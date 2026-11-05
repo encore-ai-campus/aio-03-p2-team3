@@ -5,44 +5,53 @@
 항목 끝 태그는 출처다(`.work/RULES.md` 머리말).
 
 ## 0. 지금 우리 워크스페이스 (2026-11-05 화면 확인)
-- Business 워크스페이스에 Chat/Work 전환과 Work 화면이 보인다. 그래서 **새 Codex Cloud(Work in > Cloud)** 를 쓴다. [Request]
+- Business 워크스페이스에 Chat/Work 전환과 Work 화면이 보인다. 새 Codex Cloud(Settings > Codex Cloud의 환경)를 쓴다. [Request]
+- 공식 문서의 "Work in > Cloud" 메뉴는 웹·데스크톱 앱의 Work 화면 어디에도 없다(입력창 아래는 Choose project·Files·Plugins, + 메뉴에도 Cloud 없음). 작업을 시작하는 경로는 확인 중이다(4절 1번). [Request]
 - Settings > Codex Cloud에 Environments·Personal vault 탭이 있고, Settings > Coding에 Code Review가 있다. Code Review와 PR 댓글 `@codex`는 GitHub 연동 흐름이라 Legacy가 맡는다. [Request · chatgpt-research ①]
-- 환경 `aio-03-p2-team3`(레포 `encore-ai-campus/aio-03-p2-team3`)이 만들어져 있으나 **Unpublished·Private** 다. 게시 전 환경은 작업에 못 쓴다. → 2절로 마무리한다. [Request · chatgpt-research ②]
+- 환경 `aio-03-p2-team3`(레포 `encore-ai-campus/aio-03-p2-team3`)을 2절 순서로 마무리해 게시했고, Who can use를 "Everyone at 엔코아 AI 캠퍼스"로 바꿔 다시 게시했다(Business에서도 워크스페이스 공유 선택지가 있다). [Request]
+- 팀원 모두 1절 순서로 GitHub 계정을 연결하고 환경 만들기 화면의 레포 목록에서 팀 레포를 확인했다(2026-11-05). [Request]
 - Codex 환경에는 API 키를 넣지 않는다. Codex에서 도는 테스트는 가짜 응답으로 하고, 실제 API 시험은 로컬(`.env`)과 Render에서 한다(`.work/TASK.md` 환경 줄). [Request]
 
 ## 1. 팀원 연결 순서 (각자 한 번)
-1. GitHub에서 레포 초대를 수락한다(Settings 탭이 보이면 admin). [Past work: setup · setup-research ①]
-2. ChatGPT에 Business 워크스페이스로 로그인하고, 위쪽 Chat/Work 전환에 Work가 보이는지 본다. [Request]
-3. GitHub를 연결한다: 환경 만들기 화면 또는 Codex Cloud 설정의 Connect to GitHub → 자기 GitHub 계정 허용 → 설치 대상 `encore-ai-campus` → 레포 `aio-03-p2-team3` 허용. GitHub 조직 승인이 필요하다고 나오면 조직 Owner에게 승인을 요청한다(요청 메일이 간다). [setup-research ③]
-   - 커넥터를 조직에 한 번 설치하면 팀원은 계정 허용만 하면 되는지 **(화면에서 확인)**.
-4. 환경: 3절에서 공유가 되면 공유된 환경을 고른다. 안 되면 2절 순서로 자기 환경을 만든다. [Claude proposal]
+팀원 모두 이 순서로 마쳤다(2026-11-05). 앱(ChatGPT Codex Connector)은 조직에 이미 설치돼 있어 각자 GitHub 계정만 연결하면 된다. 한국어 화면이면 메뉴 이름이 우리말로 보인다. [Request]
+1. GitHub 알림(또는 이메일)으로 온 `aio-03-p2-team3` 레포 초대를 수락한다.
+2. chatgpt.com에 Business 계정으로 로그인 → 왼쪽 아래 프로필 아이콘(내 이름) → Settings(설정) → 왼쪽 목록 Codex Cloud → Environments 탭 → Create environment.
+3. 레포 선택 칸에서 GitHub 연결을 요청하면 Connect GitHub를 누른다. 연결 요청 없이 레포 목록이 바로 보이면 6번으로 간다.
+4. GitHub 창이 열리면: GitHub 로그인 → Authorize ChatGPT Codex Connector → Authorize → ChatGPT 창으로 돌아가 6번으로 간다.
+5. GitHub 창이 안 열리면:
+   1. 주소창 오른쪽의 팝업 차단 표시를 눌러 chatgpt.com 팝업을 허용하고 3번을 다시 누른다.
+   2. 그래도 안 열리면 `https://github.com/apps/chatgpt-codex-connector/installations/new`로 들어가 설치할 곳 목록에서 `encore-ai-campus`를 누른다.
+   3. 'Update ChatGPT Codex Connector's repository access' 화면에 `encore-ai-campus/aio-03-p2-team3`가 보이면 정상이다. 아무것도 바꾸지 말고 Update access도 누르지 말고 창을 닫는다. 화면이 다르거나 팀 레포가 없으면 사용자에게 캡처를 보낸다.
+   4. ChatGPT로 돌아가 2번부터 다시 한다.
+6. 레포 목록에 `encore-ai-campus/aio-03-p2-team3`가 보이면 연결된 것이다. Get started는 누르지 말고 창을 닫는다(환경은 공유된 `aio-03-p2-team3`를 쓴다).
+7. 2번에서 Codex Cloud가 안 보이거나 6번에서 레포가 안 보이면 사용자에게 알린다.
 
 ## 2. 기존 Unpublished 환경을 마무리해 Publish하기 (환경을 만든 사람)
 1. Settings > Codex Cloud > Environments에서 `aio-03-p2-team3`를 연다. 레포가 `encore-ai-campus/aio-03-p2-team3`인지 본다. [chatgpt-research ②]
-2. 준비가 멈춰 있으면 Get started로 이어 가거나, 환경의 … 메뉴 → Edit으로 아래 요청을 넣는다. Unpublished 환경을 이어 여는 버튼 이름은 **(화면에서 확인)**. [chatgpt-research ②]
+2. 환경을 열면 "Edit aio-03-p2-team3" 대화(Cloud environment setup)가 열린다. 아래쪽 입력창(Ask for follow-up changes)에 아래 요청을 넣는다. 이 대화는 왼쪽 Recents에 구름 아이콘과 함께 남는다. [Request]
 3. 넣을 요청(그대로 붙여넣기): [Claude proposal · chatgpt-research ②]
    ```
    Python 3.12와 uv를 쓴다. `uv sync`로 설치하고 `uv run pytest`가 통과하게 준비해 줘.
    API 키와 비밀값은 넣지 않는다. 테스트는 실제 외부 API를 부르지 않는다.
    ```
-4. 보고서·설정을 검토한다: Install script에 `uv sync`가 있는지, Python이 3.12인지(`uv run python --version`), `uv run pytest`가 모두 통과했는지. uv가 미리 깔려 있는지와 Python 버전을 고르는 칸이 따로 있는지는 **(화면에서 확인)**. [chatgpt-research ②]
-5. Environment variables와 HTTP secrets는 **비워 둔다**. Personal vault도 지금은 쓰지 않는다. [Request]
-6. 인터넷: Enable all public internet access는 끄고 package managers 허용을 둔다(설치는 PyPI만 닿으면 된다). 설치가 막히면 보고서에 나온 막힌 도메인만 Additional allowed domains에 더한다. 기본값은 **(화면에서 확인)**. [Claude proposal · chatgpt-research ④]
+4. 보고서·설정을 검토한다: Install script에 `uv sync`가 있는지, Python이 3.12인지(`uv run python --version`), `uv run pytest`가 모두 통과했는지. 2026-11-05 결과: Python 3.12.14·uv, `uv sync` 성공, 테스트 9개 통과, 규칙 검사 통과. Codex가 Install script·Start skill·`UV_CACHE_DIR`(쓰기 가능한 uv 캐시 경로, 비밀값 아님)을 설정 초안에 저장했다. [Request]
+5. HTTP secrets는 **비워 두고**, Environment variables에는 Codex가 넣은 `UV_CACHE_DIR`만 둔다(키·토큰은 넣지 않는다). Personal vault도 지금은 쓰지 않는다. [Request]
+6. 인터넷: Enable all public internet access는 끄고 package managers 허용을 둔다(설치는 PyPI만 닿으면 된다). 설치가 막히면 보고서에 나온 막힌 도메인만 Additional allowed domains에 더한다. 화면 이름은 Enable all public internet access(끔)·Enable package manager domains(켬)·Additional allowed domains(없음)이고, 이 값으로 게시했다. [Claude proposal · Request]
 7. 공유 설정은 3절을 따른다.
-8. Publish → "Environment published"가 뜨고 Unpublished 표시가 사라졌는지 본다. 그 뒤 새 작업에서 고를 수 있다. [chatgpt-research ②]
+8. 대화 입력창 위의 Edit environment · Save and publish → 설정 창(Description·Repositories·Scripts·Public internet access·HTTP secrets·Environment variables·Privacy)을 검토 → 오른쪽 아래 Publish(Save draft는 초안만 저장) → "Environment published"가 뜨고 Unpublished 표시가 사라졌는지 본다. 그 뒤 새 작업에서 고를 수 있다. [chatgpt-research ②]
 9. 나중에 바꿀 때: … 메뉴 → Edit → 바꿀 것을 말함 → 시험 → 저장 → Republish. 이미 시작한 작업은 옛 상태를 쓰므로 새 작업을 시작해야 반영된다. [chatgpt-research ②]
 
 ## 3. Business에서 환경 공유가 되는지 확인하기
 공유 방법(Privacy > Who can use → 워크스페이스)은 공식 문서의 Enterprise 절에만 있어 Business에서 되는지 모른다. 아래로 확인한다. [chatgpt-research ⑤ · Claude proposal]
-1. 환경을 만든 사람: 환경 설정에서 Privacy > Who can use를 연다. 워크스페이스(팀 전체)를 고를 수 있으면 고르고 저장 → Publish(이미 게시했으면 Republish).
-2. 다른 팀원 한 명: Work in > Cloud → Select environment에 `aio-03-p2-team3`가 보이는지, 골라서 작업이 시작되는지 본다.
+1. 환경을 만든 사람: 설정 창 Privacy의 Who can use(기본 Only me)를 눌러 "Everyone at <워크스페이스 이름>"을 고르고 다시 Publish한다. 2026-11-05 우리 워크스페이스에서 이 선택지가 있어 바꿨다. [Request]
+2. 다른 팀원 한 명: 작업을 시작하는 화면(4절 1번)에서 `aio-03-p2-team3`가 보이는지, 골라서 작업이 시작되는지 본다. 이 확인은 아직 하지 않았다.
 3. 판정
    - 1번 선택지가 있고 2번에서 보이며 시작된다 → 공유 됨. 모두 이 환경을 쓴다.
    - 선택지가 Private뿐이거나 2번에서 안 보인다 → 공유 안 됨. 팀원마다 2절 순서로 자기 환경을 만든다(같은 요청 문구, 키 없음).
 4. 결과는 사용자에게 알려 6단계 기록 때 `.work/STATUS.md`에 남긴다.
 
 ## 4. Codex에 작업 맡기기
-1. Work in > Cloud → 환경 `aio-03-p2-team3` → 브랜치 `main`을 고르고 요청을 쓴다. [chatgpt-research ① · RULES 2절 1번]
+1. 환경 `aio-03-p2-team3`와 브랜치 `main`을 고르고 요청을 쓴다. 공식 문서의 "Work in > Cloud"는 우리 화면에 없어, 환경을 고르고 작업을 시작하는 경로는 **확인 중**이다(후보: Settings > Codex Cloud > Environments에서 환경을 열고 새 작업 시작). 확인되면 이 줄을 고친다. [chatgpt-research ① · RULES 2절 1번 · Request]
 2. 요청 문구(빈칸을 채워 붙여넣기). 관련 상태·도구·노드, 수정 범위, 확인 조건은 꼭 적는다. [TASK 이 레포의 규칙 · RULES 2절 4번 · Claude proposal]
    ```
    AGENTS.md부터 읽고 레포 규칙대로 해 주세요.
@@ -83,7 +92,7 @@
 
 ## 7. 6단계 연결 시험에서 확인할 것
 6단계(`.work/FLOW.md`)에서 화면으로 보고 결과를 `.work/STATUS.md`에 남긴다. [Request · Claude proposal]
-- 3절 환경 공유가 되는지, 2절의 인터넷 기본값·uv·Python 3.12
+- 작업을 시작하는 경로(4절 1번), 공유된 환경이 다른 팀원 화면에 보이는지(3절 2번)
 - PR 여는 버튼·순서, PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지
 - PR 댓글 `@codex`가 동작하는지(5절 1번), 새 경로에서 원래 작업으로 같은 PR을 고칠 수 있는지(5절 2번)
 - 새 작업이 최신 `main`(최근 병합 포함)에서 시작하는지(공식 아님, 커뮤니티 보고)

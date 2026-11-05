@@ -95,7 +95,7 @@
 마지막 갱신: 2026-11-05
 
 - 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 5단계(ChatGPT 사용 안내, `docs/CHATGPT_GUIDE.md`)까지 했다. 다음은 6단계(팀원 각자 Codex 연결 시험)다. 세팅 진행기록은 `.work/STATUS.md`.
-- 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다. Codex는 새 Codex Cloud(Work in > Cloud)의 환경 `aio-03-p2-team3`를 쓰고, 연결·요청 문구는 `docs/CHATGPT_GUIDE.md`.
+- 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다. Codex는 새 Codex Cloud의 환경 `aio-03-p2-team3`(워크스페이스 공유, 팀원 모두 GitHub 연결 마침)를 쓰고, 연결·요청 문구는 `docs/CHATGPT_GUIDE.md`.
 - Codex 환경에는 API 키를 넣지 않는다. Codex에서 도는 테스트는 가짜 응답으로 하고, 실제 API 시험은 로컬과 Render에서 한다.
 - 병합: 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. AI는 병합하지 않는다. 병합한 브랜치는 지우지 않는다.
 - 기능이 둘 이상 섞인 요청은 먼저 `docs/plans/<작업명>.md`를 PR로 올리고 하위 작업마다 새 작업으로 한다(`.work/RULES.md` 7절).

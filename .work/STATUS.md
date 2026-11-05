@@ -9,6 +9,7 @@
 - [ ] 6단계 연결 시험 — 팀원 4명이 각자 Codex PR을 병합하고, 끊김·자동 요약 여부와 `docs/CHATGPT_GUIDE.md` 7절 확인 결과(Business 환경 공유, PR 댓글 `@codex` 동작, 새 경로에서 원래 작업으로 같은 PR 고치기)가 여기에 남음
   - Claude 대화가 아니라서 안내 형식과 작업량은 두지 않는다(팀원 작업). 순서: 사용자가 `docs/CHATGPT_GUIDE.md` 2절로 환경을 Publish하고 3절로 공유를 확인 → 팀원마다 4절 요청 문구로 FLOW 6단계 할 일(README 팀원 표의 자기 줄에 한 줄 소개)을 Codex에 맡겨 PR을 열고 병합 → 7절 항목을 본다
   - 기록: 결과를 알려 주면 Claude 대화에서 여기와 '최근 완료'에 적는다
+  - 진행(2026-11-05): 환경 `aio-03-p2-team3` 게시·워크스페이스 공유(Everyone at 엔코아 AI 캠퍼스) 마침, 팀원 모두 GitHub 계정 연결 마침(`docs/CHATGPT_GUIDE.md` 1절). 남은 것: Codex 작업을 시작하는 경로 확인(공식 문서의 'Work in > Cloud'가 웹·데스크톱 앱에 없음) → 팀원 PR
 - [ ] 7단계 다음 과제용 템플릿 레포 — Template repository가 만들어지고 시작 안내가 있음
 
 ## 대기

@@ -162,7 +162,7 @@
 
 ## 6단계 연결 시험 (팀원 각자 ChatGPT)
 - 할 일: 팀원마다 Codex로 README 팀원 표의 자기 줄에 한 줄 소개를 넣는 PR을 열고 병합한다. 끊김·자동 요약 여부를 STATUS.md에 남긴다. [Request · Claude proposal: 3-2에서 팀원 표가 채워지므로 '이름 넣기'를 '한 줄 소개 넣기'로 바꿈]
-- 확인할 것: Codex PR에 PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지, PR 댓글 `@codex`가 동작해 충돌을 고칠 수 있는지, 새 경로(Work in > Cloud)에서 원래 작업으로 돌아가 같은 PR을 고칠 수 있는지, Business에서 환경 공유가 되는지. 순서와 항목은 `docs/CHATGPT_GUIDE.md` 5절·7절. [Request · Claude proposal]
+- 확인할 것: Codex PR에 PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지, PR 댓글 `@codex`가 동작해 충돌을 고칠 수 있는지, 새 경로에서 원래 작업으로 돌아가 같은 PR을 고칠 수 있는지, Business에서 환경 공유가 되는지. 순서와 항목은 `docs/CHATGPT_GUIDE.md` 5절·7절. [Request · Claude proposal]
 - 읽을 것: `docs/CHATGPT_GUIDE.md`
 - 만들 것: README 팀원 표의 각자 한 줄
 - 섞지 않을 것: 다른 파일 수정
