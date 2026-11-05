@@ -36,23 +36,24 @@
 - 패키지·환경변수: PyPI `langchain-google-genai` 4.4.3, `langchain-groq` 1.1.3 소스 (2026-11-05)
 
 ## 외부 API
-확인일: 2026-11-05
+확인일: 2026-11-05. 네이버 지도·캘린더 인증은 3-2-2-2에서 확인한다.
 
-### 후보
-| 항목 | Google Calendar API | 한국천문연구원_특일 정보 (공공데이터포털) | 기상청_단기예보 조회서비스 (공공데이터포털) |
+### 후보 (공식 문서 확인)
+| 항목 | Google Calendar API | 특일 정보(한국천문연구원) | 단기예보(기상청) |
 |---|---|---|---|
-| 쓰임 | 일정 읽기·만들기·바꾸기 | 공휴일·국경일·기념일·24절기, 공공기관 휴일 여부 | 초단기실황·초단기예보·단기예보(야외 일정 판단) |
-| 무료 한도 | 표준 사용 무료. 기본 한도 프로젝트당 분당 10,000회, 사용자당 분당 600회. 한도 초과분 과금은 2026년 뒤에 도입 예정 | 무료. 개발계정 10,000회(운영계정은 활용사례 등록 시 증가) | 무료. 개발계정 하루 10,000회 |
-| 승인 | Google Cloud 프로젝트에서 API 사용 설정 | 개발·운영 모두 자동승인 | 개발·운영 모두 자동승인 |
-| 인증 | OAuth 2.0(사용자 캘린더) 또는 서비스 계정. 민감 범위는 앱 검증 필요. Google은 서비스 계정을 데이터 소유자로 쓰지 말라고 권한다(캘린더는 사람 계정이 만들고 공유) | 서비스 키(URL 파라미터) | 서비스 키(URL 파라미터) |
-| 형식 | JSON | XML(가이드상 `_type=json` 가능, 미확인) | JSON·XML |
-| Python 패키지 | `google-api-python-client`, `google-auth` (3-2-3에서 PyPI로 확인) | 없음, HTTP 요청 | 없음, HTTP 요청 |
+| 쓰임 | 일정 읽기·만들기 | 공휴일·24절기·공공기관 휴일 여부 | 초단기·단기 예보 |
+| 무료 한도 | 표준 사용 무료. 프로젝트당 분당 10,000회, 사용자당 분당 600회 | 무료, 개발계정 10,000회 | 무료, 개발계정 하루 10,000회 |
+| 승인·인증 | OAuth 2.0 또는 서비스 계정. 민감 범위는 앱 검증 필요. Google은 서비스 계정을 데이터 소유자로 쓰지 말라고 권함 | 공공데이터포털 서비스 키, 자동승인 | 공공데이터포털 서비스 키, 자동승인 |
+| 형식·패키지 | JSON, `google-api-python-client`·`google-auth` | XML(JSON 미확인), HTTP 요청 | JSON·XML, HTTP 요청 |
 
-- 확인 못 한 것: 카카오 로컬(장소·좌표) API는 공식 문서를 도구로 열지 못해 후보에서 뺐다. OAuth 동의 화면 '테스트' 상태의 테스트 사용자 수 제한은 확인하지 못했다. [Claude proposal]
+### 정한 것 (진행 중)
+- 보조 API는 특일 정보, 단기예보, 네이버 지도를 모두 쓴다. 카카오 로컬은 쓰지 않는다. [Request]
+- 캘린더 연결 방식은 미정이다. 사용자가 'A(팀 데모 캘린더를 서비스 계정에 공유)로는 배포 뒤 사용자가 못 쓰지 않나, 배포까지 해야 한다'고 물었다. [Request]
+  - 답: A도 배포 주소에서 누구나 로그인 없이 쓰지만 모두 한 캘린더를 쓰고 자기 Google 캘린더와는 연결되지 않는다. 자기 캘린더는 OAuth 로그인(B)이 필요하고 '테스트' 상태 제한은 미확인이다. 3-2-2-2에서 확인하고 A·B·A+B 가운데 고른다. [Claude proposal]
 
 ### 출처
-- Calendar 한도·무료: https://developers.google.com/workspace/calendar/api/guides/quota (2026-11-05)
-- Calendar 서비스 계정 주의: https://developers.google.com/workspace/calendar/api/concepts/events-calendars (2026-11-05)
-- 민감·제한 범위 검증: https://developers.google.com/workspace/calendar/api/guides/auth (2026-11-05)
-- 특일 정보: https://data.go.kr/data/15012690/openapi.do (검색 결과 요약, 2026-11-05)
-- 단기예보: https://www.data.go.kr/data/15084084/openapi.do (2026-11-05)
+- Calendar 한도: https://developers.google.com/workspace/calendar/api/guides/quota
+- Calendar 서비스 계정 주의: https://developers.google.com/workspace/calendar/api/concepts/events-calendars
+- 민감·제한 범위 검증: https://developers.google.com/workspace/calendar/api/guides/auth
+- 특일 정보: https://data.go.kr/data/15012690/openapi.do
+- 단기예보: https://www.data.go.kr/data/15084084/openapi.do
