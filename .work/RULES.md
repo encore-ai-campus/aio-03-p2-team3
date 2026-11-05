@@ -12,6 +12,7 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
 - 문서는 실제 코드와 파일 내용대로 쓴다. 없는 기능을 지어내지 않는다. 문서와 코드가 다르면 코드를 기준으로 고치고 PR에 차이를 적는다. [Past work: aio3]
 - 요청 범위 밖의 파일은 고치지 않는다. 꼭 고쳐야 하면 먼저 이유를 말하고 허락을 받는다. 중간에 물을 수 없는 작업(Codex 작업)에서는 고치지 않고 결과에 '범위 밖 수정 필요: 파일, 이유'를 적는다. [Past work: aio3 · Claude proposal]
 - 요청이 모호하거나 요청자만 정할 수 있는 결정(기능 범위, 화면 문구, 상태·데이터 구조)이 있으면 추측하지 않는다. 대화라면 먼저 묻는다. 중간에 물을 수 없는 작업이면 구현하지 않고 질문을 결과로 돌려준다. [Past work: aio3 · Claude proposal]
+- 사용자가 꼭 보고 정하거나 해야 할 사항(요청자가 정할 것, 규칙 변경 제안·변경, 요청과 다르게 한 것, 사용자가 직접 할 일·병합 순서)은 답의 앞부분에 `❗ 확인할 것:` 목록으로 모아 눈에 띄게 쓴다. 본문 중간이나 끝에 묻어 두지 않는다. PR 답에서 놓는 자리는 5절 5번을 따른다. [Request]
 - 이 레포만의 규칙은 `.work/TASK.md`에 둔다. 공통 규칙의 예외가 필요하면 TASK.md에 '공통 규칙 N절 예외: 이유'로 적고, 이 레포 안에서는 그 예외가 우선한다. [Past work: setup]
 
 ## 2. 시작할 때
@@ -46,7 +47,7 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
 2. 파일을 더하거나 지우거나 옮겼으면 `.work/TASK.md`의 파일 지도도 고친다. [Past work: setup]
 3. 검사 도구(`python3 .work/check.py`)가 있으면 통과시킨다. 통과하지 못하면 PR을 열지 않고 먼저 고친다. 고칠 수 없으면 오류와 시도한 방법을 알린다. [Past work: aio3]
 4. PR 설명은 `.github/pull_request_template.md` 양식을 모두 채운다. [Past work: aio3] Codex는 마지막 답에 양식대로 채운 PR 설명을 함께 낸다(PR을 만들 때 양식이 들어가지 않을 수 있다). [Claude proposal]
-5. 마지막 답 맨 앞 줄: Claude는 `🔔 PR을 날렸습니다. 병합 후 진행해주세요: <PR 링크>`, Codex는 `🔔 작업을 마쳤습니다. PR을 열고 병합해 주세요.`를 쓴다. 공통 부분을 바꿨으면 바로 아래에 `⚠ 공통 부분 변경: 병합 전에 <관련 팀원>과 조율해 주세요.`를 쓴다. 그 뒤에 바꾼 내용을 짧게 적는다. [Request · Claude proposal]
+5. 마지막 답 맨 앞 줄: Claude는 `🔔 PR을 날렸습니다. 병합 후 진행해주세요: <PR 링크>`, Codex는 `🔔 작업을 마쳤습니다. PR을 열고 병합해 주세요.`를 쓴다. 공통 부분을 바꿨으면 바로 아래에 `⚠ 공통 부분 변경: 병합 전에 <관련 팀원>과 조율해 주세요.`를 쓴다. 그 아래에 1절의 `❗ 확인할 것:`을 쓴다(있을 때). 그 뒤에 바꾼 내용을 짧게 적는다. [Request · Claude proposal]
 6. AI는 PR을 병합하지 않는다. 병합은 사람이 한다. [Past work: setup · aio3] 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. 필수 리뷰 같은 브랜치 보호 규칙은 두지 않는다. 병합한 브랜치는 지우지 않는다. [Request]
 7. 충돌: 앞 PR이 병합된 뒤 충돌이 나면 요청자가 그 PR에서 AI에게 최신 `main` 흐름에 맞게 고쳐 달라고 한다(Codex는 PR 댓글 `@codex 최신 main에 맞게 충돌을 고쳐 주세요`). AI는 양쪽 변경의 뜻을 모두 살려 고치고, `docs/PROJECT_CONTEXT.md`의 해당 절도 합친 결과대로 고친다. [Request] 그렇게 되지 않으면 GitHub 웹 화면에서 고치거나, PR을 닫고 최신 `main`에서 같은 작업을 다시 낸다. [Claude proposal]
 
@@ -97,8 +98,8 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
      - 도구: `종류=횟수` … 또는 없음
      - 작업량: 약 ○KB(실행 중 ○KB 포함) / 기준 ○KB
    ```
-2. 안내의 백틱 항목을 그대로 넘겨 `python3 .work/measure.py --read <읽을 파일> --attach <첨부> --make <만들 파일> --tools <도구>`로 잰다. 시작할 때 읽는 파일은 `--start AGENTS.md .work/RULES.md .work/TASK.md .work/STATUS.md`로 준다. [Past work: setup · Claude proposal]
-3. PR 답변의 🔔 줄 바로 아래에 결과를 쓴다. [Past work: setup]
+2. 안내의 백틱 항목을 그대로 넘겨 `python3 .work/measure.py --read <읽을 파일> --attach <첨부> --make <만들 파일> --tools <도구>`로 잰다. 시작할 때 읽는 파일은 `--start AGENTS.md .work/RULES.md .work/TASK.md .work/STATUS.md docs/PROJECT_CONTEXT.md`로 준다(AGENTS.md가 시작할 때 읽게 하는 파일 모두). [Past work: setup · Claude proposal]
+3. PR 답변의 🔔·⚠·❗ 줄(5절 5번) 아래에 결과를 쓴다. [Past work: setup]
    - 기준 이하: `다음 단계(N단계) 작업량: 약 ○KB(실행 중 ○KB 포함) / 기준 ○KB — 새 대화 하나에서 하기에 적당합니다.` 그 아래에 붙여넣을 명령어와 첨부할 파일을 적는다.
    - 기준 초과: 묻지 않고 같은 PR에서 작업 배분량 검토를 해 나눈다. 🔔 줄 아래에 `다음 단계(N단계)가 기준을 넘어(약 ○KB / 기준 ○KB) N-1, N-2로 나눴습니다.`를 쓰고, 이어서 첫 하위 단계를 기준 이하 형식으로 쓴다. [Request]
    - 크기 모름: 모르는 파일과 나머지 양을 적고, 크기를 알려 주면 다시 잰다고 쓴다.
