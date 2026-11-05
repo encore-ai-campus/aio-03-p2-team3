@@ -16,7 +16,7 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
 - 이 레포만의 규칙은 `.work/TASK.md`에 둔다. 공통 규칙의 예외가 필요하면 TASK.md에 '공통 규칙 N절 예외: 이유'로 적고, 이 레포 안에서는 그 예외가 우선한다. [Past work: setup]
 
 ## 2. 시작할 때
-1. 최신 `main`에서 시작한다. Codex 작업은 요청자가 작업을 낼 때 `main`을 고른다. [Past work: aio3 · Claude proposal]
+1. 최신 `main`에서 시작한다. Codex 작업은 레포 기본 브랜치 `main`에서 시작한다(작업 화면에 브랜치 칸 없음, `docs/CHATGPT_GUIDE.md` 4절 1번). [Past work: aio3 · Request]
 2. 열린 PR과 관계없이 진행한다. 열린 PR을 확인하거나 병합을 기다리지 않는다. 앞 PR이 병합된 뒤 충돌이 나면 5절 7번대로 그 PR에서 고친다. [Request]
 3. `AGENTS.md` → 이 파일 → `.work/TASK.md` → `docs/PROJECT_CONTEXT.md` 순서로 읽는다. [Past work: aio3 · Claude proposal]
 4. Issue 번호로 받은 작업은 그 Issue의 완료 기준을 그대로 따르고, PR 양식의 '관련 Issue·계획'에 `Closes #번호`를 적는다. [Past work: aio3] Codex는 작업 중 인터넷이 꺼져 있어 Issue를 열지 못할 수 있으므로, 요청자가 Issue 본문(완료 기준)을 요청에 붙인다. [Claude proposal]
@@ -26,6 +26,7 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
 ## 3. 작업하면서
 - 작업 하나 = 브랜치 하나 = PR 하나. `main`에 직접 push하지 않는다. [Past work: aio3]
 - 브랜치 이름은 `feat/`·`fix/`·`docs/` 뒤에 작업명(영어 소문자·하이픈)을 붙인다. [Past work: aio3] Codex가 PR을 만들 때 스스로 정하는 브랜치 이름은 그대로 둔다. [Claude proposal]
+- 병합된 PR의 브랜치에는 push하지 않는다(그 커밋은 `main`에 들어가지 않는다). 답에 PR 링크를 준 뒤 받은 후속 요청은 앞 PR에 더하지 않는다. 앞 PR이 병합됐는지 확인해(`gh api repos/<레포 주소>/pulls/<번호> --jq .merged_at`) 병합됐으면 최신 `main`에서, 병합 전이면 앞 PR 브랜치 위에서 새 브랜치를 만들어 `main`으로 새 PR을 연다(병합 전이면 두 PR을 순서대로 병합하거나 새 PR만 병합해도 된다고 답에 적는다). 요청자가 병합 전 그 PR을 고쳐 달라고 할 때(CI 오류, 5절 7번 충돌)는 예외다. [Request]
 - Claude는 브랜치를 `git remote set-branches --add origin <브랜치>` 뒤 `git push -u origin <브랜치>`로 올린다(얕은 복제는 `main`만 추적해서 `-u`만으로는 원격 브랜치와 연결되지 않는다). [Past work: setup]
 - 커밋 메시지는 한국어로 쓰고, 앞에 `feat:`·`fix:`·`docs:`를 붙인다. [Past work: aio3]
 - 기존 파일은 바뀐 부분만 고친다. 통째로 다시 쓰지 않는다(새 파일은 예외). [Past work: setup]
@@ -45,8 +46,8 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
 ## 5. 끝낼 때 (파일을 바꾼 경우)
 1. `docs/PROJECT_CONTEXT.md`에서 이번에 바꾼 영역의 절을 같은 PR에서 고친다. 그 절의 '마지막 갱신' 날짜도 고친다. 다른 영역의 절과 문서 맨 위 공용 줄은 고치지 않는다(모든 PR이 같은 줄을 고치면 매번 충돌한다). [Request · Claude proposal]
 2. 파일을 더하거나 지우거나 옮겼으면 `.work/TASK.md`의 파일 지도도 고친다. [Past work: setup]
-3. 검사 도구(`python3 .work/check.py`)가 있으면 통과시킨다. 통과하지 못하면 PR을 열지 않고 먼저 고친다. 고칠 수 없으면 오류와 시도한 방법을 알린다. [Past work: aio3]
-4. PR 설명은 `.github/pull_request_template.md` 양식을 모두 채운다. [Past work: aio3] Codex는 PR 본문에 양식을 채워 PR을 직접 열고, 마지막 답에도 같은 설명을 낸다. [Request]
+3. 검사 도구(`python3 .work/check.py`)가 있으면 통과시킨다. 통과하지 못하면 PR을 열지 않고 먼저 고친다. 고칠 수 없으면 오류와 시도한 방법을 알린다. [Past work: aio3] 테스트(`uv run pytest`)도 함께 직접 실행해 통과시키고, 두 실행 결과를 마지막 답에 보인다. [Request]
+4. PR 설명은 `.github/pull_request_template.md` 양식을 모두 채운다. [Past work: aio3] Codex는 요청에 적혀 있지 않아도 3번을 마친 뒤 새 브랜치에 커밋해 GitHub에 push하고, `main`으로 PR을 열어 본문에 양식을 채우고, 마지막 답에도 같은 설명을 낸다. [Request]
 5. 마지막 답 맨 앞 줄: Claude는 `🔔 PR을 날렸습니다. 병합 후 진행해주세요: <PR 링크>`, Codex는 `🔔 PR을 열었습니다. 확인 후 병합해 주세요: <PR 링크>`를 쓴다. 공통 부분을 바꿨으면 바로 아래에 `⚠ 공통 부분 변경: 병합 전에 <관련 팀원>과 조율해 주세요.`를 쓴다. 그 아래에 1절의 `❗ 확인할 것:`을 쓴다(있을 때). 그 뒤에 바꾼 내용을 짧게 적는다. [Request · Claude proposal]
 6. AI는 PR을 병합하지 않는다. 병합은 사람이 한다. [Past work: setup · aio3] 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. 필수 리뷰 같은 브랜치 보호 규칙은 두지 않는다. 병합한 브랜치는 지우지 않는다. [Request]
 7. 충돌: 앞 PR이 병합된 뒤 충돌이 나면 요청자가 그 PR에서 AI에게 최신 `main` 흐름에 맞게 고쳐 달라고 한다(Codex는 PR 댓글 `@codex 최신 main에 맞게 충돌을 고쳐 주세요`). AI는 양쪽 변경의 뜻을 모두 살려 고치고, `docs/PROJECT_CONTEXT.md`의 해당 절도 합친 결과대로 고친다. [Request] 그렇게 되지 않으면 GitHub 웹 화면에서 고치거나, PR을 닫고 최신 `main`에서 같은 작업을 다시 낸다. [Claude proposal]
