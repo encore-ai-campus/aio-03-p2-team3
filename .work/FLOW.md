@@ -101,21 +101,38 @@
 - 만들 파일은 `git show HEAD:<경로> > <이 레포 경로>`로 복사한 뒤 바뀔 부분만 고친다. 그래서 '만들 것' 양은 고친 부분만 센다. [Claude proposal]
 - 순서: check.py가 measure.py를 불러와(`load_measure`) STATUS 안내의 작업량을 다시 잰다. 그래서 measure.py(4-1)를 먼저 하고 check.py·CI(4-2)를 뒤에 한다. [Claude proposal]
 - 시작 파일: 원본 measure.py의 `START_FILES`는 `.work/RULES.md`·`.work/TASK.md`·`.work/STATUS.md` 셋이다. 이 레포는 AGENTS.md대로 `AGENTS.md`와 `docs/PROJECT_CONTEXT.md`도 시작할 때 읽으므로 4-1에서 둘을 더한다. check.py는 안내의 작업량을 다시 재서 2KB 넘게 다르면 오류로 보므로, 시작 파일을 실제와 같게 둬야 한다. [Claude proposal]
+- 원본 레포는 비공개라 그냥 복제하면 인증 오류가 난다. 먼저 `add_repo`(읽기)로 이 대화에 붙인 뒤 위 방법으로 연다. [Claude proposal · 4-1에서 확인]
+- measure.py(4-1): `START_FILES`에 `AGENTS.md`·`docs/PROJECT_CONTEXT.md`를 더했고, 도구 표에 `레포 연결`(1회 4KB)을 더했고, `--read`도 레포 밖 파일을 `이름=KB`로 받게 했다(STATUS 안내가 원본 파일을 '읽을 파일'에 적기 때문). 도구 이름 `레포 연결`처럼 띄어쓰기가 있는 항목은 셸에서 따옴표로 감싼다. [Claude proposal]
 
-## 4-1단계 measure.py
+## 4-1단계 measure.py (완료)
 - 할 일: 원본 `measure.py`를 복사해 이 레포에 맞춘다(`START_FILES`, 필요하면 도구 표에 `레포 연결`). `--start`·`--read`·`--show`·`--outline`을 이 레포 파일로 한 번씩 돌려 본다. 4-2 안내를 `measure.py`로 재서 STATUS에 적고, TASK 파일 지도에 `.work/measure.py`를 더한다. [Request · Claude proposal]
 - 읽을 것: 이 절과 4단계 '정한 것', 원본 `.work/measure.py`
 - 만들 것: `.work/measure.py`
 - 섞지 않을 것: check.py·CI(4-2), 규칙 내용 변경, ChatGPT 사용 안내(5단계)
 - 도구: 스크립트 5, 레포 연결 2
 
-## 4-2단계 check.py·CI
+## 4-2단계 check.py·CI — 4-2-1, 4-2-2로 나눔(2026-11-05, measure.py로 다시 재니 약 107KB)
 - 할 일: 원본 `check.py`를 복사해 이 레포에 맞춘다(필수 파일의 진입 파일을 `CLAUDE.md`에서 `AGENTS.md`로, STATUS.md 형식, TASK.md 파일 지도 검사, 이 레포에 없는 유형 검사는 정리). `check.py`가 `uv run pytest`도 부를지 정한다. 원본 `rules-check.yml`로 CI를 만들고, AGENTS.md '확인 명령'에 `python3 .work/check.py`를 적는다. 로컬 검사와 PR의 CI가 모두 통과하게 한다. TASK 파일 지도에 두 파일을 더한다. [Request · Claude proposal]
 - 읽을 것: 이 절과 4단계 '정한 것', 원본 `.work/check.py`·`.github/workflows/rules-check.yml`, `.github/pull_request_template.md`
 - 만들 것: `.work/check.py`, `.github/workflows/rules-check.yml`
 - 섞지 않을 것: measure.py 고치기(4-1, 꼭 필요하면 이유를 PR에 적는다), 규칙 내용 변경, ChatGPT 사용 안내(5단계)
 - 도구: 스크립트 6, 레포 연결 2
 - 작업량(계획 값): 약 92KB — 시작 37KB, 읽을 것 25KB(원본 21KB 포함), 만들 것(고친 부분) 10KB, 실행 중 20KB
+- 나눈 까닭: 4-1에서 measure.py로 다시 재니 원본 check.py 20.6KB, 실행 중 약 32KB(스크립트 8, 레포 연결 2)로 약 107KB였다. CI는 check.py가 로컬에서 통과한 뒤에야 확인할 수 있어 뒤로 뗐다. [Claude proposal]
+
+## 4-2-1단계 check.py
+- 할 일: 원본 `check.py`를 복사해 이 레포에 맞춘다(필수 파일의 진입 파일을 `CLAUDE.md`에서 `AGENTS.md`로, STATUS.md 형식, TASK.md 파일 지도 검사, 이 레포에 없는 유형 검사는 정리). `check.py`가 `uv run pytest`도 부를지 정해 4단계 '정한 것'에 적는다(4-2-2의 CI가 따른다). 로컬에서 `python3 .work/check.py`를 통과시키고, AGENTS.md '확인 명령'에 적고, TASK 파일 지도에 더한다. [Request · Claude proposal]
+- 읽을 것: 이 절과 4단계 '정한 것', 원본 `.work/check.py`, `.github/pull_request_template.md`
+- 만들 것: `.work/check.py`
+- 섞지 않을 것: CI(4-2-2), measure.py 고치기(4-1, 꼭 필요하면 이유를 PR에 적는다), 규칙 내용 변경, ChatGPT 사용 안내(5단계)
+- 도구: 스크립트 5, 레포 연결 2
+
+## 4-2-2단계 CI
+- 할 일: 원본 `rules-check.yml`로 CI를 만든다(4-2-1에서 `uv run pytest`를 부르기로 했으면 uv 설치 단계를 둔다). PR에서 CI가 통과하는지 확인하고, TASK 파일 지도에 더한다. [Request · Claude proposal]
+- 읽을 것: 이 절과 4단계 '정한 것', 원본 `.github/workflows/rules-check.yml`, `.github/pull_request_template.md`
+- 만들 것: `.github/workflows/rules-check.yml`
+- 섞지 않을 것: check.py 고치기(4-2-1, 꼭 필요하면 이유를 PR에 적는다), 규칙 내용 변경, ChatGPT 사용 안내(5단계)
+- 도구: 스크립트 5(CI 결과 확인 포함), 레포 연결 2
 
 ## 5단계 ChatGPT 사용 안내
 - 할 일: 팀원 연결 순서, Codex Cloud 환경(Python 3.12·uv), 작업 요청 문구, 문서 작업용 ChatGPT 프로젝트 지침을 정리한다. 새 경로(ChatGPT Work)와 "Codex Cloud (Legacy)"의 차이도 확인한다. [Request · Claude proposal]
