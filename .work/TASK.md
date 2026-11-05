@@ -35,6 +35,7 @@
 - `.work/measure.py` — 작업량 재기 도구(공통 규칙 8절). 크기만 내고, `--show`로 절만 연다 [공통]
 - `.work/check.py` — 규칙 검사 도구(공통 규칙 5절 3번). 표준 라이브러리만 쓰고 테스트는 부르지 않는다 [공통]
 - `.github/pull_request_template.md` — PR 양식 [공통]
+- `.github/workflows/rules-check.yml` — CI. PR과 main 변경마다 규칙 검사(`check.py`)와 테스트(`uv sync --locked`·`uv run pytest`)를 따로 돌린다 [공통]
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]

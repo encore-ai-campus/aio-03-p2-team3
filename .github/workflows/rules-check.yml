@@ -1,0 +1,44 @@
+# PR과 main 변경마다 규칙 검사(.work/check.py)와 테스트(uv run pytest)를 돌린다. 비밀값이 필요 없다.
+# 원본: doomdiver100T/claude-github-setup 커밋 9c45959의 template/managed/common/.github/workflows/rules-check.yml을 복사해 고침 [Past work: setup]
+# check.py는 테스트를 부르지 않으므로 테스트 작업(tests)을 따로 둔다. 두 결과가 PR에 따로 보인다 [Claude proposal]
+name: rules-check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: rules-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: 레포 규칙 검사
+        run: python .work/check.py
+
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Python 버전은 .python-version(3.12)을 따른다
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: 패키지 설치
+        run: uv sync --locked
+
+      - name: 테스트
+        run: uv run pytest
