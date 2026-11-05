@@ -53,7 +53,7 @@
 - OAuth는 프로덕션으로 게시하고 검증은 받지 않는다. 체험자는 경고 화면에서 '고급 → 이동'을 누른다. 100명을 넘으면 테스트 상태 등록 방식으로 바꾼다. [Request: 추천안]
 - 체험 화면에 '테스트용 Google 계정으로 로그인하세요'를 안내하고, LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다(Gemini 무료 등급 입력은 Google 개선에 쓰임). 구체 방법은 11/13 설계에서 정한다. [Request: 추천안]
 - 보조 API: 특일 정보, 단기예보, 네이버 지역 검색 + Directions 5. 지역 검색 결과에 좌표가 있어 Geocoding은 쓰지 않는다. 카카오 로컬은 쓰지 않는다. [Request]
-- Directions 5의 정확한 무료 건수는 미확인. 키를 만든 사람이 콘솔에서 보고 이 줄을 고치고, '이용 한도 설정'을 무료량 이하로 둔다. [Claude proposal]
+- Directions 5의 정확한 무료 건수는 미확인. 키를 만든 사람이 콘솔에서 보고 이 줄을 고치고, '이용 한도 설정'을 무료량 이하로 둔다(Issue #9). [Claude proposal]
 
 ### 설정 경로
 1. Google Cloud 콘솔: 프로젝트 → Google Calendar API 사용 설정 → Google Auth Platform에서 Branding·Audience(외부, 앱 게시)·Data Access(캘린더 범위) → Clients에서 웹 애플리케이션 클라이언트를 만들고 Render 주소의 리디렉션 URI를 넣는다. 비밀번호는 만들 때만 보인다. 환경변수 `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`.

@@ -82,7 +82,7 @@
 
 ## 3-2-3단계 실행 환경 파일
 - 할 일: [Request]
-  1. `README.md`: 실행 방법, 두 산출물(설계서·시험 보고서)의 위치(`docs/PROJECT_CONTEXT.md` 8절과 같게), 팀원 표('3-2단계 정한 것'), 고른 LLM·API와 키 발급 경로(`.work/design/api-choice.md` 요약).
+  1. `README.md`: 실행 방법, 두 산출물(설계서·시험 보고서)의 위치(`docs/PROJECT_CONTEXT.md` 8절과 같게), 팀원 표('3-2단계 정한 것'), 고른 LLM·API와 키 발급 경로(`.work/design/api-choice.md` 요약). 키 발급 절에 '키를 만든 뒤 무료 한도를 확인하고 이용 한도를 건다(Gemini 한도, Directions 5 무료 건수와 Maps 이용 한도 설정, Issue #9)'를 적는다. [Request]
   2. `.env.example`: 환경변수 이름과 설명만.
   3. `pyproject.toml`: Python 3.12, uv. 공통 패키지(LangGraph 등)와 api-choice.md에서 고른 것의 패키지. 버전은 PyPI(`pip index versions <패키지>`)로 확인해 `==`로 고정한다. [Claude proposal: 웹검색 대신 PyPI 조회로 작업량을 줄임]
   4. `AGENTS.md` '확인 명령'에 `uv run pytest`를 적는다. `.work/TASK.md` 환경 줄의 '세팅 3단계에서 정한다'를 실제 명령으로 고치고, 'LLM·외부 API를 더하거나 바꾸는 작업은 요청자가 정한다(대화면 묻고, Codex 작업이면 질문을 결과로 돌려준다)'를 더한다(규칙 파일 변경이므로 PR '⚠ 규칙 변경'에 적는다). [Request]
