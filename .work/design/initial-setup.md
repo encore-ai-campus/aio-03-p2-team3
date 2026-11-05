@@ -97,24 +97,43 @@
 - PROJECT_CONTEXT의 '마지막 갱신'은 절마다 둔다(맨 위 공용 줄을 모든 PR이 고치면 충돌).
 - 공통 부분(상태 객체·도구 스키마·그래프)의 파일 위치는 코드 구조가 정해진 뒤 TASK.md에 적는다. 별도 CONTRACT.md는 만들지 않았다.
 - 규칙·PR 양식은 [공통], TASK.md·README·design 파일은 [과제별]로 표시했다.
-### 3단계 할 일
-- 만들 것: `.work/STATUS.md`(세팅 진행기록, 이 절의 '3단계 안내'를 옮겨 오고 1~2단계를 '최근 완료'에), `.work/FLOW.md`(세팅 단계 목록, 6절 표 기준), `docs/PROJECT_CONTEXT.md`(Aio3 형식 참고, 영역별 절과 절마다 '마지막 갱신'), `docs/OWNERS.md`, `README.md`(실행 방법, 산출물 위치, 팀원별 담당), `.env.example`, `pyproject.toml`(Python 3.12·uv, 버전은 웹에서 확인), `docs/plans/README.md`(계획 파일 형식, RULES 7절). TASK.md 파일 지도도 고친다.
-- 읽을 것: 이 절, 프로젝트1 Aio3의 `docs/PROJECT_CONTEXT.md`·`docs/OWNERS.md`(형식 참고), claude-github-setup의 `template/owned/common/.work/STATUS.md.tmpl`·`README.md.tmpl`.
-- 섞지 않을 것: 검사 도구·CI(4단계), ChatGPT 사용 안내(5단계).
-- 팀원 이름·GitHub 아이디·담당은 사용자에게 묻는다(OWNERS·README).
+### 팀원과 담당 (2026-11-05 사용자 답변) [Request]
+- 담당은 미리 정하지 않는다. 프로젝트를 마친 뒤 팀원별 PR 내역을 바탕으로 맡은 바를 정리한다. `docs/OWNERS.md`는 만들지 않는다.
+- 팀원(이름, GitHub 아이디). '확인'은 이 레포의 assignee 목록(`gh api repos/<레포>/assignees`)에서 찾은 것이다.
+  - 김진혁, `rlawlsgura-stack` (확인)
+  - 임석원, 받은 값 `SEOKWON IHM` (아이디 미확인: GitHub 아이디에는 공백을 쓸 수 없고 목록에서 찾지 못함)
+  - 정원철, 받은 값 `KRW_82` (아이디 미확인: GitHub 아이디에는 밑줄을 쓸 수 없음. 목록에 `krw82`가 있음)
+  - 사용자 본인: 이름 미확인, 아이디는 `doomdiver100T`로 보임(목록에 있음, 확인 필요)
+- 작업량이 기준을 넘으면 묻지 않고 나눈다(RULES 8절에 반영).
+
+### 3단계 할 일 (3-1, 3-2로 나눔: 2026-11-05, 기준 초과 약 142KB)
+#### 3-1 진행 문서
+- 만들 것: `.work/STATUS.md`(1~2단계를 '최근 완료'에, 3단계 묶음 제목 '3-1, 3-2로 나눔(2026-11-05, 기준 초과)'과 3-2 안내), `.work/FLOW.md`(6절 표 기준, 3단계는 3-1·3-2로), `docs/PROJECT_CONTEXT.md`(Aio3 형식 참고, 영역별 절과 절마다 '마지막 갱신', 두 산출물과 시험 기록의 위치, 일정, '프로젝트 끝에 PR 내역으로 담당 정리'), `docs/plans/README.md`(계획 파일 형식, RULES 7절). TASK.md 파일 지도도 고친다.
+- 읽을 것: 이 절, 프로젝트1 Aio3의 `docs/PROJECT_CONTEXT.md`(형식 참고), claude-github-setup의 `template/owned/common/.work/STATUS.md.tmpl`.
+- 섞지 않을 것: README·.env.example·pyproject(3-2), 검사 도구·CI(4단계), ChatGPT 사용 안내(5단계).
+#### 3-2 실행 환경
+- 만들 것: `README.md`(실행 방법, 두 산출물 위치, 팀원 표: 이름·GitHub 아이디, 담당 칸은 '프로젝트 끝에 PR 내역으로 정리'), `.env.example`, `pyproject.toml`(Python 3.12·uv, 버전은 웹에서 확인), AGENTS.md '확인 명령'의 테스트 명령. TASK.md 파일 지도, STATUS.md도 고친다.
+- 읽을 것: 이 절, `docs/PROJECT_CONTEXT.md`(3-1 결과), claude-github-setup의 `template/owned/common/README.md.tmpl`.
+- 섞지 않을 것: 진행 문서의 내용 변경(3-1), 검사 도구·CI(4단계).
+- 시작 전에 미확인 팀원 아이디와 사용자 이름을 묻는다(README 팀원 표).
+
 ### 6단계에서 확인할 것
 - Codex가 PR을 만들 때 PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지.
 - PR 댓글 `@codex`로 충돌을 고칠 수 있는지(커뮤니티에 실패 보고가 있음).
 - Codex Cloud 문서 제목이 "Codex Cloud (Legacy)"로 바뀌어 있다. 새 경로(ChatGPT Work)와의 차이는 5단계에서 확인한다.
+- 6단계 연결 시험은 3-2단계에서 README 팀원 표가 채워지므로 '팀원 표의 자기 줄에 한 줄 소개를 넣는 PR → 병합'으로 바꾼다. [Claude proposal]
+
 ### 3단계 안내
-- [ ] 3단계 진행·과제 문서 — 위 '만들 것'이 PR로 올라감
-  - 명령어: `aio-03-p2-team3 3단계를 시작해 주세요`
+- [ ] 3단계 진행·과제 문서 — 3-1, 3-2로 나눔(2026-11-05, 기준 초과 약 142KB)
+- [ ] 3-1단계 진행 문서 — STATUS·FLOW·PROJECT_CONTEXT·plans/README가 PR로 올라감
+  - 명령어: `aio-03-p2-team3 3-1단계를 시작해 주세요`
   - 첨부: 없음
-  - 읽을 파일: `.work/design/initial-setup.md#8. 2단계 결정과 3단계 할 일` `aio3:docs/PROJECT_CONTEXT.md=13.4` `aio3:docs/OWNERS.md=3.9` `setup:STATUS.md.tmpl=0.7` `setup:README.md.tmpl=0.2`
+  - 읽을 파일: `.work/design/initial-setup.md#8. 2단계 결정과 3단계 할 일 (2026-11-05)` `aio3:docs/PROJECT_CONTEXT.md=13.4` `setup:STATUS.md.tmpl=0.7`
   - 읽지 않을 파일: `.work/design/setup-research.md`, initial-setup.md의 1~7절, 원본 레포의 다른 파일, 메모리·지난 대화
-  - 만들 파일: `STATUS.md=3` `FLOW.md=6` `PROJECT_CONTEXT.md=8` `OWNERS.md=2` `README.md=4` `.env.example=1` `pyproject.toml=1` `plans/README.md=2`
-  - 도구: `웹검색=3` `웹페이지=3` `스크립트=4`
-  - 작업량: 약 142KB(실행 중 72KB 포함) / 기준 100KB — 기준 초과. 병합 후 작업 배분량 검토를 한다(RULES 8절)
+  - 만들 파일: `STATUS.md=3` `FLOW.md=6` `PROJECT_CONTEXT.md=8` `plans/README.md=2`
+  - 도구: `스크립트=3`
+  - 작업량: 약 69KB(실행 중 9KB 포함) / 기준 100KB
+- 3-2단계 안내는 3-1단계가 STATUS.md에 쓴다(예상 약 98KB(실행 중 54KB 포함) / 기준 100KB, 웹검색 2·웹페이지 3).
 
 ### 2단계 작업량 기록 (6단계 기준 맞춤용)
 - 계획 약 88KB / 실제는 기준을 넘었다: 첨부 19KB, 원본 읽기 약 32KB, 웹검색 3회(결과가 길어 회당 약 20KB), 만든 것 약 28KB, 질문·답 3번. 같은 대화에서 결정 질문을 두 번 주고받으며 웹검색이 더해졌다. 다음부터 Codex 동작처럼 확인이 필요한 질문은 앞 단계(조사)에서 끝낸다.
