@@ -169,6 +169,13 @@
 - 섞지 않을 것: 규칙 내용 변경, 팀원 결과 기록(6-2), 공식 문서 검색(화면 후보로 못 찾으면 찾은 것을 인계 파일에 적고 검색은 다음 대화로 넘긴다: 검색까지 하면 기준을 넘는다)
 - 도구: 캡처 6, 스크립트 4
 
+## 6-1-2단계 Codex 요청 한 번으로 PR까지 (Claude 대화)
+- 할 일: 6-1 시험 뒤 정한 것(`.work/design/step6-handoff.md` '6-1 시험 뒤 정한 것')대로 `docs/CHATGPT_GUIDE.md` 4절(요청 문구에 push·PR·PR 링크를 넣고, 팀원 절차를 요청 → PR 확인 → 병합으로 줄이고, PR 링크가 없을 때의 후속 요청을 예비로 둠)·7절과 `.work/RULES.md` 5절 4·5번(Codex가 PR을 직접 열고 첫 줄에 PR 링크)을 고친다. 규칙 변경은 RULES 4절 절차와 PR '⚠ 규칙 변경'에 적는다. 새 3단계 팀원 메시지를 답으로 준다. [Request]
+- 읽을 것: 이 절, `.work/design/step6-handoff.md#6-1 시험 뒤 정한 것 (2026-11-05, 6-1-2단계로 넘김)`, `docs/CHATGPT_GUIDE.md#4. Codex에 작업 맡기기`, `docs/CHATGPT_GUIDE.md#7. 6단계 연결 시험에서 확인할 것`
+- 만들 것: `docs/CHATGPT_GUIDE.md` 고침, `.work/RULES.md` 5절 고침, 팀원 메시지(답으로)
+- 섞지 않을 것: 6-2 결과 기록, 5절 4·5번 밖의 규칙 변경, 공식 문서 검색, Codex로 시험해 보기(첫 팀원 시험이 확인한다)
+- 도구: 스크립트 4
+
 ## 6-2단계 연결 시험 (팀원 각자 ChatGPT)
 - 할 일: 팀원마다 Codex로 README 팀원 표의 자기 줄에 한 줄 소개를 넣는 PR을 열고 병합한다. 끊김·자동 요약 여부를 STATUS.md에 남긴다. [Request · Claude proposal: 3-2에서 팀원 표가 채워지므로 '이름 넣기'를 '한 줄 소개 넣기'로 바꿈]
 - 확인할 것: Codex PR에 PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지, PR 댓글 `@codex`가 동작해 충돌을 고칠 수 있는지, 새 경로에서 원래 작업으로 돌아가 같은 PR을 고칠 수 있는지, Business에서 환경 공유가 되는지. 순서와 항목은 `docs/CHATGPT_GUIDE.md` 5절·7절. [Request · Claude proposal]
