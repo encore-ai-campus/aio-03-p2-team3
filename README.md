@@ -40,7 +40,7 @@ uv run pytest            # 테스트
 
 ## LLM·외부 API와 키 발급
 
-근거와 자세한 경로는 `.work/design/api-choice.md`. 환경변수 이름과 설명은 `.env.example`. 키는 로컬 `.env`, Render 환경변수, Codex 환경 비밀값에 둔다.
+근거와 자세한 경로는 `.work/design/api-choice.md`. 환경변수 이름과 설명은 `.env.example`. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않는다(테스트는 가짜 응답, `docs/CHATGPT_GUIDE.md`).
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|

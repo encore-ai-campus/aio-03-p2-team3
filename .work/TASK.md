@@ -14,7 +14,7 @@
 - AI에게 작업을 맡길 때 요청에 관련 상태·도구·노드, 수정 범위, 확인 조건을 적는다. [Request]
 - 병합 전 절차: ① PR을 연 사람이 '설명' 칸에 변경 이유·입출력·상태 변화·오류 처리를 적는다(필수). ② 검토자가 정상·오류 요청의 실제 결과를 확인한다(선택, 병합 뒤 댓글도 된다). ③ PR을 연 사람이 반영한다. [Request · Claude proposal]
 - 기록: 설계 결정·오류 사례·수정 이유·버전·재실행 결과를 Issue, PR('오류·재실행 기록' 칸), 팀 노션에 남긴다. [Request]
-- 환경: Python 3.12, uv. 환경변수 이름은 `.env.example`에 두고, 키는 서버 환경(Render)과 Codex 환경의 비밀값에 둔다. [Request] 설치는 `uv sync`, 테스트는 `uv run pytest`. 패키지는 `uv add <패키지>==<버전>`(개발용은 `--dev`)으로 더하고, 버전은 `pip index versions <패키지>`로 확인하며, 바뀐 `pyproject.toml`·`uv.lock`을 함께 올린다. 서버 실행 명령은 코드 구조가 정해지면 README에 더한다. [Claude proposal]
+- 환경: Python 3.12, uv. 환경변수 이름은 `.env.example`에 두고, 키는 각자 로컬 `.env`와 서버 환경(Render)에 둔다. Codex 환경에는 API 키를 넣지 않고, Codex에서 도는 테스트는 실제 API 대신 가짜 응답으로 한다. 실제 API 시험은 로컬과 Render에서 한다. [Request] 설치는 `uv sync`, 테스트는 `uv run pytest`. 패키지는 `uv add <패키지>==<버전>`(개발용은 `--dev`)으로 더하고, 버전은 `pip index versions <패키지>`로 확인하며, 바뀐 `pyproject.toml`·`uv.lock`을 함께 올린다. 서버 실행 명령은 코드 구조가 정해지면 README에 더한다. [Claude proposal]
 - LLM·외부 API를 더하거나 바꾸는 작업은 요청자가 정한다(대화면 묻고, Codex 작업이면 질문을 결과로 돌려준다). 정한 것은 `.work/design/api-choice.md`·`.env.example`·README에 반영한다. [Request]
 
 ## 파일 지도
@@ -38,6 +38,7 @@
 - `.github/workflows/rules-check.yml` — CI. PR과 main 변경마다 규칙 검사(`check.py`)와 테스트(`uv sync --locked`·`uv run pytest`)를 따로 돌린다 [공통]
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
+- `docs/CHATGPT_GUIDE.md` — 팀원용 ChatGPT 사용 안내(연결 순서, Codex 환경 게시·공유 확인, 작업 요청 문구, 충돌 처리, 문서 작업용 프로젝트 지침) [과제별]
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]
 - `.work/design/setup-research.md` — 연결 준비 공식 확인 결과(1단계). 세팅 단계 작업에서만 읽는다 [과제별]
 - `.work/design/api-choice.md` — 고른 LLM·외부 API와 근거(후보 비교, 설정 경로, 출처). LLM·API를 더하거나 바꿀 때 읽는다 [과제별]
