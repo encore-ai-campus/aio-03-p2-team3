@@ -35,18 +35,51 @@
 - 섞지 않을 것: README·.env.example·pyproject(3-2), 검사 도구·CI(4단계), ChatGPT 사용 안내(5단계)
 - 도구: 스크립트 3
 
-## 3-2단계 실행 환경
+## 3-2단계 실행 환경 — 3-2-1, 3-2-2, 3-2-3으로 나눔(2026-11-05, 무료 LLM·API 조사가 더해져 한 대화로 약 150KB)
+### 정한 것 (2026-11-05)
+- 지금 쓰기로 확정한 LLM·외부 API 가운데 무료로 쓸 수 있는 것은 사용자가 세팅 단계(3-2-1, 3-2-2)에서 정한다. [Request]
+- 나중에 기능을 더하며 다른 LLM·API를 더하거나 바꿀 수 있으므로, 그때 요청자에게 묻는 과정은 남긴다. 3-2-3에서 `.work/TASK.md` 환경 줄에 적는다. [Request]
+- 레포 문서와 과제 안내(`.work/design/initial-setup.md` 3절)에는 지정된 LLM·API가 없다(2026-11-05 확인). 사용자가 이미 정한 것이 있으면 명령어 뒤에 적고, 그 단계는 그것만 확인한다. [Claude proposal]
+- 테스트 명령은 `uv run pytest`로 한다. 서버 실행 명령은 코드 구조가 정해지면 README에 더한다. [Claude proposal]
+- README 템플릿(claude-github-setup `template/owned/common/README.md.tmpl`)은 아래 세 줄이 전부다. 이 레포는 규칙을 직접 소유하므로(RULES 머리말) 첫 줄의 '공통 설정 레포가 관리'는 '이 레포가 관리'로 고친다. 원본 레포는 열지 않는다. [Past work: setup · Claude proposal]
+  - `- 공통 규칙: .work/RULES.md (공통 설정 레포 [{{SETUP_REPO}}](...)가 관리)`
+  - `- 이 레포의 규칙과 파일 지도: .work/TASK.md`
+  - `- 진행기록: .work/STATUS.md`
+- README 팀원 표(`.work/design/initial-setup.md` 8절 '팀원과 담당'에서 옮김, 담당 칸은 '프로젝트 끝에 PR 내역으로 정리'): 김민성 `doomdiver100T` · 정원철 `krw82` · 김진혁 `rlawlsgura-stack` · 임석원 `swihm1989-ship-it` [Request]
+
+## 3-2-1단계 무료 LLM 고르기
+- 할 일:
+  1. 공식 문서(제공자 문서·가격 페이지)로 무료로 쓸 수 있는 LLM API 후보를 확인한다: 무료 한도(분당·일당 요청), 무료 등급의 데이터 사용 조건, LangChain 연동 패키지 이름, 키 발급 경로(사이트 → 메뉴 순서), 키를 넣을 환경변수 이름. 사용자가 정한 LLM이 있으면 그것만 확인한다. [Request]
+  2. 후보와 추천을 보이고 사용자가 고르게 한다. [Request]
+  3. `.work/design/api-choice.md`(새 파일)의 'LLM' 절에 후보 표, 고른 것, 설정 경로, 출처를 적는다(4KB 이하). TASK.md 파일 지도에 이 파일을 더한다. [Claude proposal]
+  4. STATUS.md에 3-2-2 안내를 쓰고, `docs/PROJECT_CONTEXT.md` 9절을 고친다.
+- 읽을 것: 이 절과 '3-2단계 정한 것'
+- 만들 것: `.work/design/api-choice.md`
+- 섞지 않을 것: 외부 API 조사(3-2-2), README·.env.example·pyproject(3-2-3)
+- 도구: 웹검색 1, 웹페이지 3, 스크립트 3 (웹검색 결과는 회당 약 20KB라 검색은 한 번만 하고, 나온 공식 페이지를 웹페이지로 연다)
+
+## 3-2-2단계 무료 외부 API 고르기
+- 할 일:
+  1. 일정 조정 에이전트에 필요한 외부 API(캘린더 등) 가운데 사용자가 확정한 것, 없으면 후보를 공식 문서로 확인한다: 무료 한도, 인증 방식(API 키·OAuth, 배포 뒤 다른 팀이 체험할 때 영향), Python 패키지 이름, 키·인증 정보 발급 경로, 환경변수 이름. [Request]
+  2. 후보와 추천을 보이고 사용자가 고르게 한다. [Request]
+  3. `.work/design/api-choice.md`에 '외부 API' 절을 더한다(합쳐 6KB 이하).
+  4. STATUS.md에 3-2-3 안내를 쓰고, `docs/PROJECT_CONTEXT.md` 9절을 고친다.
+- 읽을 것: 이 절과 '3-2단계 정한 것', `.work/design/api-choice.md`
+- 만들 것: `.work/design/api-choice.md`의 '외부 API' 절
+- 섞지 않을 것: LLM 다시 고르기(3-2-1), README·.env.example·pyproject(3-2-3)
+- 도구: 웹검색 1, 웹페이지 3, 스크립트 3 (3-2-1과 같은 까닭)
+
+## 3-2-3단계 실행 환경 파일
 - 할 일: [Request]
-  1. `README.md`: 실행 방법, 두 산출물(설계서·시험 보고서)의 위치(`docs/PROJECT_CONTEXT.md` 8절과 같게), 팀원 표(이름·GitHub 아이디는 `.work/design/initial-setup.md` 8절 '팀원과 담당', 담당 칸은 '프로젝트 끝에 PR 내역으로 정리').
+  1. `README.md`: 실행 방법, 두 산출물(설계서·시험 보고서)의 위치(`docs/PROJECT_CONTEXT.md` 8절과 같게), 팀원 표('3-2단계 정한 것'), 고른 LLM·API와 키 발급 경로(`.work/design/api-choice.md` 요약).
   2. `.env.example`: 환경변수 이름과 설명만.
-  3. `pyproject.toml`: Python 3.12, uv. 패키지 버전은 PyPI(`pip index versions <패키지>`)로 확인해 `==`로 고정한다. [Claude proposal: 웹검색 대신 PyPI 조회로 작업량을 줄임]
-  4. `AGENTS.md` '확인 명령'에 테스트 명령을 적는다. `.work/TASK.md` 환경 줄의 '세팅 3단계에서 정한다'를 실제 명령으로 고친다(규칙 파일 변경이므로 PR '⚠ 규칙 변경'에 적는다).
-  5. TASK.md 파일 지도, STATUS.md, `docs/PROJECT_CONTEXT.md` 9절을 고친다.
-- 요청자만 정할 것: LLM 제공자와 외부 API(일정·지도 등)를 아직 정하지 않았으면, 대화 시작 때 묻는다. 답이 없으면 공통 패키지(LangGraph 등)만 넣고 나머지는 '팀 결정 후 추가'로 둔다. [Claude proposal]
-- 읽을 것: `.work/design/initial-setup.md#8. 2단계 결정과 3단계 할 일 (2026-11-05)`의 '팀원과 담당'과 '3-2 실행 환경', `docs/PROJECT_CONTEXT.md`, claude-github-setup의 `template/owned/common/README.md.tmpl`
+  3. `pyproject.toml`: Python 3.12, uv. 공통 패키지(LangGraph 등)와 api-choice.md에서 고른 것의 패키지. 버전은 PyPI(`pip index versions <패키지>`)로 확인해 `==`로 고정한다. [Claude proposal: 웹검색 대신 PyPI 조회로 작업량을 줄임]
+  4. `AGENTS.md` '확인 명령'에 `uv run pytest`를 적는다. `.work/TASK.md` 환경 줄의 '세팅 3단계에서 정한다'를 실제 명령으로 고치고, 'LLM·외부 API를 더하거나 바꾸는 작업은 요청자가 정한다(대화면 묻고, Codex 작업이면 질문을 결과로 돌려준다)'를 더한다(규칙 파일 변경이므로 PR '⚠ 규칙 변경'에 적는다). [Request]
+  5. TASK.md 파일 지도, STATUS.md, `docs/PROJECT_CONTEXT.md` 2절('사용할 LLM과 외부 API' 줄)·7절(환경변수)·9절을 고친다.
+- 읽을 것: 이 절과 '3-2단계 정한 것', `.work/design/api-choice.md`, `docs/PROJECT_CONTEXT.md`
 - 만들 것: `README.md`, `.env.example`, `pyproject.toml`
-- 섞지 않을 것: 진행 문서의 내용 변경(3-1), 검사 도구·CI(4단계), ChatGPT 사용 안내(5단계)
-- 도구: 웹페이지 2, 스크립트 4
+- 섞지 않을 것: LLM·API 다시 고르기(3-2-1·3-2-2), 검사 도구·CI(4단계), ChatGPT 사용 안내(5단계)
+- 도구: 스크립트 5
 
 ## 4단계 검사 도구·CI
 - 할 일: claude-github-setup의 `measure.py`·`check.py`를 복사해 이 레포에 맞추고(진입 파일 AGENTS.md, STATUS.md 형식, TASK.md 파일 지도 검사), CI를 만들어 전체 검사를 통과시킨다. AGENTS.md '확인 명령'에 검사 명령을 적는다. [Request]

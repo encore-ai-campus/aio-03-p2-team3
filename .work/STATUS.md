@@ -7,22 +7,25 @@
 ## 지금 할 일
 <!-- 형식: - [ ] 할 일 — 완료 기준. 다음 단계 항목 아래에 들여 써서 안내를 둔다(RULES 8절 '단계를 마칠 때' 1번) -->
 - [ ] 3단계 진행·과제 문서 — 3-1, 3-2로 나눔(2026-11-05, 기준 초과 약 142KB)
-- [ ] 3-2단계 실행 환경 — README·.env.example·pyproject.toml이 PR로 올라가고 AGENTS.md에 테스트 명령이 들어감
-  - 명령어: `aio-03-p2-team3 3-2단계를 시작해 주세요`
+- [ ] 3-2단계 실행 환경 — 3-2-1, 3-2-2, 3-2-3으로 나눔(2026-11-05, 무료 LLM·API 조사가 더해져 한 대화로 약 150KB)
+- [ ] 3-2-1단계 무료 LLM 고르기 — 사용자가 LLM을 고르고 `.work/design/api-choice.md` 'LLM' 절이 PR로 올라감
+  - 명령어: `aio-03-p2-team3 3-2-1단계를 시작해 주세요` (이미 정한 LLM이 있으면 뒤에 적기)
   - 첨부: 없음
-  - 읽을 파일: `.work/FLOW.md#3-2단계 실행 환경` `.work/design/initial-setup.md#8. 2단계 결정과 3단계 할 일 (2026-11-05)` `docs/PROJECT_CONTEXT.md` `setup:README.md.tmpl=0.3`
-  - 읽지 않을 파일: `.work/design/setup-research.md`, initial-setup.md의 1~7절, FLOW.md의 다른 절, 원본 레포의 다른 파일(CLAUDE.md 포함), 메모리·지난 대화
-  - 만들 파일: `README.md=4` `.env.example=1` `pyproject.toml=1.5`
-  - 도구: `웹페이지=2` `스크립트=4`
-  - 작업량: 약 68KB(실행 중 22KB 포함) / 기준 100KB
-  - 원본 파일 여는 법: 레포를 복제하면 그 레포의 CLAUDE.md가 대화에 자동으로 들어온다. `git clone --depth 1 --no-checkout <원본> <폴더>` 뒤 `git -C <폴더> show HEAD:<경로>`로 그 파일만 연다.
+  - 읽을 파일: `.work/FLOW.md#3-2단계 실행 환경 — 3-2-1, 3-2-2, 3-2-3으로 나눔(2026-11-05, 무료 LLM·API 조사가 더해져 한 대화로 약 150KB)` `.work/FLOW.md#3-2-1단계 무료 LLM 고르기`
+  - 읽지 않을 파일: `.work/design/` 안의 파일, FLOW.md의 다른 절, 원본 레포, 메모리·지난 대화 (`docs/PROJECT_CONTEXT.md`는 AGENTS.md대로 시작할 때 읽는다)
+  - 만들 파일: `api-choice.md=3`
+  - 도구: `웹검색=1x20` `웹페이지=3x8` `스크립트=3` `질문·답=1x2`
+  - 작업량: 약 94KB(실행 중 55KB 포함, 레포 연결 출력 6KB 포함) / 기준 100KB
+  - 레포 연결 도구(add_repo) 출력은 약 6KB다. 이 레포 하나만 연결한다.
+- [ ] 3-2-2단계 무료 외부 API 고르기 — 사용자가 API를 고르고 api-choice.md '외부 API' 절이 PR로 올라감 (예상 약 97KB)
+- [ ] 3-2-3단계 실행 환경 파일 — README·.env.example·pyproject.toml이 PR로 올라가고 AGENTS.md에 `uv run pytest`가 들어감 (예상 약 66KB)
 - [ ] 4단계 검사 도구·CI — `python3 .work/check.py`와 CI가 통과함
 - [ ] 5단계 ChatGPT 사용 안내 — `docs/CHATGPT_GUIDE.md`가 PR로 올라감
 - [ ] 6단계 연결 시험 — 팀원 4명이 각자 Codex PR을 병합하고 끊김·자동 요약 여부가 여기에 남음
 - [ ] 7단계 다음 과제용 템플릿 레포 — Template repository가 만들어지고 시작 안내가 있음
 
 ## 대기
-- 3-1단계 PR 병합
+- 3-2단계 나누기 PR 병합
 
 ## 보류
 없음
