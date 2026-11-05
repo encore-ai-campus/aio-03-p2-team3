@@ -6,7 +6,7 @@
 
 ## 0. 지금 우리 워크스페이스 (2026-11-05 화면 확인)
 - Business 워크스페이스에 Chat/Work 전환과 Work 화면이 보인다. 새 Codex Cloud(Settings > Codex Cloud의 환경)를 쓴다. [Request]
-- 공식 문서의 "Work in > Cloud" 메뉴는 웹·데스크톱 앱의 Work 화면 어디에도 없다(입력창 아래는 Choose project·Files·Plugins, + 메뉴에도 Cloud 없음). 작업을 시작하는 경로는 확인 중이다(4절 1번). [Request]
+- 공식 문서의 "Work in > Cloud" 메뉴는 Work 화면에 없다(입력창 아래는 Choose project·Files·Plugins, + 메뉴에도 Cloud 없음). Codex 작업은 왼쪽 세로 아이콘 줄의 `…` → **Codex** 화면에서 시작하고, 입력창 위 **Cloud · Choose environment**가 그 자리다(4절 1번, 2026-11-05 사용자가 직접 해 봄). [Request]
 - Settings > Codex Cloud에 Environments·Personal vault 탭이 있고, Settings > Coding에 Code Review가 있다. Code Review와 PR 댓글 `@codex`는 GitHub 연동 흐름이라 Legacy가 맡는다. [Request · chatgpt-research ①]
 - 환경 `aio-03-p2-team3`(레포 `encore-ai-campus/aio-03-p2-team3`)을 2절 순서로 마무리해 게시했고, Who can use를 "Everyone at 엔코아 AI 캠퍼스"로 바꿔 다시 게시했다(Business에서도 워크스페이스 공유 선택지가 있다). [Request]
 - 팀원 모두 1절 순서로 GitHub 계정을 연결하고 환경 만들기 화면의 레포 목록에서 팀 레포를 확인했다(2026-11-05). [Request]
@@ -51,14 +51,14 @@
 4. 결과는 사용자에게 알려 6단계 기록 때 `.work/STATUS.md`에 남긴다.
 
 ## 4. Codex에 작업 맡기기
-1. 환경 `aio-03-p2-team3`와 브랜치 `main`을 고르고 요청을 쓴다. 공식 문서의 "Work in > Cloud"는 우리 화면에 없어, 환경을 고르고 작업을 시작하는 경로는 **확인 중**이다(후보: Settings > Codex Cloud > Environments에서 환경을 열고 새 작업 시작). 확인되면 이 줄을 고친다. [chatgpt-research ① · RULES 2절 1번 · Request]
+1. 작업 시작: chatgpt.com 왼쪽 세로 아이콘 줄의 `…` → **Codex**(새 작업은 Codex 화면 왼쪽 위 New chat) → 입력창 위 **Cloud**는 그대로 두고 **Choose environment** → `aio-03-p2-team3` → 입력창(Do anything)에 2번 요청을 쓰고 보낸다. 브랜치를 고르는 칸은 없고, 레포 기본 브랜치 `main`에서 시작한다(2026-11-05 시험에서 변경이 `work → origin/main`으로 비교되고 PR이 `main` 기준으로 열림). 시작한 작업은 Codex 화면 왼쪽 Recents에 구름 아이콘과 함께 남는다. Settings > Codex Cloud > Environments의 `···` 메뉴에는 Edit·Delete environment만 있어 거기서는 시작하지 못한다. [Request · RULES 2절 1번]
 2. 요청 문구(빈칸을 채워 붙여넣기). 관련 상태·도구·노드, 수정 범위, 확인 조건은 꼭 적는다. [TASK 이 레포의 규칙 · RULES 2절 4번 · Claude proposal]
    ```
    AGENTS.md부터 읽고 레포 규칙대로 해 주세요.
    작업: <한 줄>
    관련 상태·도구·노드: <상태 필드·도구·노드 이름, 없으면 없음>
    수정 범위: <파일·폴더>
-   확인 조건: <완료 기준>. `uv run pytest`와 `python3 .work/check.py`가 통과할 것.
+   확인 조건: <완료 기준>. `uv run pytest`와 `python3 .work/check.py`를 직접 실행해 둘 다 통과시키고, 실행 결과를 답에 보여 줄 것.
    테스트는 실제 외부 API를 부르지 말고 가짜 응답으로 한다.
    Issue: #<번호> — 아래에 본문(완료 기준)을 붙임
    <Issue 본문>
@@ -67,12 +67,19 @@
    ```
    - 계획 파일의 하위 작업이면 `작업:` 줄에 `docs/plans/<작업명>.md#N 절만 하세요`를 쓴다. 하위 작업마다 새 작업을 시작한다(RULES 7절 4번).
    - 기능이 둘 이상 섞인 요청이면 Codex는 구현하지 않고 계획 파일만 만든다(RULES 7절 1번).
-3. 결과(변경과 시험 결과)를 검토하고 PR을 연다. PR을 여는 버튼·순서는 **(화면에서 확인)**. PR 설명이 양식대로 들어가지 않았으면 Codex 마지막 답의 PR 설명을 붙여넣는다. [chatgpt-research ① · RULES 5절 4번]
-4. 병합은 사람이 한다. 누구나 병합하고, 병합한 브랜치는 지우지 않는다(RULES 5절 6번).
+3. 결과 검토: Codex 답에서 바뀐 파일과 실행 결과(`N passed`, `검사 통과`)를 본다. 작업 화면 오른쪽 패널의 Changes(+/−)를 누르면 바뀐 줄을 볼 수 있다. 통과하지 않았거나 수정 범위 밖 파일이 바뀌었으면 같은 작업 입력창(Ask for follow-up changes)에 고칠 점을 보낸다(예: "검사를 통과하게 고쳐 주세요"). [Request · Claude proposal]
+4. PR 열기: 작업 화면에는 PR을 여는 버튼이 없다(Changes 창의 아이콘·`···` 메뉴도 보기 기능과 Copy git apply command뿐, 2026-11-05 확인). 같은 작업 입력창에 아래 후속 요청을 보내면 Codex가 새 브랜치에 커밋해 push하고 PR을 연다. 답 맨 앞의 `PR #번호` 링크를 눌러 GitHub로 간다. [Request]
+   ```
+   이 변경을 새 브랜치에 커밋해 GitHub에 push하고, main으로 PR을 열어 주세요. PR 설명은 앞 답의 양식 그대로 넣고, 답 맨 앞에 PR 링크를 적어 주세요.
+   ```
+   - 2026-11-05 시험: 브랜치 이름은 Codex가 `docs/<작업명>`처럼 RULES 3절 형식으로 정했고, PR 본문에 양식이 들어갔다. [Request]
+   - 본문이 양식대로가 아니면: 본문 오른쪽 위 `···` → Edit → Codex 답의 PR 설명 붙여넣기 → Update comment(RULES 5절 4번).
+5. 병합 전 확인: PR 화면 'Files changed'에서 수정 범위 밖 파일이 없는지 보고, 아래 검사 칸에서 `rules-check`·`tests`가 모두 초록 체크(All checks have passed)인지 본다(2026-11-05 시험에서 약 15초). 빨간 X면 병합하지 않고, 그 줄의 Details에서 오류를 복사해 같은 Codex 작업 입력창에 "이 오류를 고쳐 주세요"와 함께 보낸다. [Request · Claude proposal]
+6. 병합은 사람이 한다. 초록 체크를 본 뒤 Merge pull request → Confirm merge. 누구나 병합하고, 병합한 브랜치는 지우지 않는다(Delete branch를 누르지 않음, RULES 5절 6번).
 
 ## 5. 충돌이 났을 때
 1. 규칙: 그 PR에 댓글 `@codex 최신 main에 맞게 충돌을 고쳐 주세요`를 단다(RULES 5절 7번). 이 댓글은 GitHub 연동 흐름이라 Legacy가 맡고, 새 경로에서 만든 PR에도 되는지는 **6단계에서 확인**한다. [Request · chatgpt-research ①]
-2. 6단계에서 함께 시험할 방법: 그 PR을 만든 원래 작업(Work)으로 돌아가 같은 문장을 요청하고, 같은 PR이 고쳐지는지 본다. 기존 작업은 자기 파일을 이어 쓰고, 작업 상태는 마지막 실행 뒤 7일까지 되살릴 수 있다. [Request · chatgpt-research ①]
+2. 6단계에서 함께 시험할 방법: 그 PR을 만든 원래 작업(`…` → Codex 화면 왼쪽 Recents)으로 돌아가 같은 문장을 요청하고, 같은 PR이 고쳐지는지 본다. 기존 작업은 자기 파일을 이어 쓰고, 작업 상태는 마지막 실행 뒤 7일까지 되살릴 수 있다. [Request · chatgpt-research ①]
 3. 둘 다 안 되면 GitHub 웹 화면에서 고치거나, PR을 닫고 최신 `main`에서 같은 작업을 다시 낸다(RULES 5절 7번).
 
 ## 6. 문서 작업용 ChatGPT 프로젝트
@@ -92,7 +99,8 @@
 
 ## 7. 6단계 연결 시험에서 확인할 것
 6단계(`.work/FLOW.md`)에서 화면으로 보고 결과를 `.work/STATUS.md`에 남긴다. [Request · Claude proposal]
-- 작업을 시작하는 경로(4절 1번), 공유된 환경이 다른 팀원 화면에 보이는지(3절 2번)
-- PR 여는 버튼·순서, PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지
-- PR 댓글 `@codex`가 동작하는지(5절 1번), 새 경로에서 원래 작업으로 같은 PR을 고칠 수 있는지(5절 2번)
-- 새 작업이 최신 `main`(최근 병합 포함)에서 시작하는지(공식 아님, 커뮤니티 보고)
+- 작업을 시작하는 경로(4절 1번): **확인함**(6-1, 2026-11-05). 공유된 환경이 다른 팀원 화면에 보이는지(3절 2번): 6-2에서 본다.
+- PR 여는 순서(4절 4번): **확인함**. 버튼은 없고 후속 요청으로 연다. PR 양식이 본문에 들어갔고, 브랜치 이름은 Codex가 RULES 3절 형식으로 정했다(1회). 팀원 시험에서도 같은지 본다.
+- PR 댓글 `@codex`가 동작하는지(5절 1번), 새 경로에서 원래 작업으로 같은 PR을 고칠 수 있는지(5절 2번): 6-2에서 본다.
+- 새 작업이 최신 `main`(최근 병합 포함)에서 시작하는지(공식 아님, 커뮤니티 보고): 6-1 시험 PR은 `main` 기준으로 열리고 CI를 통과했다. 앞 팀원의 병합을 반영하는지는 6-2에서 본다.
+- 작업 중 끊김·자동 요약: 6-1 시험에서 끊김 없음, 자동 요약은 화면으로 알 수 없었다.
