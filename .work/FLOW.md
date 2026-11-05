@@ -103,6 +103,9 @@
 - 시작 파일: 원본 measure.py의 `START_FILES`는 `.work/RULES.md`·`.work/TASK.md`·`.work/STATUS.md` 셋이다. 이 레포는 AGENTS.md대로 `AGENTS.md`와 `docs/PROJECT_CONTEXT.md`도 시작할 때 읽으므로 4-1에서 둘을 더한다. check.py는 안내의 작업량을 다시 재서 2KB 넘게 다르면 오류로 보므로, 시작 파일을 실제와 같게 둬야 한다. [Claude proposal]
 - 원본 레포는 비공개라 그냥 복제하면 인증 오류가 난다. 먼저 `add_repo`(읽기)로 이 대화에 붙인 뒤 위 방법으로 연다. [Claude proposal · 4-1에서 확인]
 - measure.py(4-1): `START_FILES`에 `AGENTS.md`·`docs/PROJECT_CONTEXT.md`를 더했고, 도구 표에 `레포 연결`(1회 4KB)을 더했고, `--read`도 레포 밖 파일을 `이름=KB`로 받게 했다(STATUS 안내가 원본 파일을 '읽을 파일'에 적기 때문). 도구 이름 `레포 연결`처럼 띄어쓰기가 있는 항목은 셸에서 따옴표로 감싼다. [Claude proposal]
+- check.py(4-2-1): `uv run pytest`는 부르지 않는다. 표준 라이브러리만 써서 uv·네트워크 없이(Codex 환경 포함) 돌고, 테스트 실패와 규칙 위반을 따로 보이게 하려는 것이다. CI(4-2-2)는 check.py와 별도로 uv 설치 → `uv sync` → `uv run pytest` 단계를 둔다. [Claude proposal]
+- check.py(4-2-1) 고친 것: 필수 파일을 `AGENTS.md`·RULES·TASK·STATUS·`docs/PROJECT_CONTEXT.md`·PR 양식으로 바꿈, skill·pipeline·agent 유형 검사와 `template.json` 검사를 지움, 출처 태그를 `[Request · Claude proposal]`처럼 이은 꼴도 받음, 나눈 단계의 묶음 제목은 FLOW 줄 검사에서 건너뜀, PROJECT_CONTEXT 절마다 '마지막 갱신' 줄 검사를 더함, 자동으로 읽히는 파일(`CLAUDE.md`·`.claude/`·`.mcp.json`·하위 폴더 `AGENTS.md`)은 이 레포 규칙에 금지 조항이 없어 오류가 아니라 경고로 둠. [Claude proposal]
+- check.py는 STATUS 안내의 백틱 항목을 모두 재므로, 안내 줄의 덧붙임 설명에는 백틱을 쓰지 않는다(4-2-1에서 덧붙임의 git show가 항목으로 읽혀 오류가 났다). [Claude proposal]
 
 ## 4-1단계 measure.py (완료)
 - 할 일: 원본 `measure.py`를 복사해 이 레포에 맞춘다(`START_FILES`, 필요하면 도구 표에 `레포 연결`). `--start`·`--read`·`--show`·`--outline`을 이 레포 파일로 한 번씩 돌려 본다. 4-2 안내를 `measure.py`로 재서 STATUS에 적고, TASK 파일 지도에 `.work/measure.py`를 더한다. [Request · Claude proposal]
@@ -120,7 +123,7 @@
 - 작업량(계획 값): 약 92KB — 시작 37KB, 읽을 것 25KB(원본 21KB 포함), 만들 것(고친 부분) 10KB, 실행 중 20KB
 - 나눈 까닭: 4-1에서 measure.py로 다시 재니 원본 check.py 20.6KB, 실행 중 약 32KB(스크립트 8, 레포 연결 2)로 약 107KB였다. CI는 check.py가 로컬에서 통과한 뒤에야 확인할 수 있어 뒤로 뗐다. [Claude proposal]
 
-## 4-2-1단계 check.py
+## 4-2-1단계 check.py (완료)
 - 할 일: 원본 `check.py`를 복사해 이 레포에 맞춘다(필수 파일의 진입 파일을 `CLAUDE.md`에서 `AGENTS.md`로, STATUS.md 형식, TASK.md 파일 지도 검사, 이 레포에 없는 유형 검사는 정리). `check.py`가 `uv run pytest`도 부를지 정해 4단계 '정한 것'에 적는다(4-2-2의 CI가 따른다). 로컬에서 `python3 .work/check.py`를 통과시키고, AGENTS.md '확인 명령'에 적고, TASK 파일 지도에 더한다. [Request · Claude proposal]
 - 읽을 것: 이 절과 4단계 '정한 것', 원본 `.work/check.py`, `.github/pull_request_template.md`
 - 만들 것: `.work/check.py`
@@ -128,7 +131,7 @@
 - 도구: 스크립트 5, 레포 연결 2
 
 ## 4-2-2단계 CI
-- 할 일: 원본 `rules-check.yml`로 CI를 만든다(4-2-1에서 `uv run pytest`를 부르기로 했으면 uv 설치 단계를 둔다). PR에서 CI가 통과하는지 확인하고, TASK 파일 지도에 더한다. [Request · Claude proposal]
+- 할 일: 원본 `rules-check.yml`로 CI를 만든다(check.py는 테스트를 부르지 않으므로 uv 설치·`uv sync`·`uv run pytest` 단계를 따로 둔다 — 4단계 '정한 것'). PR에서 CI가 통과하는지 확인하고, TASK 파일 지도에 더한다. [Request · Claude proposal]
 - 읽을 것: 이 절과 4단계 '정한 것', 원본 `.github/workflows/rules-check.yml`, `.github/pull_request_template.md`
 - 만들 것: `.github/workflows/rules-check.yml`
 - 섞지 않을 것: check.py 고치기(4-2-1, 꼭 필요하면 이유를 PR에 적는다), 규칙 내용 변경, ChatGPT 사용 안내(5단계)
