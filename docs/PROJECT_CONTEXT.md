@@ -94,7 +94,7 @@
 ## 9. 레포 세팅·작업 방식
 마지막 갱신: 2026-11-05
 
-- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 4단계(검사 도구 `.work/measure.py`·`.work/check.py`, CI)까지 했다. 다음은 5-1(Codex·ChatGPT 공식 확인)이다. 세팅 진행기록은 `.work/STATUS.md`.
+- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 5-1(Codex·ChatGPT 공식 확인, `.work/design/chatgpt-research.md`)까지 했다. 다음은 5-2(ChatGPT 사용 안내 글)다. 세팅 진행기록은 `.work/STATUS.md`.
 - 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다.
 - 병합: 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. AI는 병합하지 않는다. 병합한 브랜치는 지우지 않는다.
 - 기능이 둘 이상 섞인 요청은 먼저 `docs/plans/<작업명>.md`를 PR로 올리고 하위 작업마다 새 작업으로 한다(`.work/RULES.md` 7절).
