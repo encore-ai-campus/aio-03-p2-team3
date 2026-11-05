@@ -42,4 +42,5 @@
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]
 - `.work/design/setup-research.md` — 연결 준비 공식 확인 결과(1단계). 세팅 단계 작업에서만 읽는다 [과제별]
 - `.work/design/api-choice.md` — 고른 LLM·외부 API와 근거(후보 비교, 설정 경로, 출처). LLM·API를 더하거나 바꿀 때 읽는다 [과제별]
+- `.work/design/step6-handoff.md` — 6단계 인계(화면에서 본 것, 작업 시작 경로 후보, 정한 것, 팀원 메시지 초안). 6-1단계에서 읽는다 [과제별]
 - `.work/design/chatgpt-research.md` — Codex·ChatGPT 공식 확인 결과(5-1단계: 새 Codex Cloud와 Legacy, 환경·비밀값·인터넷, 프로젝트 지침 위치). 세팅 단계 작업과 Codex 환경을 바꿀 때 읽는다 [과제별]
