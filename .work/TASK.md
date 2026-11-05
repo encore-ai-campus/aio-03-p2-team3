@@ -32,6 +32,7 @@
 - `.work/TASK.md` — 이 파일 [과제별]
 - `.work/STATUS.md` — 세팅 진행기록(지금 할 일·다음 단계 안내). 세팅 단계 작업과 진행기록을 물을 때만 읽는다 [과제별]
 - `.work/FLOW.md` — 세팅 작업 흐름(단계 목록) [과제별]
+- `.work/measure.py` — 작업량 재기 도구(공통 규칙 8절). 크기만 내고, `--show`로 절만 연다 [공통]
 - `.github/pull_request_template.md` — PR 양식 [공통]
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]

@@ -7,22 +7,23 @@
 ## 지금 할 일
 <!-- 형식: - [ ] 할 일 — 완료 기준. 다음 단계 항목 아래에 들여 써서 안내를 둔다(RULES 8절 '단계를 마칠 때' 1번) -->
 - [ ] 4단계 검사 도구·CI — 4-1, 4-2로 나눔(2026-11-05, 원본 세 파일이 약 36KB라 한 대화로 약 101KB)
-- [ ] 4-1단계 measure.py — `python3 .work/measure.py`가 이 레포에서 돌고, 4-2 안내가 그것으로 잰 작업량과 함께 여기에 있음
-  - 명령어: `aio-03-p2-team3 4-1단계를 시작해 주세요 (지난 대화·메모리 검색 없이 레포 STATUS.md 안내대로)`
+- [ ] 4-2단계 check.py·CI — 4-2-1, 4-2-2로 나눔(2026-11-05, measure.py로 다시 재니 약 107KB)
+- [ ] 4-2-1단계 check.py — `python3 .work/check.py`가 로컬에서 통과하고 AGENTS.md '확인 명령'에 있음
+  - 명령어: `aio-03-p2-team3 4-2-1단계를 시작해 주세요 (지난 대화·메모리 검색 없이 레포 STATUS.md 안내대로)`
   - 첨부: 없음
-  - 읽을 파일: `.work/FLOW.md#4단계 검사 도구·CI — 4-1, 4-2로 나눔(2026-11-05, 원본 세 파일이 약 36KB라 한 대화로 약 101KB)` `.work/FLOW.md#4-1단계 measure.py` `.github/pull_request_template.md` `claude-github-setup:template/managed/common/.work/measure.py=15.1`
-  - 읽지 않을 파일: `.work/design/`의 모든 파일, FLOW.md의 다른 절, 원본 check.py·rules-check.yml(4-2), 원본 레포의 다른 파일, README·pyproject 등 실행 환경 파일, 메모리·지난 대화 (`docs/PROJECT_CONTEXT.md`는 AGENTS.md대로 시작할 때 읽는다)
-  - 만들 파일: `.work/measure.py=3` `문서 고침=3` (measure.py는 `git show`로 복사한 뒤 고친 부분만 셈)
-  - 도구: `스크립트=5x2` `레포 연결=2x4`
-  - 작업량: 약 80KB(실행 중 18KB 포함) / 기준 100KB — 시작 37KB, 읽을 파일 19KB, 만들 것 6KB
-  - 4단계 시작에서 배운 것: 시작 파일을 한 명령으로 함께 출력하면 잘린다(이번에도 40KB가 잘림). 파일마다 따로 읽는다. 원본 파일은 FLOW 4단계 '정한 것'의 방법(`--no-checkout --filter=blob:none` 뒤 `git cat-file -s`로 크기, `git show`로 내용)으로 연다
-- [ ] 4-2단계 check.py·CI — `python3 .work/check.py`와 CI가 통과함 (안내는 4-1이 적는다. 계획 값 약 92KB)
+  - 읽을 파일: `.work/FLOW.md#4단계 검사 도구·CI — 4-1, 4-2로 나눔(2026-11-05, 원본 세 파일이 약 36KB라 한 대화로 약 101KB)` `.work/FLOW.md#4-2-1단계 check.py` `.github/pull_request_template.md` `claude-github-setup:template/managed/common/.work/check.py=20.6`
+  - 읽지 않을 파일: `.work/design/`의 모든 파일, FLOW.md의 다른 절, `.work/measure.py`(필요하면 `grep -n`으로 그 줄만), 원본 rules-check.yml(4-2-2), 원본 레포의 다른 파일, README·pyproject 등 실행 환경 파일, 메모리·지난 대화 (`docs/PROJECT_CONTEXT.md`는 AGENTS.md대로 시작할 때 읽는다)
+  - 만들 파일: `.work/check.py=8` `문서 고침=3` (check.py는 `git show`로 복사한 뒤 고친 부분만 셈)
+  - 도구: `스크립트=5` `레포 연결=2`
+  - 작업량: 약 97KB(실행 중 23KB 포함) / 기준 100KB — 시작 38KB, 읽을 파일 25KB, 만들 것 11KB. 기준에 가까우니 원본 check.py는 한 번만 열고 출력이 긴 명령은 `tail`·`grep`으로 줄인다
+  - 4-1에서 배운 것: 원본 레포는 비공개라 먼저 `add_repo`(읽기)로 붙이고 FLOW 4단계 '정한 것'의 방법으로 연다(`register_repo_root`는 부르지 않는다). 시작 파일은 파일마다 따로 읽는다(4-1에서도 한 명령으로 읽다 잘렸다). measure.py에 `레포 연결`처럼 띄어쓰기가 있는 항목을 줄 때는 따옴표로 감싼다
+- [ ] 4-2-2단계 CI — PR의 CI가 통과함 (안내는 4-2-1이 적는다)
 - [ ] 5단계 ChatGPT 사용 안내 — `docs/CHATGPT_GUIDE.md`가 PR로 올라감
 - [ ] 6단계 연결 시험 — 팀원 4명이 각자 Codex PR을 병합하고 끊김·자동 요약 여부가 여기에 남음
 - [ ] 7단계 다음 과제용 템플릿 레포 — Template repository가 만들어지고 시작 안내가 있음
 
 ## 대기
-- 4단계 나누기 PR 병합
+- 4-1단계 PR 병합
 
 ## 보류
 없음
@@ -38,6 +39,7 @@
 - 2026-11-05 3-2-3단계 실행 환경 파일 — README·.env.example·pyproject.toml·uv.lock·.python-version·.gitignore·tests/test_env.py, AGENTS.md 확인 명령 `uv run pytest`(9개 통과) · 작업량 약 85KB(실행 중 약 20KB) / 계획 약 76KB · 사용 한도: 안 걸림 · 자동 요약: 없음 · 메모리·지난 대화 검색: 안 함(명령어에 넣은 효과) · 넘은 까닭: 시작 파일을 한 번에 읽다 출력이 잘려 STATUS.md를 다시 읽음(약 5KB), 안내에 없던 `.gitignore`·테스트 파일·uv.lock을 더함 · 배운 점: 시작 파일은 파일마다 따로 읽는다
 - 2026-11-05 3-2단계 실행 환경 — 3-2-1, 3-2-2, 3-2-3 모두 마침
 - 2026-11-05 3단계 진행·과제 문서 — 3-1, 3-2 모두 마침
+- 2026-11-05 4-1단계 measure.py — `START_FILES`에 AGENTS.md·PROJECT_CONTEXT.md, 도구 표에 `레포 연결`, `--read`에 레포 밖 `이름=KB` 허용 · 작업량 약 90KB(실행 중 약 25KB) / 계획 약 80KB · 사용 한도: 안 걸림 · 자동 요약: 없음 · 메모리·지난 대화 검색: 안 함 · 넘은 까닭: 원본 레포가 비공개라 레포 연결을 한 번 더 함, 4-2 안내를 쓰려고 FLOW 4-2 절을 읽음, 다시 재니 4-2가 기준을 넘어 나누기를 더함 · 배운 점: 4-2-1 안내에 적었다
 
 ## 이전 기록 요약
 - 2026-11: 1단계 연결 준비 확인(작업량 계획 약 90KB, 실제 모름, 기록은 `.work/design/setup-research.md`), 수동 준비(레포 생성, 팀원 3명 Write 초대, Claude 앱·ChatGPT Codex Connector 설치·승인) 마침
