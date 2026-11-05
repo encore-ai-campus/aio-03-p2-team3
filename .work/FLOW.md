@@ -80,7 +80,7 @@
 - 섞지 않을 것: LLM 다시 고르기(3-2-1), README·.env.example·pyproject(3-2-3)
 - 도구: 웹검색 1, 웹페이지 3, 스크립트 4
 
-## 3-2-3단계 실행 환경 파일
+## 3-2-3단계 실행 환경 파일 (완료)
 - 할 일: [Request]
   1. `README.md`: 실행 방법, 두 산출물(설계서·시험 보고서)의 위치(`docs/PROJECT_CONTEXT.md` 8절과 같게), 팀원 표('3-2단계 정한 것'), 고른 LLM·API와 키 발급 경로(`.work/design/api-choice.md` 요약).
   2. `.env.example`: 환경변수 이름과 설명만.

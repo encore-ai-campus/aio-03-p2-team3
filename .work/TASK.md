@@ -14,13 +14,20 @@
 - AI에게 작업을 맡길 때 요청에 관련 상태·도구·노드, 수정 범위, 확인 조건을 적는다. [Request]
 - 병합 전 절차: ① PR을 연 사람이 '설명' 칸에 변경 이유·입출력·상태 변화·오류 처리를 적는다(필수). ② 검토자가 정상·오류 요청의 실제 결과를 확인한다(선택, 병합 뒤 댓글도 된다). ③ PR을 연 사람이 반영한다. [Request · Claude proposal]
 - 기록: 설계 결정·오류 사례·수정 이유·버전·재실행 결과를 Issue, PR('오류·재실행 기록' 칸), 팀 노션에 남긴다. [Request]
-- 환경: Python 3.12, uv. 환경변수 이름은 `.env.example`에 두고, 키는 서버 환경(Render)과 Codex 환경의 비밀값에 둔다. 패키지 추가와 실행 명령은 세팅 3단계에서 README와 함께 정한다. [Request]
+- 환경: Python 3.12, uv. 환경변수 이름은 `.env.example`에 두고, 키는 서버 환경(Render)과 Codex 환경의 비밀값에 둔다. [Request] 설치는 `uv sync`, 테스트는 `uv run pytest`. 패키지는 `uv add <패키지>==<버전>`(개발용은 `--dev`)으로 더하고, 버전은 `pip index versions <패키지>`로 확인하며, 바뀐 `pyproject.toml`·`uv.lock`을 함께 올린다. 서버 실행 명령은 코드 구조가 정해지면 README에 더한다. [Claude proposal]
+- LLM·외부 API를 더하거나 바꾸는 작업은 요청자가 정한다(대화면 묻고, Codex 작업이면 질문을 결과로 돌려준다). 정한 것은 `.work/design/api-choice.md`·`.env.example`·README에 반영한다. [Request]
 
 ## 파일 지도
 <!-- 형식: - `경로` — 무엇인지 [공통|과제별]. [공통] 다음 과제에도 그대로 씀 · [과제별] 이 과제용(템플릿에는 빈 틀) [Request]
      맨 앞 경로가 실제로 있는지 check.py가 검사한다. -->
 - `AGENTS.md` — 진입 파일(ChatGPT·Codex·Claude가 먼저 읽음) [공통]
-- `README.md` — 레포 소개 [과제별]
+- `README.md` — 레포 소개, 실행 방법, 산출물 위치, LLM·API 키 발급, 팀원 [과제별]
+- `pyproject.toml` — Python 3.12·패키지(버전 고정)·pytest 설정 [과제별]
+- `uv.lock` — uv가 만드는 잠금 파일. 손으로 고치지 않는다 [과제별]
+- `.python-version` — uv가 쓸 Python 버전(3.12) [과제별]
+- `.env.example` — 환경변수 이름과 설명(값 없음) [과제별]
+- `.gitignore` — `.env`·`.venv` 등 올리지 않을 파일 [과제별]
+- `tests/test_env.py` — 실행 환경 확인 테스트(Python 버전, 패키지 불러오기, `.env.example`에 값 없음) [과제별]
 - `.work/RULES.md` — 공통 규칙 [공통]
 - `.work/TASK.md` — 이 파일 [과제별]
 - `.work/STATUS.md` — 세팅 진행기록(지금 할 일·다음 단계 안내). 세팅 단계 작업과 진행기록을 물을 때만 읽는다 [과제별]
