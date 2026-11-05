@@ -46,7 +46,7 @@
 - 주제: 미정. 기본은 '일정 조정 에이전트'이고, 확장 여부는 11/9까지 팀이 정한다.
 - 대표 입력·출력: 미정(11/9 마감).
 - LLM: Google Gemini API `gemini-3.8-flash`(무료 등급, 환경변수 `GEMINI_API_KEY`). 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다. 근거와 설정 경로는 `.work/design/api-choice.md`.
-- 외부 API: 한국천문연구원 특일 정보·기상청 단기예보(공공데이터포털)·네이버 지도는 쓰기로 정했다. 캘린더(Google Calendar) 연결 방식은 세팅 3-2-2-2단계에서 정한다. 근거는 `.work/design/api-choice.md`.
+- 외부 API: Google Calendar(사용자별 OAuth 로그인, 프로덕션 게시·검증 없음), 한국천문연구원 특일 정보·기상청 단기예보(공공데이터포털), 네이버 지역 검색(NAVER API HUB)·길찾기 Directions 5(네이버 클라우드 Maps). 체험자는 테스트용 Google 계정으로 로그인하게 안내하고, LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로·환경변수는 `.work/design/api-choice.md`.
 
 ## 3. 그래프 상태·기억 (공통 부분)
 마지막 갱신: 2026-11-05
@@ -92,7 +92,7 @@
 ## 9. 레포 세팅·작업 방식
 마지막 갱신: 2026-11-05
 
-- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 3-2-2-1단계(외부 API 후보 조사)까지 했다. 다음은 네이버 지도·캘린더 인증 확정(3-2-2-2) → README·.env.example·pyproject(3-2-3)다. 세팅 진행기록은 `.work/STATUS.md`.
+- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 3-2-2단계(외부 API 고르기)까지 했다. 다음은 README·.env.example·pyproject(3-2-3)다. 세팅 진행기록은 `.work/STATUS.md`.
 - 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다.
 - 병합: 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. AI는 병합하지 않는다. 병합한 브랜치는 지우지 않는다.
 - 기능이 둘 이상 섞인 요청은 먼저 `docs/plans/<작업명>.md`를 PR로 올리고 하위 작업마다 새 작업으로 한다(`.work/RULES.md` 7절).

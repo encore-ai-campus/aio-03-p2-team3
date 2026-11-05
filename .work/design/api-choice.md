@@ -39,37 +39,33 @@
 확인일: 2026-11-05
 
 ### 후보 (공식 문서 확인)
-| 항목 | Google Calendar API | 특일 정보(한국천문연구원) | 단기예보(기상청) |
-|---|---|---|---|
-| 쓰임 | 일정 읽기·만들기 | 공휴일·24절기·공공기관 휴일 여부 | 초단기·단기 예보 |
-| 무료 한도 | 표준 사용 무료. 프로젝트당 분당 10,000회, 사용자당 분당 600회 | 무료, 개발계정 10,000회 | 무료, 개발계정 하루 10,000회 |
-| 승인·인증 | OAuth 2.0 또는 서비스 계정. 민감 범위는 앱 검증 필요 | 공공데이터포털 서비스 키, 자동승인 | 공공데이터포털 서비스 키, 자동승인 |
-| 형식·패키지 | JSON, `google-api-python-client`·`google-auth` | XML(JSON 미확인), HTTP 요청 | JSON·XML, HTTP 요청 |
+| 항목 | Google Calendar | 특일 정보(천문연) | 단기예보(기상청) | 네이버 지역 검색(API HUB) | 네이버 Maps(네이버 클라우드) |
+|---|---|---|---|---|---|
+| 쓰임 | 일정 읽기·만들기 | 공휴일·절기 | 초단기·단기 예보 | 장소→주소·좌표(WGS84), 1회 1~5개 | 길찾기 Directions 5·15, 주소↔좌표, 지도 이미지 |
+| 무료 한도 | 프로젝트 분당 10,000회, 사용자 분당 600회 | 개발계정 10,000회 | 개발계정 하루 10,000회 | 하루 25,000회. 한시적 무료, 유료 전환 전 공지 | API마다 3,000~1억 건. 대표 계정 하나만 |
+| 인증 | OAuth 2.0(민감 범위) | 공공데이터포털 키, 자동승인 | 같음 | 헤더 `X-NCP-APIGW-API-KEY-ID`·`X-NCP-APIGW-API-KEY` | 헤더 `x-ncp-apigw-api-key-id` 등 |
+| 형식 | JSON, `google-api-python-client`·`google-auth` | XML | JSON·XML | JSON | JSON |
+- 네이버 개발자센터 검색 API는 NAVER API HUB로 옮겨 갔으므로 HUB로 쓴다. [Claude proposal]
+- Google OAuth 게시 상태: 테스트는 등록한 테스트 사용자 100명만, 승인 7일 뒤 만료. 프로덕션(검증 전)은 누구나 로그인하지만 '확인되지 않은 앱' 경고가 뜨고, 경고를 본 새 사용자는 프로젝트 전체 기간 100명까지.
 
-| 항목 | 네이버 지역 검색(NAVER API HUB) | 네이버 지도 Maps(네이버 클라우드) |
-|---|---|---|
-| 쓰임 | 장소 이름으로 주소·좌표(WGS84) 찾기, 1회 1~5개 | 주소↔좌표(Geocoding·Reverse Geocoding), 길찾기(Directions 5·15), 지도 이미지 |
-| 무료 한도 | 하루 25,000회. HUB는 한시적 무료, 유료 전환 전 공지 | 미확인(요금 페이지가 도구로 안 열림) |
-| 인증 | 헤더 `X-NCP-APIGW-API-KEY-ID`·`X-NCP-APIGW-API-KEY` | 헤더 `x-ncp-apigw-api-key-id` 등(Client ID·Secret) |
-| 형식 | JSON·XML, HTTP 요청 | JSON, HTTP 요청 |
-- 네이버 개발자센터(`openapi.naver.com`)의 검색 API는 NAVER API HUB로 옮겨 갔다(공식 이관 가이드). 그래서 지역 검색은 HUB로 쓴다. [Claude proposal]
+### 고른 것 (2026-11-05)
+- 캘린더는 B(사용자별 OAuth 로그인). 체험자는 자기 Google 계정으로 자기 캘린더를 쓴다. [Request]
+- OAuth는 프로덕션으로 게시하고 검증은 받지 않는다. 체험자는 경고 화면에서 '고급 → 이동'을 누른다. 100명을 넘으면 테스트 상태 등록 방식으로 바꾼다. [Request: 추천안]
+- 체험 화면에 '테스트용 Google 계정으로 로그인하세요'를 안내하고, LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다(Gemini 무료 등급 입력은 Google 개선에 쓰임). 구체 방법은 11/13 설계에서 정한다. [Request: 추천안]
+- 보조 API: 특일 정보, 단기예보, 네이버 지역 검색 + Directions 5. 지역 검색 결과에 좌표가 있어 Geocoding은 쓰지 않는다. 카카오 로컬은 쓰지 않는다. [Request]
+- Directions 5의 정확한 무료 건수는 미확인. 키를 만든 사람이 콘솔에서 보고 이 줄을 고치고, '이용 한도 설정'을 무료량 이하로 둔다. [Claude proposal]
 
-### Google OAuth 게시 상태 (캘린더 B 방식)
-- 테스트: 동의 화면에 올린 테스트 사용자 최대 100명만 로그인한다. 승인은 7일 뒤 만료된다(refresh token 포함).
-- 프로덕션(검증 전): Google 계정이 있으면 누구나 로그인한다. 검증 안 된 민감 범위를 요청하면 '확인되지 않은 앱' 경고가 뜨고, 경고를 본 새 사용자는 프로젝트 전체 기간에 100명까지다.
-
-### 정한 것 (진행 중)
-- 보조 API는 특일 정보, 단기예보, 네이버 지도를 모두 쓴다. 카카오 로컬은 쓰지 않는다. [Request]
-- 캘린더는 B(사용자별 OAuth 로그인)로 한다. 체험자는 자기 Google 계정으로 로그인해 자기 캘린더를 쓴다. [Request]
-- 남은 결정: OAuth 게시 상태, 네이버 지도 기능(Maps 무료 한도 확인 뒤).
+### 설정 경로
+1. Google Cloud 콘솔: 프로젝트 → Google Calendar API 사용 설정 → Google Auth Platform에서 Branding·Audience(외부, 앱 게시)·Data Access(캘린더 범위) → Clients에서 웹 애플리케이션 클라이언트를 만들고 Render 주소의 리디렉션 URI를 넣는다. 비밀번호는 만들 때만 보인다. 환경변수 `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`.
+2. 공공데이터포털: 두 API 페이지에서 '활용신청'(자동승인) → 마이페이지에서 인증키 확인. 환경변수 `DATA_GO_KR_SERVICE_KEY`(메뉴 이름은 화면에서 확인).
+3. 네이버 클라우드 콘솔(대표 계정): All Services → Application Services → NAVER API HUB → Application 등록 → 인증 정보. 환경변수 `NAVER_HUB_CLIENT_ID`·`NAVER_HUB_CLIENT_SECRET`.
+4. 같은 콘솔의 Maps → Application 등록(Directions 5 선택) → 인증 정보 → '이용 한도 설정'. 환경변수 `NCP_MAPS_CLIENT_ID`·`NCP_MAPS_CLIENT_SECRET`.
+- 환경변수 이름은 [Claude proposal]. 3-2-3에서 `.env.example`에 옮긴다.
 
 ### 출처
-- Calendar 한도: https://developers.google.com/workspace/calendar/api/guides/quota
-- Calendar 서비스 계정 주의: https://developers.google.com/workspace/calendar/api/concepts/events-calendars
-- 민감·제한 범위 검증: https://developers.google.com/workspace/calendar/api/guides/auth
-- OAuth 게시 상태·사용자 상한: https://support.google.com/cloud/answer/15549945
-- 특일 정보: https://data.go.kr/data/15012690/openapi.do
-- 단기예보: https://www.data.go.kr/data/15084084/openapi.do
-- 네이버 지역 검색: https://api.ncloud-docs.com/docs/naver-api-hub-search-local
-- NAVER API HUB 무료·이관: https://guide.ncloud-docs.com/docs/apihub-overview
-- 네이버 Maps API 목록·헤더: https://api.ncloud-docs.com/docs/application-maps-overview
+- Calendar 한도·범위: https://developers.google.com/workspace/calendar/api/guides/quota , .../guides/auth
+- OAuth 게시 상태: https://support.google.com/cloud/answer/15549945
+- 특일 정보·단기예보: https://data.go.kr/data/15012690/openapi.do , https://www.data.go.kr/data/15084084/openapi.do
+- 지역 검색: https://api.ncloud-docs.com/docs/naver-api-hub-search-local
+- API HUB 무료·이관·콘솔 경로: https://guide.ncloud-docs.com/docs/apihub-overview , .../apihub-application
+- Maps 목록·헤더: https://api.ncloud-docs.com/docs/application-maps-overview , 무료 한도: https://www.ncloud.com/support/faq/prod/2828 (사용자가 붙여 줌)
