@@ -36,24 +36,40 @@
 - 패키지·환경변수: PyPI `langchain-google-genai` 4.4.3, `langchain-groq` 1.1.3 소스 (2026-11-05)
 
 ## 외부 API
-확인일: 2026-11-05. 네이버 지도·캘린더 인증은 3-2-2-2에서 확인한다.
+확인일: 2026-11-05
 
 ### 후보 (공식 문서 확인)
 | 항목 | Google Calendar API | 특일 정보(한국천문연구원) | 단기예보(기상청) |
 |---|---|---|---|
 | 쓰임 | 일정 읽기·만들기 | 공휴일·24절기·공공기관 휴일 여부 | 초단기·단기 예보 |
 | 무료 한도 | 표준 사용 무료. 프로젝트당 분당 10,000회, 사용자당 분당 600회 | 무료, 개발계정 10,000회 | 무료, 개발계정 하루 10,000회 |
-| 승인·인증 | OAuth 2.0 또는 서비스 계정. 민감 범위는 앱 검증 필요. Google은 서비스 계정을 데이터 소유자로 쓰지 말라고 권함 | 공공데이터포털 서비스 키, 자동승인 | 공공데이터포털 서비스 키, 자동승인 |
+| 승인·인증 | OAuth 2.0 또는 서비스 계정. 민감 범위는 앱 검증 필요 | 공공데이터포털 서비스 키, 자동승인 | 공공데이터포털 서비스 키, 자동승인 |
 | 형식·패키지 | JSON, `google-api-python-client`·`google-auth` | XML(JSON 미확인), HTTP 요청 | JSON·XML, HTTP 요청 |
+
+| 항목 | 네이버 지역 검색(NAVER API HUB) | 네이버 지도 Maps(네이버 클라우드) |
+|---|---|---|
+| 쓰임 | 장소 이름으로 주소·좌표(WGS84) 찾기, 1회 1~5개 | 주소↔좌표(Geocoding·Reverse Geocoding), 길찾기(Directions 5·15), 지도 이미지 |
+| 무료 한도 | 하루 25,000회. HUB는 한시적 무료, 유료 전환 전 공지 | 미확인(요금 페이지가 도구로 안 열림) |
+| 인증 | 헤더 `X-NCP-APIGW-API-KEY-ID`·`X-NCP-APIGW-API-KEY` | 헤더 `x-ncp-apigw-api-key-id` 등(Client ID·Secret) |
+| 형식 | JSON·XML, HTTP 요청 | JSON, HTTP 요청 |
+- 네이버 개발자센터(`openapi.naver.com`)의 검색 API는 NAVER API HUB로 옮겨 갔다(공식 이관 가이드). 그래서 지역 검색은 HUB로 쓴다. [Claude proposal]
+
+### Google OAuth 게시 상태 (캘린더 B 방식)
+- 테스트: 동의 화면에 올린 테스트 사용자 최대 100명만 로그인한다. 승인은 7일 뒤 만료된다(refresh token 포함).
+- 프로덕션(검증 전): Google 계정이 있으면 누구나 로그인한다. 검증 안 된 민감 범위를 요청하면 '확인되지 않은 앱' 경고가 뜨고, 경고를 본 새 사용자는 프로젝트 전체 기간에 100명까지다.
 
 ### 정한 것 (진행 중)
 - 보조 API는 특일 정보, 단기예보, 네이버 지도를 모두 쓴다. 카카오 로컬은 쓰지 않는다. [Request]
-- 캘린더 연결 방식은 미정이다. 사용자가 'A(팀 데모 캘린더를 서비스 계정에 공유)로는 배포 뒤 사용자가 못 쓰지 않나, 배포까지 해야 한다'고 물었다. [Request]
-  - 답: A도 배포 주소에서 누구나 로그인 없이 쓰지만 모두 한 캘린더를 쓰고 자기 Google 캘린더와는 연결되지 않는다. 자기 캘린더는 OAuth 로그인(B)이 필요하고 '테스트' 상태 제한은 미확인이다. 3-2-2-2에서 확인하고 A·B·A+B 가운데 고른다. [Claude proposal]
+- 캘린더는 B(사용자별 OAuth 로그인)로 한다. 체험자는 자기 Google 계정으로 로그인해 자기 캘린더를 쓴다. [Request]
+- 남은 결정: OAuth 게시 상태, 네이버 지도 기능(Maps 무료 한도 확인 뒤).
 
 ### 출처
 - Calendar 한도: https://developers.google.com/workspace/calendar/api/guides/quota
 - Calendar 서비스 계정 주의: https://developers.google.com/workspace/calendar/api/concepts/events-calendars
 - 민감·제한 범위 검증: https://developers.google.com/workspace/calendar/api/guides/auth
+- OAuth 게시 상태·사용자 상한: https://support.google.com/cloud/answer/15549945
 - 특일 정보: https://data.go.kr/data/15012690/openapi.do
 - 단기예보: https://www.data.go.kr/data/15084084/openapi.do
+- 네이버 지역 검색: https://api.ncloud-docs.com/docs/naver-api-hub-search-local
+- NAVER API HUB 무료·이관: https://guide.ncloud-docs.com/docs/apihub-overview
+- 네이버 Maps API 목록·헤더: https://api.ncloud-docs.com/docs/application-maps-overview
