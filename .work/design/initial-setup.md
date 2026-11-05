@@ -99,11 +99,11 @@
 - 규칙·PR 양식은 [공통], TASK.md·README·design 파일은 [과제별]로 표시했다.
 ### 팀원과 담당 (2026-11-05 사용자 답변) [Request]
 - 담당은 미리 정하지 않는다. 프로젝트를 마친 뒤 팀원별 PR 내역을 바탕으로 맡은 바를 정리한다. `docs/OWNERS.md`는 만들지 않는다.
-- 팀원(이름, GitHub 아이디). '확인'은 이 레포의 assignee 목록(`gh api repos/<레포>/assignees`)에서 찾은 것이다.
-  - 김진혁, `rlawlsgura-stack` (확인)
-  - 임석원, 받은 값 `SEOKWON IHM` (아이디 미확인: GitHub 아이디에는 공백을 쓸 수 없고 목록에서 찾지 못함)
-  - 정원철, 받은 값 `KRW_82` (아이디 미확인: GitHub 아이디에는 밑줄을 쓸 수 없음. 목록에 `krw82`가 있음)
-  - 사용자 본인: 이름 미확인, 아이디는 `doomdiver100T`로 보임(목록에 있음, 확인 필요)
+- 팀원(이름, GitHub 아이디). 모두 이 레포의 assignee 목록(`gh api "repos/<레포>/assignees?per_page=100&page=N"`)에서 확인했다(2026-11-05). 괄호 안은 GitHub 표시 이름이다.
+  - 김민성(사용자), `doomdiver100T`
+  - 정원철, `krw82` (표시 이름 KRW_82)
+  - 김진혁, `rlawlsgura-stack`
+  - 임석원, `swihm1989-ship-it` (표시 이름 SEOKWON IHM)
 - 작업량이 기준을 넘으면 묻지 않고 나눈다(RULES 8절에 반영).
 
 ### 3단계 할 일 (3-1, 3-2로 나눔: 2026-11-05, 기준 초과 약 142KB)
@@ -115,7 +115,7 @@
 - 만들 것: `README.md`(실행 방법, 두 산출물 위치, 팀원 표: 이름·GitHub 아이디, 담당 칸은 '프로젝트 끝에 PR 내역으로 정리'), `.env.example`, `pyproject.toml`(Python 3.12·uv, 버전은 웹에서 확인), AGENTS.md '확인 명령'의 테스트 명령. TASK.md 파일 지도, STATUS.md도 고친다.
 - 읽을 것: 이 절, `docs/PROJECT_CONTEXT.md`(3-1 결과), claude-github-setup의 `template/owned/common/README.md.tmpl`.
 - 섞지 않을 것: 진행 문서의 내용 변경(3-1), 검사 도구·CI(4단계).
-- 시작 전에 미확인 팀원 아이디와 사용자 이름을 묻는다(README 팀원 표).
+- README 팀원 표는 위 '팀원과 담당'의 이름·아이디를 쓴다.
 
 ### 6단계에서 확인할 것
 - Codex가 PR을 만들 때 PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지.
