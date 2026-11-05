@@ -160,7 +160,16 @@
 - 섞지 않을 것: 새 공식 조사(5-1, 꼭 필요하면 한 번만 하고 PR에 적는다), 규칙 내용 변경, 검사 도구(4단계)
 - 도구: 스크립트 3
 
-## 6단계 연결 시험 (팀원 각자 ChatGPT)
+## 6단계 연결 시험 — 6-1, 6-2로 나눔(2026-11-05, 공식 문서의 작업 시작 경로 "Work in > Cloud"가 화면에 없어 먼저 찾는다)
+
+## 6-1단계 Codex 작업 시작 경로 찾기 (Claude 대화)
+- 할 일: 사용자 화면 캡처로 새 Codex Cloud에서 환경 `aio-03-p2-team3`를 골라 작업을 시작하는 경로를 찾는다(후보 순서는 `.work/design/step6-handoff.md`). 사용자가 자기 줄로 한 번 해 보며 시작 버튼·PR 버튼 이름을 확인하게 돕는다. 결과로 `docs/CHATGPT_GUIDE.md` 4절(1번 시작 경로, 검사 확인: Codex 답의 실행 결과와 PR의 CI 초록 체크)과 7절을 고치고, 인계 파일의 팀원 메시지 [ ]를 채워 사용자에게 준다. [Request · Claude proposal]
+- 읽을 것: 이 절, `.work/design/step6-handoff.md`, `docs/CHATGPT_GUIDE.md`
+- 만들 것: `docs/CHATGPT_GUIDE.md` 고침, 팀원 메시지(답으로)
+- 섞지 않을 것: 규칙 내용 변경, 팀원 결과 기록(6-2), 공식 문서 검색(화면 후보로 못 찾으면 찾은 것을 인계 파일에 적고 검색은 다음 대화로 넘긴다: 검색까지 하면 기준을 넘는다)
+- 도구: 캡처 6, 스크립트 4
+
+## 6-2단계 연결 시험 (팀원 각자 ChatGPT)
 - 할 일: 팀원마다 Codex로 README 팀원 표의 자기 줄에 한 줄 소개를 넣는 PR을 열고 병합한다. 끊김·자동 요약 여부를 STATUS.md에 남긴다. [Request · Claude proposal: 3-2에서 팀원 표가 채워지므로 '이름 넣기'를 '한 줄 소개 넣기'로 바꿈]
 - 확인할 것: Codex PR에 PR 양식과 마지막 답의 PR 설명이 들어가는지, 브랜치 이름을 어떻게 정하는지, PR 댓글 `@codex`가 동작해 충돌을 고칠 수 있는지, 새 경로에서 원래 작업으로 돌아가 같은 PR을 고칠 수 있는지, Business에서 환경 공유가 되는지. 순서와 항목은 `docs/CHATGPT_GUIDE.md` 5절·7절. [Request · Claude proposal]
 - 읽을 것: `docs/CHATGPT_GUIDE.md`
