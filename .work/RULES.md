@@ -46,8 +46,8 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
 1. `docs/PROJECT_CONTEXT.md`에서 이번에 바꾼 영역의 절을 같은 PR에서 고친다. 그 절의 '마지막 갱신' 날짜도 고친다. 다른 영역의 절과 문서 맨 위 공용 줄은 고치지 않는다(모든 PR이 같은 줄을 고치면 매번 충돌한다). [Request · Claude proposal]
 2. 파일을 더하거나 지우거나 옮겼으면 `.work/TASK.md`의 파일 지도도 고친다. [Past work: setup]
 3. 검사 도구(`python3 .work/check.py`)가 있으면 통과시킨다. 통과하지 못하면 PR을 열지 않고 먼저 고친다. 고칠 수 없으면 오류와 시도한 방법을 알린다. [Past work: aio3]
-4. PR 설명은 `.github/pull_request_template.md` 양식을 모두 채운다. [Past work: aio3] Codex는 마지막 답에 양식대로 채운 PR 설명을 함께 낸다(PR을 만들 때 양식이 들어가지 않을 수 있다). [Claude proposal]
-5. 마지막 답 맨 앞 줄: Claude는 `🔔 PR을 날렸습니다. 병합 후 진행해주세요: <PR 링크>`, Codex는 `🔔 작업을 마쳤습니다. PR을 열고 병합해 주세요.`를 쓴다. 공통 부분을 바꿨으면 바로 아래에 `⚠ 공통 부분 변경: 병합 전에 <관련 팀원>과 조율해 주세요.`를 쓴다. 그 아래에 1절의 `❗ 확인할 것:`을 쓴다(있을 때). 그 뒤에 바꾼 내용을 짧게 적는다. [Request · Claude proposal]
+4. PR 설명은 `.github/pull_request_template.md` 양식을 모두 채운다. [Past work: aio3] Codex는 PR 본문에 양식을 채워 PR을 직접 열고, 마지막 답에도 같은 설명을 낸다. [Request]
+5. 마지막 답 맨 앞 줄: Claude는 `🔔 PR을 날렸습니다. 병합 후 진행해주세요: <PR 링크>`, Codex는 `🔔 PR을 열었습니다. 확인 후 병합해 주세요: <PR 링크>`를 쓴다. 공통 부분을 바꿨으면 바로 아래에 `⚠ 공통 부분 변경: 병합 전에 <관련 팀원>과 조율해 주세요.`를 쓴다. 그 아래에 1절의 `❗ 확인할 것:`을 쓴다(있을 때). 그 뒤에 바꾼 내용을 짧게 적는다. [Request · Claude proposal]
 6. AI는 PR을 병합하지 않는다. 병합은 사람이 한다. [Past work: setup · aio3] 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. 필수 리뷰 같은 브랜치 보호 규칙은 두지 않는다. 병합한 브랜치는 지우지 않는다. [Request]
 7. 충돌: 앞 PR이 병합된 뒤 충돌이 나면 요청자가 그 PR에서 AI에게 최신 `main` 흐름에 맞게 고쳐 달라고 한다(Codex는 PR 댓글 `@codex 최신 main에 맞게 충돌을 고쳐 주세요`). AI는 양쪽 변경의 뜻을 모두 살려 고치고, `docs/PROJECT_CONTEXT.md`의 해당 절도 합친 결과대로 고친다. [Request] 그렇게 되지 않으면 GitHub 웹 화면에서 고치거나, PR을 닫고 최신 `main`에서 같은 작업을 다시 낸다. [Claude proposal]
 

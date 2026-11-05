@@ -51,8 +51,9 @@
 4. 결과는 사용자에게 알려 6단계 기록 때 `.work/STATUS.md`에 남긴다.
 
 ## 4. Codex에 작업 맡기기
+팀원 절차는 세 단계다: ① 요청 보내기(1·2번) → ② PR 확인(3번) → ③ 병합(4번). 요청 한 번으로 Codex가 검사·push·PR까지 한다. 답에 PR 링크가 없으면 5번(예비)을 쓴다. 충돌은 5절. [Request]
 1. 작업 시작: chatgpt.com 왼쪽 세로 아이콘 줄의 `…` → **Codex**(새 작업은 Codex 화면 왼쪽 위 New chat) → 입력창 위 **Cloud**는 그대로 두고 **Choose environment** → `aio-03-p2-team3` → 입력창(Do anything)에 2번 요청을 쓰고 보낸다. 브랜치를 고르는 칸은 없고, 레포 기본 브랜치 `main`에서 시작한다(2026-11-05 시험에서 변경이 `work → origin/main`으로 비교되고 PR이 `main` 기준으로 열림). 시작한 작업은 Codex 화면 왼쪽 Recents에 구름 아이콘과 함께 남는다. Settings > Codex Cloud > Environments의 `···` 메뉴에는 Edit·Delete environment만 있어 거기서는 시작하지 못한다. [Request · RULES 2절 1번]
-2. 요청 문구(빈칸을 채워 붙여넣기). 관련 상태·도구·노드, 수정 범위, 확인 조건은 꼭 적는다. [TASK 이 레포의 규칙 · RULES 2절 4번 · Claude proposal]
+2. 요청 문구(빈칸을 채워 붙여넣기). 관련 상태·도구·노드, 수정 범위, 확인 조건은 꼭 적는다. [TASK 이 레포의 규칙 · RULES 2절 4번 · Claude proposal] 마지막 두 줄이 요청 한 번으로 PR까지 가게 한다. [Request]
    ```
    AGENTS.md부터 읽고 레포 규칙대로 해 주세요.
    작업: <한 줄>
@@ -63,19 +64,20 @@
    Issue: #<번호> — 아래에 본문(완료 기준)을 붙임
    <Issue 본문>
    조율함: <팀원>   ← 공통 부분(상태·도구 스키마·노드·엣지)을 고칠 때만
-   마지막 답에 .github/pull_request_template.md 양식을 채운 PR 설명을 함께 내 주세요.
+   검사를 통과시킨 뒤 새 브랜치에 커밋해 GitHub에 push하고, main으로 PR을 열어 주세요. PR 본문에 .github/pull_request_template.md 양식을 채워 넣고, 마지막 답에도 같은 설명을 내 주세요.
+   답 맨 앞에 PR 링크를 적어 주세요.
    ```
    - 계획 파일의 하위 작업이면 `작업:` 줄에 `docs/plans/<작업명>.md#N 절만 하세요`를 쓴다. 하위 작업마다 새 작업을 시작한다(RULES 7절 4번).
    - 기능이 둘 이상 섞인 요청이면 Codex는 구현하지 않고 계획 파일만 만든다(RULES 7절 1번).
-3. 결과 검토: Codex 답에서 바뀐 파일과 실행 결과(`N passed`, `검사 통과`)를 본다. 작업 화면 오른쪽 패널의 Changes(+/−)를 누르면 바뀐 줄을 볼 수 있다. 통과하지 않았거나 수정 범위 밖 파일이 바뀌었으면 같은 작업 입력창(Ask for follow-up changes)에 고칠 점을 보낸다(예: "검사를 통과하게 고쳐 주세요"). [Request · Claude proposal]
-4. PR 열기: 작업 화면에는 PR을 여는 버튼이 없다(Changes 창의 아이콘·`···` 메뉴도 보기 기능과 Copy git apply command뿐, 2026-11-05 확인). 같은 작업 입력창에 아래 후속 요청을 보내면 Codex가 새 브랜치에 커밋해 push하고 PR을 연다. 답 맨 앞의 `PR #번호` 링크를 눌러 GitHub로 간다. [Request]
+3. PR 확인: Codex 답에서 실행 결과(`N passed`, `검사 통과`)를 보고, 답 맨 앞의 `PR #번호` 링크를 눌러 GitHub로 간다. PR 화면 'Files changed'에서 수정 범위 밖 파일이 없는지 보고, 아래 검사 칸에서 `rules-check`·`tests`가 모두 초록 체크(All checks have passed)인지 본다(2026-11-05 시험에서 약 15초). PR에 올라간 내용의 테스트는 GitHub CI가 맡으므로 Codex에게 PR 뒤 CI 결과를 다시 확인하게 하지 않는다(작업 중 인터넷이 막혀 읽을 수 있는지 모른다). [Request · Claude proposal]
+   - 빨간 X거나 범위 밖 파일이 바뀌었으면 병합하지 않는다. 그 줄의 Details에서 오류를 복사해(범위 밖이면 고칠 점을 적어) 같은 Codex 작업 입력창(Ask for follow-up changes)에 "이 오류를 고쳐 주세요"와 함께 보낸다.
+   - 본문이 양식대로가 아니면: 본문 오른쪽 위 `···` → Edit → Codex 답의 PR 설명 붙여넣기 → Update comment(RULES 5절 4번).
+4. 병합은 사람이 한다. 초록 체크를 본 뒤 Merge pull request → Confirm merge. 누구나 병합하고, 병합한 브랜치는 지우지 않는다(Delete branch를 누르지 않음, RULES 5절 6번).
+5. 예비 — 답에 PR 링크가 없을 때: 작업 화면에는 PR을 여는 버튼이 없다(Changes 창의 아이콘·`···` 메뉴도 보기 기능과 Copy git apply command뿐, 2026-11-05 확인). 같은 작업 입력창에 아래 후속 요청을 보내면 Codex가 새 브랜치에 커밋해 push하고 PR을 연다(6-1 시험에서 이 방법으로 엶). 그 뒤 3번부터 한다. [Request]
    ```
    이 변경을 새 브랜치에 커밋해 GitHub에 push하고, main으로 PR을 열어 주세요. PR 설명은 앞 답의 양식 그대로 넣고, 답 맨 앞에 PR 링크를 적어 주세요.
    ```
    - 2026-11-05 시험: 브랜치 이름은 Codex가 `docs/<작업명>`처럼 RULES 3절 형식으로 정했고, PR 본문에 양식이 들어갔다. [Request]
-   - 본문이 양식대로가 아니면: 본문 오른쪽 위 `···` → Edit → Codex 답의 PR 설명 붙여넣기 → Update comment(RULES 5절 4번).
-5. 병합 전 확인: PR 화면 'Files changed'에서 수정 범위 밖 파일이 없는지 보고, 아래 검사 칸에서 `rules-check`·`tests`가 모두 초록 체크(All checks have passed)인지 본다(2026-11-05 시험에서 약 15초). 빨간 X면 병합하지 않고, 그 줄의 Details에서 오류를 복사해 같은 Codex 작업 입력창에 "이 오류를 고쳐 주세요"와 함께 보낸다. [Request · Claude proposal]
-6. 병합은 사람이 한다. 초록 체크를 본 뒤 Merge pull request → Confirm merge. 누구나 병합하고, 병합한 브랜치는 지우지 않는다(Delete branch를 누르지 않음, RULES 5절 6번).
 
 ## 5. 충돌이 났을 때
 1. 규칙: 그 PR에 댓글 `@codex 최신 main에 맞게 충돌을 고쳐 주세요`를 단다(RULES 5절 7번). 이 댓글은 GitHub 연동 흐름이라 Legacy가 맡고, 새 경로에서 만든 PR에도 되는지는 **6단계에서 확인**한다. [Request · chatgpt-research ①]
@@ -100,7 +102,7 @@
 ## 7. 6단계 연결 시험에서 확인할 것
 6단계(`.work/FLOW.md`)에서 화면으로 보고 결과를 `.work/STATUS.md`에 남긴다. [Request · Claude proposal]
 - 작업을 시작하는 경로(4절 1번): **확인함**(6-1, 2026-11-05). 공유된 환경이 다른 팀원 화면에 보이는지(3절 2번): 6-2에서 본다.
-- PR 여는 순서(4절 4번): **확인함**. 버튼은 없고 후속 요청으로 연다. PR 양식이 본문에 들어갔고, 브랜치 이름은 Codex가 RULES 3절 형식으로 정했다(1회). 팀원 시험에서도 같은지 본다.
+- PR 여는 순서(4절 2·5번): 6-1에서는 버튼이 없어 후속 요청으로 열었다(**확인함**, PR 양식이 본문에 들어갔고 브랜치 이름은 Codex가 RULES 3절 형식으로 정함, 1회). 6-1-2에서 요청 한 번으로 PR까지 가게 요청 문구를 바꿨다. 첫 요청 한 번에 PR이 열리는지, 답 맨 앞에 PR 링크가 있는지, 본문 양식·브랜치 이름이 같은지: 6-2 첫 팀원 시험에서 본다.
 - PR 댓글 `@codex`가 동작하는지(5절 1번), 새 경로에서 원래 작업으로 같은 PR을 고칠 수 있는지(5절 2번): 6-2에서 본다.
 - 새 작업이 최신 `main`(최근 병합 포함)에서 시작하는지(공식 아님, 커뮤니티 보고): 6-1 시험 PR은 `main` 기준으로 열리고 CI를 통과했다. 앞 팀원의 병합을 반영하는지는 6-2에서 본다.
 - 작업 중 끊김·자동 요약: 6-1 시험에서 끊김 없음, 자동 요약은 화면으로 알 수 없었다.
