@@ -16,7 +16,7 @@ claude-github-setup(커밋 9c45959)과 프로젝트1 Aio3의 규칙을 한 번 �
 - 이 레포만의 규칙은 `.work/TASK.md`에 둔다. 공통 규칙의 예외가 필요하면 TASK.md에 '공통 규칙 N절 예외: 이유'로 적고, 이 레포 안에서는 그 예외가 우선한다. [Past work: setup]
 
 ## 2. 시작할 때
-1. 최신 `main`에서 시작한다. Codex 작업은 요청자가 작업을 낼 때 `main`을 고른다. [Past work: aio3 · Claude proposal]
+1. 최신 `main`에서 시작한다. Codex 작업은 레포 기본 브랜치 `main`에서 시작한다(작업 화면에 브랜치 칸 없음, `docs/CHATGPT_GUIDE.md` 4절 1번). [Past work: aio3 · Request]
 2. 열린 PR과 관계없이 진행한다. 열린 PR을 확인하거나 병합을 기다리지 않는다. 앞 PR이 병합된 뒤 충돌이 나면 5절 7번대로 그 PR에서 고친다. [Request]
 3. `AGENTS.md` → 이 파일 → `.work/TASK.md` → `docs/PROJECT_CONTEXT.md` 순서로 읽는다. [Past work: aio3 · Claude proposal]
 4. Issue 번호로 받은 작업은 그 Issue의 완료 기준을 그대로 따르고, PR 양식의 '관련 Issue·계획'에 `Closes #번호`를 적는다. [Past work: aio3] Codex는 작업 중 인터넷이 꺼져 있어 Issue를 열지 못할 수 있으므로, 요청자가 Issue 본문(완료 기준)을 요청에 붙인다. [Claude proposal]
