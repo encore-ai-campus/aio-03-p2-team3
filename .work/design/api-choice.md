@@ -34,3 +34,26 @@
 - Groq 데이터: https://console.groq.com/docs/your-data (2026-11-05)
 - 키 발급·환경변수 우선순위: 공식 GitHub `googleapis/python-genai` README, `google-gemini/cookbook` `quickstarts/Authentication.ipynb` (2026-11-05)
 - 패키지·환경변수: PyPI `langchain-google-genai` 4.4.3, `langchain-groq` 1.1.3 소스 (2026-11-05)
+
+## 외부 API
+확인일: 2026-11-05. 네이버 지도·캘린더 인증은 3-2-2-2에서 확인한다.
+
+### 후보 (공식 문서 확인)
+| 항목 | Google Calendar API | 특일 정보(한국천문연구원) | 단기예보(기상청) |
+|---|---|---|---|
+| 쓰임 | 일정 읽기·만들기 | 공휴일·24절기·공공기관 휴일 여부 | 초단기·단기 예보 |
+| 무료 한도 | 표준 사용 무료. 프로젝트당 분당 10,000회, 사용자당 분당 600회 | 무료, 개발계정 10,000회 | 무료, 개발계정 하루 10,000회 |
+| 승인·인증 | OAuth 2.0 또는 서비스 계정. 민감 범위는 앱 검증 필요. Google은 서비스 계정을 데이터 소유자로 쓰지 말라고 권함 | 공공데이터포털 서비스 키, 자동승인 | 공공데이터포털 서비스 키, 자동승인 |
+| 형식·패키지 | JSON, `google-api-python-client`·`google-auth` | XML(JSON 미확인), HTTP 요청 | JSON·XML, HTTP 요청 |
+
+### 정한 것 (진행 중)
+- 보조 API는 특일 정보, 단기예보, 네이버 지도를 모두 쓴다. 카카오 로컬은 쓰지 않는다. [Request]
+- 캘린더 연결 방식은 미정이다. 사용자가 'A(팀 데모 캘린더를 서비스 계정에 공유)로는 배포 뒤 사용자가 못 쓰지 않나, 배포까지 해야 한다'고 물었다. [Request]
+  - 답: A도 배포 주소에서 누구나 로그인 없이 쓰지만 모두 한 캘린더를 쓰고 자기 Google 캘린더와는 연결되지 않는다. 자기 캘린더는 OAuth 로그인(B)이 필요하고 '테스트' 상태 제한은 미확인이다. 3-2-2-2에서 확인하고 A·B·A+B 가운데 고른다. [Claude proposal]
+
+### 출처
+- Calendar 한도: https://developers.google.com/workspace/calendar/api/guides/quota
+- Calendar 서비스 계정 주의: https://developers.google.com/workspace/calendar/api/concepts/events-calendars
+- 민감·제한 범위 검증: https://developers.google.com/workspace/calendar/api/guides/auth
+- 특일 정보: https://data.go.kr/data/15012690/openapi.do
+- 단기예보: https://www.data.go.kr/data/15084084/openapi.do
