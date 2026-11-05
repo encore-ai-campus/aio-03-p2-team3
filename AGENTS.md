@@ -12,6 +12,7 @@ ChatGPT·Codex·Claude 모두 이 파일을 가장 먼저 읽는다.
 규칙은 위 파일에만 둔다. 이 파일에는 요약을 두지 않는다(두 곳에 두면 어긋난다).
 
 ## 확인 명령
-- 아직 없음. 검사 도구(`python3 .work/check.py`)는 세팅 4단계에서, 테스트 명령은 세팅 3단계(pyproject) 뒤에 여기에 적는다.
+- 테스트: `uv run pytest` (처음 한 번은 `uv sync`)
+- 검사 도구(`python3 .work/check.py`)는 세팅 4단계에서 여기에 적는다.
 
 <!-- 출처: 진입 파일 구조 [Past work: setup] · CLAUDE.md 대신 AGENTS.md(Codex가 읽음) [Claude proposal] · 이 레포에 CLAUDE.md는 두지 않는다 [Claude proposal] -->

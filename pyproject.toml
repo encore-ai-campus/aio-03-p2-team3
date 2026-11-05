@@ -1,0 +1,29 @@
+[project]
+name = "aio-03-p2-team3"
+version = "0.1.0"
+description = "단위 프로젝트2 팀3 — LangGraph 복합 API 연계 일정 조정 에이전트"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# 버전은 PyPI(`pip index versions <패키지>`)로 확인해 ==로 고정한다(2026-11-05 확인).
+# 더할 때는 `uv add <패키지>==<버전>`을 쓴다(.work/TASK.md 환경 줄).
+dependencies = [
+    "langgraph==1.2.20",
+    "langchain-google-genai==4.4.3",
+    "google-api-python-client==2.201.0",
+    "google-auth==2.62.1",
+    "google-auth-oauthlib==1.5.0",
+    "httpx==0.28.1",
+    "python-dotenv==1.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+]
+
+[tool.uv]
+# 코드 구조(패키지 이름)가 정해지기 전이라 설치용 패키지로 만들지 않는다.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
