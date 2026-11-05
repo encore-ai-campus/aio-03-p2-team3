@@ -91,7 +91,7 @@
 ## 9. 레포 세팅·작업 방식
 마지막 갱신: 2026-11-05
 
-- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 3-1단계(진행 문서)까지 했고, 다음은 3-2단계(README·.env.example·pyproject)다. 세팅 진행기록은 `.work/STATUS.md`.
+- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 3-1단계(진행 문서)까지 했다. 3-2단계는 무료 LLM 고르기(3-2-1) → 무료 외부 API 고르기(3-2-2) → README·.env.example·pyproject(3-2-3)로 나눴다. 세팅 진행기록은 `.work/STATUS.md`.
 - 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다.
 - 병합: 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. AI는 병합하지 않는다. 병합한 브랜치는 지우지 않는다.
 - 기능이 둘 이상 섞인 요청은 먼저 `docs/plans/<작업명>.md`를 PR로 올리고 하위 작업마다 새 작업으로 한다(`.work/RULES.md` 7절).
