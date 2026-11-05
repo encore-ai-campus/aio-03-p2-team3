@@ -30,3 +30,4 @@
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]
 - `.work/design/setup-research.md` — 연결 준비 공식 확인 결과(1단계). 세팅 단계 작업에서만 읽는다 [과제별]
+- `.work/design/api-choice.md` — 고른 LLM·외부 API와 근거(후보 비교, 설정 경로, 출처). LLM·API를 더하거나 바꿀 때 읽는다 [과제별]
