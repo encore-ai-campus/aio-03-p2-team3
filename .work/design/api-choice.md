@@ -34,3 +34,25 @@
 - Groq 데이터: https://console.groq.com/docs/your-data (2026-11-05)
 - 키 발급·환경변수 우선순위: 공식 GitHub `googleapis/python-genai` README, `google-gemini/cookbook` `quickstarts/Authentication.ipynb` (2026-11-05)
 - 패키지·환경변수: PyPI `langchain-google-genai` 4.4.3, `langchain-groq` 1.1.3 소스 (2026-11-05)
+
+## 외부 API
+확인일: 2026-11-05
+
+### 후보
+| 항목 | Google Calendar API | 한국천문연구원_특일 정보 (공공데이터포털) | 기상청_단기예보 조회서비스 (공공데이터포털) |
+|---|---|---|---|
+| 쓰임 | 일정 읽기·만들기·바꾸기 | 공휴일·국경일·기념일·24절기, 공공기관 휴일 여부 | 초단기실황·초단기예보·단기예보(야외 일정 판단) |
+| 무료 한도 | 표준 사용 무료. 기본 한도 프로젝트당 분당 10,000회, 사용자당 분당 600회. 한도 초과분 과금은 2026년 뒤에 도입 예정 | 무료. 개발계정 10,000회(운영계정은 활용사례 등록 시 증가) | 무료. 개발계정 하루 10,000회 |
+| 승인 | Google Cloud 프로젝트에서 API 사용 설정 | 개발·운영 모두 자동승인 | 개발·운영 모두 자동승인 |
+| 인증 | OAuth 2.0(사용자 캘린더) 또는 서비스 계정. 민감 범위는 앱 검증 필요. Google은 서비스 계정을 데이터 소유자로 쓰지 말라고 권한다(캘린더는 사람 계정이 만들고 공유) | 서비스 키(URL 파라미터) | 서비스 키(URL 파라미터) |
+| 형식 | JSON | XML(가이드상 `_type=json` 가능, 미확인) | JSON·XML |
+| Python 패키지 | `google-api-python-client`, `google-auth` (3-2-3에서 PyPI로 확인) | 없음, HTTP 요청 | 없음, HTTP 요청 |
+
+- 확인 못 한 것: 카카오 로컬(장소·좌표) API는 공식 문서를 도구로 열지 못해 후보에서 뺐다. OAuth 동의 화면 '테스트' 상태의 테스트 사용자 수 제한은 확인하지 못했다. [Claude proposal]
+
+### 출처
+- Calendar 한도·무료: https://developers.google.com/workspace/calendar/api/guides/quota (2026-11-05)
+- Calendar 서비스 계정 주의: https://developers.google.com/workspace/calendar/api/concepts/events-calendars (2026-11-05)
+- 민감·제한 범위 검증: https://developers.google.com/workspace/calendar/api/guides/auth (2026-11-05)
+- 특일 정보: https://data.go.kr/data/15012690/openapi.do (검색 결과 요약, 2026-11-05)
+- 단기예보: https://www.data.go.kr/data/15084084/openapi.do (2026-11-05)
