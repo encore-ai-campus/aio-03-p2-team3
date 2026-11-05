@@ -10,8 +10,8 @@
 | 항목 | Google Gemini API | Groq |
 |---|---|---|
 | 무료 한도 | 문서에 숫자 없음. AI Studio에서 내 프로젝트 한도 확인. 프로젝트 단위, 하루 한도는 태평양 시간 자정 초기화 | Free plan: `openai/gpt-oss-120b`·`openai/gpt-oss-20b`·`qwen/qwen3.8-27b` 각 분당 30회·하루 1,000회·분당 8K 토큰·하루 200K 토큰. 조직 단위 |
-| 무료 모델 | (확인 중: 가격 페이지) | 위 표의 모델 |
-| 무료 등급 데이터 사용 | 입력·응답을 Google 제품·모델 개선에 쓸 수 있고 사람이 검토할 수 있다. 민감·기밀·개인 정보를 넣지 말 것. 만 18세 이상 | 기본적으로 추론 요청 데이터를 보관하지 않는다. 오류·남용 조사용 로그는 최대 30일, Data Controls에서 끌 수 있다. 학습 사용 여부는 문서에 없음 |
+| 무료 모델(텍스트) | `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview`, Gemma 4. `gemini-2.5-pro`·`gemini-2.5-flash`는 지원 중단(2026-12-01부터 다른 모델로 넘어감). Pro·Gemini 4 Argon은 무료 아님. 무료 등급은 Gemini 3 이상에서 Google 검색·지도 그라운딩 불가 | 위 칸의 모델 |
+| 무료 등급 데이터 사용 | 가격 페이지 'Used to improve our products': 무료 Yes, 유료 No. 입력·응답을 Google 제품·모델 개선에 쓸 수 있고 사람이 검토할 수 있다. 민감·기밀·개인 정보를 넣지 말 것. 만 18세 이상 | 기본적으로 추론 요청 데이터를 보관하지 않는다. 오류·남용 조사용 로그는 최대 30일, Data Controls에서 끌 수 있다. 학습 사용 여부는 문서에 없음 |
 | LangChain 패키지 | `langchain-google-genai` (`ChatGoogleGenerativeAI`) | `langchain-groq` (`ChatGroq`) |
 | 환경변수 | `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY` | `GROQ_API_KEY` |
 
@@ -20,6 +20,7 @@
 
 ### 출처
 - Gemini 한도: https://ai.google.dev/gemini-api/docs/rate-limits (2026-11-05)
+- Gemini 무료 모델·데이터 사용: https://ai.google.dev/gemini-api/docs/pricing (도구로 열리지 않아 사용자가 본문을 붙여 줌, 2026-11-05)
 - Gemini 무료 등급 데이터 사용: https://ai.google.dev/gemini-api/terms 'Unpaid Services' (2026-11-05)
 - Groq 한도: https://console.groq.com/docs/rate-limits Free plan (2026-11-05)
 - Groq 데이터: https://console.groq.com/docs/your-data (2026-11-05)
