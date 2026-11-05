@@ -106,6 +106,7 @@
 - check.py(4-2-1): `uv run pytest`는 부르지 않는다. 표준 라이브러리만 써서 uv·네트워크 없이(Codex 환경 포함) 돌고, 테스트 실패와 규칙 위반을 따로 보이게 하려는 것이다. CI(4-2-2)는 check.py와 별도로 uv 설치 → `uv sync` → `uv run pytest` 단계를 둔다. [Claude proposal]
 - check.py(4-2-1) 고친 것: 필수 파일을 `AGENTS.md`·RULES·TASK·STATUS·`docs/PROJECT_CONTEXT.md`·PR 양식으로 바꿈, skill·pipeline·agent 유형 검사와 `template.json` 검사를 지움, 출처 태그를 `[Request · Claude proposal]`처럼 이은 꼴도 받음, 나눈 단계의 묶음 제목은 FLOW 줄 검사에서 건너뜀, PROJECT_CONTEXT 절마다 '마지막 갱신' 줄 검사를 더함, 자동으로 읽히는 파일(`CLAUDE.md`·`.claude/`·`.mcp.json`·하위 폴더 `AGENTS.md`)은 이 레포 규칙에 금지 조항이 없어 오류가 아니라 경고로 둠. [Claude proposal]
 - check.py는 STATUS 안내의 백틱 항목을 모두 재므로, 안내 줄의 덧붙임 설명에는 백틱을 쓰지 않는다(4-2-1에서 덧붙임의 git show가 항목으로 읽혀 오류가 났다). [Claude proposal]
+- CI(4-2-2): 작업을 둘로 나눴다. `rules-check`(원본 그대로 setup-python 3.12 → `python .work/check.py`)와 `tests`(`astral-sh/setup-uv@v10.3.3` → `uv sync --locked` → `uv run pytest`). PR에 두 결과가 따로 보인다. setup-uv는 `v10` 같은 큰 버전 태그가 없어 전체 버전으로 고정했다(2026-11-05 `git ls-remote`로 확인). `--locked`는 `uv.lock`이 `pyproject.toml`과 어긋나면 실패하게 한다. [Claude proposal]
 
 ## 4-1단계 measure.py (완료)
 - 할 일: 원본 `measure.py`를 복사해 이 레포에 맞춘다(`START_FILES`, 필요하면 도구 표에 `레포 연결`). `--start`·`--read`·`--show`·`--outline`을 이 레포 파일로 한 번씩 돌려 본다. 4-2 안내를 `measure.py`로 재서 STATUS에 적고, TASK 파일 지도에 `.work/measure.py`를 더한다. [Request · Claude proposal]
@@ -130,19 +131,34 @@
 - 섞지 않을 것: CI(4-2-2), measure.py 고치기(4-1, 꼭 필요하면 이유를 PR에 적는다), 규칙 내용 변경, ChatGPT 사용 안내(5단계)
 - 도구: 스크립트 5, 레포 연결 2
 
-## 4-2-2단계 CI
+## 4-2-2단계 CI (완료)
 - 할 일: 원본 `rules-check.yml`로 CI를 만든다(check.py는 테스트를 부르지 않으므로 uv 설치·`uv sync`·`uv run pytest` 단계를 따로 둔다 — 4단계 '정한 것'). PR에서 CI가 통과하는지 확인하고, TASK 파일 지도에 더한다. [Request · Claude proposal]
 - 읽을 것: 이 절과 4단계 '정한 것', 원본 `.github/workflows/rules-check.yml`, `.github/pull_request_template.md`
 - 만들 것: `.github/workflows/rules-check.yml`
 - 섞지 않을 것: check.py 고치기(4-2-1, 꼭 필요하면 이유를 PR에 적는다), 규칙 내용 변경, ChatGPT 사용 안내(5단계)
 - 도구: 스크립트 5(CI 결과 확인 포함), 레포 연결 2
 
-## 5단계 ChatGPT 사용 안내
-- 할 일: 팀원 연결 순서, Codex Cloud 환경(Python 3.12·uv), 작업 요청 문구, 문서 작업용 ChatGPT 프로젝트 지침을 정리한다. 새 경로(ChatGPT Work)와 "Codex Cloud (Legacy)"의 차이도 확인한다. [Request · Claude proposal]
+## 5단계 ChatGPT 사용 안내 — 5-1, 5-2로 나눔(2026-11-05, 공식 문서 조사가 더해져 한 대화로 약 118KB)
+- 원래 할 일: 팀원 연결 순서, Codex Cloud 환경(Python 3.12·uv), 작업 요청 문구, 문서 작업용 ChatGPT 프로젝트 지침을 정리한다. 새 경로(ChatGPT Work)와 "Codex Cloud (Legacy)"의 차이도 확인한다. [Request · Claude proposal]
 - 읽을 것: `.work/design/setup-research.md`, `docs/PROJECT_CONTEXT.md`, 공식 문서(OpenAI)
 - 만들 것: `docs/CHATGPT_GUIDE.md`
 - 섞지 않을 것: 규칙 내용 변경, 검사 도구(4단계)
 - 도구: 웹검색 3, 웹페이지 4
+- 나눈 까닭: 4-2-2에서 measure.py로 재니 시작 파일 39KB, 실행 중 65KB(웹검색 3, 웹페이지 4)로 약 118KB였다. 공식 문서 조사를 결과 파일로 남기는 5-1을 앞에 두고, 5-2는 그 파일만 읽고 안내 글을 쓴다. [Claude proposal]
+
+## 5-1단계 Codex·ChatGPT 공식 확인
+- 할 일: OpenAI 공식 문서로 Codex Cloud 환경 설정(Python 3.12·uv 설치, 비밀값, 작업 중 인터넷 접근), 새 경로(ChatGPT Work)와 "Codex Cloud (Legacy)"의 차이, ChatGPT 프로젝트 지침을 넣는 곳을 확인해 `.work/design/chatgpt-research.md`에 출처와 함께 적고 TASK 파일 지도에 더한다. `.work/design/setup-research.md`에서 이미 확인한 것은 다시 찾지 않는다. [Request · Claude proposal]
+- 읽을 것: 이 절, `.work/design/setup-research.md`, 공식 문서(OpenAI)
+- 만들 것: `.work/design/chatgpt-research.md`
+- 섞지 않을 것: 안내 글 쓰기(5-2), 규칙 내용 변경, 검사 도구(4단계)
+- 도구: 웹검색 2, 웹페이지 3
+
+## 5-2단계 ChatGPT 사용 안내 글
+- 할 일: 5-1 결과로 팀원 연결 순서, Codex Cloud 환경(Python 3.12·uv), 작업 요청 문구, 문서 작업용 ChatGPT 프로젝트 지침을 `docs/CHATGPT_GUIDE.md`에 정리하고 TASK 파일 지도에 더한다. [Request · Claude proposal]
+- 읽을 것: 이 절, `.work/design/chatgpt-research.md`, `.work/design/setup-research.md`
+- 만들 것: `docs/CHATGPT_GUIDE.md`
+- 섞지 않을 것: 새 공식 조사(5-1, 꼭 필요하면 한 번만 하고 PR에 적는다), 규칙 내용 변경, 검사 도구(4단계)
+- 도구: 스크립트 3
 
 ## 6단계 연결 시험 (팀원 각자 ChatGPT)
 - 할 일: 팀원마다 Codex로 README 팀원 표의 자기 줄에 한 줄 소개를 넣는 PR을 열고 병합한다. 끊김·자동 요약 여부를 STATUS.md에 남긴다. [Request · Claude proposal: 3-2에서 팀원 표가 채워지므로 '이름 넣기'를 '한 줄 소개 넣기'로 바꿈]

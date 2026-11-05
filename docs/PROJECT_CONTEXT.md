@@ -94,10 +94,11 @@
 ## 9. 레포 세팅·작업 방식
 마지막 갱신: 2026-11-05
 
-- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 4-2-1단계(규칙 검사 도구 `.work/check.py`)까지 했다. 다음은 4-2-2(CI)다. 세팅 진행기록은 `.work/STATUS.md`.
+- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 4단계(검사 도구 `.work/measure.py`·`.work/check.py`, CI)까지 했다. 다음은 5-1(Codex·ChatGPT 공식 확인)이다. 세팅 진행기록은 `.work/STATUS.md`.
 - 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다.
 - 병합: 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. AI는 병합하지 않는다. 병합한 브랜치는 지우지 않는다.
 - 기능이 둘 이상 섞인 요청은 먼저 `docs/plans/<작업명>.md`를 PR로 올리고 하위 작업마다 새 작업으로 한다(`.work/RULES.md` 7절).
 - 담당: 미리 정하지 않는다. 누구나 어느 부분이든 맡는다. 프로젝트를 마친 뒤 팀원별 PR 내역을 바탕으로 맡은 바를 정리해 README에 적는다. [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 자세한 것은 README '실행 방법'. 서버 실행 명령은 코드 구조가 정해지면 더한다.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
+- CI: `.github/workflows/rules-check.yml`. PR과 `main` 변경마다 `rules-check`(규칙 검사)와 `tests`(`uv sync --locked` 뒤 `uv run pytest`)가 따로 돈다. `uv.lock`이 `pyproject.toml`과 어긋나면 `tests`가 실패한다.
