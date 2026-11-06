@@ -212,7 +212,7 @@
 - 시작 조건: 6-2를 마친 뒤(6단계 기록을 반영해야 한다). 템플릿 레포는 사용자가 GitHub에서 만들고 Claude GitHub App 허용 목록에 더한다(Claude의 API 쓰기는 프록시가 막음). [Request]
 - 섞지 않을 것: 이 레포의 과제 코드
 
-## 7-1단계 템플릿 레포 파일 (Claude 대화)
+## 7-1단계 템플릿 레포 파일 (Claude 대화) (완료)
 - 할 일: 템플릿 레포에 [공통] 파일(TASK.md 파일 지도의 [공통])을 스크립트로 복사하고(내용을 대화에 넣지 않음), [과제별] 파일은 빈 틀로 만든다. 읽음 확인 코드는 새 값으로 바꾼다. [Request · Claude proposal]
 - 읽을 것: 이 절(TASK.md 파일 지도와 STATUS.md '최근 완료'는 시작 파일)
 - 만들 것: 빈 틀 파일(TASK·STATUS·PROJECT_CONTEXT·README·FLOW)
