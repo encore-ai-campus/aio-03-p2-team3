@@ -11,8 +11,16 @@
   - Claude 대화가 아니라서 안내 형식과 작업량은 두지 않는다(팀원 작업). 순서: 사용자가 `docs/CHATGPT_GUIDE.md` 2절로 환경을 Publish하고 3절로 공유를 확인 → 팀원마다 4절 요청 문구로 FLOW 6단계 할 일(README 팀원 표의 자기 줄에 한 줄 소개)을 Codex에 맡겨 PR을 열고 병합 → 7절 항목을 본다
   - 기록: 결과를 알려 주면 Claude 대화에서 여기와 '최근 완료'에 적는다
   - 진행(2026-11-05): 환경 `aio-03-p2-team3` 게시·워크스페이스 공유(Everyone at 엔코아 AI 캠퍼스) 마침, 팀원 모두 GitHub 계정 연결 마침(`docs/CHATGPT_GUIDE.md` 1절). 6-1에서 시작 경로(`…` → Codex → Cloud · Choose environment)와 PR 여는 순서(버튼 없음, 후속 요청)를 확인해 `docs/CHATGPT_GUIDE.md` 4절에 적음, 사용자 몫 시험 PR #20 병합(CI 통과, 끊김 없음, 자동 요약 모름). 6-1-2에서 요청 한 번으로 PR까지 가게 `docs/CHATGPT_GUIDE.md` 4절·RULES 5절 4·5번을 바꿈. 6-1-2 PR이 병합된 뒤 시작한다. 남은 것: 나머지 팀원 3명 PR, 7절 남은 확인(다른 팀원 화면의 공유 환경, `@codex` 댓글, 원래 작업으로 같은 PR 고치기, 앞 병합 반영)
-  - 진행(2026-11-06): PR #26(김진혁) 충돌을 원래 Codex 작업에 후속 요청으로 고쳐 병합(사용자 전언, 팀원 확인 전 — GitHub 기록: `@codex` 댓글 없음, 같은 브랜치에 고침 커밋 2개). `docs/CHATGPT_GUIDE.md` 5절 4번·7절에 적음
-- [ ] 6-3단계 팀원 편의 개선 — 6-3-1, 6-3-2로 나눔(2026-11-06, 한 대화로 하면 기준을 넘음)
+  - 진행(2026-11-06): PR #26(김진혁) 충돌을 원래 Codex 작업에 후속 요청으로 고쳐 병합(팀원 작업 창 캡처로 확인 — `@codex` 댓글 없음, 같은 브랜치에 고침 커밋 2개). 같은 캡처에서 첫 요청에 PR이 안 열리고(예비 후속 요청으로 엶), 팀원 요청에 Codex가 `tests` 완료 전에 병합한 것을 봄 → 6-3-1-2를 더함(`.work/design/step6-3-handoff.md` '팀원 시험에서 본 것')
+- [ ] 6-3단계 팀원 편의 개선 — 6-3-1, 6-3-2로 나눔(2026-11-06, 한 대화로 하면 기준을 넘음). 6-3-1 마침(PR #29). 팀원 시험 결과로 6-3-1-2를 더함(2026-11-06), 6-3-2는 6-3-1-2 병합 뒤
+- [ ] 6-3-1-2단계 Codex가 꼭 할 일을 AGENTS.md로 — AGENTS.md 'Codex가 꼭 할 일'(RULES에서 옮김, 병합 조건 포함), RULES 5절 6번, 안내 글 4·5·7절과 README 병합 줄이 PR로 올라감
+  - 명령어: `aio-03-p2-team3 6-3-1-2단계를 시작해 주세요 (지난 대화·메모리 검색 없이 레포 STATUS.md 안내대로, 시작 파일은 파일마다 따로 읽기)`
+  - 첨부: 없음
+  - 읽을 파일: `.work/FLOW.md#6-3-1-2단계 Codex가 꼭 할 일을 AGENTS.md로 (Claude 대화)` `.work/design/step6-3-handoff.md#정한 것 [Request]` `.work/design/step6-3-handoff.md#팀원 시험에서 본 것 (PR #26, 팀원 작업 창 캡처와 GitHub 기록, 2026-11-06 확인) [Request]` `.work/design/step6-3-handoff.md#6-3-1-2 Codex가 꼭 할 일 (2026-11-06 더함, 6-3-2 앞) [Request · Claude proposal]` `docs/CHATGPT_GUIDE.md#4. Codex에 작업 맡기기` `docs/CHATGPT_GUIDE.md#5. 충돌이 났을 때` `docs/CHATGPT_GUIDE.md#7. 6단계 연결 시험에서 확인할 것` `README.md`
+  - 읽지 않을 파일: `.work/FLOW.md`(6-3-1-2 절 말고), 인계 파일의 다른 절, `.work/check.py`, `.github/`, `.work/design/`의 다른 파일
+  - 만들 파일: `AGENTS-diff=3` `RULES-diff=2` `CHATGPT_GUIDE-diff=2` `README-diff=0.5`
+  - 도구: `스크립트=6`
+  - 작업량: 약 90KB(실행 중 18KB 포함) / 기준 100KB
 - [ ] 6-3-2단계 CI 확인 — 읽음 확인 코드, PR 양식 '읽은 파일'·'최신 흐름 갱신' 칸, `check.py --pr`·파일 지도 역검사, CI 작업 `pr-check`가 들어가고 이 PR이 `pr-check`를 통과함
   - 명령어: `aio-03-p2-team3 6-3-2단계를 시작해 주세요 (지난 대화·메모리 검색 없이 레포 STATUS.md 안내대로, 시작 파일은 파일마다 따로 읽기)`
   - 첨부: 없음
@@ -20,11 +28,11 @@
   - 읽지 않을 파일: `.work/FLOW.md`(6-3-2 절 말고), `.work/check.py`의 다른 줄, `docs/CHATGPT_GUIDE.md`, `README.md`, `.work/design/`의 다른 파일과 인계 파일의 다른 절
   - 만들 파일: `check-diff=5` `PR양식-diff=0.5` `CI-diff=0.5` `RULES-diff=1` `AGENTS-diff=0.3` `TASK-diff=0.5` `PROJECT_CONTEXT-diff=0.2`
   - 도구: `스크립트=8` `레포 연결=1`
-  - 작업량: 약 93KB(실행 중 28KB 포함) / 기준 100KB
+  - 작업량: 약 96KB(실행 중 28KB 포함) / 기준 100KB
 - [ ] 7단계 다음 과제용 템플릿 레포 — Template repository가 만들어지고 시작 안내가 있음
 
 ## 대기
-- PR #26 충돌을 고친 방법의 팀원 확인(사용자가 담당 팀원에게 물어 Claude 대화에 답함). 6-3-1에서 '사용자 전언, 팀원 확인 전'으로 적었으니, 답이 오면 `docs/CHATGPT_GUIDE.md` 5절 4번·7절의 '팀원 확인 전'을 고친다
+- 사용자가 GitHub Ruleset 'main 필수 검사'(`rules-check`·`tests` 필수, 승인·strict 없음)를 만든다(`.work/design/step6-3-handoff.md` '정한 것' 5번). 6-3-2 뒤 `pr-check`를 더한다
 
 ## 보류
 없음

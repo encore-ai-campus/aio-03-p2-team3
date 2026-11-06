@@ -184,7 +184,7 @@
 - 섞지 않을 것: 다른 파일 수정
 - 도구: 없음(Claude 대화 아님)
 
-## 6-3단계 팀원 편의 개선 — 6-3-1, 6-3-2로 나눔(2026-11-06, 규칙·안내 글과 CI 확인을 한 대화로 하면 기준을 넘음)
+## 6-3단계 팀원 편의 개선 — 6-3-1, 6-3-2로 나눔(2026-11-06, 규칙·안내 글과 CI 확인을 한 대화로 하면 기준을 넘음). 팀원 시험 결과로 6-3-1-2를 더함(2026-11-06)
 
 ## 6-3-1단계 규칙·안내 글 (Claude 대화)
 - 할 일: `.work/design/step6-3-handoff.md` '6-3-1 규칙·안내 글'대로 AGENTS.md 문구 강화, 안내 글 2·4·5·6·7절, README '팀원 빠른 시작', RULES 2절 4번(Issue 번호만으로 본문 읽기)을 고친다. 규칙 변경은 RULES 4절 절차와 PR '⚠ 규칙 변경'에 적는다. [Request · Claude proposal]
@@ -193,8 +193,15 @@
 - 섞지 않을 것: 읽음 확인 코드·PR 양식·check.py·CI(6-3-2), 팀원 메시지(6-3-2 뒤), 공식 문서 검색(인계 파일에 있음)
 - 도구: 스크립트 6
 
+## 6-3-1-2단계 Codex가 꼭 할 일을 AGENTS.md로 (Claude 대화)
+- 할 일: PR #26 팀원 시험에서 Codex가 첫 요청에 PR을 열지 않고, 팀원 요청에 검사 전 병합한 것을 보고 정한 것(인계 파일 '정한 것' 2·5번)대로 `.work/design/step6-3-handoff.md` '6-3-1-2'를 한다. 규칙 변경은 RULES 4절 절차와 PR '⚠ 규칙 변경'에 적는다. [Request · Claude proposal]
+- 읽을 것: 이 절, `.work/design/step6-3-handoff.md`의 '정한 것'·'팀원 시험에서 본 것'·'6-3-1-2' 절, `docs/CHATGPT_GUIDE.md`의 4·5·7절, `README.md`
+- 만들 것: AGENTS.md·RULES.md·안내 글·README 고침
+- 섞지 않을 것: CI(6-3-2), 공식 문서 검색
+- 도구: 스크립트 6
+
 ## 6-3-2단계 CI 확인 (Claude 대화)
-- 할 일: `.work/design/step6-3-handoff.md` '6-3-2 CI 확인'대로 읽음 확인 코드, PR 양식 두 칸, `check.py --pr`와 파일 지도 역검사, CI 작업 `pr-check`, RULES 5절·AGENTS.md 한 줄을 넣고, 이 PR로 `pr-check` 통과를 확인한다. 새 3단계 팀원 메시지를 답으로 준다. [Request · Claude proposal]
+- 할 일: `.work/design/step6-3-handoff.md` '6-3-2 CI 확인'대로 읽음 확인 코드, PR 양식 두 칸, `check.py --pr`와 파일 지도 역검사, CI 작업 `pr-check`, 채우는 규칙(RULES 5절, AGENTS.md 'Codex가 꼭 할 일')을 넣고, 이 PR로 `pr-check` 통과를 확인한다. 새 3단계 팀원 메시지를 답으로 준다. [Request · Claude proposal]
 - 읽을 것: 이 절, `.work/design/step6-3-handoff.md`의 '정한 것'·'6-3-2' 절, `.work/check.py`(1~30·81~102·166~175·326~360줄만), `.github/workflows/rules-check.yml`, `.github/pull_request_template.md`
 - 만들 것: 위 파일 고침
 - 섞지 않을 것: 안내 글 4절 외의 개편, 6-2 결과 기록
