@@ -19,7 +19,7 @@
 
 ## 파일 지도
 <!-- 형식: - `경로` — 무엇인지 [공통|과제별]. [공통] 다음 과제에도 그대로 씀 · [과제별] 이 과제용(템플릿에는 빈 틀) [Request]
-     맨 앞 경로가 실제로 있는지 check.py가 검사한다. -->
+     맨 앞 경로가 실제로 있는지, 레포의 모든 파일이 경로 줄이나 `/`로 끝나는 폴더 줄로 덮이는지 check.py가 검사한다. -->
 - `AGENTS.md` — 진입 파일(ChatGPT·Codex·Claude가 먼저 읽음) [공통]
 - `README.md` — 레포 소개, 실행 방법, 산출물 위치, LLM·API 키 발급, 팀원 [과제별]
 - `pyproject.toml` — Python 3.12·패키지(버전 고정)·pytest 설정 [과제별]
@@ -33,11 +33,12 @@
 - `.work/STATUS.md` — 세팅 진행기록(지금 할 일·다음 단계 안내). 세팅 단계 작업과 진행기록을 물을 때만 읽는다 [과제별]
 - `.work/FLOW.md` — 세팅 작업 흐름(단계 목록) [과제별]
 - `.work/measure.py` — 작업량 재기 도구(공통 규칙 8절). 크기만 내고, `--show`로 절만 연다 [공통]
-- `.work/check.py` — 규칙 검사 도구(공통 규칙 5절 3번). 표준 라이브러리만 쓰고 테스트는 부르지 않는다 [공통]
+- `.work/check.py` — 규칙 검사 도구(공통 규칙 5절 3번). 표준 라이브러리만 쓰고 테스트는 부르지 않는다. `--pr`은 PR 본문의 '읽은 파일'·'최신 흐름 갱신' 칸을 본다(공통 규칙 5절 4번) [공통]
 - `.github/pull_request_template.md` — PR 양식 [공통]
-- `.github/workflows/rules-check.yml` — CI. PR과 main 변경마다 규칙 검사(`check.py`)와 테스트(`uv sync --locked`·`uv run pytest`)를 따로 돌린다 [공통]
+- `.github/workflows/rules-check.yml` — CI. PR과 main 변경마다 규칙 검사(`check.py`)와 테스트(`uv sync --locked`·`uv run pytest`)를 따로 돌리고, PR(본문 고침 포함)에서는 `pr-check`(`check.py --pr`)도 돌린다 [공통]
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
+- `docs/plans/` — 큰 작업의 계획 파일 `<작업명>.md`(RULES 7절) [과제별]
 - `docs/CHATGPT_GUIDE.md` — 팀원용 ChatGPT 사용 안내(연결 순서, Codex 환경 게시·공유 확인, 작업 요청 문구, 충돌 처리, 문서 작업용 프로젝트 지침) [과제별]
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]
 - `.work/design/setup-research.md` — 연결 준비 공식 확인 결과(1단계). 세팅 단계 작업에서만 읽는다 [과제별]
@@ -45,3 +46,5 @@
 - `.work/design/step6-handoff.md` — 6단계 인계(화면에서 본 것, 작업 시작 경로 후보, 정한 것, 팀원 메시지 초안). 6-1단계에서 읽는다 [과제별]
 - `.work/design/step6-3-handoff.md` — 6-3단계 인계(공식 확인: Codex의 AGENTS.md 자동 읽기, 정한 것, 6-3-1·6-3-2 할 일). 6-3단계에서 읽는다 [과제별]
 - `.work/design/chatgpt-research.md` — Codex·ChatGPT 공식 확인 결과(5-1단계: 새 Codex Cloud와 Legacy, 환경·비밀값·인터넷, 프로젝트 지침 위치). 세팅 단계 작업과 Codex 환경을 바꿀 때 읽는다 [과제별]
+
+읽음 확인 코드: TASK-Z966

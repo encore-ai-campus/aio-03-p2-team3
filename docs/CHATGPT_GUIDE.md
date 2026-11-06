@@ -66,14 +66,14 @@
    - `Issue:` 줄에는 번호만 적는다. Codex가 GitHub에서 그 Issue 본문(완료 기준)을 읽는다(2절 10번을 마친 환경, RULES 2절 4번). Codex가 `Issue #번호 본문을 열지 못했습니다. 본문을 붙여 주세요.`라고 답하면, 같은 작업 입력창에 Issue 본문을 붙여 다시 보낸다. [Request]
    - 계획 파일의 하위 작업이면 `작업:` 줄에 `docs/plans/<작업명>.md#N 절만 하세요`를 쓴다. 하위 작업마다 새 작업을 시작한다(RULES 7절 4번).
    - 기능이 둘 이상 섞인 요청이면 Codex는 구현하지 않고 계획 파일만 만든다(RULES 7절 1번).
-3. PR 확인: Codex 답에서 실행 결과(`N passed`, `검사 통과`)를 보고, 답 맨 앞의 `PR #번호` 링크를 눌러 GitHub로 간다. PR 화면 'Files changed'에서 수정 범위 밖 파일이 없는지 보고, 아래 검사 칸에서 `rules-check`·`tests`가 모두 초록 체크(All checks have passed)인지 본다(2026-11-05 시험에서 약 15초). PR에 올라간 내용의 테스트는 GitHub CI가 맡으므로 Codex에게 PR 뒤 CI 결과를 다시 확인하게 하지 않는다(작업 중 인터넷이 막혀 읽을 수 있는지 모른다). [Request · Claude proposal]
+3. PR 확인: Codex 답에서 실행 결과(`N passed`, `검사 통과`)를 보고, 답 맨 앞의 `PR #번호` 링크를 눌러 GitHub로 간다. PR 화면 'Files changed'에서 수정 범위 밖 파일이 없는지 보고, 아래 검사 칸에서 `rules-check`·`tests`·`pr-check`가 모두 초록 체크(All checks have passed)인지 본다(2026-11-05 시험에서 약 15초). PR에 올라간 내용의 테스트는 GitHub CI가 맡으므로 Codex에게 PR 뒤 CI 결과를 다시 확인하게 하지 않는다(작업 중 인터넷이 막혀 읽을 수 있는지 모른다). [Request · Claude proposal]
    - 빨간 X거나 범위 밖 파일이 바뀌었으면 병합하지 않는다. 그 줄의 Details에서 오류를 복사해(범위 밖이면 고칠 점을 적어) 같은 Codex 작업 입력창(Ask for follow-up changes)에 "이 오류를 고쳐 주세요"와 함께 보낸다.
-   - 본문이 양식대로가 아니면: 본문 오른쪽 위 `···` → Edit → Codex 답의 PR 설명 붙여넣기 → Update comment(AGENTS.md 'Codex가 꼭 할 일' 4번).
+   - 본문이 양식대로가 아니면: 본문 오른쪽 위 `···` → Edit → Codex 답의 PR 설명 붙여넣기 → Update comment(AGENTS.md 'Codex가 꼭 할 일' 4번). 본문을 고치면 `pr-check`가 다시 돈다. `pr-check`가 빨간 X면 '읽은 파일'·'최신 흐름 갱신' 칸 문제이니 오류를 같은 작업에 보내 PR 설명을 다시 받는다.
    - Codex에 병합을 맡길 때(4번 나)도 이 확인(범위 밖 파일, 초록 체크)은 직접 한다.
 4. 병합: 초록 체크를 본 뒤 둘 중 하나로 한다. 누구나 병합하고, 병합한 브랜치는 지우지 않는다(Delete branch를 누르지 않음, RULES 5절 6번). [Request]
    - 가. GitHub에서 직접: PR 화면 Merge pull request → Confirm merge.
-   - 나. Codex에 맡기기: 같은 Codex 작업 입력창에 `병합해 주세요`를 보낸다. Codex는 필수 검사(`rules-check`·`tests`)가 모두 통과했을 때만 병합하고, 아니면 `검사가 끝난 뒤 다시 요청해 주세요.`라고 답한다(AGENTS.md 'Codex가 꼭 할 일' 6번). 그렇게 답하면 PR 화면에서 초록 체크를 본 뒤 다시 보내거나 가로 병합한다.
-   - `main`에는 Ruleset 'main 필수 검사'가 있다(`rules-check`·`tests` 필수, strict 끔, Bypass 없음, 삭제·강제 push 막기, 2026-11-06 GitHub 기록으로 확인). 두 검사가 통과하기 전에는 GitHub이 병합을 막는다(실제로 막히는지는 7절에서 본다).
+   - 나. Codex에 맡기기: 같은 Codex 작업 입력창에 `병합해 주세요`를 보낸다. Codex는 필수 검사(`rules-check`·`tests`·`pr-check`)가 모두 통과했을 때만 병합하고, 아니면 `검사가 끝난 뒤 다시 요청해 주세요.`라고 답한다(AGENTS.md 'Codex가 꼭 할 일' 6번). 그렇게 답하면 PR 화면에서 초록 체크를 본 뒤 다시 보내거나 가로 병합한다.
+   - `main`에는 Ruleset 'main 필수 검사'가 있다(`rules-check`·`tests` 필수, strict 끔, Bypass 없음, 삭제·강제 push 막기, 2026-11-06 GitHub 기록으로 확인, `pr-check`는 6-3-2 병합 뒤 사용자가 더함). 두 검사가 통과하기 전에는 GitHub이 병합을 막는다(실제로 막히는지는 7절에서 본다).
 5. 예비 — 답에 PR 링크가 없을 때: 작업 화면에는 PR을 여는 버튼이 없다(Changes 창의 아이콘·`···` 메뉴도 보기 기능과 Copy git apply command뿐, 2026-11-05 확인). 같은 작업 입력창에 아래 후속 요청을 보내면 Codex가 새 브랜치에 커밋해 push하고 PR을 연다(6-1 시험에서 이 방법으로 엶). 그 뒤 3번부터 한다. [Request]
    ```
    이 변경을 새 브랜치에 커밋해 GitHub에 push하고, main으로 PR을 열어 주세요. PR 설명은 앞 답의 양식 그대로 넣고, 답 맨 앞에 PR 링크를 적어 주세요.

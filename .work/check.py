@@ -2,6 +2,8 @@
 """작업 레포 규칙 검사.
 
 사용: python3 .work/check.py   (레포 안 어느 폴더에서 실행해도 된다)
+      python3 .work/check.py --pr [본문 파일]   PR 본문의 '읽은 파일'·'최신 흐름 갱신' 칸 검사(CI 작업 pr-check).
+          CI에서는 GITHUB_EVENT_PATH의 PR 본문과 base를 쓴다. 로컬에서는 본문을 파일로 주고 base는 origin/main(없으면 main).
 결과: 문제가 없으면 0, 오류가 있으면 1로 끝난다. 경고와 참고는 실패로 치지 않는다.
 claude-github-setup(커밋 9c45959)의 check.py를 한 번 복사해 이 레포에 맞췄고, 이제 이 레포가 소유한다.
 테스트(uv run pytest)는 부르지 않는다. 표준 라이브러리만 써서 uv·네트워크 없이 돈다. 테스트는 따로 돌린다(AGENTS.md '확인 명령').
@@ -10,6 +12,8 @@ claude-github-setup(커밋 9c45959)의 check.py를 한 번 복사해 이 레포�
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import re
 import subprocess
 import sys
@@ -27,6 +31,11 @@ TAG_ONE = r"(?:Request|Claude proposal|Past work:[^\]·]+)"
 TAG_RE = re.compile(r"\[" + TAG_ONE + r"(?:\s*·\s*" + TAG_ONE + r")*\]")
 ITEM_RE = re.compile(r"^(?:- |\d+\. )(.*)$")
 UPDATED_RE = re.compile(r"마지막 갱신: \d{4}-\d{2}-\d{2}")
+# 읽음 확인 코드: AGENTS.md '먼저 읽을 것' 세 파일에 한 줄씩 둔다. PR 본문 '읽은 파일' 칸에 같은 값을 적는다 [Claude proposal]
+CODE_FILES = (".work/RULES.md", ".work/TASK.md", CONTEXT)
+CODE_RE = re.compile(r"^읽음 확인 코드: ([A-Z]+-[A-Z0-9]{4})\s*$")
+PR_READ_SECTION = "읽은 파일"
+PR_CONTEXT_SECTION = "최신 흐름 갱신"
 
 # 세팅 단계 작업(공통 규칙 8절): 다음 단계 안내와 작업 흐름
 TODO_SECTION = "지금 할 일"
@@ -164,12 +173,36 @@ def check_rules(rel: str, items: list[tuple[int, str]], report: Report, seen: di
 
 
 def check_map(rel: str, numbered: list[tuple[int, str]], files: list[str], report: Report) -> None:
-    """파일 지도 각 줄의 맨 앞 경로가 레포에 있는지 본다."""
+    """파일 지도 각 줄의 맨 앞 경로가 레포에 있는지, 레포의 모든 파일이 지도 줄로 덮이는지 본다."""
     known = set(files) | {"/".join(f.split("/")[:i]) for f in files for i in range(1, f.count("/") + 1)}
+    paths: set[str] = set()
+    folders: list[str] = []
     for no, line in numbered:
         m = re.match(r"- `([^`]+)`", line)
-        if m and m.group(1).rstrip("/") not in known:
-            report.errors.append(f"{rel}:{no}: 파일 지도의 `{m.group(1)}`이(가) 레포에 없다")
+        if not m:
+            continue
+        path = m.group(1)
+        if path.endswith("/"):
+            folders.append(path)
+        else:
+            paths.add(path)
+        if path.rstrip("/") not in known:
+            report.errors.append(f"{rel}:{no}: 파일 지도의 `{path}`이(가) 레포에 없다")
+    # 역검사: 정확한 경로 줄이나 `/`로 끝나는 폴더 줄로 덮여야 한다 [Claude proposal]
+    for f in files:
+        if f not in paths and not any(f.startswith(d) for d in folders):
+            report.errors.append(f"{rel}: `{f}`이(가) 파일 지도에 없다(경로 줄이나 `/`로 끝나는 폴더 줄을 더한다, RULES 5절 2번)")
+
+
+def read_code(lines: list[str]) -> list[str]:
+    return [m.group(1) for line in lines if (m := CODE_RE.match(line))]
+
+
+def check_codes(lines: dict[str, list[str] | None], report: Report) -> None:
+    """먼저 읽을 세 파일에 읽음 확인 코드 줄이 하나씩 있는지 본다."""
+    for rel in CODE_FILES:
+        if lines.get(rel) is not None and len(read_code(lines[rel])) != 1:
+            report.errors.append(f"{rel}: '읽음 확인 코드: <약칭>-<영숫자 4자>' 줄이 하나여야 한다")
 
 
 def check_status(rel: str, lines: list[str], report: Report) -> None:
@@ -349,13 +382,92 @@ def run(root: Path) -> Report:
         check_guides(root, ".work/STATUS.md", status, report)
     if lines[CONTEXT] is not None:
         check_context(CONTEXT, lines[CONTEXT], report)
+    check_codes(lines, report)
 
     check_secrets(root, files, report)
     return report
 
 
+def pr_sections(body: str) -> dict[str, str]:
+    """PR 본문을 '## 제목'별 글로 나눈다. 주석(<!-- -->)은 뺀다."""
+    found: dict[str, str] = {}
+    name = None
+    for line in re.sub(r"<!--.*?-->", "", body, flags=re.S).splitlines():
+        m = re.match(r"##\s+(.+?)\s*$", line)
+        if m:
+            name = m.group(1)
+            found[name] = ""
+        elif name is not None:
+            found[name] += line + "\n"
+    return found
+
+
+def changed_files(root: Path, base: str, report: Report) -> list[str] | None:
+    try:
+        out = subprocess.run(["git", "diff", "--name-only", f"{base}...HEAD"],
+                             cwd=root, capture_output=True, check=True, text=True).stdout
+        return [p for p in out.splitlines() if p]
+    except (OSError, subprocess.CalledProcessError) as e:
+        report.errors.append(f"`git diff {base}...HEAD`를 못 돌렸다(CI는 checkout fetch-depth: 0): {e}")
+        return None
+
+
+def local_base(root: Path) -> str:
+    for ref in ("origin/main", "main"):
+        if subprocess.run(["git", "rev-parse", "--verify", "-q", ref], cwd=root,
+                          capture_output=True).returncode == 0:
+            return ref
+    return "origin/main"
+
+
+def run_pr(root: Path, body: str, base: str) -> Report:
+    """PR 본문의 '읽은 파일'·'최신 흐름 갱신' 칸을 본다(RULES 5절 4번, AGENTS.md 'Codex가 꼭 할 일' 4번)."""
+    report = Report()
+    found = pr_sections(body or "")
+    read = found.get(PR_READ_SECTION)
+    if read is None:
+        report.errors.append(f"PR 본문: '## {PR_READ_SECTION}' 칸이 없다(PR 양식)")
+    else:
+        for rel in CODE_FILES:
+            path = root / rel
+            codes = read_code(path.read_text(encoding="utf-8-sig").splitlines()) if path.is_file() else []
+            if len(codes) != 1:
+                report.errors.append(f"{rel}: 읽음 확인 코드 줄을 찾지 못했다")
+            elif not re.search(r"(?<![A-Z0-9-])" + re.escape(codes[0]) + r"(?![A-Z0-9])", read):
+                report.errors.append(f"PR 본문 '{PR_READ_SECTION}': {rel}의 읽음 확인 코드가 없거나 다르다"
+                                     "(파일을 끝까지 읽고 그 줄 값을 적는다)")
+    context = found.get(PR_CONTEXT_SECTION)
+    changed = changed_files(root, base, report)
+    if context is None:
+        report.errors.append(f"PR 본문: '## {PR_CONTEXT_SECTION}' 칸이 없다(PR 양식)")
+    elif changed is not None:
+        edited = re.search(r"고친 절:\s*\S", context)
+        skipped = re.search(r"해당 없음\s*[—-]+\s*\S", context)
+        if CONTEXT in changed and not edited:
+            report.errors.append(f"PR 본문 '{PR_CONTEXT_SECTION}': {CONTEXT}를 고쳤으니 `고친 절: <번호>`를 적는다")
+        if CONTEXT not in changed and not skipped:
+            report.errors.append(f"PR 본문 '{PR_CONTEXT_SECTION}': {CONTEXT}가 바뀌지 않았다. 바꾼 영역의 절을 고치거나"
+                                 " `해당 없음 — <이유>`를 적는다(RULES 5절 1번)")
+    if not report.errors:
+        report.notes.append(f"PR 본문 검사: base {base}, 바뀐 파일 {len(changed or [])}개")
+    return report
+
+
 def main() -> int:
-    return run(Path(__file__).resolve().parent.parent).print()
+    root = Path(__file__).resolve().parent.parent
+    args = sys.argv[1:]
+    if args and args[0] == "--pr":
+        event = os.environ.get("GITHUB_EVENT_PATH")
+        if len(args) > 1:
+            body, base = Path(args[1]).read_text(encoding="utf-8-sig"), local_base(root)
+        elif event:
+            pr = json.loads(Path(event).read_text(encoding="utf-8")).get("pull_request") or {}
+            body, base = pr.get("body") or "", (pr.get("base") or {}).get("sha", "origin/main")
+        else:
+            print("오류  --pr: 본문 파일을 주거나 GITHUB_EVENT_PATH(GitHub Actions pull_request)에서 돌린다")
+            return 1
+        return run_pr(root, body, base).print()
+    return run(root).print()
 
 
 if __name__ == "__main__":

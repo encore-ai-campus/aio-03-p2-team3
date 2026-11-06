@@ -207,9 +207,21 @@
 - 섞지 않을 것: 안내 글 4절 외의 개편, 6-2 결과 기록
 - 도구: 스크립트 8
 
-## 7단계 다음 과제용 템플릿 레포
+## 7단계 다음 과제용 템플릿 레포 — 7-1, 7-2로 나눔(2026-11-06, 한 대화로 재면 약 104KB / 기준 100KB)
 - 할 일: 6단계 기록을 반영해 [공통] 파일과 [과제별] 파일의 빈 틀, 시작 안내를 담은 GitHub Template repository를 만든다. 기준 100KB와 도구 1회 크기도 기록을 보고 고친다. [Request]
-- 읽을 것: `.work/TASK.md` 파일 지도, `.work/STATUS.md` '최근 완료'
-- 만들 것: 템플릿 레포
+- 시작 조건: 6-2를 마친 뒤(6단계 기록을 반영해야 한다). 템플릿 레포는 사용자가 GitHub에서 만들고 Claude GitHub App 허용 목록에 더한다(Claude의 API 쓰기는 프록시가 막음). [Request]
 - 섞지 않을 것: 이 레포의 과제 코드
-- 도구: 6단계 뒤에 잰다
+
+## 7-1단계 템플릿 레포 파일 (Claude 대화)
+- 할 일: 템플릿 레포에 [공통] 파일(TASK.md 파일 지도의 [공통])을 스크립트로 복사하고(내용을 대화에 넣지 않음), [과제별] 파일은 빈 틀로 만든다. 읽음 확인 코드는 새 값으로 바꾼다. [Request · Claude proposal]
+- 읽을 것: 이 절(TASK.md 파일 지도와 STATUS.md '최근 완료'는 시작 파일)
+- 만들 것: 빈 틀 파일(TASK·STATUS·PROJECT_CONTEXT·README·FLOW)
+- 섞지 않을 것: 시작 안내, 기준·도구 크기 고침(7-2)
+- 도구: 스크립트 7, 레포 연결 2
+
+## 7-2단계 시작 안내·기준 고침 (Claude 대화)
+- 할 일: 템플릿 레포 README에 시작 안내(Use this template → 레포 이름 → Claude·Codex 연결 → 첫 세팅 단계)를 쓰고, STATUS.md '최근 완료'·'이전 기록 요약'을 보고 기준 100KB(RULES 8절)와 도구 1회 크기(`measure.py` 표)를 두 레포에서 고친다. 템플릿 레포 Settings의 Template repository는 사용자가 켠다. [Request · Claude proposal]
+- 읽을 것: 이 절, `.work/measure.py`의 도구 표
+- 만들 것: 시작 안내, RULES·measure.py 고침
+- 섞지 않을 것: 빈 틀 내용 고침(7-1)
+- 도구: 스크립트 4, 레포 연결 2

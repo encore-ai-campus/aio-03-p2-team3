@@ -1,11 +1,14 @@
 # PR과 main 변경마다 규칙 검사(.work/check.py)와 테스트(uv run pytest)를 돌린다. 비밀값이 필요 없다.
 # 원본: doomdiver100T/claude-github-setup 커밋 9c45959의 template/managed/common/.github/workflows/rules-check.yml을 복사해 고침 [Past work: setup]
 # check.py는 테스트를 부르지 않으므로 테스트 작업(tests)을 따로 둔다. 두 결과가 PR에 따로 보인다 [Claude proposal]
+# pr-check는 PR 본문의 '읽은 파일'·'최신 흐름 갱신' 칸을 본다(check.py --pr). 본문을 고치면 다시 돌도록 edited를 넣는다.
+# edited에서도 세 작업을 모두 돌린다(작업을 건너뛰면 건너뜀이 앞 실패를 덮어 필수 검사를 통과한 것처럼 보인다) [Claude proposal]
 name: rules-check
 
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -26,6 +29,24 @@ jobs:
 
       - name: 레포 규칙 검사
         run: python .work/check.py
+
+  pr-check:
+    name: pr-check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # base와 비교(git diff base...HEAD)하려고 기록을 모두 가져온다
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: PR 본문 검사(읽은 파일·최신 흐름 갱신)
+        run: python .work/check.py --pr
 
   tests:
     name: tests
