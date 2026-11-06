@@ -28,7 +28,7 @@
   - 읽지 않을 파일: `.work/FLOW.md`(6-3-2 절 말고), `.work/check.py`의 다른 줄, `docs/CHATGPT_GUIDE.md`, `README.md`, `.work/design/`의 다른 파일과 인계 파일의 다른 절
   - 만들 파일: `check-diff=5` `PR양식-diff=0.5` `CI-diff=0.5` `RULES-diff=1` `AGENTS-diff=0.3` `TASK-diff=0.5` `PROJECT_CONTEXT-diff=0.2`
   - 도구: `스크립트=8` `레포 연결=1`
-  - 작업량: 약 93KB(실행 중 28KB 포함) / 기준 100KB
+  - 작업량: 약 96KB(실행 중 28KB 포함) / 기준 100KB
 - [ ] 7단계 다음 과제용 템플릿 레포 — Template repository가 만들어지고 시작 안내가 있음
 
 ## 대기
