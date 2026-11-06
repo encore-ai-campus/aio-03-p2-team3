@@ -1,9 +1,21 @@
-<!-- 양식 구조 [Past work: aio3] · '⚠ 규칙 변경' [Past work: setup] · '설명' 칸 [Request] · 나머지 칸 [Claude proposal] -->
+<!-- 양식 구조 [Past work: aio3] · '⚠ 규칙 변경' [Past work: setup] · '설명' 칸 [Request] · '읽은 파일'·'최신 흐름 갱신' 칸 [Request · Claude proposal] · 나머지 칸 [Claude proposal] -->
 ## ⚠ 규칙 변경
 
 <!-- AGENTS.md·.work/RULES.md·.work/TASK.md·이 양식을 바꿨다면 한 줄씩: 추가: … / 수정: 전 → 후 / 삭제: … (공통 규칙 4절). 병합하면 승인으로 본다. 없으면 "없음" -->
 
 없음
+
+## 읽은 파일
+
+<!-- .work/RULES.md·.work/TASK.md·docs/PROJECT_CONTEXT.md를 끝까지 읽을 때 본 `읽음 확인 코드:` 줄 값을 한 줄씩(CI pr-check가 본다, 공통 규칙 5절 4번) -->
+
+- RULES:
+- TASK:
+- CONTEXT:
+
+## 최신 흐름 갱신
+
+<!-- docs/PROJECT_CONTEXT.md에서 고친 절이면 "고친 절: <번호>", 고치지 않았으면 "해당 없음 — <이유>"(공통 규칙 5절 1번) -->
 
 ## 관련 Issue·계획
 
@@ -49,4 +61,4 @@
 없음
 
 ---
-병합: 승인 없이 누구나 병합한다. `rules-check`·`tests`가 통과해야 병합된다. Claude는 병합하지 않고, Codex는 팀원이 요청할 때 검사 통과 뒤에만 병합한다(AGENTS.md). 검토(②)는 선택이고 병합 뒤 댓글로 해도 된다.
+병합: 승인 없이 누구나 병합한다. `rules-check`·`tests`·`pr-check`가 통과해야 병합된다. Claude는 병합하지 않고, Codex는 팀원이 요청할 때 검사 통과 뒤에만 병합한다(AGENTS.md). 검토(②)는 선택이고 병합 뒤 댓글로 해도 된다.

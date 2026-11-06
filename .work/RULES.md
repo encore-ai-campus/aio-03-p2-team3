@@ -48,9 +48,9 @@ Codex의 3~6번 몫(검사·테스트, PR 열기, 답 첫 줄, 병합)은 `AGENT
 1. `docs/PROJECT_CONTEXT.md`에서 이번에 바꾼 영역의 절을 같은 PR에서 고친다. 그 절의 '마지막 갱신' 날짜도 고친다. 다른 영역의 절과 문서 맨 위 공용 줄은 고치지 않는다(모든 PR이 같은 줄을 고치면 매번 충돌한다). [Request · Claude proposal]
 2. 파일을 더하거나 지우거나 옮겼으면 `.work/TASK.md`의 파일 지도도 고친다. [Past work: setup]
 3. 검사 도구(`python3 .work/check.py`)가 있으면 통과시킨다. 통과하지 못하면 PR을 열지 않고 먼저 고친다. 고칠 수 없으면 오류와 시도한 방법을 알린다. [Past work: aio3] 테스트(`uv run pytest`)도 함께 직접 실행해 통과시키고, 두 실행 결과를 마지막 답에 보인다. [Request]
-4. PR 설명은 `.github/pull_request_template.md` 양식을 모두 채운다. [Past work: aio3]
+4. PR 설명은 `.github/pull_request_template.md` 양식을 모두 채운다. [Past work: aio3] '읽은 파일' 칸에는 이 파일·`.work/TASK.md`·`docs/PROJECT_CONTEXT.md`를 끝까지 읽을 때 본 `읽음 확인 코드:` 줄 값을 한 줄씩 적고, '최신 흐름 갱신' 칸에는 `고친 절: <번호>` 또는 `해당 없음 — <이유>`를 적는다. CI `pr-check`(`python3 .work/check.py --pr`)가 코드와, `docs/PROJECT_CONTEXT.md`를 고치지 않았을 때 이유가 있는지 본다. `읽음 확인 코드:` 줄은 세팅 단계 작업 말고는 고치지 않는다. [Request · Claude proposal]
 5. 마지막 답 맨 앞 줄: Claude는 `🔔 PR을 날렸습니다. 병합 후 진행해주세요: <PR 링크>`를 쓴다(Codex의 첫 줄은 `AGENTS.md`). 공통 부분을 바꿨으면 바로 아래에 `⚠ 공통 부분 변경: 병합 전에 <관련 팀원>과 조율해 주세요.`를 쓴다. 그 아래에 1절의 `❗ 확인할 것:`을 쓴다(있을 때). 그 뒤에 바꾼 내용을 짧게 적는다. [Request · Claude proposal]
-6. Claude는 PR을 병합하지 않는다. 병합은 사람이 한다. [Past work: setup · aio3] 팀원이 요청하면 Codex가 `AGENTS.md`의 병합 조건(필수 검사가 모두 통과했을 때만)대로 병합해도 된다. [Request] 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. 승인(리뷰) 요구는 두지 않고, `main` 필수 검사(Ruleset 'main 필수 검사': `rules-check`·`tests` 필수, '최신 main에 맞추기'(strict) 끔)는 둔다. 병합한 브랜치는 지우지 않는다. [Request]
+6. Claude는 PR을 병합하지 않는다. 병합은 사람이 한다. [Past work: setup · aio3] 팀원이 요청하면 Codex가 `AGENTS.md`의 병합 조건(필수 검사가 모두 통과했을 때만)대로 병합해도 된다. [Request] 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. 승인(리뷰) 요구는 두지 않고, `main` 필수 검사(Ruleset 'main 필수 검사': `rules-check`·`tests`·`pr-check` 필수, '최신 main에 맞추기'(strict) 끔)는 둔다. 병합한 브랜치는 지우지 않는다. [Request]
 7. 충돌: 앞 PR이 병합된 뒤 충돌이 나면 요청자가 그 PR에서 AI에게 최신 `main` 흐름에 맞게 고쳐 달라고 한다(Codex는 PR 댓글 `@codex 최신 main에 맞게 충돌을 고쳐 주세요`). AI는 양쪽 변경의 뜻을 모두 살려 고치고, `docs/PROJECT_CONTEXT.md`의 해당 절도 합친 결과대로 고친다. [Request] 그렇게 되지 않으면 GitHub 웹 화면에서 고치거나, PR을 닫고 최신 `main`에서 같은 작업을 다시 낸다. [Claude proposal]
 
 ## 6. 기록
@@ -119,3 +119,5 @@ Codex의 3~6번 몫(검사·테스트, PR 열기, 답 첫 줄, 병합)은 `AGENT
 - STATUS.md에 그 단계의 안내가 있으면, 시작할 때 읽는 파일 말고는 안내에 적힌 파일만 읽는다. 발췌는 `python3 .work/measure.py --show '<경로>#<절 제목>'`으로 그 절만 연다. [Past work: setup]
 - 읽지 않을 파일은 열지 않고, 그 내용을 지난 대화나 메모리에서 찾지도 않는다. [Past work: setup]
 - 첨부할 파일이 오지 않았으면 요청한다. 받은 뒤 다시 재서 기준을 넘으면 묻지 않고 작업 배분량 검토만 해서 PR로 올리고 끝낸다. [Past work: setup · Request]
+
+읽음 확인 코드: RULES-6LM4
