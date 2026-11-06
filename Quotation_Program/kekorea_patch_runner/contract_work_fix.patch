@@ -1,0 +1,105 @@
+--- a/Quotation_KEKOREA/contracts/ui.py
++++ b/Quotation_KEKOREA/contracts/ui.py
+@@ -873,3 +873,4 @@
+     records = _records(repo)
+     if records:
++        options = {str(record["id"]): record for record in records}
+         st.markdown("### 저장된 계약")
+--- a/Quotation_KEKOREA/tests/test_contract_workspace_ui.py
++++ b/Quotation_KEKOREA/tests/test_contract_workspace_ui.py
+@@ -113,3 +113,12 @@
++    def test_saved_contract_list_renders_without_undefined_options(self):
++        self.seed('first', 'sale', 'First contract')
++        self.seed('second', 'trade_commission', 'Second contract')
++        self.run_app()
++        labels = [item.label for item in self.at.button]
++        self.assertIn('First contract', labels)
++        self.assertIn('Second contract', labels)
++        self.assertEqual(labels.count('X'), 2)
++
+     def test_contract_delete_requires_confirmation(self):
+         self.seed('delete-me', 'sale', 'Delete this contract')
+         self.run_app()
+--- a/Quotation_KEKOREA/Team/README.md
++++ b/Quotation_KEKOREA/Team/README.md
+@@ -135,3 +135,30 @@
+-## 7. 관련 문서
++## 7. 계약서 목록 오류 수정 및 인수인계 (2026-11-06)
++
++### 목적 및 영향
++
++- **문제:** 저장된 계약이 하나 이상 있을 때 `render_contract_page()`의 삭제 확인 분기가 정의되지 않은 `options` 변수를 참조하여 `NameError`를 발생시킬 수 있었습니다. 이 오류가 나면 계약 목록과 대화 History 확인도 중단됩니다.
++- **수정:** `records`에서 ID를 문자열로 정규화한 `options` 사전을 생성합니다. 삭제 요청 ID가 실제 목록에 포함되는 경우에만 계약 제목과 확인창을 표시합니다. 메뉴 구성, 견적서 가격 계산, 계약 revision 및 Supabase 데이터 구조는 변경하지 않습니다.
++- **대화 History:** `repo.list_messages(contract_id)`에서 계약별 대화를 읽어 `st.chat_message`에 표시하는 기존 기능을 유지합니다. 화면이 열리지 않던 원인을 제거한 것이며, 과거 메시지가 실제 DB에 존재하는지나 운영 서버에서 정상 노출되는지는 별도 검증이 필요합니다.
++- **삭제 흐름:** 목록의 X → 확인/취소. 실제 삭제는 기존 Supabase RPC 및 Storage 처리 경로를 사용합니다. 확인 없이 삭제하지 않습니다. 실제 DB·파일을 대상으로 파괴적 테스트를 수행하지 않습니다.
++
++### 적용 및 테스트
++
++```powershell
++# 저장소 최상위 폴더에서, 수정 패치 적용 후
++uv run --with-requirements .\Quotation_KEKOREA\requirements.txt python -m unittest Quotation_KEKOREA.tests.test_contract_workspace_ui
++uv run --with-requirements .\Quotation_KEKOREA\requirements.txt python -m unittest discover -s .\Quotation_KEKOREA\tests
++git diff --check
++uv run --with-requirements .\Quotation_KEKOREA\requirements.txt streamlit run .\Quotation_KEKOREA\app.py
++```
++
++화면에서 (1) 저장 계약 2건 조회 (2) 삭제 취소 (3) 삭제 확인 (합성·테스트 저장소만) (4) 다른 계약을 열 때 History가 섞이지 않는지 확인합니다. 전체 테스트는 이전부터 알려진 `test_annotations_load_prices_without_bypassing_product_confirmation` 실패 가능성도 따로 기록하고, 새 실패가 발생하면 배포하지 않습니다.
++
++**검증 상태:** 이번 변경은 GitHub 연결의 읽기 권한으로 원인을 조사했습니다. 연결 앱에 쓰기 권한이 없어 원격 저장을 시도할 때 HTTP 403이 발생했고, 현재 세션에서 전체 저장소 의존성을 이용한 테스트와 실제 서비스 실행은 완료하지 못했습니다. 따라서 이 항목을 운영 적용·전체 테스트 통과로 해석하지 마세요. 실제 테스트 결과와 배포 상태를 확인한 담당자가 이 항목을 갱신해야 합니다.
++
++### 보안 및 운영 확인
++
++계약 화면은 비밀번호 없이 공개 접근됩니다. 민감 계약/개인정보 저장은 접근 제어가 마련되기 전까지 피해야 합니다. Supabase migration, Secrets, RLS, 실제 계약·파일 삭제 및 PDF/DOCX 시각 검증은 별개입니다. 배포 후 앱에서 확인하지 않고 단순 GitHub 반영을 운영 성공으로 표시하지 않습니다.
++
++## 8. 관련 문서
+ 
+ - 상세 설계·기능 변경 이력: [README.md](../README.md)
+--- /dev/null
++++ b/Quotation_KEKOREA/Presentation/README.md
+@@ -0,0 +1,46 @@
++# KE KOREA AI 문서 자동화 — 발표용 요약
++
++> 발표용 핵심 메시지와 시연 흐름. 현재 코드와 운영 배포의 검증 상태는 구분합니다.
++
++## 1. 프로젝트 목적
++
++반복되는 해외무역·계약서 문서 작업을 AI 기반 초안 생성과 사람이 승인하는 검토 과정으로 단순화합니다. 모델은 입력 내용을 구조화하고 문장을 제안하며, 가격 계산·필수값 검증·발행 판단은 별도 규칙과 사용자 확인을 거칩니다.
++
++## 2. 발표 시 한눈에 보여줄 기능
++
++| 분야 | 입력 | 처리 | 결과 |
++| --- | --- | --- | --- |
++| PO / PI / CI / PL | 텍스트, 이미지, PDF | OCR·구조화, SKU/용량 대조, DB 가격 조회, 누락·합계 검증 | 검토 후 PDF/Excel 초안 |
++| 계약서 작성 | 거래 설명, 당사자·조건표, 참고 PDF/DOCX | 계약 유형 선택, 한국어/영어 초안, 문장 메모 및 변경 비교 | revision 기록, DOCX/PDF 초안 |
++| 계약서 기록 | 저장 계약, 대화 메시지 | 계약별 History 조회, 이전 revision 복구 | 수정·검토 추적 |
++
++## 3. 3분 발표 흐름
++
++1. **문제(30초):** 반복 입력, 제품·가격 오류, 계약 문장 수정 이력 관리의 어려움.
++2. **문서 자동화(60초):** 테스트 주문자료로 문서 종류 선택 → AI 추출 → 가격·누락 검토 → 결과 파일 미리보기.
++3. **계약 기능(60초):** 저장된 계약 선택 → 대화 History → 문장 선택 및 메모 → 수정 전후 비교 → 적용 시 새 revision.
++4. **통제와 마무리(30초):** 승인 없이는 중요한 변경이나 내보내기를 자동 확정하지 않음. 실제 계약 서명·발송은 수행하지 않음.
++
++## 4. 품질 개선 사례
++
++- 기존 견적서에서는 메뉴 이동 중 초안 소실, 상품 코드 인식과 가격 조회, 수량 0 처리, 포장 합계 승인 등을 회귀 테스트 대상으로 관리합니다.
++- 계약 목록에서는 저장된 계약이 존재할 때 정의되지 않은 `options` 참조로 화면이 중단될 수 있는 오류를 발견하여, 계약 ID → 기록 매핑을 명시적으로 만드는 수정 패치를 준비했습니다.
++- 삭제는 **X → 확인/취소**이며, 계약별 대화는 데이터 저장소에서 조회해 채팅 형식으로 표시합니다.
++
++## 5. 데모 전 체크리스트
++
++- 테스트용 합성 데이터만 사용. 비밀번호나 API 키, 민감 고객 계약은 시연에 넣지 않습니다.
++- 로컬 전체 테스트 통과 및 `git diff --check` 확인 후 데모합니다. 이전 기록에는 `test_annotations_load_prices_without_bypassing_product_confirmation` 단일 실패가 보고되어 있으므로 재확인이 필요합니다.
++- 계약서 저장·삭제는 운영 DB가 아니라 테스트 저장소로 시연합니다.
++- GitHub에 커밋된 것과 실제 Render/Streamlit 배포를 구분합니다. 운영 앱은 로그인 없이 접근 가능하므로 실계약 시연은 금지합니다.
++
++## 6. 검증 및 배포 현황 (2026-11-06)
++
++이번 세션에서는 계약 목록의 `options` 오류를 소스 검토로 발견했습니다. GitHub 연결에 쓰기 권한이 없어 원격 저장 시도에서 HTTP 403이 발생했고, 전체 테스트와 실제 앱 구동은 실행 완료하지 못했습니다. **따라서 이번 수정은 검증·배포 완료 상태가 아닙니다.** 적용 후 실제 검사 결과를 기록해야 합니다.
++
++## 7. 발표 자료 및 기술 문서
++
++- [발표 스크립트](presentation_script_ko.md)
++- [팀 운영·인수인계 문서](../Team/README.md)
++- [계약 기능 명세 및 운영 주의사항](../README_CONTRACTS.md)
++- [변경 보호 지침](../AGENTS.md)
