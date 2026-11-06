@@ -95,7 +95,7 @@
 ## 9. 레포 세팅·작업 방식
 마지막 갱신: 2026-11-06
 
-- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜기는 사용자 몫). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
+- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜 둠). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
 - [공통] 파일은 두 레포에서 같게 둔다(읽음 확인 코드 줄만 다름). 이 레포의 고유 값(레포 주소 등)은 [공통] 파일에 쓰지 않고 `.work/TASK.md`에서 가리킨다(RULES 2절 4번의 Issue 주소가 그 예).
 - 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다. Codex는 새 Codex Cloud의 환경 `aio-03-p2-team3`(워크스페이스 공유, 팀원 모두 GitHub 연결 마침)를 쓴다. 작업은 ChatGPT 왼쪽 `…` → Codex → Cloud · Choose environment에서 시작하고, Codex는 `AGENTS.md`를 자동으로 읽으므로 요청 문구에 그 파일을 읽으라고 쓰지 않는다. 요청 문구에 적지 않아도 `AGENTS.md`의 'Codex가 꼭 할 일'대로 검사·테스트·push·PR까지 하고, Issue는 `Issue: #번호`만 적으면 GitHub에서 본문을 읽는다(환경에 `api.github.com` 허용 뒤, 못 읽으면 본문을 붙임)(팀원 절차: 요청 → PR 확인 → 병합), 답에 PR 링크가 없으면 같은 작업에 후속 요청으로 연다. 연결·요청 문구는 `docs/CHATGPT_GUIDE.md`.
 - Codex 환경에는 API 키를 넣지 않는다. Codex에서 도는 테스트는 가짜 응답으로 하고, 실제 API 시험은 로컬과 Render에서 한다.
