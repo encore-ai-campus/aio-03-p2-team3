@@ -24,15 +24,16 @@ import sys
 from pathlib import Path
 from typing import NamedTuple, Sequence
 
-DEFAULT_LIMIT_KB = 100.0
+DEFAULT_LIMIT_KB = 100.0  # 계획 작업량 기준. 실제는 대개 1.1~1.4배(공통 규칙 8절 5번)
 KB = 1024
 # AGENTS.md가 시작할 때 읽게 하는 파일 모두(진입 파일, 공통 규칙, 레포 규칙, 세팅 진행기록, 최신 흐름)
 START_FILES = ("AGENTS.md", ".work/RULES.md", ".work/TASK.md", ".work/STATUS.md", "docs/PROJECT_CONTEXT.md")
-# 도구 1회 결과 크기(KB). 처음 값이다 — '최근 완료' 기록과 사용자 의견을 보고 이 레포에서 고친다(공통 규칙 8절).
-# 레포 연결: add_repo 결과 1회 약 4KB(2026-11-05 4-1단계에서 잼).
+# 도구 1회 결과 크기(KB). 2026-11-06 '최근 완료' 기록을 보고 그대로 두기로 정했다(넘은 까닭은 대부분 횟수가 늘어난 것).
+# 사용 한도·자동 요약에 걸리거나 1회 크기가 크게 다르면 기록과 사용자 의견을 보고 고친다(공통 규칙 8절).
+# 레포 연결: add_repo 결과 1회 약 4KB(2026-11-05 4-1단계에서 잼, 2026-11-06 7-2단계에서도 약 4KB).
 TOOL_KB = {"웹검색": 15.0, "웹페이지": 5.0, "MCP": 5.0, "서브에이전트": 5.0, "스크립트": 3.0, "레포 연결": 4.0}
 TOOL_RE = re.compile(r"^(?P<kind>[^=]+)=(?:(?P<count>\d+)(?:[xX×](?P<size>\d+(?:\.\d+)?))?|(?P<unknown>\?))$")
-TOOLS_TITLE = "실행 중 생기는 양(처음 값)"
+TOOLS_TITLE = "실행 중 생기는 양"
 NOT_TEXT = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".hwp", ".hwpx", ".zip", ".skill", ".7z",
             ".gz", ".tar", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".mp3", ".mp4", ".wav", ".mov"}
 SKIP_DIRS = {".git", "__pycache__", "node_modules"}
