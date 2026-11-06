@@ -2,6 +2,14 @@
 
 단위 프로젝트 2 (팀 3) 「복합 API 연계 일정 조정 에이전트」. LangGraph로 다중 도구 선택, 순환형 워크플로우, 자가 성찰·피드백 루프를 만들고 배포한다. 과제 개요와 현재 상태는 `docs/PROJECT_CONTEXT.md`.
 
+## 팀원 빠른 시작
+
+1. 요청: chatgpt.com 왼쪽 `…` → Codex → Cloud · Choose environment `aio-03-p2-team3` → `docs/CHATGPT_GUIDE.md` 4절 2번 요청 문구(작업, 관련 상태·도구·노드, 수정 범위, 확인 조건, `Issue: #번호`)를 채워 보낸다. AGENTS.md를 읽으라는 말과 검사·PR 지시는 쓰지 않는다(Codex가 레포 규칙대로 한다).
+2. PR 확인: 답 맨 앞 PR 링크 → Files changed에 수정 범위 밖 파일이 없고 `rules-check`·`tests`가 초록 체크인지 본다. 빨간 X면 같은 작업에 오류를 붙여 고쳐 달라고 한다.
+3. 병합: Merge pull request → Confirm merge. 브랜치는 지우지 않는다.
+
+자세한 것과 막힐 때(PR 링크가 없을 때, 충돌)는 `docs/CHATGPT_GUIDE.md` 4·5절.
+
 - 공통 규칙: `.work/RULES.md` (이 레포가 관리)
 - 이 레포의 규칙과 파일 지도: `.work/TASK.md`
 - 진행기록: `.work/STATUS.md`
