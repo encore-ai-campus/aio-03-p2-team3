@@ -184,6 +184,22 @@
 - 섞지 않을 것: 다른 파일 수정
 - 도구: 없음(Claude 대화 아님)
 
+## 6-3단계 팀원 편의 개선 — 6-3-1, 6-3-2로 나눔(2026-11-06, 규칙·안내 글과 CI 확인을 한 대화로 하면 기준을 넘음)
+
+## 6-3-1단계 규칙·안내 글 (Claude 대화)
+- 할 일: `.work/design/step6-3-handoff.md` '6-3-1 규칙·안내 글'대로 AGENTS.md 문구 강화, 안내 글 2·4·5·6·7절, README '팀원 빠른 시작', RULES 2절 4번(Issue 번호만으로 본문 읽기)을 고친다. 규칙 변경은 RULES 4절 절차와 PR '⚠ 규칙 변경'에 적는다. [Request · Claude proposal]
+- 읽을 것: 이 절, `.work/design/step6-3-handoff.md`의 '공식 확인'·'정한 것'·'답 대기'·'6-3-1' 절, `docs/CHATGPT_GUIDE.md`의 2·4·5·6·7절, `README.md`
+- 만들 것: 위 파일 고침
+- 섞지 않을 것: 읽음 확인 코드·PR 양식·check.py·CI(6-3-2), 팀원 메시지(6-3-2 뒤), 공식 문서 검색(인계 파일에 있음)
+- 도구: 스크립트 6
+
+## 6-3-2단계 CI 확인 (Claude 대화)
+- 할 일: `.work/design/step6-3-handoff.md` '6-3-2 CI 확인'대로 읽음 확인 코드, PR 양식 두 칸, `check.py --pr`와 파일 지도 역검사, CI 작업 `pr-check`, RULES 5절·AGENTS.md 한 줄을 넣고, 이 PR로 `pr-check` 통과를 확인한다. 새 3단계 팀원 메시지를 답으로 준다. [Request · Claude proposal]
+- 읽을 것: 이 절, `.work/design/step6-3-handoff.md`의 '정한 것'·'6-3-2' 절, `.work/check.py`(1~30·81~102·166~175·326~360줄만), `.github/workflows/rules-check.yml`, `.github/pull_request_template.md`
+- 만들 것: 위 파일 고침
+- 섞지 않을 것: 안내 글 4절 외의 개편, 6-2 결과 기록
+- 도구: 스크립트 8
+
 ## 7단계 다음 과제용 템플릿 레포
 - 할 일: 6단계 기록을 반영해 [공통] 파일과 [과제별] 파일의 빈 틀, 시작 안내를 담은 GitHub Template repository를 만든다. 기준 100KB와 도구 1회 크기도 기록을 보고 고친다. [Request]
 - 읽을 것: `.work/TASK.md` 파일 지도, `.work/STATUS.md` '최근 완료'

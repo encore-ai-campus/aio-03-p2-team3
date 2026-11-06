@@ -1,6 +1,6 @@
 # aio-03-p2-team3 세팅 진행기록
 
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-06
 
 <!-- 세팅 단계 작업(.work/FLOW.md)만 적는다. 과제 작업의 최신 흐름은 docs/PROJECT_CONTEXT.md, 남은 작업은 GitHub Issue. 규칙은 .work/RULES.md 6절·8절 -->
 
@@ -11,10 +11,19 @@
   - Claude 대화가 아니라서 안내 형식과 작업량은 두지 않는다(팀원 작업). 순서: 사용자가 `docs/CHATGPT_GUIDE.md` 2절로 환경을 Publish하고 3절로 공유를 확인 → 팀원마다 4절 요청 문구로 FLOW 6단계 할 일(README 팀원 표의 자기 줄에 한 줄 소개)을 Codex에 맡겨 PR을 열고 병합 → 7절 항목을 본다
   - 기록: 결과를 알려 주면 Claude 대화에서 여기와 '최근 완료'에 적는다
   - 진행(2026-11-05): 환경 `aio-03-p2-team3` 게시·워크스페이스 공유(Everyone at 엔코아 AI 캠퍼스) 마침, 팀원 모두 GitHub 계정 연결 마침(`docs/CHATGPT_GUIDE.md` 1절). 6-1에서 시작 경로(`…` → Codex → Cloud · Choose environment)와 PR 여는 순서(버튼 없음, 후속 요청)를 확인해 `docs/CHATGPT_GUIDE.md` 4절에 적음, 사용자 몫 시험 PR #20 병합(CI 통과, 끊김 없음, 자동 요약 모름). 6-1-2에서 요청 한 번으로 PR까지 가게 `docs/CHATGPT_GUIDE.md` 4절·RULES 5절 4·5번을 바꿈. 6-1-2 PR이 병합된 뒤 시작한다. 남은 것: 나머지 팀원 3명 PR, 7절 남은 확인(다른 팀원 화면의 공유 환경, `@codex` 댓글, 원래 작업으로 같은 PR 고치기, 앞 병합 반영)
+- [ ] 6-3단계 팀원 편의 개선 — 6-3-1, 6-3-2로 나눔(2026-11-06, 한 대화로 하면 기준을 넘음)
+- [ ] 6-3-1단계 규칙·안내 글 — AGENTS.md 문구 강화, 요청 문구 첫 줄 삭제, Issue 번호만으로 요청, README 빠른 시작이 PR로 올라감
+  - 명령어: `aio-03-p2-team3 6-3-1단계를 시작해 주세요 (지난 대화·메모리 검색 없이 레포 STATUS.md 안내대로, 시작 파일은 파일마다 따로 읽기)`
+  - 첨부: 없음
+  - 읽을 파일: `.work/design/step6-3-handoff.md` `docs/CHATGPT_GUIDE.md#2. 기존 Unpublished 환경을 마무리해 Publish하기 (환경을 만든 사람)` `docs/CHATGPT_GUIDE.md#4. Codex에 작업 맡기기` `docs/CHATGPT_GUIDE.md#5. 충돌이 났을 때` `docs/CHATGPT_GUIDE.md#6. 문서 작업용 ChatGPT 프로젝트` `docs/CHATGPT_GUIDE.md#7. 6단계 연결 시험에서 확인할 것` `README.md`
+  - 읽지 않을 파일: `.work/FLOW.md`(6-3-1 절 말고), `.work/check.py`, `.github/`, `.work/design/`의 다른 파일
+  - 만들 파일: `CHATGPT_GUIDE-diff=4` `README-diff=1.5` `RULES-diff=2` `AGENTS-diff=1`
+  - 도구: `스크립트=6`
+  - 작업량: 약 93KB(실행 중 18KB 포함) / 기준 100KB
 - [ ] 7단계 다음 과제용 템플릿 레포 — Template repository가 만들어지고 시작 안내가 있음
 
 ## 대기
-- 6-1-2단계 PR 병합
+- PR #26 충돌을 고친 방법(사용자가 담당 팀원에게 물어 Claude 대화에 답함, `.work/design/step6-3-handoff.md` '답 대기')
 
 ## 보류
 없음
