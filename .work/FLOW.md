@@ -219,7 +219,7 @@
 - 섞지 않을 것: 시작 안내, 기준·도구 크기 고침(7-2)
 - 도구: 스크립트 7, 레포 연결 2
 
-## 7-2단계 시작 안내·기준 고침 (Claude 대화)
+## 7-2단계 시작 안내·기준 고침 (Claude 대화) (완료)
 - 할 일: 템플릿 레포 README에 시작 안내(Use this template → 레포 이름 → Claude·Codex 연결 → 첫 세팅 단계)를 쓰고, STATUS.md '최근 완료'·'이전 기록 요약'을 보고 기준 100KB(RULES 8절)와 도구 1회 크기(`measure.py` 표)를 두 레포에서 고친다. 템플릿 레포 Settings의 Template repository는 사용자가 켠다. [Request · Claude proposal]
 - 읽을 것: 이 절, `.work/measure.py`의 도구 표
 - 만들 것: 시작 안내, RULES·measure.py 고침
