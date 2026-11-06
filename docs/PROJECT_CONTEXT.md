@@ -95,10 +95,10 @@
 ## 9. 레포 세팅·작업 방식
 마지막 갱신: 2026-11-06
 
-- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 6-3-2(규칙 파일 읽기·최신 흐름 갱신을 CI `pr-check`로 확인)까지 했고, 6-2(팀원 각자 Codex 연결 시험)는 팀원 PR까지 마치고 남은 확인 중이다. 다음은 6-2를 마친 뒤 7단계(다음 과제용 템플릿 레포)다. 세팅 진행기록은 `.work/STATUS.md`.
+- 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 지금은 6-3-2(규칙 파일 읽기·최신 흐름 갱신을 CI `pr-check`로 확인)와 6-2(팀원 각자 Codex 연결 시험, 사용자 혼자 Issue·`pr-check`·Codex 병합 시험 PR #34·#36)까지 했다. 다음은 7-1단계(다음 과제용 템플릿 레포 파일)다. 세팅 진행기록은 `.work/STATUS.md`.
 - 팀원은 ChatGPT(Codex)로 작업을 맡기고, 세팅 단계는 Claude가 한다. 모두 PR로 올린다. Codex는 새 Codex Cloud의 환경 `aio-03-p2-team3`(워크스페이스 공유, 팀원 모두 GitHub 연결 마침)를 쓴다. 작업은 ChatGPT 왼쪽 `…` → Codex → Cloud · Choose environment에서 시작하고, Codex는 `AGENTS.md`를 자동으로 읽으므로 요청 문구에 그 파일을 읽으라고 쓰지 않는다. 요청 문구에 적지 않아도 `AGENTS.md`의 'Codex가 꼭 할 일'대로 검사·테스트·push·PR까지 하고, Issue는 `Issue: #번호`만 적으면 GitHub에서 본문을 읽는다(환경에 `api.github.com` 허용 뒤, 못 읽으면 본문을 붙임)(팀원 절차: 요청 → PR 확인 → 병합), 답에 PR 링크가 없으면 같은 작업에 후속 요청으로 연다. 연결·요청 문구는 `docs/CHATGPT_GUIDE.md`.
 - Codex 환경에는 API 키를 넣지 않는다. Codex에서 도는 테스트는 가짜 응답으로 하고, 실제 API 시험은 로컬과 Render에서 한다.
-- 병합: 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. `main`에는 Ruleset 'main 필수 검사'(`rules-check`·`tests` 필수, 승인·strict 없음, `pr-check`는 6-3-2 병합 뒤 사용자가 더함)가 있어 검사 통과 전에는 병합되지 않는다. Claude는 병합하지 않고, Codex는 팀원이 요청할 때 검사 통과 뒤에만 병합한다. 병합한 브랜치는 지우지 않는다.
+- 병합: 승인 없이 PR을 연 사람을 포함해 누구나 병합한다. `main`에는 Ruleset 'main 필수 검사'(`rules-check`·`tests`·`pr-check` 필수, 승인·strict 없음)가 있어 검사 통과 전에는 병합되지 않는다. Claude는 병합하지 않고, Codex는 팀원이 요청할 때 검사 통과 뒤에만 병합한다. 병합한 브랜치는 지우지 않는다.
 - 기능이 둘 이상 섞인 요청은 먼저 `docs/plans/<작업명>.md`를 PR로 올리고 하위 작업마다 새 작업으로 한다(`.work/RULES.md` 7절).
 - 담당: 미리 정하지 않는다. 누구나 어느 부분이든 맡는다. 프로젝트를 마친 뒤 팀원별 PR 내역을 바탕으로 맡은 바를 정리해 README에 적는다. [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 자세한 것은 README '실행 방법'. 서버 실행 명령은 코드 구조가 정해지면 더한다.
