@@ -9,7 +9,7 @@
 <!-- 이 레포에만 해당하는 규칙. 고칠 때는 공통 규칙 4절을 따른다. -->
 - 공통 부분: 그래프 상태 객체, 도구 스키마(입출력), 그래프 노드·엣지. 고치기 전에 관련 팀원(그 부분을 지금 고치고 있거나 최근에 고친 사람)과 조율한다. 같은 파일을 여럿이 고칠 때도 조율한다. [Request]
   - 요청자는 AI에게 맡기기 전에 조율하고, 요청에 `조율함: <팀원>`을 적는다. 그 줄 없이 공통 부분을 바꿔야 하면 AI는 공통 규칙 5절 5번의 ⚠ 줄을 쓴다. [Claude proposal]
-  - 공통 부분의 파일 위치는 코드 구조가 정해지면 여기에 적는다(아직 없음). [Claude proposal]
+  - 공통 부분의 파일 위치: 정의 원본 `docs/CONTRACT.md` 2·3·4절, 코드는 그래프 상태 `app/graph/state.py`, 도구 스키마 `app/tools/base.py`·`app/tools/registry.py`·각 도구 파일의 `Input`, 그래프 노드·엣지 `app/graph/build.py`·`app/graph/routing.py`(코드 파일은 `docs/plans/gmail-quote-mvp.md#2`에서 만든다). 코드와 계약을 같은 PR에서 함께 고친다. [Claude proposal]
 - 담당은 미리 정하지 않는다. 누구나 어느 부분이든 맡는다. 프로젝트를 마친 뒤 팀원별 PR 내역을 바탕으로 맡은 바를 정리해 README에 적는다. [Request]
 - AI에게 작업을 맡길 때 요청에 관련 상태·도구·노드, 수정 범위, 확인 조건을 적는다. [Request]
 - 병합 전 절차: ① PR을 연 사람이 '설명' 칸에 변경 이유·입출력·상태 변화·오류 처리·작동 방식(발표용)을 적는다(필수, 칸마다 쓸 내용은 PR 양식). ② 검토자가 정상·오류 요청의 실제 결과를 확인한다(선택, 병합 뒤 댓글도 된다). ③ PR을 연 사람이 반영한다. [Request · Claude proposal]
@@ -40,6 +40,7 @@
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
 - `docs/plans/` — 큰 작업의 계획 파일 `<작업명>.md`(RULES 7절) [과제별]
+- `docs/CONTRACT.md` — gmail-quote-mvp 공통 계약(폴더 구조, 그래프 상태·노드·전이·한도, 도구 입출력, 필수 항목 출처, LLM 호출, DB 표, 실행 기록, 화면, Google, 환경변수). 하위 작업은 13절에서 자기가 읽을 절만 연다 [과제별]
 - `docs/CHATGPT_GUIDE.md` — 팀원용 ChatGPT 사용 안내(연결 순서, Codex 환경 게시·공유 확인, 작업 요청 문구, 충돌 처리, 문서 작업용 프로젝트 지침) [과제별]
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]
 - `.work/design/setup-research.md` — 연결 준비 공식 확인 결과(1단계). 세팅 단계 작업에서만 읽는다 [과제별]

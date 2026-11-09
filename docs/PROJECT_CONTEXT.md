@@ -52,20 +52,26 @@
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
 
 ## 3. 그래프 상태·기억 (공통 부분)
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-09
 
-- 아직 없음. 상태 객체를 만들면 파일 위치를 여기와 `.work/TASK.md` '공통 부분'에 적는다.
-- 고치기 전에 관련 팀원과 조율한다(TASK.md 공통 부분 규칙).
+- 계약 정함(2026-11-09, `docs/CONTRACT.md` 2절·7절). 코드는 아직 없음(`app/graph/state.py`의 `AgentState`, `docs/plans/gmail-quote-mvp.md#2`에서 만듦).
+- 상태: 시작 입력(`run_id`·`user_id`·`mode`·`message_id`·`thread_id`·`email`·`reflection_enabled`), 기억(`thread_context`·`long_term`), 판단(`intent`·`selected_tool`·`tool_reason`·`step_status`), 거래(`deal_terms`·`required_fields`·`missing_fields`), 결과(`reply_mode`·`candidates`·`quote_draft`), 성찰(`reflection`·`reflection_history`), 횟수(`call_retries` 통신·형식 재시도, `reflection_retries`·`reflection_retries_by_type` 성찰 재실행 — 따로 셈), `errors`·`needs_review`·`notice`·`end_reason`, 도구 기록 `tools_called`.
+- 기억: 단기는 스레드(threadId) 단위 `thread_messages`·`thread_memory`(요약 포함), 장기는 `user_preferences`·`company_profiles`·`price_list_items`·`counterparty_history`(Render Postgres). 현재 메일 조건이 과거 기억보다 앞선다.
+- 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-09
 
-- 아직 없음. 도구를 더하면 도구 이름, 입력·출력, 쓰는 외부 API, 오류 처리를 여기에 한 줄씩 적는다.
+- 계약 정함(2026-11-09, `docs/CONTRACT.md` 4절). 코드는 아직 없음. 도구 하나 = `app/tools/<이름>.py` 하나 + `app/tools/registry.py` 한 줄, 결과는 모두 `ToolResult`(성공 여부·값·오류 종류·출처·조회 시점·시도 횟수·소요 시간).
+- `draft_replies`(답장 후보 2~3개, Gemini) · `extract_deal_terms`(거래 항목 추출, Gemini) · `check_required_fields`(필수 항목 검토, 코드, 목록은 `get_required_fields()`) · `draft_followup_replies`(재질문 후보, Gemini) · `create_quote`(견적서 초안, 코드) · `send_email`(승인 뒤 같은 스레드로 발송, Gmail. 그래프 밖 승인 경로에서만 부름).
+- 오류: 한도 오류(`rate_limit`)는 재시도 없이 기본 답장 틀 후보 + 안내, 통신 실패는 `LIMITS`까지 재시도 뒤 실패 종료.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-09
 
-- 아직 없음. 노드·엣지와 성찰·재실행 루프가 생기면 흐름을 한 줄로 적고, 자세한 그림은 설계서에 둔다.
+- 계약 정함(2026-11-09, `docs/CONTRACT.md` 3절). 코드는 아직 없음(`app/graph/build.py`·`routing.py`).
+- 흐름: `load_memory` → `analyze_email` → (일반) `draft_replies` / (거래) `extract_deal` → `check_required` → (빠짐) `draft_followup` / (다 있음) `make_quote` → `draft_replies` → (성찰 켬) `reflect` ↺ 재실행 → `save_pending` → 끝. 실패는 `finish_failed`, 처리 안 함은 바로 끝. 승인·발송은 그래프 밖(`app/services/approval.py`).
+- 종료: `awaiting_approval`(정상) · `followup_question`(추가 질문) · `ignored` · `failed`. 성찰 재실행 한도를 넘으면 '확인 필요' 표시로 끝냄(대체 경로).
 
 ## 6. 시험·평가
 마지막 갱신: 2026-11-05
