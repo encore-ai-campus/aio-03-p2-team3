@@ -48,19 +48,31 @@ uv run pytest            # 테스트
 
 ## LLM·외부 API와 키 발급
 
-근거와 자세한 경로는 `.work/design/api-choice.md`. 환경변수 이름과 설명은 `.env.example`. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않는다(테스트는 가짜 응답, `docs/CHATGPT_GUIDE.md`).
+2026-11-09에 정한 Gmail 견적 MVP 기준이다(`docs/plans/gmail-quote-mvp.md#3`). 근거와 자세한 경로는 `.work/design/api-choice.md`. 환경변수 이름의 기준은 `docs/CONTRACT.md` 11절, 이름과 설명만 담은 설정 틀은 `.env.example`이다. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않는다(테스트는 가짜 응답, `docs/CHATGPT_GUIDE.md`). 콘솔 설정과 실제 연동은 별도 작업에서 진행한다.
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|
 | Google Gemini API `gemini-3.8-flash`(무료 등급) | LLM | Google AI Studio API 키 화면(https://aistudio.google.com/app/apikey) | `GEMINI_API_KEY` |
-| Google Calendar API | 일정 읽기·만들기(사용자별 OAuth 로그인) | Google Cloud 콘솔: Calendar API 사용 설정 → Google Auth Platform(외부, 앱 게시) → Clients에서 웹 애플리케이션 클라이언트, Render 주소의 리디렉션 URI | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` |
-| 특일 정보(천문연)·단기예보(기상청) | 공휴일·절기, 날씨 | 공공데이터포털에서 두 API '활용신청'(자동승인) → 마이페이지 인증키 | `DATA_GO_KR_SERVICE_KEY` |
-| 네이버 지역 검색(NAVER API HUB) | 장소→주소·좌표 | 네이버 클라우드 콘솔(대표 계정) → NAVER API HUB → Application 등록 → 인증 정보 | `NAVER_HUB_CLIENT_ID` `NAVER_HUB_CLIENT_SECRET` |
-| 네이버 Maps Directions 5 | 길찾기 | 같은 콘솔 Maps → Application 등록(Directions 5) → 인증 정보, '이용 한도 설정'은 무료량 이하 | `NCP_MAPS_CLIENT_ID` `NCP_MAPS_CLIENT_SECRET` |
+| Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
+| Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
+| Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | Calendar API와 사용자별 Google OAuth를 사용. 일정 도구 작업 때 연결 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
+
+API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`·Render에만 넣는다.
+
+| 환경변수 | 설명 |
+|---|---|
+| `DATABASE_URL` | Postgres 접속 주소. 로컬에서 비우면 SQLite 파일 사용 |
+| `TOKEN_ENCRYPTION_KEY` | Google 토큰 암호화 키 |
+| `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 |
+| `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |
+| `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값. 설정할 때 `true` 또는 `false` 지정 |
+
+특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외했다. 일정(캘린더) 도구 작업 때 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천하고 채택 여부를 확인한다.
 
 주의:
-- Gemini 무료 등급은 입력이 Google 제품 개선에 쓰인다. 실제 개인정보를 넣지 않는다. LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다.
-- 체험자에게는 테스트용 Google 계정으로 로그인하도록 안내한다(OAuth 검증을 받지 않아 '확인되지 않은 앱' 경고가 뜨면 '고급 → 이동').
+
+- Gemini 무료 등급은 입력이 Google 제품 개선에 쓰인다. 테스트용 Google 계정과 가상 메일을 사용하고 실제 개인정보를 넣지 않는다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다.
+- OAuth 게시·권한과 Pub/Sub 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 설정한다.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md`).
 
 ## 팀원

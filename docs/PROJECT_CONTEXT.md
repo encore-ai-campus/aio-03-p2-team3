@@ -44,11 +44,11 @@
 ## 2. 서비스와 대표 입력·출력
 마지막 갱신: 2026-11-09
 
-- 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`(아직 없음).
+- 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`.
 - 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
-- 아래 LLM·외부 API 줄은 2026-11-05 기준이다. Gmail API·Pub/Sub 추가와 보조 API 정리는 계획의 하위 작업에서 반영한다(인계 파일 1절 4번).
 - LLM: Google Gemini API `gemini-3.8-flash`(무료 등급, 환경변수 `GEMINI_API_KEY`). 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다. 근거와 설정 경로는 `.work/design/api-choice.md`. 패키지는 `langchain-google-genai`(`pyproject.toml`).
-- 외부 API: Google Calendar(사용자별 OAuth 로그인, 프로덕션 게시·검증 없음), 한국천문연구원 특일 정보·기상청 단기예보(공공데이터포털), 네이버 지역 검색(NAVER API HUB)·길찾기 Directions 5(네이버 클라우드 Maps). 체험자는 테스트용 Google 계정으로 로그인하게 안내하고, LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로·환경변수는 `.work/design/api-choice.md`, 요약은 README 'LLM·외부 API와 키 발급'.
+- 외부 API: Gmail API(사용자별 Google OAuth로 메일 읽기·감시 등록·승인 후 발송)와 Cloud Pub/Sub(메일함 변경 푸시 알림)를 추가했다. Google Calendar는 도구 2(구글캘린더 등록)용으로 유지한다. 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외하고 `.work/design/api-choice.md`의 '일정 도구 추천 후보'로 옮겼다(2026-11-09 결정). API 연동·콘솔 설정은 별도 작업이다.
+- 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로는 `.work/design/api-choice.md`, 요약은 README 'LLM·외부 API와 키 발급', 환경변수는 `docs/CONTRACT.md` 11절·`.env.example`.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
 
 ## 3. 그래프 상태·기억 (공통 부분)
@@ -65,6 +65,7 @@
 - 계약 정함(2026-11-09, `docs/CONTRACT.md` 4절). 코드는 아직 없음. 도구 하나 = `app/tools/<이름>.py` 하나 + `app/tools/registry.py` 한 줄, 결과는 모두 `ToolResult`(성공 여부·값·오류 종류·출처·조회 시점·시도 횟수·소요 시간).
 - `draft_replies`(답장 후보 2~3개, Gemini) · `extract_deal_terms`(거래 항목 추출, Gemini) · `check_required_fields`(필수 항목 검토, 코드, 목록은 `get_required_fields()`) · `draft_followup_replies`(재질문 후보, Gemini) · `create_quote`(견적서 초안, 코드) · `send_email`(승인 뒤 같은 스레드로 발송, Gmail. 그래프 밖 승인 경로에서만 부름).
 - 오류: 한도 오류(`rate_limit`)는 재시도 없이 기본 답장 틀 후보 + 안내, 통신 실패는 `LIMITS`까지 재시도 뒤 실패 종료.
+- 일정(캘린더) 도구 작업 때 AI가 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천한다. Calendar는 도구 2용으로 유지하며, 후보 API는 채택 확인 후 추가한다.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
 마지막 갱신: 2026-11-09
@@ -80,10 +81,13 @@
 - 같은 시나리오를 다시 돌릴 때의 편차보다 큰 차이만 개선으로 본다. [Past work: aio3]
 
 ## 7. 배포
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-09
 
 - 아직 없음. 서버는 Render를 쓸 예정이다. 배포 주소, 첫 요청 지연 같은 주의점을 적는다.
-- 환경변수(`.env.example`, 값은 Render 환경변수에 둔다): `GEMINI_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`, `DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_CLIENT_ID`·`NAVER_HUB_CLIENT_SECRET`, `NCP_MAPS_CLIENT_ID`·`NCP_MAPS_CLIENT_SECRET`.
+- 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
+- LLM·OAuth: `GEMINI_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`.
+- Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
+- 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
 
 ## 8. 문서·산출물 위치
 마지막 갱신: 2026-11-09
@@ -94,7 +98,7 @@
 | 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 아직 없음(11/13 초안) |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 아직 없음 |
 | 시험 실행 기록(실행마다 한 파일) | `docs/test-records/` | 아직 없음 |
-| 큰 작업의 계획 파일 | `docs/plans/` (형식: `docs/plans/README.md`) | 형식만 있음 |
+| 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 발표 PPT | 미정 | 아직 없음 |
 
 - 위치는 Claude가 정한 처음 값이다. 팀이 바꾸면 이 표와 README를 함께 고친다. [Claude proposal]

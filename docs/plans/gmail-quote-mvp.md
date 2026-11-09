@@ -41,7 +41,7 @@
 - 선행 작업: 1, 3
 - 하는 사람: Codex
 
-## 3. API·문서 정리
+## 3. API·문서 정리 (완료)
 - 할 일: 요청자가 2026-11-09에 정한 API 변경을 문서에 반영한다. 관련 요구사항: R-04·D-03. [Request]
   - `.work/design/api-choice.md`: Gmail API와 Cloud Pub/Sub(푸시 알림용)를 더한다. LLM은 Gemini `gemini-3.8-flash` 그대로, Google Calendar는 도구 2(구글캘린더 등록)용으로 남긴다. 한국천문연구원 특일 정보·기상청 단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 빼고 '일정 도구 추천 후보' 절로 옮긴다.
   - `.env.example`: 뺀 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)를 지우고 `docs/CONTRACT.md`의 환경변수 이름을 이름과 설명만 더한다.
