@@ -1,0 +1,4 @@
+{% macro quote_table(lines) -%}
+<table><thead><tr><th scope="col">품목</th><th scope="col">수량</th><th scope="col">금액</th></tr></thead>
+<tbody>{% for line in lines %}<tr><td>{{ line.item_name }}</td><td>{{ line.quantity }}</td><td>{{ line.amount if line.amount is not none else '단가 입력 필요' }}</td></tr>{% endfor %}</tbody></table>
+{%- endmacro %}

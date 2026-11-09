@@ -54,7 +54,7 @@
 ## 3. 그래프 상태·기억 (공통 부분)
 마지막 갱신: 2026-11-09
 
-- 계약 정함(2026-11-09, `docs/CONTRACT.md` 2절·7절). 코드는 아직 없음(`app/graph/state.py`의 `AgentState`, `docs/plans/gmail-quote-mvp.md#2`에서 만듦).
+- 계약의 `AgentState`·자료 형식·초기값을 `app/graph/state.py`에 구현했다(계획 2절, 2026-11-09). `tools_called`·`reflection_history`·`errors`·`call_retries`는 누적 리듀서다. 통신 재시도와 성찰 재실행은 별도로 유지한다. 기억을 읽고 쓰는 업무 본문은 아직 빈 틀이다.
 - 상태: 시작 입력(`run_id`·`user_id`·`mode`·`message_id`·`thread_id`·`email`·`reflection_enabled`), 기억(`thread_context`·`long_term`), 판단(`intent`·`selected_tool`·`tool_reason`·`step_status`), 거래(`deal_terms`·`required_fields`·`missing_fields`), 결과(`reply_mode`·`candidates`·`quote_draft`), 성찰(`reflection`·`reflection_history`), 횟수(`call_retries` 통신·형식 재시도, `reflection_retries`·`reflection_retries_by_type` 성찰 재실행 — 따로 셈), `errors`·`needs_review`·`notice`·`end_reason`, 도구 기록 `tools_called`.
 - 기억: 단기는 스레드(threadId) 단위 `thread_messages`·`thread_memory`(요약 포함), 장기는 `user_preferences`·`company_profiles`·`price_list_items`·`counterparty_history`(Render Postgres). 현재 메일 조건이 과거 기억보다 앞선다.
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
@@ -62,28 +62,31 @@
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
 마지막 갱신: 2026-11-09
 
-- 계약 정함(2026-11-09, `docs/CONTRACT.md` 4절). 코드는 아직 없음. 도구 하나 = `app/tools/<이름>.py` 하나 + `app/tools/registry.py` 한 줄, 결과는 모두 `ToolResult`(성공 여부·값·오류 종류·출처·조회 시점·시도 횟수·소요 시간).
+- 계약의 입력 스키마·도구 6개 등록과 `ToolResult`를 구현했다(계획 2절, 2026-11-09). `app/tools/<이름>.py`의 업무 본문은 빈 틀로, 미구현 결과를 반환하며 실제 API를 부르지 않는다. 잘못된 스키마 입력은 `invalid_input` 결과로 돌려준다.
 - `draft_replies`(답장 후보 2~3개, Gemini) · `extract_deal_terms`(거래 항목 추출, Gemini) · `check_required_fields`(필수 항목 검토, 코드, 목록은 `get_required_fields()`) · `draft_followup_replies`(재질문 후보, Gemini) · `create_quote`(견적서 초안, 코드) · `send_email`(승인 뒤 같은 스레드로 발송, Gmail. 그래프 밖 승인 경로에서만 부름).
-- 오류: 한도 오류(`rate_limit`)는 재시도 없이 기본 답장 틀 후보 + 안내, 통신 실패는 `LIMITS`까지 재시도 뒤 실패 종료.
+- `app/llm/client.py`의 `call_structured()`는 구조화 출력·프롬프트 버전·호출 시간·재시도 기록을 남긴다. 실제 SDK의 429·RESOURCE_EXHAUSTED는 `rate_limit`(재시도 없음), 시간 초과·연결 오류·5xx는 `network`(최대 3회, 1초→2초 대기), 형식 오류는 별도 1회 재시도다. 기본 답장 대체 문구와 업무 노드의 오류 처리는 후속 작업에서 채운다. 테스트는 `use_backend(fake)`로 대체한다.
 - 일정(캘린더) 도구 작업 때 AI가 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천한다. Calendar는 도구 2용으로 유지하며, 후보 API는 채택 확인 후 추가한다.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
 마지막 갱신: 2026-11-09
 
-- 계약 정함(2026-11-09, `docs/CONTRACT.md` 3절). 코드는 아직 없음(`app/graph/build.py`·`routing.py`).
+- `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). 업무 노드는 입력 상태를 유지하는 빈 틀이며, `save_pending`·`finish_failed`는 종료 이유만 정한다. 후보·처리 상태 DB 저장은 후속 작업이다. 기본 빈 그래프는 의도 미판정으로 실패 종료한다.
 - 흐름: `load_memory` → `analyze_email` → (일반) `draft_replies` / (거래) `extract_deal` → `check_required` → (빠짐) `draft_followup` / (다 있음) `make_quote` → `draft_replies` → (성찰 켬) `reflect` ↺ 재실행 → `save_pending` → 끝. 실패는 `finish_failed`, 처리 안 함은 바로 끝. 승인·발송은 그래프 밖(`app/services/approval.py`).
 - 종료: `awaiting_approval`(정상) · `followup_question`(추가 질문) · `ignored` · `failed`. 성찰 재실행 한도를 넘으면 '확인 필요' 표시로 끝냄(대체 경로).
+- `start_run()`이 사용자 설정·시험 옵션으로 성찰 여부를 정하고 실행을 시작한다. `traced_node`가 노드 앞뒤·변경 필드·전이·소요 시간·예외 종류를 `runs`·`run_events`에 남긴다. 업무용 성찰 감지·수정 본문은 아직 없다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-09
 
-- 아직 없음. 시험 시나리오(정상·오류), 지표 계산 방법, 성찰 전후 실행 결과를 적는다.
+- 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
+- `/healthz`·기본 화면·로컬 정적 파일, DB 16개 표·사용자별 중복 방지·UTC 저장·Postgres JSONB 정의를 검사한다. 성찰 전후 평가 지표와 실제 API 시험·보고서는 아직 없다.
 - 같은 시나리오를 다시 돌릴 때의 편차보다 큰 차이만 개선으로 본다. [Past work: aio3]
 
 ## 7. 배포
 마지막 갱신: 2026-11-09
 
 - 아직 없음. 서버는 Render를 쓸 예정이다. 배포 주소, 첫 요청 지연 같은 주의점을 적는다.
+- 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 키 없이 기본 화면을 열 수 있고, `DATABASE_URL`이 비면 커밋 제외된 `app/db/local.sqlite3`를 쓴다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render 연결 시험은 후속 작업이다.
 - 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
 - LLM·OAuth: `GEMINI_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`.
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
@@ -116,6 +119,6 @@
 - PR '설명' 칸에는 '작동 방식(발표용)'(구현 방식 2~4문장)도 적고 마지막 답에서 요청자에게 따로 짚어 안내하며(Codex·Claude 모두), 계획·설계서·시험 보고서·PR은 요구사항을 `docs/REQUIREMENTS.md`의 R-ID로 가리킨다(2026-11-09, `.work/TASK.md` 이 레포의 규칙).
 - 작업 완료 답변에는 별도 요청이 없어도 다음 작업 1~3개의 담당·시작 조건·계획 절·Issue를 안내하고, Codex 하위 작업은 새 작업용 요청문을 함께 준다. 완료 여부를 확인하지 못했으면 `미확인`으로 표시한다(2026-11-09, `AGENTS.md` 5번·`.work/RULES.md` 5절 8번).
 - 담당: 미리 정하지 않는다. 누구나 어느 부분이든 맡는다. 프로젝트를 마친 뒤 팀원별 PR 내역을 바탕으로 맡은 바를 정리해 README에 적는다. [Request]
-- 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 자세한 것은 README '실행 방법'. 서버 실행 명령은 코드 구조가 정해지면 더한다.
+- 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다. 자세한 것은 README '실행 방법'.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
 - CI: `.github/workflows/rules-check.yml`. PR과 `main` 변경마다 `rules-check`(규칙 검사, 파일 지도에 없는 파일도 오류)와 `tests`(`uv sync --locked` 뒤 `uv run pytest`)가 따로 돈다. `uv.lock`이 `pyproject.toml`과 어긋나면 `tests`가 실패한다. PR에서는(본문을 고쳐도) `pr-check`도 돌아 PR 본문 '읽은 파일' 칸의 읽음 확인 코드(RULES.md·TASK.md·이 문서)와 '최신 흐름 갱신' 칸(이 문서를 안 고쳤으면 `해당 없음 — 이유`)을 본다.
