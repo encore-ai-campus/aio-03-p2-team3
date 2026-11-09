@@ -42,10 +42,11 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-09
 
-- 주제: 미정. 기본은 '일정 조정 에이전트'이고, 확장 여부는 11/9까지 팀이 정한다.
-- 대표 입력·출력: 미정(11/9 마감).
+- 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`(아직 없음).
+- 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
+- 아래 LLM·외부 API 줄은 2026-11-05 기준이다. Gmail API·Pub/Sub 추가와 보조 API 정리는 계획의 하위 작업에서 반영한다(인계 파일 1절 4번).
 - LLM: Google Gemini API `gemini-3.8-flash`(무료 등급, 환경변수 `GEMINI_API_KEY`). 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다. 근거와 설정 경로는 `.work/design/api-choice.md`. 패키지는 `langchain-google-genai`(`pyproject.toml`).
 - 외부 API: Google Calendar(사용자별 OAuth 로그인, 프로덕션 게시·검증 없음), 한국천문연구원 특일 정보·기상청 단기예보(공공데이터포털), 네이버 지역 검색(NAVER API HUB)·길찾기 Directions 5(네이버 클라우드 Maps). 체험자는 테스트용 Google 계정으로 로그인하게 안내하고, LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로·환경변수는 `.work/design/api-choice.md`, 요약은 README 'LLM·외부 API와 키 발급'.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
@@ -79,10 +80,11 @@
 - 환경변수(`.env.example`, 값은 Render 환경변수에 둔다): `GEMINI_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`, `DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_CLIENT_ID`·`NAVER_HUB_CLIENT_SECRET`, `NCP_MAPS_CLIENT_ID`·`NCP_MAPS_CLIENT_SECRET`.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-05
+마지막 갱신: 2026-11-09
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
+| 과제 요구사항 정리(R-ID·D-ID) | `docs/REQUIREMENTS.md` | 있음(2026-11-09) |
 | 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 아직 없음(11/13 초안) |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 아직 없음 |
 | 시험 실행 기록(실행마다 한 파일) | `docs/test-records/` | 아직 없음 |
