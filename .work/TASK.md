@@ -49,6 +49,8 @@
 - `.work/design/step6-3-handoff.md` — 6-3단계 인계(공식 확인: Codex의 AGENTS.md 자동 읽기, 정한 것, 6-3-1·6-3-2 할 일). 6-3단계에서 읽는다 [과제별]
 - `.work/design/mvp-plan-handoff.md` — MVP 계획 인계(정한 것, 확인한 사실, Claude 추천 설계, 규칙 변경·계획 대화 안내). 그 대화들에서 4절이 가리키는 절만 읽는다 [과제별]
 - `docs/REQUIREMENTS.md` — 과제 요구사항 정리(노션 원문을 구현 관점으로 재구성, R-ID·D-ID). 계획·설계서·시험 보고서에서 필요한 절만 읽는다 [과제별]
+- `docs/ARCHITECTURE.md` — Gmail 견적 MVP 에이전트 아키텍처 설계서 초안(D-01, 20에서 최종 코드와 맞춤) [과제별]
 - `.work/design/chatgpt-research.md` — Codex·ChatGPT 공식 확인 결과(5-1단계: 새 Codex Cloud와 Legacy, 환경·비밀값·인터넷, 프로젝트 지침 위치). 세팅 단계 작업과 Codex 환경을 바꿀 때 읽는다 [과제별]
 
 읽음 확인 코드: TASK-Z966
+
