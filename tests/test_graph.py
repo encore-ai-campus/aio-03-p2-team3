@@ -32,7 +32,7 @@ def stub_drafts(state):
 
 # 이 파일은 그래프 연결(전이)만 본다. 업무 본문을 채운 거래 노드도 빈 틀로 바꿔 끼운다
 # (거래 노드 본문 시험은 tests/test_deal.py).
-BLANK_NODES = {name: (lambda s: {}) for name in ("extract_deal", "check_required", "draft_followup")}
+BLANK_NODES = {name: (lambda s: {}) for name in ("extract_deal", "check_required", "draft_followup", "make_quote")}
 
 
 def run(database, email, overrides=None, **kwargs):

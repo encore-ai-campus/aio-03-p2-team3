@@ -42,7 +42,8 @@ def _quote_summary(quote: dict | None) -> str:
     if not quote:
         return "없음"
     missing = ", ".join(quote.get("missing_prices") or []) or "없음"
-    return (f"견적번호 {quote.get('quote_no')}, 합계 {quote.get('total')}원, "
+    total = "미정(사용자 단가 입력 대기)" if quote.get("total") is None else f"{quote['total']}원"
+    return (f"견적번호 {quote.get('quote_no')}, 합계 {total}, "
             f"유효기간 {quote.get('valid_until')}, 단가 없는 품목 {missing}")
 
 

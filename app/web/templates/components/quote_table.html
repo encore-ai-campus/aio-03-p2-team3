@@ -1,4 +1,4 @@
 {% macro quote_table(lines) -%}
-<table><thead><tr><th scope="col">품목</th><th scope="col">수량</th><th scope="col">금액</th></tr></thead>
-<tbody>{% for line in lines %}<tr><td>{{ line.item_name }}</td><td>{{ line.quantity }}</td><td>{{ line.amount if line.amount is not none else '단가 입력 필요' }}</td></tr>{% endfor %}</tbody></table>
+<div class="table-wrap"><table><thead><tr><th scope="col">품목</th><th scope="col">수량</th><th scope="col">단위</th><th scope="col">단가(원)</th><th scope="col">금액(원)</th><th scope="col">단가 출처</th></tr></thead>
+<tbody>{% for line in lines %}<tr><td>{{ line.item_name }}</td><td>{{ line.quantity }}</td><td>{{ line.unit or '' }}</td><td>{{ '{:,}'.format(line.unit_price) if line.unit_price is not none else '단가 입력 필요' }}</td><td>{{ '{:,}'.format(line.amount) if line.amount is not none else '미정' }}</td><td>{{ {'thread':'스레드 합의','price_list':'단가표','user':'사용자 입력'}.get(line.price_source, '입력 필요') }}</td></tr>{% endfor %}</tbody></table></div>
 {%- endmacro %}

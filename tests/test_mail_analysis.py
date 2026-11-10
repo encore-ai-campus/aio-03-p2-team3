@@ -70,7 +70,7 @@ def test_general_inquiry_saves_two_or_three_candidates(database, email, count):
     assert select_event.node == "analyze_email" and select_event.tool == "draft_replies"
     assert select_event.detail["reason"] == GENERAL["reason"]
     assert {"tool_call", "tool_result"} <= {e.event for e in logged if e.tool == "draft_replies"}
-    assert [e.detail["prompt_version"] for e in logged if e.event == "llm_call"] == ["analyze_email.v1", "draft_replies.v1"]
+    assert [e.detail["prompt_version"] for e in logged if e.event == "llm_call"] == ["analyze_email.v1", "draft_replies.v2"]
     assert email["body_text"] in fake.calls[0] and email["body_text"] in fake.calls[1]
     assert email["body_text"] not in json.dumps([e.detail for e in logged], ensure_ascii=False)
 
