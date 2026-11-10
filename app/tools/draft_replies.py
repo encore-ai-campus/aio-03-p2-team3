@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from app.config import LIMITS
-from app.graph.state import EmailMessage, QuoteDraft, ReplyCandidate, ThreadContext
+from app.graph.state import EmailMessage, QuoteDraft, ReplyCandidate, ThreadContext, TradeDocDraft
 from app.llm.client import call_structured, model_source
 from app.prompts.draft_replies import PROMPT, REPLY_MODE_GUIDES
 from app.prompts.format import email_text, preferences_text, thread_context_text
@@ -23,6 +23,7 @@ class Input(BaseModel):
     thread_context: ThreadContext | None = None
     reply_mode: Literal["general", "quote"]
     quote_draft: QuoteDraft | None = None
+    trade_doc_draft: TradeDocDraft | None = None  # 무역서류 초안(계약 15.6절, quote_draft 대신)
     preferences: dict = Field(default_factory=dict)
     feedback: str | None = None
 
@@ -47,15 +48,28 @@ def _quote_summary(quote: dict | None) -> str:
             f"유효기간 {quote.get('valid_until')}, 단가 없는 품목 {missing}")
 
 
+def trade_doc_summary(doc: dict | None) -> str:
+    """무역서류 요약 텍스트(계약 15.6절: 문서 종류·문서번호·합계)."""
+    if not doc:
+        return "없음"
+    kind = doc.get("doc_kind") or doc.get("document_type") or "?"
+    total = doc.get("total")
+    amount = "미정(검토 입력 필요)" if total in (None, "") else f"{doc.get('currency') or ''} {total}".strip()
+    status = doc.get("status") or "needs_input"
+    return f"{kind} 문서번호 {doc.get('doc_no')}, 합계 {amount}, 상태 {status}"
+
+
 @tool(args_schema=Input)
-def draft_replies(email, reply_mode, thread_context=None, quote_draft=None,
+def draft_replies(email, reply_mode, thread_context=None, quote_draft=None, trade_doc_draft=None,
                   preferences=None, feedback=None) -> ToolResult:
     """받은 메일에 대한 답장 후보 2~3개를 만든다."""
     started = perf_counter()
     try:
         variables = {
             "candidate_min": LIMITS["CANDIDATE_MIN"], "candidate_max": LIMITS["CANDIDATE_MAX"],
-            "reply_mode_guide": REPLY_MODE_GUIDES[reply_mode].format(quote_summary=_quote_summary(quote_draft)),
+            "reply_mode_guide": REPLY_MODE_GUIDES[reply_mode].format(
+                quote_summary=_quote_summary(quote_draft), trade_doc=trade_doc_summary(trade_doc_draft)),
+            "trade_doc": trade_doc_summary(trade_doc_draft),
             "preferences": preferences_text(preferences), "feedback": feedback or "없음",
             "thread_context": thread_context_text(thread_context), "email": email_text(email),
         }

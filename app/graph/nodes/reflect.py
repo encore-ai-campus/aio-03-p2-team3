@@ -198,10 +198,11 @@ def _missing_param(state: AgentState) -> list[Finding]:
             _issue("missing_param", f"후보 도구의 필수 입력({what})이 비어 있음", "deal_terms" if terms is None else "deal_terms.items"),
             "reprompt", "extract_deal", f"{what}이 비어 있습니다. 메일에서 거래 항목을 빠짐없이 뽑으세요.",
         )]
-    if mode == "quote" and state["quote_draft"] is None:
+    if mode == "quote" and state["quote_draft"] is None and state["trade_doc_draft"] is None:
+        # 무역서류 동봉 답장은 quote_draft 대신 trade_doc_draft를 쓴다(계약 15.6절). 둘 다 비어 있어야 문제다.
         return [Finding(
-            _issue("missing_param", "견적서 동봉 답장의 필수 입력(견적서 초안)이 비어 있음", "quote_draft"),
-            "reprompt", "make_quote", "견적서 초안이 비어 있어 견적서를 다시 만듭니다.",
+            _issue("missing_param", "문서 동봉 답장의 필수 입력(견적서·무역서류 초안)이 비어 있음", "quote_draft/trade_doc_draft"),
+            "reprompt", "make_quote", "문서 초안이 비어 있어 견적서·무역서류를 다시 만듭니다.",
         )]
     return []
 
@@ -292,7 +293,7 @@ def _source_text(state: AgentState) -> str:
     if context:
         parts += [context.get("summary") or "", _dump(context.get("confirmed_terms")), _dump(context.get("last_result"))]
         parts += [f"{m.get('subject') or ''}\n{m.get('body_text') or ''}" for m in context.get("recent_messages") or []]
-    parts += [_dump(state["deal_terms"]), _dump(state["quote_draft"]),
+    parts += [_dump(state["deal_terms"]), _dump(state["quote_draft"]), _dump(state["trade_doc_draft"]),
               _dump(long_term.get("price_list")), _dump(long_term.get("company")), _dump(preferences_of(state))]
     return "\n".join(parts)
 

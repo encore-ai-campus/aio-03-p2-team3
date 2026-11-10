@@ -6,7 +6,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from app.config import LIMITS
-from app.graph.state import DealTerms, EmailMessage, ThreadContext
+from app.graph.state import DealTerms, EmailMessage, ThreadContext, TradeDocTerms
 from app.llm.client import call_structured, model_source
 from app.prompts.draft_followup_replies import PROMPT
 from app.prompts.format import email_text, preferences_text, thread_context_text
@@ -19,7 +19,7 @@ NONE = "없음"
 class Input(BaseModel):
     email: EmailMessage
     thread_context: ThreadContext | None = None
-    deal_terms: DealTerms
+    deal_terms: DealTerms | TradeDocTerms  # 판별 키 doc_kind(계약 15.6절)
     missing_fields: list[str]
     field_labels: dict[str, str]
     preferences: dict = Field(default_factory=dict)

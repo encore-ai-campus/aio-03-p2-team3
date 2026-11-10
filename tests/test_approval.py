@@ -146,8 +146,8 @@ def test_approval_sends_once_to_same_thread_and_records(client, fake, mailbox):
     assert rows(client, ProcessedMessage)[0].status == "sent"
     events = [(e.event, e.tool, e.detail) for e in rows(client, RunEvent) if e.run_id == "run-fake-message"]
     assert events == [
-        ("approval", "send_email", {"candidate_id": first, "quote_id": None, "ok": True, "error_kind": None}),
-        ("send", "send_email", {"candidate_id": first, "quote_id": None, "ok": True, "error_kind": None}),
+        ("approval", "send_email", {"candidate_id": first, "quote_id": None, "trade_doc_id": None, "ok": True, "error_kind": None}),
+        ("send", "send_email", {"candidate_id": first, "quote_id": None, "trade_doc_id": None, "ok": True, "error_kind": None}),
     ]
     page = client.get("/threads/fake-thread?notice=sent")
     assert APPROVAL_NOTICES["sent"][0] in page.text and "다른 답장을 보냄" in page.text

@@ -106,6 +106,7 @@ def _long_term(session, user_id, counterparty):
     company = session.get(CompanyProfile, user_id)
     prices = list(session.scalars(select(PriceListItem).where(
         PriceListItem.user_id == user_id,
+        PriceListItem.role.is_(None),  # 국내 견적서 행만(무역 행은 계약 15.7절)
     ).order_by(PriceListItem.item_name)))
     # 다른 거래처 기록은 읽지 않으며, 최근 다섯 건만 모델에 전달한다.
     history = list(session.scalars(select(CounterpartyHistory).where(
@@ -128,8 +129,10 @@ def _long_term(session, user_id, counterparty):
             })
     return {
         "preferences": {row.key: row.value for row in preferences},
+        # 무역서류 발행사 기본값(apply_issuer_defaults)이 legal_name_en·address·phone·email까지 읽는다(계약 15.6절).
         "company": {key: getattr(company, key) for key in
-                    ("company_name", "business_no", "ceo_name", "contact")} if company else None,
+                    ("company_name", "business_no", "ceo_name", "contact",
+                     "legal_name_en", "address", "phone", "email")} if company else None,
         "price_list": [{"item_name": row.item_name, "unit": row.unit, "unit_price": row.unit_price}
                        for row in prices],
         "counterparty_history": [{"thread_id": row.thread_id, "summary": row.summary,

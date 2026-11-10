@@ -19,6 +19,7 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
         company = session.get(CompanyProfile, user_id)
         prices = session.scalars(select(PriceListItem).where(
             PriceListItem.user_id == user_id,
+            PriceListItem.role.is_(None),  # 국내 견적서 행만(무역 행은 계약 15.7절, 별도)
         ).order_by(PriceListItem.item_name)).all()
         reflection_enabled = session.scalar(select(User.reflection_enabled).where(User.id == user_id))
     return request.app.state.templates.TemplateResponse(
@@ -71,6 +72,7 @@ def save_price(request: Request, item_name: Annotated[str, Form(min_length=1, ma
         session.scalar(select(User).where(User.id == user_id).with_for_update())
         row = session.scalar(select(PriceListItem).where(
             PriceListItem.user_id == user_id, PriceListItem.item_name == item_name.strip(),
+            PriceListItem.role.is_(None),  # 국내 견적서 행만 저장·수정(무역 행은 계약 15.7절)
         ))
         if row is None:
             row = PriceListItem(user_id=user_id, item_name=item_name.strip())

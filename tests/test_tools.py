@@ -4,7 +4,7 @@ from app.tools.registry import TOOLS
 
 def test_registered_tools_have_contract_inputs(email, database):
     assert set(TOOLS) == {"draft_replies", "extract_deal_terms", "check_required_fields",
-                          "draft_followup_replies", "create_quote", "send_email"}
+                          "draft_followup_replies", "create_quote", "create_trade_document", "send_email"}
     deal_terms = {"customer_name": None, "items": [], "due_date": None, "contact_name": None,
                   "contact_phone": None, "delivery_place": None, "note": None, "evidence": {}}
     from app.runlog.logger import recording
