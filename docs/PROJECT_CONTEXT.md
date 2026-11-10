@@ -109,6 +109,7 @@
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
 - 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
 - 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
+- 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
 마지막 갱신: 2026-11-09
