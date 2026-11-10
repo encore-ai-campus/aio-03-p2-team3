@@ -10,6 +10,7 @@
   --color-warning: #795500;
   --color-warning-bg: #fff6dc;
   --font-family: system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
   --font-small: 0.875rem;
   --font-body: 1rem;
   --font-title: 2rem;

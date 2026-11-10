@@ -9,7 +9,7 @@
   <script src="{{ url_for('static', path='js/htmx.min.js') }}" defer></script>
 </head>
 <body>
-  <header class="header"><nav class="shell" aria-label="기본 메뉴"><a class="brand" href="/inbox">Gmail 견적 도우미</a></nav></header>
+  <header class="header"><nav class="shell nav" aria-label="기본 메뉴"><a class="brand" href="/inbox">Gmail 견적 도우미</a><a href="/runs">실행 기록</a></nav></header>
   <main class="shell">{% block content %}{% endblock %}</main>
   <footer class="shell">답장은 내용을 확인하고 승인한 뒤에 보냅니다.</footer>
 </body>
