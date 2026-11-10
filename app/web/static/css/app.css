@@ -44,3 +44,21 @@ footer { margin-block: var(--space-xl); }
 .form-stack label { display: grid; gap: var(--space-xs); }
 input { font: inherit; padding: var(--space-sm); border: var(--width-line) solid var(--color-line); border-radius: var(--radius-sm); }
 .pdf-preview { width: var(--width-full); height: var(--height-pdf-preview); border: var(--width-line) solid var(--color-line); }
+.badge-muted { color: var(--color-muted); background: var(--color-bg); }
+.badge-done { color: var(--color-done); background: var(--color-done-bg); }
+.badge-warn { color: var(--color-warning); background: var(--color-warning-bg); }
+.badges { display: inline-flex; flex-wrap: wrap; gap: var(--space-xs); }
+.banner-done { color: var(--color-done); background: var(--color-done-bg); }
+.banner-muted { color: var(--color-muted); background: var(--color-soft); }
+.mail-list { list-style: none; margin: var(--space-none); padding: var(--space-none); }
+.mail-list li + li { border-top: var(--width-line) solid var(--color-line); }
+.mail-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-sm); padding-block: var(--space-sm); color: inherit; text-decoration: none; }
+.mail-row:hover strong { color: var(--color-accent); }
+.mail-main { display: flex; flex-direction: column; }
+.mail-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.candidates { display: grid; gap: var(--space-md); margin-inline-start: var(--space-lg); }
+.candidate { margin-block: var(--space-none); }
+.candidate-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-sm); }
+.candidate-head h3 { font-size: var(--font-body); margin: var(--space-none); }
+.candidate-foot { margin-block-start: var(--space-md); }
+.button[disabled] { opacity: var(--opacity-disabled); }

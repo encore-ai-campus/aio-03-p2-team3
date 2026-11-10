@@ -1,3 +1,4 @@
-{% macro status_badge(label) -%}
-<span class="badge">{{ label }}</span>
+{# tone: accent(기본)·muted·done·warn — 색은 app.css의 badge-<tone>이 토큰으로 정한다 #}
+{% macro status_badge(label, tone=none) -%}
+<span class="badge{% if tone %} badge-{{ tone }}{% endif %}">{{ label }}</span>
 {%- endmacro %}

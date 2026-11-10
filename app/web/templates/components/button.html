@@ -4,6 +4,6 @@
 {% macro link_button(label, href) -%}
 <a class="button button-primary" href="{{ href }}">{{ label }}</a>
 {%- endmacro %}
-{% macro submit_button(label) -%}
-<button class="button" type="submit">{{ label }}</button>
+{% macro submit_button(label, primary=false) -%}
+<button class="button{% if primary %} button-primary{% endif %}" type="submit">{{ label }}</button>
 {%- endmacro %}

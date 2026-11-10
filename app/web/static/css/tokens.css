@@ -9,6 +9,8 @@
   --color-soft: #eaf4ee;
   --color-warning: #795500;
   --color-warning-bg: #fff6dc;
+  --color-done: #1f5f8b;
+  --color-done-bg: #e8f1f8;
   --font-family: system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
   --font-small: 0.875rem;
@@ -29,4 +31,5 @@
   --width-content: 64rem;
   --width-full: 100%;
   --height-pdf-preview: 36rem;
+  --opacity-disabled: 0.6;
 }
