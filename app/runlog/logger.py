@@ -36,6 +36,11 @@ def log_event(run_id: str, event: str, *, node: str | None = None,
         ))
 
 
+def current_database() -> Database:
+    """실행 중인 그래프가 쓰는 DB(시험은 메모리 DB). 실행 밖이면 기본 DB."""
+    return _database.get() or get_database()
+
+
 def current_event(event: str, **kwargs):
     run_id = _run_id.get()
     if run_id is not None:

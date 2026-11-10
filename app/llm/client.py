@@ -26,6 +26,8 @@ from app.prompts import Prompt
 from app.runlog.logger import current_event
 
 _override = ContextVar("llm_backend", default=None)
+MODEL_NAME = "gemini-3.8-flash"
+MODEL_SOURCE = f"gemini:{MODEL_NAME}"  # ToolResult.source
 
 
 class LLMResult(BaseModel):
@@ -46,7 +48,7 @@ def _backend_for_settings(settings: Settings):
     if not settings.gemini_api_key:
         raise ValueError("GEMINI_API_KEY 설정이 필요합니다")
     return ChatGoogleGenerativeAI(
-        model="gemini-3.8-flash", google_api_key=settings.gemini_api_key,
+        model=MODEL_NAME, google_api_key=settings.gemini_api_key,
         max_retries=0, timeout=LIMITS["LLM_TIMEOUT_SECONDS"],
     )
 

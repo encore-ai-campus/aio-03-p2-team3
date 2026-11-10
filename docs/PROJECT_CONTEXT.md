@@ -60,25 +60,30 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
-- 계약의 입력 스키마·도구 6개 등록과 `ToolResult`를 구현했다(계획 2절, 2026-11-09). `app/tools/<이름>.py`의 업무 본문은 빈 틀로, 미구현 결과를 반환하며 실제 API를 부르지 않는다. 잘못된 스키마 입력은 `invalid_input` 결과로 돌려준다.
+- 계약의 입력 스키마·도구 6개 등록과 `ToolResult`를 구현했다(계획 2절, 2026-11-09). 잘못된 스키마 입력은 `invalid_input` 결과로 돌려준다. `draft_replies` 말고는 업무 본문이 빈 틀로, 미구현 결과를 반환하며 실제 API를 부르지 않는다.
+- `draft_replies` 구현(계획 8절, 2026-11-10): `call_structured()` 1회로 후보 2~3개(`label`·`body`)를 받는다. 개수가 2~3개가 아니면 형식 오류로 1회 다시 부른다. 제목은 코드가 `Re: <원래 제목>`으로 정하고, 사용자 선호의 `signature`가 있으면 본문 끝에 붙인다. `source`는 `gemini:gemini-3.8-flash`, DB 저장은 `save_pending` 노드가 한다. `quote` 모드는 견적서 요약만 프롬프트에 넣어 두었고 11이 다듬는다.
+- 대체 후보 `app/tools/fallback.py`의 `fallback_candidates(email, kind=, asks_fields=, preferences=)`: 한도 오류 때 기본 답장 틀 1개(`needs_review=True`, `notice="rate_limit"`)를 만든다. 후보의 `notice`에는 키만 두고, 화면 문구는 `NOTICE_MESSAGES["rate_limit"]`('한도 초과로 AI 후보를 만들지 못했습니다…')를 쓴다(9가 화면에 표시). 재질문 노드(10)도 같은 함수를 `kind="followup"`으로 쓴다.
 - `draft_replies`(답장 후보 2~3개, Gemini) · `extract_deal_terms`(거래 항목 추출, Gemini) · `check_required_fields`(필수 항목 검토, 코드, 목록은 `get_required_fields()`) · `draft_followup_replies`(재질문 후보, Gemini) · `create_quote`(견적서 초안, 코드) · `send_email`(승인 뒤 같은 스레드로 발송, Gmail. 그래프 밖 승인 경로에서만 부름).
 - `app/llm/client.py`의 `call_structured()`는 구조화 출력·프롬프트 버전·호출 시간·재시도 기록을 남긴다. 실제 SDK의 429·RESOURCE_EXHAUSTED는 `rate_limit`(재시도 없음), 시간 초과·연결 오류·5xx는 `network`(최대 3회, 1초→2초 대기), 형식 오류는 별도 1회 재시도다. 기본 답장 대체 문구와 업무 노드의 오류 처리는 후속 작업에서 채운다. 테스트는 `use_backend(fake)`로 대체한다.
 - 일정(캘린더) 도구 작업 때 AI가 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천한다. Calendar는 도구 2용으로 유지하며, 후보 API는 채택 확인 후 추가한다.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
-- `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). 업무 노드는 입력 상태를 유지하는 빈 틀이며, `save_pending`·`finish_failed`는 종료 이유만 정한다. 후보·처리 상태 DB 저장은 후속 작업이다. 기본 빈 그래프는 의도 미판정으로 실패 종료한다.
+- `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). 아직 채우지 않은 업무 노드(`load_memory`·`extract_deal`·`check_required`·`draft_followup`·`make_quote`·`reflect`)는 입력 상태를 유지하는 빈 틀이고, `finish_failed`는 종료 이유만 정한다. 처리한 메일 표(`processed_messages`) 상태 연결은 알림 수신(7) 몫이다.
+- 계획 8절(2026-11-10): `analyze_email`은 LLM 1회로 `intent`(general/deal/ignore)와 근거 한 문장을 받아 `selected_tool`(`draft_replies`/`extract_deal_terms`/없음)·`tool_reason`을 정하고 `tool_select` 기록을 남긴다. general이면 `reply_mode="general"`, ignore면 `end_reason="ignored"`. `draft_replies` 노드는 도구를 `TOOLS`로 부르고 `tool_call`·`tool_result`·`tools_called`를 남기며, 성찰이 실패로 남긴 `reflection.feedback`을 도구에 넘긴다. `save_pending`은 `candidates`를 `reply_candidates`(`status="pending"`)에 저장한다.
+- 오류 처리(`app/graph/nodes/common.py`의 `failure_update`): 한도 오류는 재시도 없이 대체 후보·`needs_review`·`notice="rate_limit"`·`step_status="rate_limit"`으로 `save_pending`에 가고(성찰 건너뜀), 통신 실패는 `call_structured()`가 2번 더 시도한 뒤에도 실패하면 `step_status="failed"`로 실패 종료한다. 둘 다 `errors`와 `error` 기록을 남기고, 재시도 횟수(`attempts - 1`)를 `call_retries`에 더한다. 10·11의 노드도 이 함수를 쓰면 된다.
 - 흐름: `load_memory` → `analyze_email` → (일반) `draft_replies` / (거래) `extract_deal` → `check_required` → (빠짐) `draft_followup` / (다 있음) `make_quote` → `draft_replies` → (성찰 켬) `reflect` ↺ 재실행 → `save_pending` → 끝. 실패는 `finish_failed`, 처리 안 함은 바로 끝. 승인·발송은 그래프 밖(`app/services/approval.py`).
 - 종료: `awaiting_approval`(정상) · `followup_question`(추가 질문) · `ignored` · `failed`. 성찰 재실행 한도를 넘으면 '확인 필요' 표시로 끝냄(대체 경로).
 - `start_run()`이 사용자 설정·시험 옵션으로 성찰 여부를 정하고 실행을 시작한다. `traced_node`가 노드 앞뒤·변경 필드·전이·소요 시간·예외 종류를 `runs`·`run_events`에 남긴다. 업무용 성찰 감지·수정 본문은 아직 없다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
+- 계획 8절: `tests/test_mail_analysis.py`가 가짜 LLM으로 일반 문의 → 후보 2~3개 저장, 후보 개수 오류 재시도, 거래 메일 → 거래 경로, 처리 안 함, 한도 오류(분석·후보 각각) → 대체 후보와 표시, 통신 실패 → 재시도 뒤 성공·실패 종료, 성찰 피드백 전달을 시험한다. `tests/test_graph.py`의 흐름 시험은 답장 후보 노드를 가짜로 바꿔 끼운다.
 - `/healthz`·기본 화면·로컬 정적 파일, DB 16개 표·사용자별 중복 방지·UTC 저장·Postgres JSONB 정의를 검사한다. 성찰 전후 평가 지표와 실제 API 시험·보고서는 아직 없다.
 - 같은 시나리오를 다시 돌릴 때의 편차보다 큰 차이만 개선으로 본다. [Past work: aio3]
 

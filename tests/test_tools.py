@@ -5,7 +5,7 @@ from app.tools.registry import TOOLS
 def test_registered_tools_have_contract_inputs_and_no_business_implementation(email):
     assert set(TOOLS) == {"draft_replies", "extract_deal_terms", "check_required_fields",
                           "draft_followup_replies", "create_quote", "send_email"}
-    result = TOOLS["draft_replies"].invoke({"email": email, "reply_mode": "general"})
+    result = TOOLS["extract_deal_terms"].invoke({"email": email})
     assert isinstance(result, ToolResult)
     assert not result.ok and result.error_kind == "internal" and result.attempts == 0
     send = TOOLS["send_email"].invoke({"user_id": 1, "thread_id": "fake-thread", "to_addrs": [], "subject": "가상", "body": "가상"})
