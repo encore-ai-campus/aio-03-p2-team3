@@ -52,6 +52,7 @@
 - `docs/REQUIREMENTS.md` — 과제 요구사항 정리(노션 원문을 구현 관점으로 재구성, R-ID·D-ID). 계획·설계서·시험 보고서에서 필요한 절만 읽는다 [과제별]
 - `docs/ARCHITECTURE.md` — Gmail 견적 MVP 에이전트 아키텍처 설계서 초안(D-01, 20에서 최종 코드와 맞춤) [과제별]
 - `docs/TEST_REPORT.md` — 에이전트 시험 결과 보고서(D-02). 17에서 시나리오·판정 기준·시험 환경 틀, 18·19에서 결과를 채움 [과제별]
+- `docs/test-records/` — 시험·실제 API 확인의 실행 기록(`.jsonl`, 개인정보 가림, 이름 규칙은 `docs/TEST_REPORT.md` 2절)과 확인 결과 문서 [과제별]
 - `.work/design/chatgpt-research.md` — Codex·ChatGPT 공식 확인 결과(5-1단계: 새 Codex Cloud와 Legacy, 환경·비밀값·인터넷, 프로젝트 지침 위치). 세팅 단계 작업과 Codex 환경을 바꿀 때 읽는다 [과제별]
 
 읽음 확인 코드: TASK-Z966

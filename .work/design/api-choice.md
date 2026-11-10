@@ -74,7 +74,7 @@
 - 정한 것 [Request]: Gmail·OAuth·Pub/Sub 전용 Google Cloud 프로젝트 `aio3-gmail-quote`를 따로 만들고 이 프로젝트에만 결제 계정을 연결한다. Gemini 키가 있는 프로젝트에는 결제를 연결하지 않는다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 확인되지 않은 앱 경고와 사용자 100명 상한을 감수한다.
 - OAuth: 게시 상태 프로덕션 단계(검증 없음), 사용자 유형 외부. 범위 `openid`·`userinfo.email`·`gmail.readonly`·`gmail.send`(`app/config.py`의 `GOOGLE_SCOPES`와 같음). 웹 애플리케이션 클라이언트의 리디렉션 URI는 `https://aio3-gmail-quote.onrender.com/auth/google/callback`, `http://localhost:8000/auth/google/callback`.
 - 브랜딩: 앱 이름 `Gmail 견적 도우미`(화면 이름과 같음), 홈페이지 `/about`·개인정보처리방침 `/privacy`·서비스 약관 `/terms`(서비스 주소 아래, #82), 승인된 도메인 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있어 서비스 주소가 최상위 개인 도메인).
-- Pub/Sub: 토픽 `projects/aio3-gmail-quote/topics/gmail-notify`(게시자: `gmail-api-push@system.gserviceaccount.com`, 역할 Pub/Sub 게시자), 푸시 구독 `gmail-notify-push` → `https://aio3-gmail-quote.onrender.com/gmail/push`, 인증 사용(서비스 계정 `gmail-push-auth@aio3-gmail-quote.iam.gserviceaccount.com`, 대상 = 엔드포인트 주소), 확인 기한 120초, 재시도 정책 지수 백오프(기본 10~600초).
+- Pub/Sub: 토픽 `projects/aio3-gmail-quote/topics/gmail-notify`(게시자: `gmail-api-push@system.gserviceaccount.com`, 역할 Pub/Sub 게시자. 2026-11-10 실제 API 확인(#62) 때 이 권한이 빠져 있어 감시 등록이 HTTP 403으로 실패했고, 그때 추가했다), 푸시 구독 `gmail-notify-push` → `https://aio3-gmail-quote.onrender.com/gmail/push`, 인증 사용(서비스 계정 `gmail-push-auth@aio3-gmail-quote.iam.gserviceaccount.com`, 대상 = 엔드포인트 주소), 확인 기한 120초, 재시도 정책 지수 백오프(기본 10~600초).
 - Render 환경변수(이름): `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`·`GMAIL_PUBSUB_TOPIC`·`PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`. 값은 레포에 두지 않는다.
 
 ### 공식 문서 확인 결과 (2026-11-09~10 조회, 계획 5절 항목별)

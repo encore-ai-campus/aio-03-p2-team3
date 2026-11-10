@@ -119,6 +119,7 @@
 
 - Render 배포(2026-11-10, 계획 4절): 웹 서비스 `https://aio3-gmail-quote.onrender.com`(무료, Singapore, `main` 병합 시 자동 배포), `/healthz` 응답 확인(요청자). 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 넣은 환경변수: `DATABASE_URL`(Internal 주소)·`GEMINI_API_KEY`·`SESSION_SECRET`·`REFLECTION_ENABLED_DEFAULT`·`APP_BASE_URL`. `TOKEN_ENCRYPTION_KEY`와 Google 값(`GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`)도 넣음(2026-11-10, 계획 5절, 설정 결과는 `.work/design/api-choice.md` '콘솔 설정 결과').
 - Render Postgres: 무료, Singapore(웹 서비스와 같은 지역), 2026-11-10 만듦 → 30일 뒤 2026-12-10경 만료, 14일 유예 뒤 2026-12-24경 삭제(11/19 제출까지는 충분).
+- 실제 API 확인 주의점(2026-11-10, #62 1번 일반 문의 흐름, 결과 `docs/test-records/20261110_live_general_result.md`): ① 감시 등록이 HTTP 403이면 Pub/Sub 토픽 `gmail-notify`의 권한에 `gmail-api-push@system.gserviceaccount.com`(Pub/Sub 게시자)가 있는지 먼저 본다(이번에 빠져 있었음). 등록 전에 온 메일은 처리하지 않으므로 등록 뒤 다시 보낸다. ② 무료 Gemini 모델이 503을 반복하면(실행 기록에는 `network`로만 남음) Render에서 `GEMINI_MODEL`을 응답하는 모델로 바꾼다. ③ 서버가 깨어 있을 때 상대방 발송 → 푸시 수신 약 16초, 실행(성찰 켬) 약 25초(대부분 Gemini 호출 2번), 발송 → 후보 준비 약 43초. 잠든 서버의 첫 푸시는 아직 확인하지 않았다.
 - 주의: 15분 동안 요청이 없으면 잠들고 깨는 데 최대 약 1분 걸린다. 재배포·재시작·잠들 때 로컬 파일이 사라지므로 저장은 Postgres에만 한다. 시연 전에 화면을 미리 열어 깨운다.
 - 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 키 없이 기본 화면을 열 수 있고, `DATABASE_URL`이 비면 커밋 제외된 `app/db/local.sqlite3`를 쓴다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render 연결 시험은 후속 작업이다.
 - 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
@@ -136,7 +137,7 @@
 | 과제 요구사항 정리(R-ID·D-ID) | `docs/REQUIREMENTS.md` | 있음(2026-11-09) |
 | 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 초안 있음(최종 코드와 맞춰 20에서 고침) |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 틀 있음(2026-11-10, 시나리오·판정 기준·시험 환경. 결과는 18·19) |
-| 시험 실행 기록(실행마다 한 파일) | `docs/test-records/` | 아직 없음 |
+| 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 발표 PPT | 미정 | 아직 없음 |
 
