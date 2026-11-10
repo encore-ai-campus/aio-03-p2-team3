@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
-from app.db.models import Approval, ReplyCandidate, ThreadMessage, User
+from app.config import LIMITS
+from app.db.models import Approval, ProcessedMessage, ReplyCandidate, ThreadMessage, User
 from app.services.approval import RESENDABLE, TAKEN, send_approved_candidate
 from app.tools.fallback import NOTICE_MESSAGES
 from app.web.routes.auth import require_user
@@ -37,11 +38,15 @@ KIND_LABELS = {"general": "일반 답장", "followup": "추가 질문", "quote":
 
 
 def thread_view(database, user_id: int, thread_id: str) -> list[dict] | None:
-    """스레드의 메일과 그 메일에 대한 후보. 본인 것이 하나도 없으면 None."""
+    """스레드의 메일·처리 상태·후보. 본인 것이 하나도 없으면 None."""
     with database.session() as session:
         messages = list(session.scalars(
             select(ThreadMessage).where(ThreadMessage.user_id == user_id, ThreadMessage.thread_id == thread_id)
             .order_by(ThreadMessage.sent_at, ThreadMessage.id)
+        ))
+        processed = list(session.scalars(
+            select(ProcessedMessage).where(ProcessedMessage.user_id == user_id, ProcessedMessage.thread_id == thread_id)
+            .order_by(ProcessedMessage.id)
         ))
         candidates = list(session.scalars(
             select(ReplyCandidate).where(ReplyCandidate.user_id == user_id, ReplyCandidate.thread_id == thread_id)
@@ -51,14 +56,15 @@ def thread_view(database, user_id: int, thread_id: str) -> list[dict] | None:
             select(Approval).where(Approval.user_id == user_id,
                                    Approval.candidate_id.in_([c.id for c in candidates]))
         )}
-    if not messages and not candidates:
+    if not messages and not candidates and not processed:
         return None
     taken = {c.source_message_id for c in candidates if c.status in TAKEN}
-    by_source: dict[str, list[dict]] = {}
+    by_source = {p.gmail_message_id: {"status": p.status, "run_id": p.run_id, "candidates": []} for p in processed}
     for c in candidates:
         label, tone = CANDIDATE_STATUS.get(c.status, (c.status, "muted"))
         approval = approvals.get(c.id)
-        by_source.setdefault(c.source_message_id, []).append({
+        source = by_source.setdefault(c.source_message_id, {"status": None, "run_id": None, "candidates": []})
+        source["candidates"].append({
             "id": c.id, "label": c.label, "subject": c.subject, "body": c.body,
             "kind_label": KIND_LABELS.get(c.kind, c.kind), "quote_waiting": c.kind == "quote" and c.status in RESENDABLE,
             "status_label": label, "tone": tone, "needs_review": c.needs_review,
@@ -69,11 +75,12 @@ def thread_view(database, user_id: int, thread_id: str) -> list[dict] | None:
         })
     entries = [{
         "from_addr": m.from_addr, "subject": m.subject, "body": m.body_text, "sent": kst(m.sent_at),
-        "outgoing": m.direction == "out", "candidates": by_source.pop(m.gmail_message_id, []),
+        "outgoing": m.direction == "out",
+        **by_source.pop(m.gmail_message_id, {"status": None, "run_id": None, "candidates": []}),
     } for m in messages]
-    for leftover in by_source.values():  # 원본 메일 줄이 없는 후보도 숨기지 않는다
+    for leftover in by_source.values():  # 원본 메일 줄이 없는 처리 상태·후보도 숨기지 않는다
         entries.append({"from_addr": None, "subject": None, "body": None, "sent": None,
-                        "outgoing": False, "candidates": leftover})
+                        "outgoing": False, **leftover})
     return entries
 
 
@@ -85,6 +92,8 @@ def thread_page(request: Request, thread_id: str, notice: str | None = None, use
     message, tone = APPROVAL_NOTICES.get(notice or "", (None, None))
     return request.app.state.templates.TemplateResponse(request=request, name="pages/thread.html", context={
         "entries": entries, "notice": message, "notice_tone": tone,
+        "thread_id": thread_id, "processing": any(entry["status"] == "processing" for entry in entries),
+        "poll_seconds": LIMITS["INBOX_POLL_SECONDS"],
     })
 
 
