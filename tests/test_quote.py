@@ -1,9 +1,11 @@
 """계획 11절: 정수 계산·한글 PDF·설정·사용자 격리·견적 그래프. 외부 API는 쓰지 않는다."""
 
-from base64 import b64decode
+from base64 import b64decode, urlsafe_b64decode
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import date, timedelta
+from email import message_from_bytes
+from email.policy import default as email_policy
 from io import BytesIO
 from threading import Event
 
@@ -21,7 +23,7 @@ from app.main import create_app
 from app.quote.calc import build_draft, fill_prices
 from app.quote.pdf import render_quote_pdf
 from app.runlog.logger import recording
-from app.services.approval import send_approved_quote
+from app.services.approval import send_approved_candidate, send_approved_quote
 from app.services.auth import GoogleAccess, TokenCipher, save_login
 from app.tools.base import ToolResult
 from app.tools.registry import TOOLS
@@ -231,7 +233,8 @@ def test_approve_requires_prices_then_attaches_current_pdf_once(approval_web, mo
     client, app, db, quote_id, ids, access = approval_web
     sender = FakeSender()
     monkeypatch.setitem(TOOLS, "send_email", sender)
-    assert client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]}).status_code == 409
+    pending = client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]})
+    assert pending.status_code == 200 and "notice=needs_price" in str(pending.url)
     assert sender.calls == []
     assert "disabled" in client.get(f"/quotes/{quote_id}").text
     client.post(f"/quotes/{quote_id}/prices", data={"price_2": 50})
@@ -271,18 +274,16 @@ def test_concurrent_different_candidates_are_one_approval(approval_web, monkeypa
 
     monkeypatch.setitem(TOOLS, "send_email", type("Sender", (), {"invoke": staticmethod(blocking_send)})())
     with ThreadPoolExecutor(max_workers=2) as pool:
-        first = pool.submit(send_approved_quote, access, 1, quote_id, ids[0])
+        first = pool.submit(send_approved_quote, 1, quote_id, ids[0], access=access)
         assert entered.wait(timeout=10)
-        second = pool.submit(send_approved_quote, access, 1, quote_id, ids[1])
-        try:
-            assert second.result(timeout=5)["status"] == "sending"
-        finally:
-            release.set()
-        assert first.result(timeout=10)["ok"]
+        second = pool.submit(send_approved_quote, 1, quote_id, ids[1], access=access)
+        release.set()
+        assert first.result(timeout=10).outcome == "sent"
+        assert second.result(timeout=10).outcome == "already_sent"
     assert len(sender.calls) == 1
 
 
-def test_approval_failure_and_tampering_never_send_again(approval_web, monkeypatch):
+def test_approval_failure_tampering_and_explicit_retry(approval_web, monkeypatch):
     client, app, db, quote_id, ids, access = approval_web
     sender = FakeSender(ToolResult(ok=False, source="gmail", error_kind="network", error_message="가짜 실패"))
     monkeypatch.setitem(TOOLS, "send_email", sender)
@@ -297,10 +298,77 @@ def test_approval_failure_and_tampering_never_send_again(approval_web, monkeypat
     with db.session() as session:
         session.get(ReplyCandidate, ids[0]).kind = "quote"
     assert sender.calls == []
-    assert client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]}).status_code == 409
-    assert client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[1]}).status_code == 409
+    failed = client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]})
+    assert failed.status_code == 200 and "notice=failed_unknown" in str(failed.url)
+    assert "보낸편지함을 확인" in failed.text
     assert len(sender.calls) == 1
     with db.session() as session:
         assert session.scalar(select(Approval)).send_status == "failed"
         assert session.get(ReplyCandidate, ids[0]).status == "send_failed"
         assert session.get(Quote, quote_id).status == "ready"
+    # 일반 승인과 같은 결과 키·명시적 재승인: 자동 재시도는 없고 같은 승인 행을 재사용한다.
+    sender.result = ToolResult(ok=True, source="gmail", value={"sent_message_id": "retried-fake"})
+    assert "notice=sent" in str(client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]}).url)
+    assert len(sender.calls) == 2
+    with db.session() as session:
+        assert len(session.scalars(select(Approval)).all()) == 1
+        assert session.scalar(select(Approval)).sent_message_id == "retried-fake"
+
+
+def test_quote_uses_real_send_email_mime_and_gmail_once(approval_web):
+    client, app, db, quote_id, ids, access = approval_web
+    client.post(f"/quotes/{quote_id}/prices", data={"price_2": 50})
+    result = client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]})
+    assert "notice=sent" in str(result.url)
+    client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]})
+    sends = access.google.mailbox.called("send")
+    assert len(sends) == 1
+    _, params, retries = sends[0]
+    assert retries == 0 and params["body"]["threadId"] == "thread"
+    mime = message_from_bytes(urlsafe_b64decode(params["body"]["raw"]), policy=email_policy)
+    assert mime["To"] == "sender@example.invalid" and mime["In-Reply-To"] == "<fake-message@example.invalid>"
+    attachment, = list(mime.iter_attachments())
+    assert attachment.get_content_type() == "application/pdf"
+    assert attachment.get_filename().startswith("견적서_Q-")
+    assert "합계: 502원" in PdfReader(BytesIO(attachment.get_payload(decode=True))).pages[0].extract_text()
+
+
+def test_quote_and_general_approval_share_user_lock(approval_web, monkeypatch):
+    client, app, db, quote_id, ids, access = approval_web
+    client.post(f"/quotes/{quote_id}/prices", data={"price_2": 50})
+    with db.session() as session:
+        candidate = session.get(ReplyCandidate, ids[1])
+        candidate.kind, candidate.quote_id = "general", None
+    entered, release = Event(), Event()
+    calls = []
+
+    def blocking_send(payload):
+        calls.append(payload)
+        entered.set()
+        assert release.wait(timeout=10)
+        return ToolResult(ok=True, source="gmail", value={"sent_message_id": "sent-fake"})
+
+    monkeypatch.setitem(TOOLS, "send_email", type("Sender", (), {"invoke": staticmethod(blocking_send)})())
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(send_approved_quote, 1, quote_id, ids[0], access=access)
+        assert entered.wait(timeout=10)
+        second = pool.submit(send_approved_candidate, 1, ids[1], access=access)
+        release.set()
+        assert first.result(timeout=10).outcome == "sent"
+        assert second.result(timeout=10).outcome == "already_replied"
+    assert len(calls) == 1
+
+
+def test_pdf_failure_does_not_claim_or_send(approval_web, monkeypatch):
+    client, app, db, quote_id, ids, access = approval_web
+    client.post(f"/quotes/{quote_id}/prices", data={"price_2": 50})
+
+    def fail(_):
+        raise OSError("가짜 글꼴 읽기 오류")
+
+    monkeypatch.setattr("app.services.approval.render_quote_pdf", fail)
+    result = send_approved_quote(1, quote_id, ids[0], access=access)
+    assert result.outcome == "failed" and access.google.mailbox.called("send") == []
+    with db.session() as session:
+        assert session.get(ReplyCandidate, ids[0]).status == "pending"
+        assert session.scalars(select(Approval)).all() == []

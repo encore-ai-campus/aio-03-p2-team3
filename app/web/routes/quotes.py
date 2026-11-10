@@ -12,6 +12,7 @@ from app.quote.calc import fill_prices
 from app.quote.pdf import render_quote_pdf
 from app.services.approval import send_approved_quote
 from app.web.deps import current_user_id
+from app.web.routes.candidates import APPROVAL_NOTICES
 
 router = APIRouter()
 
@@ -25,16 +26,19 @@ def owned_quote(session, quote_id, user_id, *, lock=False):
 
 
 @router.get("/quotes/{quote_id}")
-def quote_detail(quote_id: int, request: Request, user_id: int = Depends(current_user_id)):
+def quote_detail(quote_id: int, request: Request, notice: str | None = None,
+                 user_id: int = Depends(current_user_id)):
     with request.app.state.database.session() as session:
         row = owned_quote(session, quote_id, user_id)
         candidates = session.scalars(select(ReplyCandidate).where(
             ReplyCandidate.user_id == user_id, ReplyCandidate.quote_id == row.id,
             ReplyCandidate.run_id == row.run_id, ReplyCandidate.thread_id == row.thread_id,
-            ReplyCandidate.kind == "quote", ReplyCandidate.status == "pending",
+            ReplyCandidate.kind == "quote", ReplyCandidate.status.in_(("pending", "send_failed")),
         ).order_by(ReplyCandidate.id)).all()
     return request.app.state.templates.TemplateResponse(
-        request=request, name="pages/quote.html", context={"quote": row, "candidates": candidates},
+        request=request, name="pages/quote.html", context={"quote": row, "candidates": candidates,
+            "notice": ({"needs_price": ("빠진 단가를 입력한 뒤 승인해 주세요", "warn"),
+                         **APPROVAL_NOTICES}).get(notice or "", (None, None))[0]},
     )
 
 
@@ -73,9 +77,7 @@ def preview(quote_id: int, request: Request, user_id: int = Depends(current_user
 @router.post("/quotes/{quote_id}/approve")
 def approve(quote_id: int, candidate_id: Annotated[int, Form()], request: Request,
             user_id: int = Depends(current_user_id)):
-    result = send_approved_quote(request.app.state.google_access, user_id, quote_id, candidate_id)
-    if result["status"] == "not_found":
-        raise HTTPException(404, result["message"])
-    if not result["ok"]:
-        raise HTTPException(409, result["message"])
-    return RedirectResponse(f"/quotes/{quote_id}", status_code=303)
+    result = send_approved_quote(user_id, quote_id, candidate_id, access=request.app.state.google_access)
+    if result.outcome == "not_found":
+        raise HTTPException(404, "견적서와 답장 후보를 찾을 수 없습니다")
+    return RedirectResponse(f"/quotes/{quote_id}?notice={result.outcome}", status_code=303)

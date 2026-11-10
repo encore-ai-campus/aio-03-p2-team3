@@ -3,6 +3,7 @@
 {% from 'components/button.html' import submit_button %}
 {% block content %}
 <h1>견적서 확인</h1>
+{% if notice %}<p class="banner">{{ notice }}</p>{% endif %}
 <section class="card">
   <h2>{{ quote.draft.quote_no }}</h2>
   <p>거래처: {{ quote.draft.customer_name }}</p>
@@ -31,7 +32,7 @@
   {% for candidate in candidates %}
   <article class="card"><h2>{{ candidate.label }}</h2><p>{{ candidate.subject }}</p><p class="raw">{{ candidate.body }}</p>
     {% if quote.status == 'ready' %}
-    <form method="post" action="/quotes/{{ quote.id }}/approve"><input type="hidden" name="candidate_id" value="{{ candidate.id }}">{{ submit_button('승인 · PDF 첨부 발송') }}</form>
+    <form method="post" action="/quotes/{{ quote.id }}/approve" hx-boost="true" hx-disabled-elt="find button"><input type="hidden" name="candidate_id" value="{{ candidate.id }}">{{ submit_button('승인 · PDF 첨부 발송', primary=true) }}</form>
     {% else %}<button class="button" disabled>단가 입력 후 승인 가능</button>{% endif %}
   </article>
   {% else %}<p>승인할 답장 후보가 없습니다.</p>{% endfor %}

@@ -11,6 +11,7 @@
 """
 
 from dataclasses import dataclass
+from base64 import b64encode
 from email.utils import getaddresses
 import logging
 from threading import Lock
@@ -20,7 +21,8 @@ from weakref import WeakKeyDictionary
 from sqlalchemy import select, update
 
 from app.clients.gmail import GoogleError
-from app.db.models import Approval, ProcessedMessage, ReplyCandidate, utcnow
+from app.db.models import Approval, ProcessedMessage, Quote, ReplyCandidate, utcnow
+from app.quote.pdf import render_quote_pdf
 from app.runlog.logger import log_event
 from app.services.auth import GoogleAccess, get_access_token, get_owned
 from app.tools.base import ToolResult
@@ -74,11 +76,51 @@ def send_approved_candidate(user_id: int, candidate_id: int, *, access: GoogleAc
     return ApprovalResult("failed", thread_id)
 
 
-def _claim(access, user_id, candidate_id):
+def send_approved_quote(user_id: int, quote_id: int, candidate_id: int, *, access: GoogleAccess) -> ApprovalResult:
+    """견적 확인 화면의 승인. 일반 후보와 같은 사용자 잠금·조건부 claim·결과 키를 쓴다."""
+    with _user_lock(access.database, user_id):
+        with access.database.session() as session:
+            quote = get_owned(session, Quote, quote_id, user_id)
+            candidate = get_owned(session, ReplyCandidate, candidate_id, user_id)
+            if (quote is None or candidate is None or candidate.kind != "quote"
+                    or candidate.quote_id != quote_id or candidate.thread_id != quote.thread_id
+                    or candidate.run_id != quote.run_id):
+                return ApprovalResult("not_found")
+            thread_id = quote.thread_id
+            if quote.status == "sent":
+                return ApprovalResult("already_sent", thread_id)
+            if quote.status != "ready" or quote.draft["missing_prices"]:
+                return ApprovalResult("needs_price", thread_id)
+            snapshot = quote.draft
+        try:
+            attachments = [{"filename": f"견적서_{snapshot['quote_no']}.pdf", "mime_type": "application/pdf",
+                            "content_b64": b64encode(render_quote_pdf(snapshot)).decode("ascii")}]
+        except Exception as error:
+            log.warning("견적서 PDF 생성 실패 (%s)", type(error).__name__)
+            return ApprovalResult("failed", thread_id)
+        claimed = _claim(access, user_id, candidate_id, quote_id=quote_id)
+        if isinstance(claimed, str):
+            return ApprovalResult(claimed, thread_id)
+        _record(access, claimed, "approval", ok=True)
+        started = perf_counter()
+        result, stage = _send(access, user_id, claimed, attachments=attachments)
+        _finish(access, user_id, claimed, result)
+        _record(access, claimed, "send", ok=result.ok, error_kind=result.error_kind,
+                duration_ms=int((perf_counter() - started) * 1000))
+    if result.ok:
+        return ApprovalResult("sent", thread_id)
+    if result.error_kind == "auth":
+        return ApprovalResult("failed_auth", thread_id)
+    if result.error_kind == "network" and stage == "send":
+        return ApprovalResult("failed_unknown", thread_id)
+    return ApprovalResult("failed", thread_id)
+
+
+def _claim(access, user_id, candidate_id, *, quote_id=None):
     """보낼 권리를 얻으면 보낼 값(dict), 못 얻으면 화면 안내 키(str)."""
     with access.database.session() as session:
         candidate = get_owned(session, ReplyCandidate, candidate_id, user_id)
-        if candidate.kind == "quote":
+        if candidate.kind == "quote" and (quote_id is None or candidate.quote_id != quote_id):
             return "quote_only"
         if candidate.status in TAKEN:
             return "already_sent"
@@ -113,7 +155,7 @@ def _claim(access, user_id, candidate_id):
         }
 
 
-def _send(access, user_id, claimed) -> tuple[ToolResult, str]:
+def _send(access, user_id, claimed, *, attachments=None) -> tuple[ToolResult, str]:
     """(결과, 실패한 단계). 원본 머리글을 읽은 뒤 `send_email` 도구를 한 번만 부른다."""
     try:
         gmail = access.google.gmail(get_access_token(access, user_id))
@@ -134,6 +176,7 @@ def _send(access, user_id, claimed) -> tuple[ToolResult, str]:
             "user_id": user_id, "thread_id": claimed["thread_id"], "to_addrs": to_addrs,
             "subject": claimed["subject"], "body": claimed["body"],
             "in_reply_to": message_id, "references": references,
+            "attachments": attachments or [],
         })
     return result, "send"
 
@@ -150,6 +193,10 @@ def _finish(access, user_id, claimed, result: ToolResult) -> None:
         approval.send_status = "sent"
         approval.sent_message_id = result.value["sent_message_id"]
         candidate.status = "sent"
+        if claimed["quote_id"] is not None:
+            quote = get_owned(session, Quote, claimed["quote_id"], user_id)
+            quote.status, quote.sent_at = "sent", utcnow()
+            quote.draft = {**quote.draft, "status": "sent"}
         session.execute(
             update(ReplyCandidate)
             .where(ReplyCandidate.user_id == user_id,
