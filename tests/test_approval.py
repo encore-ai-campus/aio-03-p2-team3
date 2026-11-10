@@ -280,6 +280,120 @@ def test_inbox_lists_own_mail_with_status_and_polls(client, fake):
     assert "한도 초과로 AI 후보를 만들지 못했습니다" in limited and "확인 필요" in limited
 
 
+@pytest.mark.parametrize("status", ["processing", "error", "awaiting_approval"])
+def test_thread_shows_processing_error_or_pending_candidates(client, fake, status):
+    user_id = add_user(client)
+    log_in(client, user_id)
+    ids = add_mail(client, user_id, status=status, kinds=("general", "general") if status == "awaiting_approval" else ())
+
+    page = client.get("/threads/fake-thread")
+    assert page.status_code == 200
+    assert "테스트용 가상 문의입니다." in page.text
+    assert ("답장 후보를 만드는 중입니다" in page.text) == (status == "processing")
+    assert ("후보를 만들지 못했습니다" in page.text) == (status == "error")
+    assert ('href="/runs/run-fake-message"' in page.text) == (status == "error")
+    assert ('hx-get="/threads/fake-thread"' in page.text) == (status == "processing")
+    if status == "processing":
+        assert f'hx-trigger="every {LIMITS["INBOX_POLL_SECONDS"]}s"' in page.text
+        assert 'hx-select="#thread-content"' in page.text and 'hx-swap="outerHTML"' in page.text
+    if status == "awaiting_approval":
+        assert "승인 대기" in page.text and "후보 1" in page.text and "후보 2" in page.text
+        assert all(f'action="/candidates/{candidate_id}/approve"' in page.text for candidate_id in ids)
+    assert fake.mailbox.called("send") == [] and rows(client, Approval) == []
+    assert rows(client, ProcessedMessage)[0].status == status
+
+
+@pytest.mark.parametrize("finished", ["awaiting_approval", "error"])
+def test_thread_refresh_replaces_processing_and_stops_polling(client, fake, finished):
+    user_id = add_user(client)
+    log_in(client, user_id)
+    add_mail(client, user_id, status="processing", kinds=())
+    assert 'hx-get="/threads/fake-thread"' in client.get("/threads/fake-thread").text
+
+    with client.app.state.database.session() as session:
+        session.scalar(select(ProcessedMessage)).status = finished
+        if finished == "awaiting_approval":
+            session.add(ReplyCandidate(user_id=user_id, run_id="run-fake-message", thread_id="fake-thread",
+                                       source_message_id="fake-message", kind="general", label="새 답장 후보",
+                                       subject="Re: 가상 문의", body="가상 답장"))
+
+    refreshed = client.get("/threads/fake-thread", headers={"HX-Request": "true"})
+    assert refreshed.status_code == 200 and 'id="thread-content"' in refreshed.text
+    assert "답장 후보를 만드는 중입니다" not in refreshed.text
+    assert "hx-trigger" not in refreshed.text
+    if finished == "awaiting_approval":
+        assert "새 답장 후보" in refreshed.text and 'action="/candidates/' in refreshed.text
+    else:
+        assert "후보를 만들지 못했습니다" in refreshed.text
+        assert 'href="/runs/run-fake-message"' in refreshed.text
+    assert fake.mailbox.called("send") == [] and rows(client, Approval) == []
+
+
+def test_thread_matches_each_messages_status_and_run(client):
+    user_id = add_user(client)
+    log_in(client, user_id)
+    add_mail(client, user_id, "failed-message", status="error", kinds=(), subject="실패한 문의")
+    add_mail(client, user_id, "pending-message", subject="후보가 준비된 문의")
+    add_mail(client, user_id, "processing-message", status="processing", kinds=(), subject="처리 중인 문의")
+
+    page = client.get("/threads/fake-thread")
+    assert page.status_code == 200
+    failed = page.text.index("실패한 문의")
+    pending = page.text.index("후보가 준비된 문의")
+    processing = page.text.index("처리 중인 문의")
+    assert failed < page.text.index("후보를 만들지 못했습니다") < pending
+    assert failed < page.text.index('href="/runs/run-failed-message"') < pending
+    assert pending < page.text.index("후보 1") < processing
+    assert processing < page.text.index("답장 후보를 만드는 중입니다")
+    assert page.text.count("후보를 만들지 못했습니다") == 1
+    assert page.text.count("답장 후보를 만드는 중입니다") == 1
+
+
+@pytest.mark.parametrize("status", ["processing", "error"])
+def test_thread_with_only_processed_row_shows_status_without_run_link(client, status):
+    user_id = add_user(client)
+    log_in(client, user_id)
+    with client.app.state.database.session() as session:
+        session.add(ProcessedMessage(user_id=user_id, gmail_message_id="fake-message", thread_id="fake-thread",
+                                     status=status))
+    page = client.get("/threads/fake-thread")
+    assert page.status_code == 200
+    assert ("답장 후보를 만드는 중입니다" in page.text) == (status == "processing")
+    assert ("후보를 만들지 못했습니다" in page.text) == (status == "error")
+    assert 'href="/runs/' not in page.text
+
+
+@pytest.mark.parametrize("status", ["processing", "error"])
+def test_thread_does_not_read_other_users_status_with_same_ids(client, status):
+    user_id = add_user(client)
+    other = add_user(client, sub="fake-sub-2", address="other@example.invalid")
+    log_in(client, user_id)
+    add_mail(client, user_id)
+    add_mail(client, other, "other-message", "fake-thread", status=status, kinds=(), subject="다른 사용자의 원문")
+    with client.app.state.database.session() as session:
+        session.add(ProcessedMessage(user_id=other, gmail_message_id="fake-message", thread_id="fake-thread",
+                                     status=status, run_id="private-run-marker"))
+
+    for headers in ({}, {"HX-Request": "true"}):
+        page = client.get("/threads/fake-thread", headers=headers)
+        assert page.status_code == 200 and "승인 대기" in page.text
+        assert "다른 사용자의 원문" not in page.text and "private-run-marker" not in page.text
+        assert "답장 후보를 만드는 중입니다" not in page.text and "후보를 만들지 못했습니다" not in page.text
+        assert "hx-trigger" not in page.text
+
+
+@pytest.mark.parametrize("status", ["processing", "error"])
+def test_other_users_processing_or_error_thread_is_denied(client, status):
+    user_id = add_user(client)
+    other = add_user(client, sub="fake-sub-2", address="other@example.invalid")
+    log_in(client, user_id)
+    add_mail(client, other, "other-message", "other-thread", status=status, kinds=())
+    for headers in ({}, {"HX-Request": "true"}):
+        denied = client.get("/threads/other-thread", headers=headers)
+        assert denied.status_code == 404
+        assert "run-other-message" not in denied.text
+
+
 def test_send_email_tool_requires_approval_path():
     result = TOOLS["send_email"].invoke({
         "user_id": 1, "thread_id": "fake-thread", "to_addrs": ["sender@example.invalid"],
