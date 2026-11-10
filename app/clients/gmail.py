@@ -244,6 +244,30 @@ class GoogleClient:
         except Exception as error:
             raise GoogleUnavailable(_error_label(error)) from error
 
+    def get_reply_headers(self, gmail, message_id: str) -> dict[str, str]:
+        """답장에 필요한 원본 머리글(From·Reply-To·Message-ID·References)만 읽는다. 읽기라 재시도한다."""
+        try:
+            raw = gmail.users().messages().get(
+                userId="me", id=message_id, format="metadata",
+                metadataHeaders=["From", "Reply-To", "Message-ID", "References"],
+            ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+        return {h["name"].lower(): h["value"] for h in raw.get("payload", {}).get("headers", [])}
+
+    def send_message(self, gmail, raw: str, thread_id: str) -> str:
+        """같은 threadId로 메일 하나를 보내고 보낸 메일 id를 돌려준다.
+
+        자동 재시도하지 않는다(num_retries=0): 시간 초과여도 실제로는 나갔을 수 있어 다시 보내면 두 번 갈 수 있다.
+        """
+        try:
+            response = gmail.users().messages().send(
+                userId="me", body={"raw": raw, "threadId": thread_id},
+            ).execute(num_retries=0)
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+        return str(response["id"])
+
 
 @lru_cache(maxsize=4)
 def _certificate_response(url: str, window: int):

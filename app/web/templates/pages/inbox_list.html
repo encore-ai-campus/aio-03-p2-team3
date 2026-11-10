@@ -1,0 +1,14 @@
+{# GET /inbox/list 조각. inbox.html이 같은 내용을 include하고, INBOX_POLL_SECONDS마다 이 조각으로 바꾼다 #}
+{% from 'components/status_badge.html' import status_badge %}
+{% if items %}
+<ul class="mail-list">
+{% for item in items %}
+<li><a class="mail-row" href="/threads/{{ item.thread_id }}">
+<span class="mail-main"><strong>{{ item.subject }}</strong><span class="muted">{{ item.from_addr }} · {{ item.received }}</span></span>
+<span class="badges">{% if item.rate_limited %}{{ status_badge('한도 초과', 'warn') }}{% endif %}{% if item.pending %}{{ status_badge('후보 ' ~ item.pending ~ '개', 'muted') }}{% endif %}{{ status_badge(item.status_label, item.tone) }}</span>
+</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="muted">아직 처리한 메일이 없습니다. 새 메일이 오면 답장 후보와 함께 여기에 나타납니다.</p>
+{% endif %}
