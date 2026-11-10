@@ -40,6 +40,7 @@ DEFAULT_REQUIRED_FIELDS = [
 class Settings:
     database_url: str = field(default="", repr=False)
     gemini_api_key: str = field(default="", repr=False)
+    gemini_model: str = ""
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = field(default="", repr=False)
     google_oauth_redirect_uri: str = ""

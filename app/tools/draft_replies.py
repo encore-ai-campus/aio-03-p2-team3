@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.config import LIMITS
 from app.graph.state import EmailMessage, QuoteDraft, ReplyCandidate, ThreadContext
-from app.llm.client import MODEL_SOURCE, call_structured
+from app.llm.client import call_structured, model_source
 from app.prompts.draft_replies import PROMPT, REPLY_MODE_GUIDES
 from app.prompts.format import email_text, preferences_text, thread_context_text
 from app.tools.base import ToolResult
@@ -62,7 +62,7 @@ def draft_replies(email, reply_mode, thread_context=None, quote_draft=None,
         result = call_structured(PROMPT, DraftOutput, variables)
         if not result.ok:
             return ToolResult(
-                ok=False, error_kind=result.error_kind, source=MODEL_SOURCE,
+                ok=False, error_kind=result.error_kind, source=model_source(),
                 error_message=f"답장 후보 LLM 호출 실패 ({result.error_kind})",
                 attempts=result.attempts, duration_ms=result.duration_ms,
             )
@@ -72,7 +72,7 @@ def draft_replies(email, reply_mode, thread_context=None, quote_draft=None,
             asks_fields=[], needs_review=False, notice=None,
         ) for item in result.value.candidates]
         return ToolResult(
-            ok=True, value={"candidates": candidates}, source=MODEL_SOURCE,
+            ok=True, value={"candidates": candidates}, source=model_source(),
             attempts=result.attempts, duration_ms=result.duration_ms,
         )
     except Exception as error:

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.config import LIMITS
 from app.graph.state import DealTerms, EmailMessage, ThreadContext
-from app.llm.client import MODEL_SOURCE as SOURCE, call_structured
+from app.llm.client import call_structured, model_source
 from app.prompts.draft_followup_replies import PROMPT
 from app.prompts.format import email_text, preferences_text, thread_context_text
 from app.tools.base import ToolResult
@@ -63,7 +63,7 @@ def draft_followup_replies(email: EmailMessage, deal_terms: DealTerms, missing_f
             "feedback": feedback or NONE,
         })
         if not result.ok:
-            return ToolResult(ok=False, error_kind=result.error_kind, source=SOURCE,
+            return ToolResult(ok=False, error_kind=result.error_kind, source=model_source(),
                               error_message="재질문 후보를 만들지 못했습니다",
                               attempts=result.attempts, duration_ms=result.duration_ms)
         # 제목·서명은 답장 후보(8)와 같은 방식으로 코드가 정한다.
@@ -76,8 +76,8 @@ def draft_followup_replies(email: EmailMessage, deal_terms: DealTerms, missing_f
             "needs_review": False,
             "notice": None,
         } for c in result.value.candidates]
-        return ToolResult(ok=True, value={"candidates": candidates}, source=SOURCE,
+        return ToolResult(ok=True, value={"candidates": candidates}, source=model_source(),
                           attempts=result.attempts, duration_ms=result.duration_ms)
     except Exception as error:
-        return ToolResult(ok=False, error_kind="internal", source=SOURCE,
+        return ToolResult(ok=False, error_kind="internal", source=model_source(),
                           error_message=f"재질문 후보 생성 중 오류 ({type(error).__name__})")

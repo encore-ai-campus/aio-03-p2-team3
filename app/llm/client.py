@@ -26,8 +26,8 @@ from app.prompts import Prompt
 from app.runlog.logger import current_event
 
 _override = ContextVar("llm_backend", default=None)
-MODEL_NAME = "gemini-3.8-flash"
-MODEL_SOURCE = f"gemini:{MODEL_NAME}"  # ToolResult.source
+# 2026-11-10(#62): 무료 등급 gemini-3.8-flash가 503을 반복해 3.6으로 바꿨다. GEMINI_MODEL로 덮어쓴다.
+DEFAULT_MODEL = "gemini-3.6-flash"
 
 
 class LLMResult(BaseModel):
@@ -39,6 +39,16 @@ class LLMResult(BaseModel):
     duration_ms: int
 
 
+def model_name(settings: Settings | None = None) -> str:
+    """쓸 Gemini 모델. 환경변수 `GEMINI_MODEL`이 있으면 그것, 없으면 `DEFAULT_MODEL`."""
+    return (settings or get_settings()).gemini_model.strip() or DEFAULT_MODEL
+
+
+def model_source() -> str:
+    """ToolResult.source 값(`gemini:<모델>`)."""
+    return f"gemini:{model_name()}"
+
+
 def get_backend(settings: Settings | None = None):
     return _backend_for_settings(settings or get_settings())
 
@@ -48,7 +58,7 @@ def _backend_for_settings(settings: Settings):
     if not settings.gemini_api_key:
         raise ValueError("GEMINI_API_KEY 설정이 필요합니다")
     return ChatGoogleGenerativeAI(
-        model=MODEL_NAME, google_api_key=settings.gemini_api_key,
+        model=model_name(settings), google_api_key=settings.gemini_api_key,
         max_retries=0, timeout=LIMITS["LLM_TIMEOUT_SECONDS"],
     )
 
