@@ -112,14 +112,15 @@
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
 - 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
 - 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
+- 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
 | 과제 요구사항 정리(R-ID·D-ID) | `docs/REQUIREMENTS.md` | 있음(2026-11-09) |
-| 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 아직 없음(11/13 초안) |
+| 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 초안 있음(최종 코드와 맞춰 20에서 고침) |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 아직 없음 |
 | 시험 실행 기록(실행마다 한 파일) | `docs/test-records/` | 아직 없음 |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
