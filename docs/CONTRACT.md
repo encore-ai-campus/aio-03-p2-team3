@@ -458,7 +458,7 @@ class AgentError(TypedDict):
 | 견적서 확인 | `quote.html` | `GET /quotes/{quote_id}`, `POST /quotes/{quote_id}/prices`, `GET /quotes/{quote_id}/preview.pdf`, `POST /quotes/{quote_id}/approve`(폼에 `candidate_id`) | 11 |
 | 설정 | `settings.html` | `GET /settings`, `POST /settings/company`, `POST /settings/prices`, `POST /settings/reflection` | 11, 12 |
 | 실행 기록 | `runs.html`, `run_detail.html` | `GET /runs`, `GET /runs/{run_id}`, `GET /runs/{run_id}/export` | 14 |
-| 공개 페이지(로그인 없이) | `about.html`, `privacy.html`, `terms.html` | `GET /about`(앱 소개, Google 브랜딩 홈페이지), `GET /privacy`(개인정보처리방침), `GET /terms`(서비스 약관). 모든 페이지 아래쪽에 세 링크 | #82 |
+| 공개 페이지(로그인 없이) | `about.html`, `privacy.html`, `terms.html` | `GET /about`(앱 소개, Google 브랜딩 홈페이지), `GET /privacy`(개인정보처리방침), `GET /terms`(서비스 약관). 모든 페이지 아래쪽에 세 링크, 로그인 화면 본문 아래에도 세 링크 | #82 |
 | 상태 확인 | 없음 | `GET /healthz` → `{"status": "ok"}` | 2 |
 | 알림 수신 | 없음 | `POST /gmail/push` | 7 |
 
