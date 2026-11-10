@@ -10,6 +10,7 @@ from app.llm.client import call_structured
 from app.prompts.analyze_email import PROMPT
 from app.prompts.format import email_text, thread_context_text
 from app.runlog.logger import current_event
+from app.services.memory import context_for_model
 
 NEXT_TOOL = {"general": "draft_replies", "deal": "extract_deal_terms", "ignore": None}
 
@@ -20,8 +21,11 @@ class EmailAnalysis(BaseModel):
 
 
 def analyze_email(state: AgentState) -> dict:
+    # load_memory의 고정 다음 노드. 기억 조회·요약 실패를 덮어쓰지 않는다.
+    if state["step_status"] != "ok":
+        return {}
     result = call_structured(PROMPT, EmailAnalysis, {
-        "thread_context": thread_context_text(state["thread_context"]),
+        "thread_context": thread_context_text(context_for_model(state)),
         "email": email_text(state["email"]),
     })
     retries = max(result.attempts - 1, 0)

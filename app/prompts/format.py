@@ -4,7 +4,6 @@ import json
 
 EMAIL_BODY_LIMIT = 4000
 RECENT_BODY_LIMIT = 600
-RECENT_MESSAGE_LIMIT = 4
 
 
 def _clip(text: str | None, limit: int) -> str:
@@ -30,7 +29,9 @@ def thread_context_text(context: dict | None) -> str:
         lines.append(f"요약: {context['summary']}")
     if context.get("confirmed_terms"):
         lines.append("확인한 조건: " + json.dumps(context["confirmed_terms"], ensure_ascii=False))
-    for message in (context.get("recent_messages") or [])[-RECENT_MESSAGE_LIMIT:]:
+    if context.get("last_result"):
+        lines.append("직전 결과·답 안 된 항목: " + json.dumps(context["last_result"], ensure_ascii=False))
+    for message in context.get("recent_messages") or []:
         who = "보낸 메일" if message.get("direction") == "out" else "받은 메일"
         lines.append(f"- {who} / {message.get('subject') or ''}: {_clip(message.get('body_text'), RECENT_BODY_LIMIT)}")
     return "\n".join(lines) or "없음"

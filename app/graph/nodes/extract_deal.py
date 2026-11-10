@@ -5,6 +5,7 @@
 
 from app.graph.nodes.common import call_tool, retry_feedback
 from app.graph.state import AgentState
+from app.services.memory import context_for_model
 
 NODE = "extract_deal"
 TOOL = "extract_deal_terms"
@@ -14,7 +15,7 @@ def extract_deal(state: AgentState) -> dict:
     feedback = retry_feedback(state, NODE)
     context = state["thread_context"]
     result, update = call_tool(state, NODE, TOOL, {
-        "email": state["email"], "thread_context": context, "feedback": feedback,
+        "email": state["email"], "thread_context": context_for_model(state), "feedback": feedback,
     }, {
         "body_chars": len(state["email"]["body_text"] or ""),
         "thread_messages": len(context["recent_messages"]) if context else 0,
