@@ -2,6 +2,13 @@
 {% from 'components/button.html' import submit_button %}
 {% block content %}
 <h1>설정</h1>
+<section class="card"><h2>자가 성찰</h2>
+  <p class="muted">켜면 답장 후보를 저장하기 전에 원문에 없는 금액·수량·날짜, 경로 오류, 빠진 입력, 후보 수·받는 사람 불일치를 검사하고 고쳐서 다시 만듭니다. 고치지 못하면 '확인 필요'로 표시합니다. 다음에 오는 메일부터 적용됩니다.</p>
+  <form method="post" action="/settings/reflection" class="form-stack">
+    <label><input type="checkbox" name="enabled" value="on"{% if reflection_enabled %} checked{% endif %}> 자가 성찰 켜기 (지금: {{ '켬' if reflection_enabled else '끔' }})</label>
+    {{ submit_button('성찰 설정 저장') }}
+  </form>
+</section>
 <section class="card"><h2>공급자 정보</h2>
   <p class="muted">저장한 정보는 다음에 만드는 견적서부터 반영됩니다.</p>
   <form method="post" action="/settings/company" class="form-stack">

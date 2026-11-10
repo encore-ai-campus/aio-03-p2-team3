@@ -1,12 +1,14 @@
-"""한도 오류 때 쓰는 기본 답장 틀 후보(계약 3.2절, 계획 8절).
+"""한도 오류·성찰 한도 초과 때 쓰는 기본 답장 틀 후보(계약 3.2·3.3절, 계획 8·12절).
 
-후보의 `notice`에는 안내 종류 키(`rate_limit`)를 두고, 화면은 `NOTICE_MESSAGES`로 문구를 보여 준다.
+후보의 `notice`에는 안내 종류 키(`rate_limit`·`reflection_limit`)를 두고, 화면은 `NOTICE_MESSAGES`로 문구를 보여 준다.
 """
 
 from app.graph.state import EmailMessage, ReplyCandidate
 
 NOTICE_MESSAGES = {
     "rate_limit": "한도 초과로 AI 후보를 만들지 못했습니다. 기본 답장 틀을 확인해 고친 뒤 보내 주세요.",
+    # 계획 12절: 성찰 재실행 한도를 넘어 고치지 못한 문제가 남은 후보
+    "reflection_limit": "자동 검토에서 고치지 못한 문제가 남았습니다. 금액·수량·날짜와 받는 사람을 확인해 고친 뒤 보내 주세요.",
 }
 
 FALLBACK_LABEL = "기본 답장(확인 필요)"

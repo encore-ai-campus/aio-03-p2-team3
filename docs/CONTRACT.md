@@ -512,11 +512,15 @@ class AgentError(TypedDict):
 | `inconsistent` | 응답 불일치 | 후보가 2~3개가 아님, 재질문에 빠진 항목이 다 없음, 받는 사람·스레드 불일치 | `reprompt` |
 
 - 감지는 규칙 검사(LLM 없음)로 하고, 문제가 있을 때만 `reflect_fix` 프롬프트로 원인을 적는다. 재실행 뒤 같은 기준으로 다시 검사해 `verified`를 남긴다. 한도는 3.4절. [Request]
+  - 12 구현(`app/graph/nodes/reflect.py`): 감지 규칙 — `hallucination`: 후보 본문의 금액(`원`·`만원`·`₩` 등)·수량(숫자+`개`·`박스`·`EA` 등 단위)·날짜(`YYYY-MM-DD`·`M월 D일`·`M/D`)가 원문·스레드 기억·`deal_terms`·`quote_draft`·단가표·회사 정보·선호에 없음(상대방 과거 거래 기록은 근거로 보지 않음, 단위 없는 숫자는 보지 않음). `wrong_tool`: 견적서 경로인데 `missing_fields`가 있음 → `followup`(`draft_followup`, `reply_mode="followup"`), 견적서 경로인데 거래 항목을 다시 검사하면 빠진 항목이 있음 → `reroute`(`extract_deal`), 일반 답장인데 메일에 거래 표현(견적·발주·주문·구매·납품·단가)과 수량이 함께 있음 → `reroute`(`extract_deal`, `intent="deal"`). `missing_param`: 견적서·재질문 경로인데 `deal_terms`(견적서는 품목 포함)가 빔 → `extract_deal`, 견적서 경로인데 `quote_draft`가 빔 → `make_quote`. `inconsistent`: 후보 수가 2~3개가 아님, 후보 종류·제목(`Re: 원래 제목`)이 맞지 않음, 본문에 원문·기억에 없는 메일 주소, 재질문 후보의 `asks_fields`나 본문에 빠진 항목 이름이 없음 → 후보 노드 재실행. 실행 스레드와 메일 스레드가 다르면 고칠 길이 없어 바로 대체 경로. [Claude proposal]
+  - 여러 유형이 함께 나오면 `wrong_tool` → `missing_param` → `inconsistent` → `hallucination` 순으로 앞 유형을 먼저 고친다. 전체 한도나 그 유형 한도를 이미 다 썼으면 LLM을 부르지 않고 대체 경로로 끝낸다(마지막 후보 최대 3개에 `needs_review`·`reflection_limit`, 후보가 없으면 기본 답장 틀). `reflect_fix`가 실패하면(한도·통신 등) 규칙 검사 결과로 원인·수정 지시를 대신 쓰고 재실행한다. 재실행 노드에 넘기는 `feedback`은 LLM 지시와 규칙 검사로 찾은 문제를 함께 담는다. 성찰 노드 자체 오류는 `errors`에 `internal`로 남기고 대체 경로로 끝낸다. [Claude proposal]
+  - 실행 기록(8.1절 `reflection`): `detect`(`issues`: 유형·설명·근거, `rechecking`) → 재실행 뒤면 `verify`(`verified`, `after_strategy`, `retried`) → 문제가 있으면 `analyze`(`cause`, `llm`·`llm_ok`·`error_kind`) → `strategy`(`strategy`, `retry_target`, `issue_type`, 누적 횟수, 대체 경로면 `reason`=`limit`/`no_fix`). 경로를 바꾸면 `tool_select`(`by: reflection`)도 남긴다. 본문은 남기지 않고, 근거에는 찾은 값 조각만 적는다. [Claude proposal]
 ### 12.2 단가 채우기 순서 (11)
 - 스레드에서 합의된 단가(`price_source="thread"`) → 단가표(`price_list`) → 없으면 `status="needs_price"`로 두고 견적서 확인 화면에서 입력(`user`). 단가는 상대방에게 묻는 필수 항목이 아니다. [Request]
   - 11 구현: 단가표는 품목명과 단위가 모두 같은 행을 적용한다(단위가 다르면 사용자 입력). 0원도 합의·입력 단가로 인정한다. 단가는 0 이상의 원 단위 정수, 수량은 양의 정수다. 한 줄이라도 단가가 없으면 공급가액·부가세·합계는 모두 `None`, 다 채우면 `sum(수량×단가)`·`공급가액 // 10`·두 금액의 합으로 계산한다.
 ### 12.3 성찰 켬/끔 (12)
 - 우선순위: 시험 실행기 옵션 → 사용자 설정(`users.reflection_enabled`) → `REFLECTION_ENABLED_DEFAULT`. `start_run()`이 정해 `reflection_enabled`로 넣는다. [Request · Claude proposal]
+  - 12 구현: 환경변수는 새 사용자 행의 `reflection_enabled` 기본값이 되고, 설정 화면 `/settings`의 '자가 성찰' 체크박스(`POST /settings/reflection`, 폼 `enabled=on`)가 본인 행을 바꿔 다음 실행부터 적용된다. 시험 실행기(17)는 `start_run(reflection_enabled=True/False)`로 같은 입력을 성찰 켬·끔으로 돌린다. [Claude proposal]
 ### 12.4 기억 우선순위 (13, R-06~R-08)
 - 사용자·스레드로 구분해 읽는다. 현재 메일의 조건이 과거 기억과 충돌하면 현재 메일을 따른다. 과거 외부 데이터는 `Source.fetched_at`을 함께 넘겨 최신처럼 쓰지 않는다. [Request]
 - 구현(13): `load_memory`는 `thread_memory`의 요약·확인한 조건·직전 결과와 `thread_messages`의 아직 요약하지 않은 원문을 읽는다. 현재 메일은 별도로 전달하고, 같은 메시지 ID와 현재 메일보다 미래의 메시지는 문맥에서 뺀다. `save_pending`은 후보와 같은 트랜잭션에 현재 수신 원문(이미 있으면 생략), 확인한 거래 조건, `last_result`(`end_reason`·`reply_mode`·`missing_fields`)를 저장한다. [Claude proposal]
