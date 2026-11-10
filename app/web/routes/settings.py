@@ -1,4 +1,4 @@
-"""공급자 정보·품목 단가표 설정(계획 11절)."""
+"""공급자 정보·품목 단가표 설정(계획 11절)과 자가 성찰 켬/끔(계획 12절)."""
 
 from typing import Annotated
 
@@ -20,9 +20,23 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
         prices = session.scalars(select(PriceListItem).where(
             PriceListItem.user_id == user_id,
         ).order_by(PriceListItem.item_name)).all()
+        reflection_enabled = session.scalar(select(User.reflection_enabled).where(User.id == user_id))
     return request.app.state.templates.TemplateResponse(
-        request=request, name="pages/settings.html", context={"company": company, "prices": prices},
+        request=request, name="pages/settings.html",
+        context={"company": company, "prices": prices, "reflection_enabled": bool(reflection_enabled)},
     )
+
+
+@router.post("/settings/reflection")
+def save_reflection(request: Request, enabled: Annotated[str, Form()] = "",
+                    user_id: int = Depends(current_user_id)):
+    """자가 성찰 켬/끔(계획 12절). 다음 실행부터 `start_run()`이 이 값을 쓴다(계약 12.3절)."""
+    with request.app.state.database.session() as session:
+        user = session.scalar(select(User).where(User.id == user_id).with_for_update())
+        if user is None:
+            raise HTTPException(404, "사용자를 찾을 수 없습니다")
+        user.reflection_enabled = enabled == "on"
+    return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/settings/company")
