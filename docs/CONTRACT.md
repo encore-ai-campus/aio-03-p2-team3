@@ -453,14 +453,12 @@ class AgentError(TypedDict):
 | 페이지 | 템플릿 | 경로 | 하위 작업 |
 |---|---|---|---|
 | 로그인 | `login.html` | `GET /login`, `GET /auth/google/start`, `GET /auth/google/callback`, `POST /logout` | 6 |
-| 앱 소개(로그인 없이) | `about.html` | `GET /about` | #82 |
-| 개인정보처리방침(로그인 없이) | `privacy.html` | `GET /privacy` | #82 |
-| 서비스 약관(로그인 없이) | `terms.html` | `GET /terms` | #82 |
 | 받은 메일·후보 목록 | `inbox.html` | `GET /` → `/inbox`, `GET /inbox`, `GET /inbox/list`(HTMX 조각, `INBOX_POLL_SECONDS`마다) | 9 |
 | 스레드·후보 고르기 | `thread.html` | `GET /threads/{thread_id}`, `POST /candidates/{candidate_id}/approve` | 9 |
 | 견적서 확인 | `quote.html` | `GET /quotes/{quote_id}`, `POST /quotes/{quote_id}/prices`, `GET /quotes/{quote_id}/preview.pdf`, `POST /quotes/{quote_id}/approve`(폼에 `candidate_id`) | 11 |
 | 설정 | `settings.html` | `GET /settings`, `POST /settings/company`, `POST /settings/prices`, `POST /settings/reflection` | 11, 12 |
 | 실행 기록 | `runs.html`, `run_detail.html` | `GET /runs`, `GET /runs/{run_id}`, `GET /runs/{run_id}/export` | 14 |
+| 공개 페이지(로그인 없이) | `about.html`, `privacy.html`, `terms.html` | `GET /about`(앱 소개, Google 브랜딩 홈페이지), `GET /privacy`(개인정보처리방침), `GET /terms`(서비스 약관). 모든 페이지 아래쪽에 세 링크, 로그인 화면 본문 아래에도 세 링크 | #82 |
 | 상태 확인 | 없음 | `GET /healthz` → `{"status": "ok"}` | 2 |
 | 알림 수신 | 없음 | `POST /gmail/push` | 7 |
 

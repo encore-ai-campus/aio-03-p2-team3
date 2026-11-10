@@ -1,21 +1,18 @@
 {% extends 'base.html' %}
 {% from 'components/card.html' import card %}
-{% from 'components/banner.html' import banner %}
-{% block title %}서비스 약관 · Gmail 견적 도우미{% endblock %}
+{% block title %}서비스 약관 · {{ app_name }}{% endblock %}
 {% block content %}
-<div class="intro"><h1>서비스 약관</h1><p class="muted">Gmail 견적 도우미 이용 조건입니다.</p></div>
-{{ banner('수업 과제용 시연 서비스입니다. 테스트용 Gmail 계정과 가상 메일로만 이용해 주세요.') }}
-{% call card('이용 범위') %}
-<p>이 서비스는 수업 과제의 기능을 시연하고 시험하기 위해 제공합니다. 실제 업무에 사용하거나 실제 개인정보가 담긴 메일·거래 정보를 입력할 수 없습니다.</p>
-<p>AI가 만든 답장 후보와 견적서 내용은 사용자가 직접 확인해야 합니다. 답장은 사용자가 승인해야만 발송합니다.</p>
+<div class="intro">
+  <h1>서비스 약관</h1>
+  <p class="muted">{{ app_name }} · 시행일 {{ policy_date }}</p>
+</div>
+{% call card('이용 조건') %}
+<ol>
+  <li>{{ app_name }}는 수업 과제로 만든 시연용 서비스입니다. 실제 업무에 쓰도록 만든 서비스가 아닙니다.</li>
+  <li>테스트용 Gmail 계정으로만 이용하고, 실제 개인정보나 실제 업무 메일을 넣지 마세요.</li>
+  <li>AI가 만든 답장 후보와 견적서는 틀릴 수 있습니다. 보내기 전에 내용을 직접 확인하고 승인한 책임은 사용자에게 있습니다.</li>
+  <li>서비스는 아무 보증 없이 제공되며, 과제 기간이 끝나거나 운영상 필요하면 예고 없이 중단될 수 있습니다.</li>
+  <li>Google 사용자 데이터는 <a href="/privacy">개인정보처리방침</a>대로 다룹니다.</li>
+</ol>
 {% endcall %}
-{% call card('보증과 서비스 중단') %}
-<p>AI 생성 내용에는 오류나 누락이 있을 수 있으며, 결과의 정확성이나 서비스의 지속적인 제공을 보증하지 않습니다.</p>
-<p>서비스는 예고 없이 변경되거나 언제든 중단될 수 있습니다.</p>
-{% endcall %}
-<nav class="facts" aria-label="서비스 안내">
-  <a href="/about">앱 소개</a>
-  <a href="/privacy">개인정보처리방침</a>
-  <a href="/login">로그인</a>
-</nav>
 {% endblock %}
