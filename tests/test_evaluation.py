@@ -186,3 +186,102 @@ def test_report_defines_criteria_for_every_scenario_before_measurement():
         assert f"`{scenario.key}`" in text
         assert all(f"`{tool}`" in text for tool in scenario.expect.tools)
     assert all(name in text for name in METRIC_NAMES.values())
+
+
+# --- 실제 실행 준비: 시험 계정 찾기·승인 발송용 실제 메일 찾기 ------------------------------------------
+
+def gmail_mail(message_id, subject, body, sender="partner@example.invalid"):
+    raw = message(message_id, thread_id=f"thread-{message_id}", sender=sender, body=body)
+    for header in raw["payload"]["headers"]:
+        if header["name"] == "Subject":
+            header["value"] = subject
+    return raw
+
+
+def ref(message_id):
+    return {"id": message_id, "threadId": f"thread-{message_id}"}
+
+
+@pytest.fixture
+def mailbox(gmail):
+    """검색 결과는 최신 순(m5 → m1), 두 페이지. m2는 제목이 다르고 m5는 내가 보낸 메일이다."""
+    scenario = SCENARIOS_BY_KEY["gmail_error"]
+    body = scenario.body
+    gmail.mailbox.raw_messages.update({
+        "m1": gmail_mail("m1", scenario.subject, body),
+        "m2": gmail_mail("m2", "다른 제목", body),
+        "m3": gmail_mail("m3", scenario.subject, body),
+        "m4": gmail_mail("m4", scenario.subject, body.replace(" ", "\n  ") + "\n\n-- \n상대방 서명"),
+        "m5": gmail_mail("m5", scenario.subject, body, sender="demo@example.invalid"),
+    })
+    gmail.mailbox.search_pages = {
+        None: {"messages": [ref("m5"), ref("m4"), ref("m3")], "nextPageToken": "p2"},
+        "p2": {"messages": [ref("m2"), ref("m1")]},
+    }
+    return gmail.mailbox
+
+
+def test_gmail_search_picks_unused_matching_mails_oldest_first(database, access, mailbox):
+    scenario = SCENARIOS_BY_KEY["gmail_error"]
+    with database.session() as session:
+        session.add(Run(run_id="old-run", user_id=1, mode="test", message_id="m1", thread_id="thread-m1",
+                        reflection_enabled=False, scenario="gmail_error"))
+    sources, report = runner.find_gmail_sources(database, access, 1, scenario, limit=2)
+    assert sources == [("m3", "thread-m3"), ("m4", "thread-m4")]
+    assert report == {"query": runner.DEFAULT_GMAIL_SEARCH, "found": 5, "already_used": 1,
+                      "mismatched": 1, "selected": 2, "needed": 2}
+    searches = mailbox.called("search")
+    assert [call[1]["q"] for call in searches] == [runner.DEFAULT_GMAIL_SEARCH] * 2
+    assert [call[1].get("pageToken") for call in searches] == [None, "p2"]
+
+    # 찾은 메일로 실제 실행(실제 Gemini 자리는 대역)을 돌리면 그 메일에 답장하고, 다음 검색에서는 빠진다.
+    real = FakeLLM([GENERAL, CLEAN, GENERAL, CLEAN])
+    result = runner.run_suite(database, 1, scenarios=[scenario], repeat=1, mode="real", access=access,
+                              real=lambda: real, gmail_sources=sources)
+    assert [j["completed"] for j in result["judgments"]] == [True, True] and not result["skipped"]
+    with database.session() as session:
+        used = session.scalars(select(Run.message_id).where(Run.scenario == "gmail_error", Run.run_id != "old-run"))
+        assert sorted(used) == ["m3", "m4"]
+    sends = mailbox.called("send")
+    assert [call[1]["body"]["threadId"] for call in sends] == ["thread-m3", "thread-m4"]
+    again, report = runner.find_gmail_sources(database, access, 1, scenario, limit=2)
+    assert again == [] and report["already_used"] == 3 and report["mismatched"] == 2
+
+
+def test_gmail_search_failure_hides_error_text(database, access, gmail):
+    gmail.mailbox.search_pages = {}
+    with pytest.raises(RuntimeError, match=r"^Gmail 검색 실패 \(KeyError\)$"):
+        runner.find_gmail_sources(database, access, 1, SCENARIOS_BY_KEY["gmail_error"], limit=2)
+
+
+def test_resolve_user_by_email(database):
+    assert runner.resolve_user(database, user_email=" Demo@Example.invalid ") == 1
+    assert runner.resolve_user(database, user_id=1) == 1
+    with pytest.raises(ValueError, match="로그인"):
+        runner.resolve_user(database, user_email="nobody@example.invalid")
+    with pytest.raises(ValueError):
+        runner.resolve_user(database, user_id=99)
+
+
+def test_cli_real_finds_user_and_gmail_mails(database, access, mailbox, monkeypatch, capsys):
+    import app.clients.gmail as gmail_module
+    import app.config as config_module
+    import app.db.engine as engine_module
+    import app.services.auth as auth_module
+
+    monkeypatch.setattr(config_module, "get_settings", lambda: config_module.Settings())
+    monkeypatch.setattr(engine_module, "get_database", lambda settings=None: database)
+    monkeypatch.setattr(gmail_module, "GoogleClient", lambda settings: access.google)
+    monkeypatch.setattr(auth_module, "make_cipher", lambda settings: access.cipher)
+    captured = {}
+
+    def fake_suite(database, user_id, **kwargs):
+        captured.update(user_id=user_id, **kwargs)
+        return {"metrics": runner.compute_metrics([]), "skipped": [], "judgments": []}
+
+    monkeypatch.setattr(runner, "run_suite", fake_suite)
+    assert runner.main(["--real", "--user-email", "demo@example.invalid", "--gmail-search",
+                        "--scenario", "gmail_error", "--repeat", "2"]) == 0
+    assert captured["user_id"] == 1 and captured["mode"] == "real" and captured["access"] is not None
+    assert captured["gmail_sources"] == [("m1", "thread-m1"), ("m3", "thread-m3"), ("m4", "thread-m4")]
+    assert "3/4통 사용" in capsys.readouterr().out

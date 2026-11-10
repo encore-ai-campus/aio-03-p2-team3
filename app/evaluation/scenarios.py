@@ -101,6 +101,9 @@ FIX = {"cause": "앞 단계 결과가 메일 내용과 맞지 않음", "feedback
 GENERAL_BODY = "안녕하세요, 가상오피스입니다. 사무용품 제품 안내 자료를 받아 볼 수 있을까요?"
 DEAL_BODY = "가상상사입니다. 가상 복사용지 100박스 견적 부탁드립니다. 11월 20일까지 필요합니다."
 NO_DUE_BODY = "가상상사입니다. 가상 복사용지 100박스 견적 부탁드립니다."
+# 승인 발송 시나리오는 실제 실행에서 시험 계정에 실제로 보낸 메일을 쓴다. 실행기가 Gmail 검색으로 찾도록
+# 제목에 검색용 낱말(`evalsend`)을 넣는다(`runner.DEFAULT_GMAIL_SEARCH`).
+GMAIL_ERROR_SUBJECT = "[evalsend] 제품 안내 자료 문의"
 
 SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
@@ -119,7 +122,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         fake={"EmailAnalysis": [DEAL], "ExtractedDealTerms": [NO_DUE], "FollowupDraft": [FOLLOWUP_REPLY]},
     ),
     Scenario(
-        "gmail_error", "도구 실패", "승인 발송 중 Gmail 5xx → 실패 안내 → 다시 승인", "제품 안내 자료 문의",
+        "gmail_error", "도구 실패", "승인 발송 중 Gmail 5xx → 실패 안내 → 다시 승인", GMAIL_ERROR_SUBJECT,
         GENERAL_BODY,
         Expect("awaiting_approval", "general", GENERAL_TOOLS, approval=("failed_unknown", "sent")),
         sender="gmail-case@example.invalid",
