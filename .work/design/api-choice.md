@@ -64,6 +64,22 @@
 - Pub/Sub 인증된 푸시: https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions
 - 선택 근거: `docs/plans/gmail-quote-mvp.md#3`(2026-11-09 요청), 환경변수 계약: `docs/CONTRACT.md` 11절
 
+### 콘솔 설정 결과 (2026-11-10, 계획 5절)
+- 정한 것 [Request]: Gmail·OAuth·Pub/Sub 전용 Google Cloud 프로젝트 `aio3-gmail-quote`를 따로 만들고 이 프로젝트에만 결제 계정을 연결한다. Gemini 키가 있는 프로젝트에는 결제를 연결하지 않는다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 확인되지 않은 앱 경고와 사용자 100명 상한을 감수한다.
+- OAuth: 게시 상태 프로덕션 단계(검증 없음), 사용자 유형 외부. 범위 `openid`·`userinfo.email`·`gmail.readonly`·`gmail.send`(`app/config.py`의 `GOOGLE_SCOPES`와 같음). 웹 애플리케이션 클라이언트의 리디렉션 URI는 `https://aio3-gmail-quote.onrender.com/auth/google/callback`, `http://localhost:8000/auth/google/callback`.
+- 브랜딩: 앱 이름 `Gmail 견적 도우미`(화면 이름과 같음), 홈페이지 `/about`·개인정보처리방침 `/privacy`·서비스 약관 `/terms`(서비스 주소 아래, #82), 승인된 도메인 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있어 서비스 주소가 최상위 개인 도메인).
+- Pub/Sub: 토픽 `projects/aio3-gmail-quote/topics/gmail-notify`(게시자: `gmail-api-push@system.gserviceaccount.com`, 역할 Pub/Sub 게시자), 푸시 구독 `gmail-notify-push` → `https://aio3-gmail-quote.onrender.com/gmail/push`, 인증 사용(서비스 계정 `gmail-push-auth@aio3-gmail-quote.iam.gserviceaccount.com`, 대상 = 엔드포인트 주소), 확인 기한 120초, 재시도 정책 지수 백오프(기본 10~600초).
+- Render 환경변수(이름): `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`·`GMAIL_PUBSUB_TOPIC`·`PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`. 값은 레포에 두지 않는다.
+
+### 공식 문서 확인 결과 (2026-11-09~10 조회, 계획 5절 항목별)
+1. 결제: Free Tier 범위 안이라도 Cloud Billing 계정이 있어야 한다. Pub/Sub Free Tier는 결제 계정당 월 10 GiB. Gemini는 결제를 연결하지 않은 프로젝트에 둬야 무료 등급이 유지되며, 무료 키와 유료 키는 프로젝트를 나누라고 안내한다. 출처: https://docs.cloud.google.com/billing/docs , https://docs.cloud.google.com/free/docs/free-cloud-features , https://cloud.google.com/pubsub/pricing , https://ai.google.dev/gemini-api/docs/billing
+2. 토큰 만료: 외부·테스트 상태면 갱신 토큰이 7일 뒤 만료된다(기본 신원 범위만 요청하면 예외). 프로덕션 상태에서는 갱신 토큰이 취소되거나 오래(보통 6개월) 쓰지 않을 때 말고는 대체로 만료되지 않는다(7일 만료 없음). 검증 안 된 게시 앱은 민감·제한 범위에 경고 화면과 전체 사용자 100명 상한이 있다. 출처: https://developers.google.com/identity/protocols/oauth2 , https://developers.google.com/health/setup , https://developers.google.com/identity/protocols/oauth2/production-readiness/overview , https://support.google.com/cloud/answer/15549945
+3. 범위 구분: `gmail.send`는 민감, `gmail.readonly`·`gmail.modify`는 제한 범위다. 출처: https://developers.google.com/workspace/gmail/api/auth/scopes . 이 범위로 감시 등록·기록 조회·메일 읽기·발송이 실제로 되는지는 계획 16(#62)에서 확인한다.
+4. 브랜딩: 외부 프로덕션 앱은 홈페이지·개인정보처리방침·서비스 약관 링크가 필요하고, 링크 도메인은 승인된 도메인이어야 한다. 도메인 소유 확인(Search Console)은 검증을 신청할 때 필요하다. 출처: https://support.google.com/cloud/answer/15549049 , https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification
+5. 토픽 권한: Gmail 문서는 `gmail-api-push@system.gserviceaccount.com`에 publish 권한을 주라고 하며 역할 이름은 적지 않는다(Pub/Sub 게시자 역할로 줌). 감시 등록은 최소 7일마다(하루 1번 권장) 다시 해야 하고, 사용자당 알림은 초당 1개까지다. 출처: https://developers.google.com/workspace/gmail/api/guides/push
+6. 푸시 인증: 인증을 켜면 Pub/Sub가 서명한 JWT를 `Authorization` 헤더로 보내고, 받는 쪽은 대상과 서비스 계정 이메일(`email`, `email_verified`)을 확인한다. 서비스 계정은 구독과 같은 프로젝트에 있어야 한다. 출처: https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions , https://docs.cloud.google.com/pubsub/docs/create-push-subscription
+7. 잠든 Render와 푸시: 푸시 요청 제한 시간은 확인 기한과 같고(기본 10초, 최대 600초), 기한 안에 성공 응답이 없으면 재시도 정책대로 다시 보낸다(지수 백오프 기본 10~600초). 확인되지 않은 메시지는 기본 7일 보관된다. Render 무료 서버는 15분 동안 요청이 없으면 잠들고 깨는 데 약 1분 걸리므로 확인 기한을 120초로 했다. 실제로 첫 푸시가 기다렸다 성공하는지, 재전송으로 처리되는지는 계획 16(#62)에서 확인한다. 출처: https://docs.cloud.google.com/pubsub/docs/subscription-properties , https://docs.cloud.google.com/pubsub/docs/subscription-retry-policy , https://docs.cloud.google.com/go/docs/reference/cloud.google.com/go/pubsub/latest , https://render.com/docs/faq
+
 ## 일정 도구 추천 후보
 MVP에서 제외한 보조 API다(2026-11-09). 일정(캘린더) 도구 작업 때 AI가 아래 후보를 요청자에게 추천하고, 채택 여부를 확인한 뒤 API·환경변수를 추가한다. 현재 연동이나 키 발급은 하지 않는다. [Request]
 

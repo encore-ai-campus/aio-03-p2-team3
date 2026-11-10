@@ -66,7 +66,7 @@
 - 선행 작업: 2
 - 하는 사람: 사람
 
-## 5. (사람) Google Cloud 설정 (Gmail API·OAuth·Pub/Sub)
+## 5. (사람) Google Cloud 설정 (Gmail API·OAuth·Pub/Sub) (완료)
 - 할 일: Google Cloud 콘솔에서 아래를 차례로 한다. '공식 문서 확인' 표시가 있는 단계는 그 단계 전에 공식 문서로 확인하고, 결과(링크·확인 날짜)를 `.work/design/api-choice.md`에 적는다. 비밀값은 레포에 넣지 않는다. 관련 요구사항: R-04·R-14. [Request · Claude proposal]
   1. 결제(공식 문서 확인, 미확인 항목): Pub/Sub를 쓰려면 결제 계정 연결이 필요한지, 결제를 Gemini 키가 있는 프로젝트에 붙이면 Gemini 무료 등급에 영향이 있는지 확인한다. 결제 연결이 필요하면 여기서 멈추고 요청자가 정한다.
   2. Gmail API와 Cloud Pub/Sub API를 켠다.
