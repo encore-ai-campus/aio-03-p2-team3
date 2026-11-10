@@ -118,6 +118,7 @@ def test_login_encrypts_tokens_and_registers_watch(client, fake):
     assert "demo@example.invalid" in inbox.text and "새 메일 알림 켜짐" in inbox.text
     assert 'action="/logout"' in inbox.text
     assert len(fake.called("watch")) == 1  # 하루가 안 지났으면 화면 요청 때 다시 부르지 않는다
+    assert client.get("/runs").status_code == 200  # 14절 화면(current_user_id)도 같은 세션으로 열린다
 
 
 def test_callback_rejects_wrong_or_missing_state(client, fake):

@@ -15,7 +15,8 @@ from app.graph.run import get_graph
 from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
 from app.web import WEB, templates
-from app.web.routes import auth
+from app.web.deps import LoginRequired
+from app.web.routes import auth, runs
 
 SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
@@ -50,7 +51,13 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
         https_only=config.app_base_url.startswith("https://"),
     )
     app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
+    # 라우터 파일(app/web/routes/)은 request.app.state.templates(= app.web.templates)로 같은 템플릿을 쓴다.
+    app.state.templates = templates
     app.include_router(auth.router)
+
+    @app.exception_handler(LoginRequired)
+    def login_required(request: Request, _):
+        return RedirectResponse("/login", status_code=303)
 
     @app.get("/healthz")
     def healthz():
@@ -67,6 +74,7 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
             request=request, name="pages/inbox.html", context={"user": user, "status": status},
         )
 
+    app.include_router(runs.router)
     return app
 
 

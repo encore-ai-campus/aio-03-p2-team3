@@ -24,6 +24,7 @@ app/
   prompts/
     <프롬프트 이름>.py      NAME·VERSION·TEMPLATE (6절)
     VERSIONS.md            프롬프트 버전과 변경 이유 표
+    format.py              메일·스레드·선호를 프롬프트 변수 텍스트로 바꾸기(8에서 더함, 10도 씀)
   clients/
     gmail.py               사용자별 Gmail API 클라이언트 만들기(토큰 갱신 포함), 재시도
   graph/
@@ -42,10 +43,11 @@ app/
       reflect.py           성찰
       save_pending.py      승인 대기 저장
       finish_failed.py     실패 종료
+      common.py            업무 노드 공통: failure_update()(한도 오류 → 대체 후보, 그 밖 → 실패, 8에서 더함), call_tool()(tool_call·tool_result 기록, ToolResult → 상태)·retry_feedback()(10에서 더함)
   tools/
     base.py                ToolResult(공통 결과 형식) — 4.1절 (공통 부분)
     registry.py            도구 등록 목록 — 4.2절 (공통 부분)
-    fallback.py            fallback_candidates() — 한도 오류 때 기본 답장 틀
+    fallback.py            fallback_candidates(email, kind=, asks_fields=, preferences=) — 한도 오류 때 기본 답장 틀(도구 아님, 등록하지 않음)
     draft_replies.py       도구 하나 = 파일 하나 (4.4절)
     extract_deal_terms.py
     check_required_fields.py
@@ -64,11 +66,12 @@ app/
     approval.py            승인 뒤 보내기 경로(그래프 밖)
     memory.py              기억 저장(발송 뒤 거래 기록, 선호, 요약)
   runlog/
-    logger.py              traced_node 감싸기, log_event()
+    logger.py              traced_node 감싸기, log_event(), current_database()(실행 중인 DB)
     export.py              실행 하나를 파일로 내보내기
     mask.py                개인정보 가리기 — 8.3절
   web/
     routes/                auth.py · inbox.py · candidates.py · quotes.py · settings.py · runs.py · gmail_push.py
+    deps.py                current_user_id(로그인한 사용자 id) — 9절
     templates/
       base.html            기본 레이아웃
       components/          화면 조각 — 9절
@@ -166,7 +169,7 @@ save_pending → END
 finish_failed → END
 ```
 - 라우팅 함수는 `step_status`·`intent`·`missing_fields`·`reflection_enabled`·`reflection`만 읽고 상태를 고치지 않는다. 2에서 모두 만들고, 뒤 하위 작업은 `build.py`·`routing.py`를 고치지 않는다. 고쳐야 하면 공통 부분 변경으로 조율한다. [Request · Claude proposal]
-- 한도 오류(`rate_limit`)가 난 노드는 `fallback_candidates()`로 기본 답장 틀 후보 1개를 `candidates`에 넣고 `needs_review=True`, `notice="rate_limit"`, `step_status="rate_limit"`을 돌려준다. 이 경로는 성찰을 건너뛴다(성찰도 LLM을 부를 수 있어서). [Request · Claude proposal]
+- 한도 오류(`rate_limit`)가 난 노드는 `fallback_candidates(email, *, kind, asks_fields, preferences) -> list[ReplyCandidate]`(`app/tools/fallback.py`, LLM 없이 고정 문구. 재질문 노드는 `kind="followup"`, `asks_fields`=빠진 항목)로 기본 답장 틀 후보 1개를 `candidates`에 넣고 `needs_review=True`, `notice="rate_limit"`, `step_status="rate_limit"`을 돌려준다. 이 경로는 성찰을 건너뛴다(성찰도 LLM을 부를 수 있어서). [Request · Claude proposal]
 
 ### 3.3 종료 조건 (R-11)
 | `end_reason` | 뜻 | 언제 | 처리 상태(7절 `processed_messages.status`) |
@@ -427,7 +430,7 @@ class AgentError(TypedDict):
 
 ### 8.2 내보내기 파일 (`docs/test-records/`)
 - 실행 하나 = 파일 하나. 이름: `<YYYYMMDD-HHMM>_<scenario 또는 live>_<refl-on|refl-off>_<run_id 앞 8자>.jsonl`. [Claude proposal]
-- 내용: 첫 줄 `{"type": "run", …runs 열}`, 그 뒤 `{"type": "event", …run_events 열}`을 `seq` 순서로. 시험 실행기(17)의 준비된 응답·고의 실패 주입은 `detail.injected: true`로 표시해 실제 API 결과와 구분한다. [Request · Claude proposal]
+- 내용: 첫 줄 `{"type": "run", …runs 열}`, 그 뒤 `{"type": "event", …run_events 열(DB 줄 번호 `id`는 뺀다)}`을 `seq` 순서로. 시험 실행기(17)의 준비된 응답·고의 실패 주입은 `detail.injected: true`로 표시해 실제 API 결과와 구분한다. [Request · Claude proposal]
 
 ### 8.3 개인정보 가리기 (`app/runlog/mask.py`, 내보낼 때와 실행 기록 화면에 적용)
 | 대상 | 바꾸는 값 |
@@ -440,6 +443,7 @@ class AgentError(TypedDict):
 | 메일 본문·후보 본문(`mode=test`, 지어낸 메일) | 위 규칙만 적용하고 남긴다 |
 
 - 기록에 실제 개인정보가 남지 않게 하는 것이 목적이다(`.work/RULES.md` 3절). [Request · Claude proposal]
+- 이름 열·키(`from_name`·`display_name`·`contact_name`)에서 모은 이름은 오류 문구·시험 본문 같은 다른 글에 섞여 있어도 같은 `<이름N>`으로 바꾼다. 실행 id·메시지 id·시각처럼 기록을 따라가는 값은 가리지 않는다. [Claude proposal]
 
 ## 9. 화면 (R-14)
 - 디자인 토큰: `app/web/static/css/tokens.css` 한 파일에 CSS 변수로 둔다(`--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`). 다른 CSS와 템플릿은 색·글꼴·간격 값을 직접 쓰지 않고 토큰만 쓴다(한 곳을 고쳐도 다른 곳이 깨지지 않게). [Request]
@@ -459,7 +463,7 @@ class AgentError(TypedDict):
 
 - `kind=quote` 후보는 `/candidates/{id}/approve`로 보내지 않고 견적서 확인 화면의 승인으로만 보낸다(견적서를 확인해야 첨부해 보냄). [Request · Claude proposal]
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
-- 로그인 확인(6): 세션은 `SESSION_SECRET`으로 서명한 쿠키(`gq_session`, 14일)에 사용자 id만 둔다. 화면 경로는 `app/web/routes/auth.py`의 `require_user`(로그인 안 했으면 `/login`으로 303, HTMX면 `HX-Redirect`) 또는 `current_user`(없으면 None)를 쓰고, 둘 다 응답 뒤 감시 갱신을 건다. id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user.id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 화면 틀은 `app/web`의 `templates` 하나를 함께 쓴다. [Claude proposal]
+- 본인 확인: 로그인(6)이 세션(`SESSION_SECRET`으로 서명한 쿠키 `gq_session`, 14일)에 `user_id`만 넣는다. 로그인이 필요한 경로는 둘 중 하나를 `Depends`로 받고, 로그인 안 했으면 둘 다 `/login`으로 보낸다(303). ① `app/web/deps.py`의 `current_user_id`: id만 필요할 때(14가 씀). ② `app/web/routes/auth.py`의 `require_user`(없으면 `/login`, HTMX면 `HX-Redirect`)·`current_user`(없으면 None): `User` 행이 필요하거나 화면 요청 때 감시 갱신까지 걸 때(응답 뒤, 받은 메일 화면이 씀). id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user_id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 라우터는 `request.app.state.templates`(`app.web`의 `templates`와 같은 객체)·`request.app.state.database`를 쓴다. [Claude proposal]
 
 ## 10. Google
 - OAuth 범위는 `app/config.py`의 `GOOGLE_SCOPES` 한 곳에서만 읽는다. 후보: `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.send`. 이 범위로 감시 등록·기록 조회·메일 읽기·발송이 되는지와 민감·제한 범위 구분은 5에서 공식 문서로 확인하고, 다르면 5의 결과대로 이 줄과 코드를 고친다. [Request]

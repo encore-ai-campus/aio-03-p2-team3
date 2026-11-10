@@ -30,3 +30,13 @@ p { margin-block: var(--space-sm); }
 table { width: var(--width-full); border-collapse: collapse; }
 th, td { text-align: start; padding: var(--space-sm); border-bottom: var(--width-line) solid var(--color-line); }
 footer { margin-block: var(--space-xl); }
+.nav { display: flex; gap: var(--space-md); align-items: baseline; }
+.facts { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-lg); margin: var(--space-none); }
+.facts dt { color: var(--color-muted); font-size: var(--font-small); }
+.facts dd { margin: var(--space-none); }
+.table-wrap { overflow-x: auto; }
+.mono, .raw { font-family: var(--font-mono); font-size: var(--font-small); }
+.raw { white-space: pre-wrap; margin: var(--space-xs) var(--space-none) var(--space-none); }
+.row-warn { background: var(--color-warning-bg); }
+.row-warn .badge { color: var(--color-warning); background: var(--color-surface); }
+.button-link { display: inline-block; text-decoration: none; color: var(--color-accent); }
