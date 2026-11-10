@@ -42,12 +42,13 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
 - 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`.
 - 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
 - LLM: Google Gemini API `gemini-3.8-flash`(무료 등급, 환경변수 `GEMINI_API_KEY`). 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다. 근거와 설정 경로는 `.work/design/api-choice.md`. 패키지는 `langchain-google-genai`(`pyproject.toml`).
 - 외부 API: Gmail API(사용자별 Google OAuth로 메일 읽기·감시 등록·승인 후 발송)와 Cloud Pub/Sub(메일함 변경 푸시 알림)를 추가했다. Google Calendar는 도구 2(구글캘린더 등록)용으로 유지한다. 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외하고 `.work/design/api-choice.md`의 '일정 도구 추천 후보'로 옮겼다(2026-11-09 결정). API 연동·콘솔 설정은 별도 작업이다.
+- Google 로그인·감시 등록(계획 6절, 2026-11-10): 받은 메일 화면 'Gmail 연결하기' → `/login`('테스트용 Gmail로 등록하세요') → Google 동의 → 토큰을 Fernet으로 암호화해 저장 → `users.watch`(받은편지함만) 등록 → `/inbox`에 연결된 메일·알림 상태·로그아웃. 크론 없이 로그인·화면 요청(응답 뒤)·알림 수신 때 마지막 갱신이 24시간을 넘었거나 실패했으면 다시 등록하고, 로그아웃하면 멈춘다. 갱신 토큰 만료면 '다시 로그인', 등록 실패면 '다시 시도' 안내를 보인다. 실제 Google 연결 확인은 Google Cloud 설정(5절) 뒤 로컬·Render에서 한다. 이름과 규칙은 `docs/CONTRACT.md` 7·9·10절.
 - 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로는 `.work/design/api-choice.md`, 요약은 README 'LLM·외부 API와 키 발급', 환경변수는 `docs/CONTRACT.md` 11절·`.env.example`.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
 
@@ -83,12 +84,13 @@
 마지막 갱신: 2026-11-10
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
+- 계획 6절(`tests/test_auth.py`): `tests/fakes/google.py`의 가짜 Google로 로그인 → 토큰 암호화 저장 → 감시 등록, 24시간 지난 감시 재등록(화면 요청 포함)·접근 토큰 갱신, 다른 사용자 행·위조 세션 쿠키 거부, 갱신 토큰 만료·감시 등록 실패 안내, 로그아웃 중지, 설정 누락을 확인한다. 실제 `GoogleClient`는 동의 주소(PKCE)와 watch 요청 본문만 네트워크 없이 확인한다.
 - 계획 8절: `tests/test_mail_analysis.py`가 가짜 LLM으로 일반 문의 → 후보 2~3개 저장, 후보 개수 오류 재시도, 거래 메일 → 거래 경로, 처리 안 함, 한도 오류(분석·후보 각각) → 대체 후보와 표시, 통신 실패 → 재시도 뒤 성공·실패 종료, 성찰 피드백 전달을 시험한다. `tests/test_graph.py`의 흐름 시험은 답장 후보 노드를 가짜로 바꿔 끼운다.
 - `/healthz`·기본 화면·로컬 정적 파일, DB 16개 표·사용자별 중복 방지·UTC 저장·Postgres JSONB 정의를 검사한다. 성찰 전후 평가 지표와 실제 API 시험·보고서는 아직 없다.
 - 같은 시나리오를 다시 돌릴 때의 편차보다 큰 차이만 개선으로 본다. [Past work: aio3]
 
 ## 7. 배포
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
 - 아직 없음. 서버는 Render를 쓸 예정이다. 배포 주소, 첫 요청 지연 같은 주의점을 적는다.
 - 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 키 없이 기본 화면을 열 수 있고, `DATABASE_URL`이 비면 커밋 제외된 `app/db/local.sqlite3`를 쓴다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render 연결 시험은 후속 작업이다.
@@ -96,6 +98,7 @@
 - LLM·OAuth: `GEMINI_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`.
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
 - 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
+- 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
 
 ## 8. 문서·산출물 위치
 마지막 갱신: 2026-11-09

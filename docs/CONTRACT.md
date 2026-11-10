@@ -399,6 +399,8 @@ class AgentError(TypedDict):
 | `run_events` | 실행 기록 한 줄 | `id` PK · `run_id` · `seq` · `at` · `event` · `node` · `tool` · `detail` JSON · `duration_ms` | 2, 12, 14, 17 |
 
 - Google 토큰은 `TOKEN_ENCRYPTION_KEY`로 암호화해 저장한다(방식은 6이 정하고 이 절에 적는다). [Request]
+  - 방식(6): `cryptography`의 Fernet(AES-128-CBC + HMAC-SHA256). `TOKEN_ENCRYPTION_KEY`는 Fernet 키(만드는 명령은 `.env.example`)이고, 키를 바꾸면 저장된 토큰을 못 읽어 사용자가 다시 로그인해야 한다. 암호화·복호화는 `app/services/auth.py`의 `TokenCipher`, 토큰 꺼내기·갱신은 `get_access_token()`만 쓴다. [Claude proposal]
+- `gmail_watches`(6): `status`가 `error`일 때 `last_error`는 `token_expired`(갱신 토큰 만료·취소·읽기 실패: 저장한 토큰을 지우고 다시 로그인을 안내) 또는 `watch_failed: <HTTP 상태 등>`(감시 등록 실패: 다음 갱신 때 다시 시도). `history_id`는 처음 등록하거나 `stopped`에서 다시 등록할 때만 watch 응답 값으로 정하고, 켜져 있는 감시를 갱신할 때는 그대로 둔다(7이 이어 읽음). `stopped`(로그아웃) 사용자의 알림은 처리하지 않는다. [Claude proposal]
 - 처리 상태와 화면 표시: `processing` 처리 중 · `awaiting_approval` 승인 대기 · `sent` 보냄 · `error` 오류(`notice=rate_limit`이면 '한도 초과' 표시) · `ignored`는 목록에 보이지 않는다. [Request · Claude proposal]
 
 ## 8. 실행 기록
@@ -457,6 +459,7 @@ class AgentError(TypedDict):
 
 - `kind=quote` 후보는 `/candidates/{id}/approve`로 보내지 않고 견적서 확인 화면의 승인으로만 보낸다(견적서를 확인해야 첨부해 보냄). [Request · Claude proposal]
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
+- 로그인 확인(6): 세션은 `SESSION_SECRET`으로 서명한 쿠키(`gq_session`, 14일)에 사용자 id만 둔다. 화면 경로는 `app/web/routes/auth.py`의 `require_user`(로그인 안 했으면 `/login`으로 303, HTMX면 `HX-Redirect`) 또는 `current_user`(없으면 None)를 쓰고, 둘 다 응답 뒤 감시 갱신을 건다. id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user.id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 화면 틀은 `app/web`의 `templates` 하나를 함께 쓴다. [Claude proposal]
 
 ## 10. Google
 - OAuth 범위는 `app/config.py`의 `GOOGLE_SCOPES` 한 곳에서만 읽는다. 후보: `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.send`. 이 범위로 감시 등록·기록 조회·메일 읽기·발송이 되는지와 민감·제한 범위 구분은 5에서 공식 문서로 확인하고, 다르면 5의 결과대로 이 줄과 코드를 고친다. [Request]
@@ -467,6 +470,7 @@ class AgentError(TypedDict):
   2. 대체: 엔드포인트 주소에 `?token=<PUBSUB_PUSH_TOKEN>`을 붙이고 같은지 비교한다. 이유: 설정이 단순하다. 주소가 새면 막지 못한다. 1이 콘솔 설정에서 막히면 이것을 쓴다.
   - 어느 쪽이든 확인에 실패하면 403으로 응답하고 실행 기록 없이 서버 로그에만 남긴다. [Claude proposal]
 - 감시 등록 토픽은 `GMAIL_PUBSUB_TOPIC`(`projects/<프로젝트>/topics/<토픽>`). [Request]
+- Google 호출(6): 실제 호출은 `app/clients/gmail.py`의 `GoogleClient` 하나(로그인 주소·코드 교환(PKCE)·토큰 갱신·`gmail(접근 토큰)`·`watch`·`stop`)이고 서버가 뜰 때 `app.state.google`, 준비물 묶음은 `app.state.google_access`(`GoogleAccess`)에 둔다. 테스트는 `tests/fakes/google.py`의 `FakeGoogle`을 `create_app(settings, google=...)`로 넣는다. 감시 등록은 `labelIds: ["INBOX"]`로 받은편지함 변경만 알린다. 7은 알림을 받을 때 `renew_watch_if_due(access, user_id)`, Gmail을 읽을 때 `get_access_token()` → `google.gmail(토큰)`을 쓴다. `TokenExpired`·`GoogleUnavailable`·`WatchFailed`는 모두 `GoogleError`다. [Claude proposal]
 
 ## 11. 환경변수 이름 (값은 `.env`와 Render 환경변수에만 둔다)
 | 이름 | 뜻 | 쓰는 하위 작업 |

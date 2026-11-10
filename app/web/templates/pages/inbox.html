@@ -1,12 +1,22 @@
 {% extends 'base.html' %}
 {% from 'components/card.html' import card %}
-{% from 'components/button.html' import button %}
+{% from 'components/banner.html' import banner %}
+{% from 'components/button.html' import link_button, submit_button %}
 {% from 'components/status_badge.html' import status_badge %}
 {% block content %}
 <div class="intro">{{ status_badge('받은 메일') }}<h1>메일에서 답장과 견적까지</h1><p class="muted">받은 메일을 확인하고, 보낼 답장을 골라 보세요.</p></div>
-{% call card('아직 연결된 메일함이 없습니다') %}
-<p>Gmail 연결 기능을 준비하고 있습니다.</p>
-<p class="muted">연결이 가능해지면 테스트용 Gmail로 등록해 주세요.</p>
-{{ button('Gmail 연결 준비 중') }}
+{% if user %}
+{% call card('연결된 Gmail') %}
+<p><strong>{{ user.email }}</strong> {{ status_badge(status.label) }}</p>
+{% if status.notice %}{{ banner(status.notice) }}{% endif %}
+{% if status.relogin %}<p>{{ link_button('다시 로그인', '/auth/google/start?consent=1') }}</p>{% endif %}
+<p class="muted">새 메일이 오면 답장 후보를 만들어 이 화면에 보여 줍니다.</p>
+<form method="post" action="/logout">{{ submit_button('로그아웃') }}</form>
 {% endcall %}
+{% else %}
+{% call card('아직 연결된 메일함이 없습니다') %}
+<p>Google 계정으로 로그인해 테스트용 Gmail을 연결해 주세요.</p>
+{{ link_button('Gmail 연결하기', '/login') }}
+{% endcall %}
+{% endif %}
 {% endblock %}

@@ -1,2 +1,18 @@
 {% extends 'base.html' %}
-{% block content %}<h1>테스트용 Gmail로 등록하세요</h1><p>기능을 준비하고 있습니다.</p>{% endblock %}
+{% from 'components/card.html' import card %}
+{% from 'components/banner.html' import banner %}
+{% from 'components/button.html' import button, link_button %}
+{% block title %}로그인 · Gmail 견적 도우미{% endblock %}
+{% block content %}
+<div class="intro"><h1>테스트용 Gmail로 등록하세요</h1><p class="muted">받은 메일 내용은 Gemini 무료 등급으로 처리하며, 무료 등급은 입력이 Google 제품 개선에 쓰입니다. 실제 개인 메일 대신 테스트용 Gmail 계정으로 로그인해 주세요.</p></div>
+{% if notice %}{{ banner(notice) }}{% endif %}
+{% call card('Google 계정으로 Gmail 연결') %}
+<p>로그인하면 새 메일 알림을 등록하고, 받은 메일마다 답장 후보를 만들어 둡니다. 답장은 직접 고르고 승인해야만 보냅니다.</p>
+{% if missing %}
+<p class="muted">서버 설정이 끝나지 않아 지금은 로그인할 수 없습니다. 비어 있는 환경변수: {{ missing | join(', ') }}</p>
+{{ button('Google로 로그인') }}
+{% else %}
+{{ link_button('Google로 로그인', '/auth/google/start') }}
+{% endif %}
+{% endcall %}
+{% endblock %}
