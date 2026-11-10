@@ -16,7 +16,10 @@ import pytest
 from sqlalchemy import select
 
 from app.config import Settings
-from app.db.models import Approval, CompanyProfile, PriceListItem, ProcessedMessage, Quote, ReplyCandidate, Run, ThreadMessage, User, utcnow
+from app.db.models import (
+    Approval, CompanyProfile, CounterpartyHistory, DealTerms, PriceListItem, ProcessedMessage,
+    Quote, ReplyCandidate, Run, ThreadMessage, User, UserPreference, utcnow,
+)
 from app.graph.run import start_run
 from app.llm.client import use_backend
 from app.main import create_app
@@ -331,6 +334,42 @@ def test_quote_uses_real_send_email_mime_and_gmail_once(approval_web):
     assert attachment.get_content_type() == "application/pdf"
     assert attachment.get_filename().startswith("견적서_Q-")
     assert "합계: 502원" in PdfReader(BytesIO(attachment.get_payload(decode=True))).pages[0].extract_text()
+
+
+def test_quote_send_preserves_memory_and_quote_status_together(approval_web):
+    """11·13절 통합: 미완성 견적은 기억에 쓰지 않고, 승인 발송 성공 뒤 한 번만 저장한다."""
+    client, app, db, quote_id, ids, access = approval_web
+    with db.session() as session:
+        terms = DealTerms(user_id=1, thread_id="thread", source_message_id="fake-message",
+                          run_id="quote-run", terms=TERMS, missing_fields=[], required_source="config")
+        session.add(terms)
+        session.flush()
+        session.get(Quote, quote_id).deal_terms_id = terms.id
+    assert "notice=needs_price" in str(client.post(
+        f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]},
+    ).url)
+    with db.session() as session:
+        assert session.scalar(select(CounterpartyHistory)) is None
+        assert session.get(UserPreference, (1, "approved_reply_style")) is None
+    client.post(f"/quotes/{quote_id}/prices", data={"price_2": 50})
+    assert "notice=sent" in str(client.post(
+        f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]},
+    ).url)
+    client.post(f"/quotes/{quote_id}/approve", data={"candidate_id": ids[0]})
+    assert len(access.google.mailbox.called("send")) == 1
+    with db.session() as session:
+        quote = session.get(Quote, quote_id)
+        assert quote.status == quote.draft["status"] == "sent"
+        history, = session.scalars(select(CounterpartyHistory).where(CounterpartyHistory.user_id == 1))
+        assert history.quote_id == quote_id and history.deal_terms == TERMS
+        assert history.counterparty_email == "sender@example.invalid" and history.thread_id == "thread"
+        outgoing, = session.scalars(select(ThreadMessage).where(
+            ThreadMessage.user_id == 1, ThreadMessage.direction == "out",
+        ))
+        assert outgoing.gmail_message_id == "fake-sent-1" and outgoing.to_addrs == ["sender@example.invalid"]
+        assert outgoing.body_text == "첨부 견적서를 확인해 주세요."
+        preference = session.get(UserPreference, (1, "approved_reply_style"))
+        assert preference.value["label"] == "짧게"
 
 
 def test_quote_and_general_approval_share_user_lock(approval_web, monkeypatch):

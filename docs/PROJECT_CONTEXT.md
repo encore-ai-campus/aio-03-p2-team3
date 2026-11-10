@@ -55,11 +55,14 @@
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
 
 ## 3. 그래프 상태·기억 (공통 부분)
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
-- 계약의 `AgentState`·자료 형식·초기값을 `app/graph/state.py`에 구현했다(계획 2절, 2026-11-09). `tools_called`·`reflection_history`·`errors`·`call_retries`는 누적 리듀서다. 통신 재시도와 성찰 재실행은 별도로 유지한다. 기억을 읽고 쓰는 업무 본문은 아직 빈 틀이다.
+- 계약의 `AgentState`·자료 형식·초기값을 `app/graph/state.py`에 구현했다(계획 2절, 2026-11-09). `tools_called`·`reflection_history`·`errors`·`call_retries`는 누적 리듀서다. 통신 재시도와 성찰 재실행은 별도로 유지한다. 기억 조회·요약·저장 서비스는 계획 13절에서 구현했다(2026-11-10).
 - 상태: 시작 입력(`run_id`·`user_id`·`mode`·`message_id`·`thread_id`·`email`·`reflection_enabled`), 기억(`thread_context`·`long_term`), 판단(`intent`·`selected_tool`·`tool_reason`·`step_status`), 거래(`deal_terms`·`required_fields`·`missing_fields`), 결과(`reply_mode`·`candidates`·`quote_draft`), 성찰(`reflection`·`reflection_history`), 횟수(`call_retries` 통신·형식 재시도, `reflection_retries`·`reflection_retries_by_type` 성찰 재실행 — 따로 셈), `errors`·`needs_review`·`notice`·`end_reason`, 도구 기록 `tools_called`.
 - 기억: 단기는 스레드(threadId) 단위 `thread_messages`·`thread_memory`(요약 포함), 장기는 `user_preferences`·`company_profiles`·`price_list_items`·`counterparty_history`(Render Postgres). 현재 메일 조건이 과거 기억보다 앞선다.
+- 기억 구현(13, Issue #59): `load_memory`가 본인·같은 스레드의 요약·미요약 원문·확인 조건·직전 결과를 읽고, 본인 선호·회사·단가표와 같은 상대방의 최근 거래 기록 5건을 `long_term`으로 읽는다. 현재 메일은 중복하지 않고 미래 메시지도 제외한다. 모델에는 현재 메일 우선 지시와 과거 기록의 출처·저장/발송 시점을 함께 보낸다. 과거 거래의 수량·납기·합의 단가를 이번 거래로 복사하지 않는다.
+- 긴 스레드(13): 미요약 메시지와 현재 메일이 8개 또는 본문 12000자를 넘으면 최근 원문 4개를 남기고 `summarize_thread.v1`로 거래 조건·확인 항목·미답변 질문을 누적 요약한다. 원문은 DB에 보존하고 요약 성공 때만 시각 커서를 옮긴다. 경계의 같은 시각 메시지는 모두 원문으로 남긴다. 조건·미답변 항목은 요약과 별개로 모델에 전달한다. 한도 오류면 확인 필요 후보, 통신·형식 오류 재시도 소진이면 실패 종료하며 실패한 요약·커서는 바꾸지 않는다.
+- 저장(13): `save_pending`에서 원문·확인 조건·직전 결과를 후보와 함께 저장한다. `save_sent_memory(session, user_id=..., candidate_id=..., sent_at=..., to_addrs=...)`는 본인 승인·발송 성공 기록을 검사한 뒤 실제 수신자(Reply-To 우선)를 포함한 발송 원문·승인 문체 예시·스레드별 상대방 거래 기록을 중복 없이 저장한다. `app/services/approval.py`의 일반·견적서 승인 공통 `_finish()` 성공 트랜잭션에 연결했고 가짜 Gmail로 새 스레드에서 활용하기까지 검증했다. 견적 발송 때는 견적서의 `sent` 상태와 기억의 `quote_id` 연결도 함께 유지한다. 기억 저장만 실패하면 그 저장을 되돌리고 예외 종류만 서버 로그에 남기며 발송 성공 상태는 유지한다(자동 재발송·기억 저장 재시도 없음). 설정 화면(11)·성찰(12)은 이 작업에서 구현하지 않았다.
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
@@ -79,7 +82,8 @@
 ## 5. 그래프 노드·흐름 (공통 부분)
 마지막 갱신: 2026-11-10
 
-- `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). 아직 채우지 않은 업무 노드(`load_memory`·`reflect`)는 입력 상태를 유지하는 빈 틀이고, `finish_failed`는 종료 이유만 정한다. 알림 수신 서비스가 `processed_messages`를 그래프 실행 결과에 연결한다(계획 7절).
+- `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). 아직 채우지 않은 업무 노드(`reflect`)는 입력 상태를 유지하는 빈 틀이고, `finish_failed`는 종료 이유만 정한다. 기억 조회(13)의 `load_memory`와 견적서 생성(11)의 `make_quote`는 업무 본문을 구현했다. 알림 수신 서비스가 `processed_messages`를 그래프 실행 결과에 연결한다(계획 7절).
+- 기억 연결(13, 2026-11-10): `load_memory`가 기억을 읽고 필요할 때 요약한다. 분석·추출·후보 노드는 같은 `context_for_model()`로 기억을 모델 입력에 붙이며, `save_pending`은 단기 기억도 저장한다. 요약 오류는 `analyze_email`이 상태를 덮어쓰지 않고 기존 전이로 대체 후보/실패 종료에 이른다. 일반·견적 승인 성공 경로를 합친 뒤 일반 승인도 최초 후보 조회부터 사용자 잠금 안에서 실행해 메모리 SQLite의 단일 연결을 동시 승인 요청이 함께 쓰지 않게 했다. 그래프 상태 형식·노드 이름·엣지·도구 스키마는 유지했다.
 - 계획 8절(2026-11-10): `analyze_email`은 LLM 1회로 `intent`(general/deal/ignore)와 근거 한 문장을 받아 `selected_tool`(`draft_replies`/`extract_deal_terms`/없음)·`tool_reason`을 정하고 `tool_select` 기록을 남긴다. general이면 `reply_mode="general"`, ignore면 `end_reason="ignored"`. `draft_replies` 노드는 도구를 `TOOLS`로 부르고 `tool_call`·`tool_result`·`tools_called`를 남기며, 성찰이 실패로 남긴 `reflection.feedback`을 도구에 넘긴다. `save_pending`은 `candidates`를 `reply_candidates`(`status="pending"`)에 저장한다.
 - 오류 처리(`app/graph/nodes/common.py`의 `failure_update`): 한도 오류는 재시도 없이 대체 후보·`needs_review`·`notice="rate_limit"`·`step_status="rate_limit"`으로 `save_pending`에 가고(성찰 건너뜀), 통신 실패는 `call_structured()`가 2번 더 시도한 뒤에도 실패하면 `step_status="failed"`로 실패 종료한다. 둘 다 `errors`와 `error` 기록을 남기고, 재시도 횟수(`attempts - 1`)를 `call_retries`에 더한다. 10·11의 노드도 이 함수를 쓴다. 도구를 부르는 노드는 같은 파일의 `call_tool()`(`tool_call`·`tool_result` 기록, `tools_called`·`call_retries`, 실패면 `failure_update`)과 `retry_feedback()`(성찰의 `retry_target`이 그 노드일 때만 `feedback`)을 쓸 수 있다(10에서 더함). 노드 안에서 DB는 `app/runlog/logger.py`의 `current_database()`로 연다.
 - 흐름: `load_memory` → `analyze_email` → (일반) `draft_replies` / (거래) `extract_deal` → `check_required` → (빠짐) `draft_followup` / (다 있음) `make_quote` → `draft_replies` → (성찰 켬) `reflect` ↺ 재실행 → `save_pending` → 끝. 실패는 `finish_failed`, 처리 안 함은 바로 끝. 승인·발송은 그래프 밖(`app/services/approval.py`).
@@ -97,6 +101,7 @@
 - 계획 7절(`tests/test_gmail_push.py`): 가짜 Gmail SDK 응답으로 새 메일 → 실제 그래프·가짜 LLM → 후보 저장, 중복·동시 알림 1회 처리, 무시할 메일 분류, 사용자별 격리, 같은 스레드·페이지 이어 읽기, Gmail 기록/메일/페이지/본문 조회 실패 후 다음 알림에서 재개, 감시·토큰 갱신, 그래프 실패 상태 연결, OIDC 우선·비밀 토큰·위조/형식 오류 거부, MIME/HTML 변환을 시험한다. ASGI 전송 메시지를 직접 확인해 그래프가 대기 중일 때 이미 204 응답 본문 전송이 끝났음을 검증한다. 실제 Gmail·Gemini 호출은 없다.
 - 계획 8절: `tests/test_mail_analysis.py`가 가짜 LLM으로 일반 문의 → 후보 2~3개 저장, 후보 개수 오류 재시도, 거래 메일 → 거래 경로, 처리 안 함, 한도 오류(분석·후보 각각) → 대체 후보와 표시, 통신 실패 → 재시도 뒤 성공·실패 종료, 성찰 피드백 전달을 시험한다.
 - 계획 10절: `tests/test_deal.py`가 가짜 LLM으로 필수 항목이 다 있음 → 견적서 경로, 납기 빠짐 → 납기를 묻는 재질문 후보, 추출 실패(통신·형식) → 실패 종료, 한도 오류(추출·재질문 각각) → 대체 후보·성찰 건너뜀, 후보 개수 오류 재시도, 성찰 피드백 전달, 빠진 항목 판정 규칙, 기록에 본문이 남지 않음을 시험한다.
+- 계획 13절: `tests/test_memory.py`가 같은 스레드의 앞 조건·미답변 항목 재사용과 현재 메일 변경 우선, 다른 스레드의 상대방 거래 기록·승인 문체 참조, 사용자·상대방·스레드 격리, 출처별 시점, 메시지 수/글자 수 기준의 누적 요약·원문/보존 항목 유지·커서 재사용·같은 시각 경계, 현재 메일 중복/미래 원문 제외를 확인한다. 요약 오류의 재시도·대체 후보/실패 종료·커서 보존과 발송 성공 저장 훅의 승인 전/실패 거부·중복 방지도 가짜 데이터로 시험한다. `tests/test_approval.py`에는 실제 승인 진입점·가짜 Gmail → 실제 수신자를 반영한 기억 저장 → 새 스레드 모델 입력의 통합 시험과 실패 후 재승인 때만 저장, 기억 저장 오류 시 성공 상태 유지·중복 발송 방지 시험을 더했다. 최신 main의 11절과 합친 뒤 `tests/test_quote.py`에서 미완성 견적의 기억 저장 거부, 견적 첨부 발송 성공 뒤 견적서·발송·기억 상태와 견적 ID 연결 유지·중복 저장 방지를 함께 검증한다.
 - 계획 9절: `tests/test_approval.py`가 가짜 Gmail(`tests/fakes/gmail.py`에 `messages.send` 더함)로 승인 → 같은 threadId·답장 머리글로 1회 발송(재시도 0)·승인 기록·`approval`/`send` 기록·나머지 후보 `superseded`, 승인 전 발송 없음, 두 번·동시에 눌러도 1회, 보내는 중 후보 재발송 없음, 견적서 후보 거부, 다른 사용자 후보·스레드 접근 거부, 발송 실패(시간 초과·5xx·401·400·429)별 안내와 같은 후보 다시 승인, 보내기 전 실패 안내, 받은 메일 목록의 상태·한도 초과·본인 것만·HTMX 새로 읽기를 시험한다.
 - 계획 11절: `tests/test_quote.py`가 단가 우선순위·0원·단위 불일치·큰 정수 계산·30일 유효기간·부가세 버림·사용자별 견적번호, 한글 PDF 추출·TTF 포함·여러 페이지, 설정 갱신·사용자 격리·로그인 필요, 빠진 단가 입력·변조 거부·현재 금액의 미리보기, 실제 그래프의 견적서·후보 연결을 시험한다. 실제 `send_email`과 가짜 Gmail로 현재 PDF의 MIME 첨부·같은 스레드·재시도 0·1회 발송을 확인하고, 동시 견적 승인 및 일반 승인과의 공통 잠금·발송 실패와 명시적 재승인·PDF 실패 때 승인하지 않음을 검증한다. Chromium에서 설정 저장 → 단가 입력 → 합계·승인 버튼·PDF 미리보기와 데스크톱·모바일 화면도 확인했다.
 - `tests/test_graph.py`의 흐름 시험은 전이만 보도록 답장 후보·거래 노드를 가짜로 바꿔 끼운다.

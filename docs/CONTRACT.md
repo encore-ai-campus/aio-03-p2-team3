@@ -519,6 +519,11 @@ class AgentError(TypedDict):
 - 우선순위: 시험 실행기 옵션 → 사용자 설정(`users.reflection_enabled`) → `REFLECTION_ENABLED_DEFAULT`. `start_run()`이 정해 `reflection_enabled`로 넣는다. [Request · Claude proposal]
 ### 12.4 기억 우선순위 (13, R-06~R-08)
 - 사용자·스레드로 구분해 읽는다. 현재 메일의 조건이 과거 기억과 충돌하면 현재 메일을 따른다. 과거 외부 데이터는 `Source.fetched_at`을 함께 넘겨 최신처럼 쓰지 않는다. [Request]
+- 구현(13): `load_memory`는 `thread_memory`의 요약·확인한 조건·직전 결과와 `thread_messages`의 아직 요약하지 않은 원문을 읽는다. 현재 메일은 별도로 전달하고, 같은 메시지 ID와 현재 메일보다 미래의 메시지는 문맥에서 뺀다. `save_pending`은 후보와 같은 트랜잭션에 현재 수신 원문(이미 있으면 생략), 확인한 거래 조건, `last_result`(`end_reason`·`reply_mode`·`missing_fields`)를 저장한다. [Claude proposal]
+- 모델 입력: 분석·거래 추출·일반/재질문 후보 노드는 `context_for_model()`로 현재 메일 우선 지시와 같은 상대방의 최근 거래 기록 최대 5건을 기존 `ThreadContext` 입력에 붙인다(상태 자체의 `thread_context`는 바꾸지 않음). 다른 스레드의 기록은 과거 참고로 표시하며 이번 수량·납기·합의 단가로 복사하지 않는다. 선호·회사·단가표·상대방 기록은 모두 본인 자료만 `long_term`으로 읽고, `sources`에는 자료별 저장/발송 시점과 출처를 남긴다. [Claude proposal]
+- 요약: 현재 메일을 포함한 아직 요약하지 않은 메시지가 8개 또는 본문 합계 12000자를 **넘을 때**, 최근 원문 4개를 제외한 오래된 원문과 기존 요약으로 `summarize_thread.v1`을 부른다. 거래 조건·확인 항목·미답변 질문을 구조화 출력으로 받고 전체 4000자 이하만 저장한다. 확인한 조건과 직전 미답변 항목은 모델 입력에 따로도 남긴다. 원문은 삭제하지 않으며 성공한 요약만 `summarized_until`을 옮긴다. 같은 시각의 메시지가 경계에 걸리면 누락을 막기 위해 그 시각의 메시지 전부를 원문 쪽에 남긴다(이때 4개보다 많을 수 있음). [Claude proposal]
+- 요약 오류: 기존 `call_structured()`의 재시도를 따르고 `call_retries`에 센다. 한도 오류는 기본 후보·확인 필요 표시로 승인 대기하며, 그 밖의 오류는 실패 종료한다. `analyze_email`은 앞 노드의 실패 상태를 유지해 업무 LLM을 더 부르지 않는다. 실패한 요약은 기존 요약·커서를 바꾸지 않고 미답변 항목도 유지한다. [Claude proposal]
+- 발송 뒤 저장: 승인 서비스의 `_finish()`가 성공 상태(`reply_candidates.status="sent"`, `approvals.send_status="sent"`, `sent_message_id` 있음)를 반영한 같은 DB 세션에서 `save_sent_memory(session, user_id=..., candidate_id=..., sent_at=..., to_addrs=...)`를 부른다. 훅은 본인 소유와 성공 상태를 다시 검사해 발송 원문(Reply-To를 반영한 실제 수신자 포함)·승인한 문체 예시(`user_preferences.approved_reply_style`, 기존 `tone`·`signature`는 유지)·스레드별 최신 상대방 거래 기록을 저장한다. 같은 발송을 다시 저장해도 원문·거래 기록을 중복하지 않고, 승인 전·발송 실패는 장기 기억에 쓰지 않는다. 문체 예시의 사실·약속을 다음 거래로 옮기지 않도록 모델에 명시한다. 기억 저장만 실패하면 세이브포인트를 되돌리고 예외 종류만 서버 로그에 남기며, 이미 보낸 메일의 성공 상태는 유지한다(자동 재발송·기억 저장 재시도는 하지 않음). [Claude proposal]
 
 ## 13. 하위 작업별로 읽을 절과 쓰는 이름
 | 하위 작업 | 읽을 절 | 쓰는 이름 |

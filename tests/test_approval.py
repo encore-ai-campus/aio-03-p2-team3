@@ -2,6 +2,7 @@
 
 from base64 import b64encode, urlsafe_b64decode
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from email import message_from_bytes
 from email.policy import default as email_policy
 import json
@@ -17,7 +18,12 @@ import pytest
 from sqlalchemy import select
 
 from app.config import LIMITS, Settings
-from app.db.models import Approval, ProcessedMessage, ReplyCandidate, Run, RunEvent, ThreadMessage, utcnow
+from app.db.models import (
+    Approval, CounterpartyHistory, DealTerms, ProcessedMessage, ReplyCandidate, Run, RunEvent,
+    ThreadMessage, UserPreference, utcnow,
+)
+from app.graph.run import start_run
+from app.llm.client import use_backend
 from app.main import create_app
 from app.services.approval import send_approved_candidate
 from app.services.auth import save_login
@@ -26,6 +32,7 @@ from app.tools.registry import TOOLS
 from app.web.routes.candidates import APPROVAL_NOTICES
 from tests.fakes.gmail import FakeGmailGoogle, message
 from tests.fakes.google import fake_login
+from tests.fakes.llm import FakeLLM
 
 SECRET = "fake-session-secret"
 
@@ -279,3 +286,86 @@ def test_send_email_tool_requires_approval_path():
         "subject": "Re: 가상 문의", "body": "가상 답장",
     })
     assert result.ok is False and result.error_kind == "internal"
+
+
+def test_approved_send_saves_memory_used_in_later_thread(client, fake, mailbox):
+    """13절: 실제 승인 진입점 → 가짜 Gmail → 기억 저장 → 새 스레드 모델 입력."""
+    user_id, (first, _, _) = mailbox
+    database = client.app.state.database
+    terms = {"customer_name": "가상상사", "items": [{"item_name": "가상용지", "quantity": 20}],
+             "due_date": "2026-11-20"}
+    with database.session() as session:
+        session.add(DealTerms(user_id=user_id, thread_id="fake-thread", source_message_id="fake-message",
+                             run_id="run-fake-message", terms=terms, missing_fields=[], required_source="config"))
+        session.add(UserPreference(user_id=user_id, key="tone", value="정중"))
+        assert session.get(UserPreference, (user_id, "approved_reply_style")) is None
+    assert rows(client, CounterpartyHistory) == [] and len(rows(client, ThreadMessage)) == 1
+    fake.mailbox.raw_messages["fake-message"]["payload"]["headers"].append(
+        {"name": "Reply-To", "value": "reply@example.invalid"},
+    )
+    assert approve(client, first).endswith("notice=sent")
+    assert approve(client, first).endswith("notice=already_sent")
+    assert len(fake.mailbox.called("send")) == 1
+    outgoing = [row for row in rows(client, ThreadMessage) if row.direction == "out"]
+    assert len(outgoing) == 1 and outgoing[0].gmail_message_id == "fake-sent-1"
+    assert outgoing[0].to_addrs == ["reply@example.invalid"]
+    assert outgoing[0].body_text == "가상 답장 본문 1"
+    history = rows(client, CounterpartyHistory)
+    assert len(history) == 1 and history[0].deal_terms == terms
+    with database.session() as session:
+        assert session.get(UserPreference, (user_id, "approved_reply_style")).value["label"] == "후보 1"
+        assert session.get(UserPreference, (user_id, "tone")).value == "정중"
+    email = {
+        "gmail_message_id": "new-thread-message", "thread_id": "new-thread", "rfc_message_id": None,
+        "from_addr": "sender@example.invalid", "from_name": None, "to_addrs": ["demo@example.invalid"],
+        "subject": "가상 재문의", "body_text": "지난 거래에 이어 문의합니다.",
+        "received_at": (utcnow() + timedelta(seconds=1)).isoformat(), "direction": "in",
+    }
+    llm = FakeLLM([
+        {"intent": "general", "reason": "가상 후속 문의"},
+        {"candidates": [{"label": "간단히 안내", "body": "가상 안내"},
+                        {"label": "자세히 안내", "body": "가상 상세 안내"}]},
+    ])
+    with use_backend(llm):
+        result = start_run(user_id=user_id, email=email, mode="test", database=database,
+                           reflection_enabled=False)
+    assert result["end_reason"] == "awaiting_approval"
+    assert result["thread_context"]["confirmed_terms"] == {}
+    assert result["long_term"]["counterparty_history"][0]["deal_terms"] == terms
+    assert all("가상상사" in prompt and "과거 거래 기록·발송 시점" in prompt for prompt in llm.calls)
+    assert "정중" in llm.calls[-1] and "가상 답장 본문 1" in llm.calls[-1]
+
+
+def test_send_failure_saves_no_memory_until_successful_retry(client, fake, mailbox):
+    user_id, (first, _, _) = mailbox
+    fake.mailbox.send_results.append(TimeoutError())
+    assert approve(client, first).endswith("notice=failed_unknown")
+    assert len(rows(client, ThreadMessage)) == 1 and rows(client, CounterpartyHistory) == []
+    with client.app.state.database.session() as session:
+        assert session.get(UserPreference, (user_id, "approved_reply_style")) is None
+    assert approve(client, first).endswith("notice=sent")
+    assert len(rows(client, ThreadMessage)) == 2
+    with client.app.state.database.session() as session:
+        assert session.get(UserPreference, (user_id, "approved_reply_style")) is not None
+
+
+def test_memory_error_does_not_undo_sent_status_or_send_again(client, fake, mailbox, monkeypatch, caplog):
+    from app.services import approval as service
+
+    user_id, (first, _, _) = mailbox
+
+    def broken_memory(session, **kwargs):
+        session.add(UserPreference(user_id=user_id, key="partial-memory", value="가상"))
+        session.flush()
+        raise RuntimeError("private-memory-body-marker")
+
+    monkeypatch.setattr(service, "save_sent_memory", broken_memory)
+    assert approve(client, first).endswith("notice=sent")
+    assert candidate(client, first).status == "sent" and rows(client, Approval)[0].send_status == "sent"
+    assert rows(client, ProcessedMessage)[0].status == "sent"
+    with client.app.state.database.session() as session:
+        assert session.get(UserPreference, (user_id, "partial-memory")) is None
+    assert approve(client, first).endswith("notice=already_sent")
+    assert len(fake.mailbox.called("send")) == 1
+    assert "발송 뒤 기억 저장 실패 (RuntimeError)" in caplog.text
+    assert "private-memory-body-marker" not in caplog.text

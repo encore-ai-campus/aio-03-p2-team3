@@ -4,6 +4,7 @@ from app.graph.nodes.common import failure_update, preferences_of
 from app.graph.state import AgentState, ToolCallRecord
 from app.runlog.logger import current_event
 from app.tools.registry import TOOLS
+from app.services.memory import context_for_model
 
 
 def draft_replies(state: AgentState) -> dict:
@@ -16,7 +17,7 @@ def draft_replies(state: AgentState) -> dict:
         "has_quote": state["quote_draft"] is not None, "has_feedback": feedback is not None,
     })
     result = TOOLS["draft_replies"].invoke({
-        "email": state["email"], "thread_context": state["thread_context"],
+        "email": state["email"], "thread_context": context_for_model(state),
         "reply_mode": reply_mode, "quote_draft": state["quote_draft"],
         "preferences": preferences_of(state), "feedback": feedback,
     })
