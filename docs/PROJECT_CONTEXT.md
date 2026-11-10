@@ -49,6 +49,7 @@
 - LLM: Google Gemini API `gemini-3.8-flash`(무료 등급, 환경변수 `GEMINI_API_KEY`). 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다. 근거와 설정 경로는 `.work/design/api-choice.md`. 패키지는 `langchain-google-genai`(`pyproject.toml`).
 - 외부 API: Gmail API(사용자별 Google OAuth로 메일 읽기·감시 등록·승인 후 발송)와 Cloud Pub/Sub(메일함 변경 푸시 알림)를 추가했다. Google Calendar는 도구 2(구글캘린더 등록)용으로 유지한다. 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외하고 `.work/design/api-choice.md`의 '일정 도구 추천 후보'로 옮겼다(2026-11-09 결정). API 연동·콘솔 설정은 별도 작업이다.
 - Google 로그인·감시 등록(계획 6절, 2026-11-10): 받은 메일 화면 'Gmail 연결하기' → `/login`('테스트용 Gmail로 등록하세요') → Google 동의 → 토큰을 Fernet으로 암호화해 저장 → `users.watch`(받은편지함만) 등록 → `/inbox`에 연결된 메일·알림 상태·로그아웃. 크론 없이 로그인·화면 요청(응답 뒤)·알림 수신 때 마지막 갱신이 24시간을 넘었거나 실패했으면 다시 등록하고, 로그아웃하면 멈춘다. 갱신 토큰 만료면 '다시 로그인', 등록 실패면 '다시 시도' 안내를 보인다. 실제 Google 연결 확인은 Google Cloud 설정(5절) 뒤 로컬·Render에서 한다. 이름과 규칙은 `docs/CONTRACT.md` 7·9·10절.
+- Gmail 알림 수신(계획 7절, Issue #53, 2026-11-10): `POST /gmail/push`에서 OIDC(대상·발급자·서명·만료·인증된 서비스 계정 이메일)를 확인하고 204 응답 뒤 `BackgroundTasks`로 처리한다. 검증 공개 키는 5분 단위로 캐시하며, OIDC 설정이 없을 때만 `PUBSUB_PUSH_TOKEN` 비교를 쓴다. 인증 실패는 403·서버 로그만, 알림 형식 오류는 400이다. 감시의 마지막 `history_id` 이후 `messagesAdded`를 모든 페이지에서 읽고, 자기 발신·SENT·no-reply·프로모션·소셜·받은편지함 밖 메일은 `ignored`로 남긴다. 텍스트/HTML·중첩 MIME 본문을 계약의 `EmailMessage`로 바꾼다.
 - 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로는 `.work/design/api-choice.md`, 요약은 README 'LLM·외부 API와 키 발급', 환경변수는 `docs/CONTRACT.md` 11절·`.env.example`.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
 
@@ -74,19 +75,21 @@
 ## 5. 그래프 노드·흐름 (공통 부분)
 마지막 갱신: 2026-11-10
 
-- `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). 아직 채우지 않은 업무 노드(`load_memory`·`make_quote`·`reflect`)는 입력 상태를 유지하는 빈 틀이고, `finish_failed`는 종료 이유만 정한다. 처리한 메일 표(`processed_messages`) 상태 연결은 알림 수신(7) 몫이다.
+- `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). 아직 채우지 않은 업무 노드(`load_memory`·`make_quote`·`reflect`)는 입력 상태를 유지하는 빈 틀이고, `finish_failed`는 종료 이유만 정한다. 알림 수신 서비스가 `processed_messages`를 그래프 실행 결과에 연결한다(계획 7절).
 - 계획 8절(2026-11-10): `analyze_email`은 LLM 1회로 `intent`(general/deal/ignore)와 근거 한 문장을 받아 `selected_tool`(`draft_replies`/`extract_deal_terms`/없음)·`tool_reason`을 정하고 `tool_select` 기록을 남긴다. general이면 `reply_mode="general"`, ignore면 `end_reason="ignored"`. `draft_replies` 노드는 도구를 `TOOLS`로 부르고 `tool_call`·`tool_result`·`tools_called`를 남기며, 성찰이 실패로 남긴 `reflection.feedback`을 도구에 넘긴다. `save_pending`은 `candidates`를 `reply_candidates`(`status="pending"`)에 저장한다.
 - 오류 처리(`app/graph/nodes/common.py`의 `failure_update`): 한도 오류는 재시도 없이 대체 후보·`needs_review`·`notice="rate_limit"`·`step_status="rate_limit"`으로 `save_pending`에 가고(성찰 건너뜀), 통신 실패는 `call_structured()`가 2번 더 시도한 뒤에도 실패하면 `step_status="failed"`로 실패 종료한다. 둘 다 `errors`와 `error` 기록을 남기고, 재시도 횟수(`attempts - 1`)를 `call_retries`에 더한다. 10·11의 노드도 이 함수를 쓴다. 도구를 부르는 노드는 같은 파일의 `call_tool()`(`tool_call`·`tool_result` 기록, `tools_called`·`call_retries`, 실패면 `failure_update`)과 `retry_feedback()`(성찰의 `retry_target`이 그 노드일 때만 `feedback`)을 쓸 수 있다(10에서 더함). 노드 안에서 DB는 `app/runlog/logger.py`의 `current_database()`로 연다.
 - 흐름: `load_memory` → `analyze_email` → (일반) `draft_replies` / (거래) `extract_deal` → `check_required` → (빠짐) `draft_followup` / (다 있음) `make_quote` → `draft_replies` → (성찰 켬) `reflect` ↺ 재실행 → `save_pending` → 끝. 실패는 `finish_failed`, 처리 안 함은 바로 끝. 승인·발송은 그래프 밖(`app/services/approval.py`).
 - 종료: `awaiting_approval`(정상) · `followup_question`(추가 질문) · `ignored` · `failed`. 성찰 재실행 한도를 넘으면 '확인 필요' 표시로 끝냄(대체 경로).
 - 거래 경로 노드를 채웠다(계획 10절, 2026-11-10). `extract_deal`은 거래 항목을 `deal_terms`에 넣고(도구 선택 기록은 `analyze_email`이 남김), `check_required`는 `get_required_fields()` 결과를 `required_fields`에, 빠진 키를 `missing_fields`에 넣고(빠지면 `reply_mode="followup"`), 실행마다 `deal_terms` 표에 한 줄(거래 항목·빠진 항목·출처)을 저장하며 `required_source`와 다음 도구(`draft_followup_replies`/`create_quote`)의 `tool_select` 기록을 남긴다. `draft_followup`은 재질문 후보를 `candidates`에 넣는다. 추출이 통신·형식 재시도를 다 쓰면 `finish_failed`(`end_reason="failed"`), 한도 오류면 대체 후보로 `save_pending`(성찰 건너뜀). 성찰이 이 노드를 다시 실행하게 하면 `reflection.feedback`을 프롬프트에 더한다.
 - `start_run()`이 사용자 설정·시험 옵션으로 성찰 여부를 정하고 실행을 시작한다. `traced_node`가 노드 앞뒤·변경 필드·전이·소요 시간·예외 종류를 `runs`·`run_events`에 남긴다. 업무용 성찰 감지·수정 본문은 아직 없다.
+- 알림 → 그래프 연결(계획 7절, 2026-11-10): 같은 사용자 알림 처리를 단일 프로세스 안에서 직렬화하고, `(user_id, gmail_message_id)` 유일 제약을 통과한 메일만 `thread_messages`에 저장해 `start_run(mode="live")`을 부른다. 시작 입력의 메일·스레드 ID·사용자 성찰 설정을 기존 진입점이 채운다. 결과의 `run_id`·`notice`를 처리한 메일에 연결하고 승인 대기/추가 질문 → `awaiting_approval`, 처리 안 함 → `ignored`, 실패 → `error`로 남긴다. 모든 Gmail 조회가 성공한 뒤에만 `gmail_watches.history_id`를 옮긴다. Gmail 오류는 `last_error`에 원문 없이 남기고 다음 알림에서 저장된 메일을 건너뛰어 이어 읽는다. 로그아웃·재로그인 필요 상태의 알림은 처리하지 않는다. 계약의 `BackgroundTasks`는 프로세스 내 작업이므로 재시작 중 작업 복구나 만료된 historyId의 전체 동기화는 구현하지 않았다.
 
 ## 6. 시험·평가
 마지막 갱신: 2026-11-10
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
 - 계획 6절(`tests/test_auth.py`): `tests/fakes/google.py`의 가짜 Google로 로그인 → 토큰 암호화 저장 → 감시 등록, 24시간 지난 감시 재등록(화면 요청 포함)·접근 토큰 갱신, 다른 사용자 행·위조 세션 쿠키 거부, 갱신 토큰 만료·감시 등록 실패 안내, 로그아웃 중지, 설정 누락을 확인한다. 실제 `GoogleClient`는 동의 주소(PKCE)와 watch 요청 본문만 네트워크 없이 확인한다.
+- 계획 7절(`tests/test_gmail_push.py`): 가짜 Gmail SDK 응답으로 새 메일 → 실제 그래프·가짜 LLM → 후보 저장, 중복·동시 알림 1회 처리, 무시할 메일 분류, 사용자별 격리, 같은 스레드·페이지 이어 읽기, Gmail 기록/메일/페이지/본문 조회 실패 후 다음 알림에서 재개, 감시·토큰 갱신, 그래프 실패 상태 연결, OIDC 우선·비밀 토큰·위조/형식 오류 거부, MIME/HTML 변환을 시험한다. ASGI 전송 메시지를 직접 확인해 그래프가 대기 중일 때 이미 204 응답 본문 전송이 끝났음을 검증한다. 실제 Gmail·Gemini 호출은 없다.
 - 계획 8절: `tests/test_mail_analysis.py`가 가짜 LLM으로 일반 문의 → 후보 2~3개 저장, 후보 개수 오류 재시도, 거래 메일 → 거래 경로, 처리 안 함, 한도 오류(분석·후보 각각) → 대체 후보와 표시, 통신 실패 → 재시도 뒤 성공·실패 종료, 성찰 피드백 전달을 시험한다.
 - 계획 10절: `tests/test_deal.py`가 가짜 LLM으로 필수 항목이 다 있음 → 견적서 경로, 납기 빠짐 → 납기를 묻는 재질문 후보, 추출 실패(통신·형식) → 실패 종료, 한도 오류(추출·재질문 각각) → 대체 후보·성찰 건너뜀, 후보 개수 오류 재시도, 성찰 피드백 전달, 빠진 항목 판정 규칙, 기록에 본문이 남지 않음을 시험한다.
 - `tests/test_graph.py`의 흐름 시험은 전이만 보도록 답장 후보·거래 노드를 가짜로 바꿔 끼운다.

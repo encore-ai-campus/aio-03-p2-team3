@@ -7,11 +7,18 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from base64 import urlsafe_b64decode
+from email.header import decode_header, make_header
+from email.message import Message
+from email.utils import getaddresses, parseaddr
 from functools import lru_cache
+from html.parser import HTMLParser
 import logging
 import os
+from time import monotonic
 
 from app.config import GOOGLE_SCOPES, LIMITS, Settings
+from app.graph.state import EmailMessage
 
 # Google은 'email'을 'https://www.googleapis.com/auth/userinfo.email'로 돌려주고,
 # include_granted_scopes로 예전에 허용한 범위가 더해질 수 있다. 범위가 달라도 토큰 교환을 멈추지 않게 하고,
@@ -205,11 +212,124 @@ class GoogleClient:
         except Exception as error:
             raise GoogleUnavailable(_error_label(error)) from error
 
+    def verify_push_token(self, token: str, audience: str, service_account: str) -> None:
+        from google.oauth2 import id_token
+
+        claims = id_token.verify_oauth2_token(token, _certificate_request, audience)
+        if claims.get("email") != service_account or claims.get("email_verified") is not True:
+            raise ValueError("Pub/Sub 서비스 계정 불일치")
+
+    def list_history(self, gmail, history_id: str, page_token: str | None = None) -> dict:
+        try:
+            return gmail.users().history().list(
+                userId="me", startHistoryId=history_id,
+                historyTypes=["messageAdded"], pageToken=page_token,
+            ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+
+    def get_message(self, gmail, message_id: str) -> dict:
+        try:
+            return gmail.users().messages().get(
+                userId="me", id=message_id, format="full",
+            ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+
+    def get_attachment(self, gmail, message_id: str, attachment_id: str) -> str:
+        try:
+            return gmail.users().messages().attachments().get(
+                userId="me", messageId=message_id, id=attachment_id,
+            ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])["data"]
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+
+
+@lru_cache(maxsize=4)
+def _certificate_response(url: str, window: int):
+    from google.auth.transport.requests import Request
+
+    return Request()(url, method="GET", timeout=HTTP_TIMEOUT_SECONDS)
+
+
+def _certificate_request(url, method="GET", **kwargs):
+    # 서명·대상·만료는 매번 확인하고 공개 키 응답만 5분 단위로 재사용한다.
+    return _certificate_response(url, int(monotonic() // 300))
+
+
+class _HTMLText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.text = []
+        self.hidden = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self.hidden += 1
+        if tag in {"br", "p", "div", "li", "tr"} and not self.hidden:
+            self.text.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"}:
+            self.hidden = max(0, self.hidden - 1)
+        if tag in {"p", "div", "li", "tr"} and not self.hidden:
+            self.text.append("\n")
+
+    def handle_data(self, data):
+        if not self.hidden:
+            self.text.append(data)
+
+
+def decode_message(raw: dict, own_email: str, attachment_loader=None) -> EmailMessage:
+    """Gmail full 응답을 계약의 메일 형식으로 바꾼다. 첨부 파일 본문은 읽지 않는다."""
+    payload = raw["payload"]
+    headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+    sender_name, sender = parseaddr(str(make_header(decode_header(headers.get("from", "")))))
+    plain, html = [], []
+
+    def read_part(part):
+        part_headers = {h["name"].lower(): h["value"] for h in part.get("headers", [])}
+        if part.get("filename") or part_headers.get("content-disposition", "").lower().startswith("attachment"):
+            return
+        mime = part.get("mimeType", "")
+        if mime in {"text/plain", "text/html"}:
+            body = part.get("body", {})
+            encoded = body.get("data", "")
+            if not encoded and body.get("attachmentId"):
+                if attachment_loader is None:
+                    raise ValueError("메일 본문 조회가 필요합니다")
+                encoded = attachment_loader(body["attachmentId"])
+            content_type = Message()
+            content_type["content-type"] = part_headers.get("content-type", mime)
+            decoded = urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+            value = decoded.decode(content_type.get_content_charset() or "utf-8", errors="replace")
+            (plain if mime == "text/plain" else html).append(value)
+        for child in part.get("parts", []):
+            read_part(child)
+
+    read_part(payload)
+    if plain:
+        body_text = "\n".join(plain)
+    else:
+        parser = _HTMLText()
+        parser.feed("\n".join(html))
+        body_text = "\n".join(line.strip() for line in "".join(parser.text).splitlines() if line.strip())
+    received_at = datetime.fromtimestamp(int(raw["internalDate"]) / 1000, UTC)
+    return {
+        "gmail_message_id": raw["id"], "thread_id": raw["threadId"],
+        "rfc_message_id": headers.get("message-id"), "from_addr": sender,
+        "from_name": sender_name or None,
+        "to_addrs": [addr for _, addr in getaddresses([headers.get("to", "")])],
+        "subject": str(make_header(decode_header(headers.get("subject", "")))),
+        "body_text": body_text, "received_at": received_at.isoformat(),
+        "direction": "out" if sender.casefold() == own_email.casefold() or "SENT" in raw.get("labelIds", []) else "in",
+    }
+
 
 def _error_label(error: Exception) -> str:
-    status = getattr(error, "status_code", None)
+    status = getattr(error, "status_code", None) or getattr(getattr(error, "resp", None), "status", None)
     if status:
-        log.warning("Gmail API 오류 HTTP %s: %s", status, error)
+        log.warning("Gmail API 오류 HTTP %s (%s)", status, type(error).__name__)
         return f"HTTP {status}"
     log.warning("Gmail API 호출 실패: %s", type(error).__name__)
     return type(error).__name__
