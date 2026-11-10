@@ -90,12 +90,12 @@
 - 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
 | 과제 요구사항 정리(R-ID·D-ID) | `docs/REQUIREMENTS.md` | 있음(2026-11-09) |
-| 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 아직 없음(11/13 초안) |
+| 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 초안 있음(최종 코드와 맞춰 20에서 고침) |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 아직 없음 |
 | 시험 실행 기록(실행마다 한 파일) | `docs/test-records/` | 아직 없음 |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
@@ -118,3 +118,4 @@
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 자세한 것은 README '실행 방법'. 서버 실행 명령은 코드 구조가 정해지면 더한다.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
 - CI: `.github/workflows/rules-check.yml`. PR과 `main` 변경마다 `rules-check`(규칙 검사, 파일 지도에 없는 파일도 오류)와 `tests`(`uv sync --locked` 뒤 `uv run pytest`)가 따로 돈다. `uv.lock`이 `pyproject.toml`과 어긋나면 `tests`가 실패한다. PR에서는(본문을 고쳐도) `pr-check`도 돌아 PR 본문 '읽은 파일' 칸의 읽음 확인 코드(RULES.md·TASK.md·이 문서)와 '최신 흐름 갱신' 칸(이 문서를 안 고쳤으면 `해당 없음 — 이유`)을 본다.
+
