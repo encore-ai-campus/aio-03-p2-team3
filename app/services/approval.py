@@ -23,6 +23,7 @@ from app.clients.gmail import GoogleError
 from app.db.models import Approval, ProcessedMessage, ReplyCandidate, utcnow
 from app.runlog.logger import log_event
 from app.services.auth import GoogleAccess, get_access_token, get_owned
+from app.services.memory import save_sent_memory
 from app.tools.base import ToolResult
 from app.tools.registry import TOOLS
 from app.tools.send_email import google_error_kind, use_google
@@ -125,6 +126,7 @@ def _send(access, user_id, claimed) -> tuple[ToolResult, str]:
     if not to_addrs:
         return ToolResult(ok=False, error_kind="invalid_input", error_message="받는 사람 없음",
                           source="code", attempts=0), "prepare"
+    claimed["to_addrs"] = to_addrs  # 기억에도 실제 발송 대상(Reply-To 우선)을 남긴다.
     message_id = headers.get("message-id")
     references = headers.get("references", "").split()
     if message_id and message_id not in references:
@@ -165,6 +167,14 @@ def _finish(access, user_id, claimed, result: ToolResult) -> None:
             .values(status="sent")
             .execution_options(synchronize_session=False)
         )
+        try:
+            # 성공 상태를 먼저 flush하고 같은 트랜잭션에 기억을 저장한다.
+            # 기억만 실패해도 이미 보낸 메일을 다시 보내지 않도록 발송 상태는 보존한다.
+            with session.begin_nested():
+                save_sent_memory(session, user_id=user_id, candidate_id=candidate.id,
+                                 sent_at=utcnow(), to_addrs=claimed["to_addrs"])
+        except Exception as error:
+            log.warning("발송 뒤 기억 저장 실패 (%s)", type(error).__name__)
 
 
 def _record(access, claimed, event, *, ok, error_kind=None, duration_ms=None) -> None:

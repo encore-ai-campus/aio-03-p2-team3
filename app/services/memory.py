@@ -189,7 +189,7 @@ def save_run_memory(session, state: dict, end_reason: str):
     }
 
 
-def save_sent_memory(session, *, user_id: int, candidate_id: int, sent_at=None) -> bool:
+def save_sent_memory(session, *, user_id: int, candidate_id: int, sent_at=None, to_addrs=None) -> bool:
     """승인 경로가 발송 성공 상태를 flush한 뒤 같은 트랜잭션에서 부를 훅.
 
     승인·후보 모두 sent이고 Gmail ID가 있어야 저장한다. 재호출은 원문·거래 기록을 중복하지 않는다.
@@ -217,7 +217,8 @@ def save_sent_memory(session, *, user_id: int, candidate_id: int, sent_at=None) 
     if sent is None:
         session.add(ThreadMessage(
             user_id=user_id, thread_id=candidate.thread_id, gmail_message_id=approval.sent_message_id,
-            direction="out", from_addr=user.email, to_addrs=[address(original.from_addr)],
+            direction="out", from_addr=user.email,
+            to_addrs=list(to_addrs) if to_addrs is not None else [address(original.from_addr)],
             subject=candidate.subject, body_text=candidate.body, sent_at=at,
         ))
     preference = session.get(UserPreference, (user_id, "approved_reply_style"))
