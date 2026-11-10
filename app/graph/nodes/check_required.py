@@ -1,8 +1,52 @@
-"""check_required: 업무 동작은 후속 하위 작업에서 채운다."""
+"""check_required: 빠진 필수 항목을 코드로 찾고 거래 항목을 저장한다(계획 10절)."""
 
+from sqlalchemy import select
+
+from app.db.models import DealTerms as DealTermsRow
+from app.graph.nodes.tool_step import call_tool, failure_update
 from app.graph.state import AgentState
+from app.quote.required_fields import get_required_fields
+from app.runlog.logger import current_database, current_event
+
+NODE = "check_required"
+TOOL = "check_required_fields"
 
 
 def check_required(state: AgentState) -> dict:
-    # LangGraph의 부분 업데이트: 빈 dict는 입력 상태를 그대로 유지한다.
-    return {}
+    deal_terms = state["deal_terms"]
+    if deal_terms is None:
+        return failure_update(NODE, "invalid_input", "검토할 거래 항목이 없습니다")
+    required = get_required_fields(state["user_id"])
+    keys = [field["key"] for field in required["fields"]]
+    current_event("required_source", detail={
+        "source": required["source"], "fields": keys, "evidence": required["evidence"],
+    })
+    result, update = call_tool(NODE, TOOL, {"deal_terms": deal_terms, "required_fields": required}, {
+        "fields": keys, "items": len(deal_terms["items"]),
+        "filled": sorted(k for k, v in deal_terms.items() if k not in ("items", "evidence") and v),
+    })
+    update["required_fields"] = required
+    if not result.ok:
+        update["step_status"] = "failed"  # 코드 검사라 한도 오류가 없다
+        return update
+    missing = result.value["missing_fields"]
+    update["missing_fields"] = missing
+    if missing:
+        update["reply_mode"] = "followup"
+    save_deal_terms(state, deal_terms, missing, required["source"])
+    return update
+
+
+def save_deal_terms(state: AgentState, deal_terms: dict, missing: list[str], source: str):
+    """실행마다 한 줄. 성찰로 다시 검토하면 같은 실행의 줄을 고친다."""
+    with current_database().session() as session:
+        row = session.scalar(select(DealTermsRow).where(
+            DealTermsRow.run_id == state["run_id"], DealTermsRow.user_id == state["user_id"],
+        ))
+        if row is None:
+            row = DealTermsRow(user_id=state["user_id"], run_id=state["run_id"],
+                               thread_id=state["thread_id"], source_message_id=state["message_id"])
+            session.add(row)
+        row.terms = deal_terms
+        row.missing_fields = missing
+        row.required_source = source

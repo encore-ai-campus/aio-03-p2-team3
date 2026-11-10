@@ -25,9 +25,14 @@ def events_for(database, run_id):
         ).order_by(RunEvent.seq)))
 
 
+# 이 파일은 그래프 연결(전이)만 본다. 업무 본문을 채운 노드는 빈 틀로 바꿔 끼운다
+# (거래 노드 본문 시험은 tests/test_deal.py).
+BLANK_NODES = {name: (lambda s: {}) for name in ("extract_deal", "check_required", "draft_followup")}
+
+
 def run(database, email, overrides=None, **kwargs):
     return start_run(user_id=1, email=email, mode="test", database=database,
-                     graph=build_graph(node_overrides=overrides), **kwargs)
+                     graph=build_graph(node_overrides={**BLANK_NODES, **(overrides or {})}), **kwargs)
 
 
 def test_fake_llm_graph_completes_and_records_node_times(database, email, monkeypatch):
