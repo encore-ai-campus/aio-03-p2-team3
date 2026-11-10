@@ -42,13 +42,14 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-10
+마지막 갱신: 2026-11-10 · #95 오류 진단 보완
 
 - 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`.
 - 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
 - LLM: Google Gemini API `gemini-3.6-flash`(무료 등급, 환경변수 `GEMINI_API_KEY`). 2026-11-10 실제 API 확인(#62)에서 `gemini-3.8-flash`가 503을 반복해 요청자가 바꿨고, 모델 이름은 `GEMINI_MODEL`로 덮어쓸 수 있다(비우면 3.6). 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다. 근거와 설정 경로는 `.work/design/api-choice.md`. 패키지는 `langchain-google-genai`(`pyproject.toml`).
 - 외부 API: Gmail API(사용자별 Google OAuth로 메일 읽기·감시 등록·승인 후 발송)와 Cloud Pub/Sub(메일함 변경 푸시 알림)를 추가했다. Google Calendar는 도구 2(구글캘린더 등록)용으로 유지한다. 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외하고 `.work/design/api-choice.md`의 '일정 도구 추천 후보'로 옮겼다(2026-11-09 결정). API 연동·콘솔 설정은 별도 작업이다.
 - Google 로그인·감시 등록(계획 6절, 2026-11-10): 받은 메일 화면 'Gmail 연결하기' → `/login`('테스트용 Gmail로 등록하세요') → Google 동의 → 토큰을 Fernet으로 암호화해 저장 → `users.watch`(받은편지함만) 등록 → `/inbox`에 연결된 메일·알림 상태·로그아웃. 크론 없이 로그인·화면 요청(응답 뒤)·알림 수신 때 마지막 갱신이 24시간을 넘었거나 실패했으면 다시 등록하고, 로그아웃하면 멈춘다. 갱신 토큰 만료면 '다시 로그인', 등록 실패면 '다시 시도' 안내를 보인다. 실제 Google 연결 확인은 Google Cloud 설정(5절) 뒤 로컬·Render에서 한다. 이름과 규칙은 `docs/CONTRACT.md` 7·9·10절.
+- 감시 오류 진단(#95): 서버 로그와 `gmail_watches.last_error`에 `HTTP 403 (forbidden)`·`HTTP 403 (accessNotConfigured)`처럼 상태와 허용된 Google `reason`을 함께 남긴다. 알 수 없는 reason·응답 메시지·URL·키·메일 원문은 기록하지 않고, `last_error`의 200자 제한과 기존 상태·갱신 동작은 유지한다.
 - Gmail 알림 수신(계획 7절, Issue #53, 2026-11-10): `POST /gmail/push`에서 OIDC(대상·발급자·서명·만료·인증된 서비스 계정 이메일)를 확인하고 204 응답 뒤 `BackgroundTasks`로 처리한다. 검증 공개 키는 5분 단위로 캐시하며, OIDC 설정이 없을 때만 `PUBSUB_PUSH_TOKEN` 비교를 쓴다. 인증 실패는 403·서버 로그만, 알림 형식 오류는 400이다. 감시의 마지막 `history_id` 이후 `messagesAdded`를 모든 페이지에서 읽고, 자기 발신·SENT·no-reply·프로모션·소셜·받은편지함 밖 메일은 `ignored`로 남긴다. 텍스트/HTML·중첩 MIME 본문을 계약의 `EmailMessage`로 바꾼다.
 - 승인·발송 화면(계획 9절, Issue #55, 2026-11-10): `/inbox`의 '받은 메일' 목록은 본인 메일만 처리 중/승인 대기/보냄/오류와 '한도 초과'·대기 후보 수로 보이고, `/inbox/list` 조각을 HTMX로 `INBOX_POLL_SECONDS`(90초)마다 다시 읽는다. `/threads/{thread_id}`에서 원본 메일 아래 후보를 보고 하나를 승인하면(`POST /candidates/{id}/approve`) `app/services/approval.py`의 `send_approved_candidate()`가 원본 머리글(From·Reply-To·Message-ID·References)을 읽어 `send_email` 도구로 같은 threadId에 답장한다. 후보 상태를 `pending`/`send_failed` → `approved`로 바꾸는 조건부 UPDATE를 통과한 요청만 보내고, 같은 사용자의 승인은 프로세스 안에서 직렬화해 두 번 눌러도·같은 메일의 다른 후보를 눌러도 한 번만 보낸다. Gmail 발송은 자동 재시도하지 않는다(`num_retries=0`). 실패하면 `approvals.send_status=failed`·후보 `send_failed`로 두고 안내를 띄워 같은 후보로 다시 승인하게 한다(승인 기록은 후보마다 한 줄을 다시 씀). 5xx·시간 초과는 실제로 나갔을 수 있어 '보낸편지함 확인 뒤 다시 승인'을 안내한다. 보내면 후보 `sent`, 같은 원본 메일의 나머지 대기 후보 `superseded`, 처리한 메일 `sent`. `kind=quote` 후보는 여기서 보내지 않는다(11). 승인·발송은 후보의 `run_id`로 `approval`·`send` 기록을 남긴다. 실제 Gmail 발송 확인은 Google Cloud 설정(5절) 뒤 로컬·Render에서 한다.
 - 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로는 `.work/design/api-choice.md`, 요약은 README 'LLM·외부 API와 키 발급', 환경변수는 `docs/CONTRACT.md` 11절·`.env.example`.
@@ -67,7 +68,7 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-10
+마지막 갱신: 2026-11-10 · #95 오류 진단 보완
 
 - 계약의 입력 스키마·도구 6개 등록과 `ToolResult`를 구현했다(계획 2절, 2026-11-09). 잘못된 스키마 입력은 `invalid_input` 결과로 돌려준다. 견적서 만들기까지 도구 6개의 업무 본문을 채웠다(계획 11절, 2026-11-10).
 - `draft_replies` 구현(계획 8절, 2026-11-10): `call_structured()` 1회로 후보 2~3개(`label`·`body`)를 받는다. 개수가 2~3개가 아니면 형식 오류로 1회 다시 부른다. 제목은 코드가 `Re: <원래 제목>`으로 정하고, 사용자 선호의 `signature`가 있으면 본문 끝에 붙인다. `source`는 `model_source()`(`gemini:<모델>`, 기본 `gemini:gemini-3.6-flash`), DB 저장은 `save_pending` 노드가 한다. 계획 11절의 `draft_replies.v2`는 단가 미입력을 상대방에게 묻지 않고, 이후 화면 입력으로 금액이 바뀔 수 있어 숫자를 본문에 복사하지 않고 첨부 견적서를 안내한다.
@@ -78,6 +79,7 @@
 - 대체 후보 `app/tools/fallback.py`의 `fallback_candidates(email, kind=, asks_fields=, preferences=)`: 한도 오류 때 기본 답장 틀 1개(`needs_review=True`, `notice="rate_limit"`)를 만든다. 후보의 `notice`에는 키만 두고, 화면 문구는 `NOTICE_MESSAGES["rate_limit"]`('한도 초과로 AI 후보를 만들지 못했습니다…')를 쓴다(9가 화면에 표시). 재질문 노드(10)는 `kind="followup"`, `asks_fields`=빠진 항목으로 쓴다.
 - `draft_replies`(답장 후보 2~3개, Gemini) · `extract_deal_terms`(거래 항목 추출, Gemini) · `check_required_fields`(필수 항목 검토, 코드, 목록은 `get_required_fields()`) · `draft_followup_replies`(재질문 후보, Gemini) · `create_quote`(견적서 초안, 코드) · `send_email`(승인 뒤 같은 스레드로 발송, Gmail. 그래프 밖 승인 경로에서만 부름).
 - `app/llm/client.py`의 `call_structured()`는 구조화 출력·프롬프트 버전·호출 시간·재시도 기록을 남긴다. 모델은 `model_name()`(`GEMINI_MODEL`, 비우면 `DEFAULT_MODEL`=`gemini-3.6-flash`)이고 Gemini 도구 3개의 `ToolResult.source`는 `model_source()`로 같은 이름을 쓴다(2026-11-10, #62). 실제 SDK의 429·RESOURCE_EXHAUSTED는 `rate_limit`(재시도 없음), 시간 초과·연결 오류·5xx는 `network`(최대 3회, 1초→2초 대기), 형식 오류는 별도 1회 재시도다. 기본 답장 대체 문구와 업무 노드의 오류 처리는 후속 작업에서 채운다. 테스트는 `use_backend(fake)`로 대체한다.
+- LLM 오류 진단(#95): `retry`와 실패한 `llm_call`의 `detail.error_code`에 `HTTP 503`·`HTTP 429`·`ReadTimeout` 같은 짧은 값만 남긴다. 감싼 SDK 예외는 `__cause__`를 따라가며 순환을 차단하고, 복구 성공한 `llm_call`은 `error_code=null`이다. 프롬프트·백엔드 준비 단계 실패도 예외 종류만 남긴다. 오류 분류·재시도 예산·`LLMResult`·도구 스키마는 유지한다. Gmail의 원인 코드는 진단 로그·감시 기록에만 더하고, 발송의 기존 HTTP 코드 판정은 유지한다.
 - 일정(캘린더) 도구 작업 때 AI가 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천한다. Calendar는 도구 2용으로 유지하며, 후보 API는 채택 확인 후 추가한다.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
@@ -97,9 +99,10 @@
 - 알림 → 그래프 연결(계획 7절, 2026-11-10): 같은 사용자 알림 처리를 단일 프로세스 안에서 직렬화하고, `(user_id, gmail_message_id)` 유일 제약을 통과한 메일만 `thread_messages`에 저장해 `start_run(mode="live")`을 부른다. 시작 입력의 메일·스레드 ID·사용자 성찰 설정을 기존 진입점이 채운다. 결과의 `run_id`·`notice`를 처리한 메일에 연결하고 승인 대기/추가 질문 → `awaiting_approval`, 처리 안 함 → `ignored`, 실패 → `error`로 남긴다. 모든 Gmail 조회가 성공한 뒤에만 `gmail_watches.history_id`를 옮긴다. Gmail 오류는 `last_error`에 원문 없이 남기고 다음 알림에서 저장된 메일을 건너뛰어 이어 읽는다. 로그아웃·재로그인 필요 상태의 알림은 처리하지 않는다. 계약의 `BackgroundTasks`는 프로세스 내 작업이므로 재시작 중 작업 복구나 만료된 historyId의 전체 동기화는 구현하지 않았다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-10
+마지막 갱신: 2026-11-10 · #95 오류 진단 보완
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
+- 오류 코드 기록(#95): `tests/test_llm.py`가 가짜 SDK 503·429·시간 초과, 감싼 예외·순환 원인·복구 성공·백엔드 준비 실패의 안전한 코드를 확인한다. `tests/test_auth.py`가 가짜 HttpError의 403 두 원인을 감시 기록·서버 로그에서 구분하고, 잘못된 JSON·알 수 없는 reason·민감한 래퍼 메시지를 버리며, 발송 403·429의 기존 분류를 유지함을 확인한다. `tests/test_runs.py`는 실제 그래프·가짜 LLM으로 오류 코드가 실행 기록 화면과 `.jsonl`에 표시되고 예외에 섞은 가짜 개인정보·본문·키는 노출되지 않음을 검증한다. 개인정보 가리기 코드는 바꾸지 않았다.
 - 계획 6절(`tests/test_auth.py`): `tests/fakes/google.py`의 가짜 Google로 로그인 → 토큰 암호화 저장 → 감시 등록, 24시간 지난 감시 재등록(화면 요청 포함)·접근 토큰 갱신, 다른 사용자 행·위조 세션 쿠키 거부, 갱신 토큰 만료·감시 등록 실패 안내, 로그아웃 중지, 설정 누락을 확인한다. 실제 `GoogleClient`는 동의 주소(PKCE)와 watch 요청 본문만 네트워크 없이 확인한다.
 - 계획 7절(`tests/test_gmail_push.py`): 가짜 Gmail SDK 응답으로 새 메일 → 실제 그래프·가짜 LLM → 후보 저장, 중복·동시 알림 1회 처리, 무시할 메일 분류, 사용자별 격리, 같은 스레드·페이지 이어 읽기, Gmail 기록/메일/페이지/본문 조회 실패 후 다음 알림에서 재개, 감시·토큰 갱신, 그래프 실패 상태 연결, OIDC 우선·비밀 토큰·위조/형식 오류 거부, MIME/HTML 변환을 시험한다. ASGI 전송 메시지를 직접 확인해 그래프가 대기 중일 때 이미 204 응답 본문 전송이 끝났음을 검증한다. 실제 Gmail·Gemini 호출은 없다.
 - 계획 8절: `tests/test_mail_analysis.py`가 가짜 LLM으로 일반 문의 → 후보 2~3개 저장, 후보 개수 오류 재시도, 거래 메일 → 거래 경로, 처리 안 함, 한도 오류(분석·후보 각각) → 대체 후보와 표시, 통신 실패 → 재시도 뒤 성공·실패 종료, 성찰 피드백 전달을 시험한다.

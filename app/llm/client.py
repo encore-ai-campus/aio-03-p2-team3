@@ -72,18 +72,37 @@ def use_backend(fake):
         _override.reset(token)
 
 
+def _http_code(error: Exception):
+    if isinstance(error, APIError):
+        return error.code
+    if isinstance(error, httpx.HTTPStatusError):
+        return error.response.status_code
+    if isinstance(error, google_errors.GoogleAPICallError):
+        return error.code
+    return None
+
+
+def _error_label(error: Exception) -> str:
+    """감싼 SDK 오류의 HTTP 코드 또는 예외 종류만 남긴다. 메시지·응답은 기록하지 않는다."""
+    seen = set()
+    current = error
+    label = type(error).__name__
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        code = _http_code(current)
+        if isinstance(code, int) and 100 <= code <= 599:
+            return f"HTTP {int(code)}"
+        label = type(current).__name__
+        current = current.__cause__
+    return label
+
+
 def classify_error(error: Exception) -> str:
     seen = set()
     current = error
     while current is not None and id(current) not in seen:
         seen.add(id(current))
-        code = None
-        if isinstance(current, APIError):
-            code = current.code
-        elif isinstance(current, httpx.HTTPStatusError):
-            code = current.response.status_code
-        elif isinstance(current, google_errors.GoogleAPICallError):
-            code = current.code
+        code = _http_code(current)
         if code == 429 or isinstance(current, (google_errors.ResourceExhausted, google_errors.TooManyRequests)):
             return "rate_limit"
         if code == 400 or isinstance(current, google_errors.InvalidArgument):
@@ -104,7 +123,7 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) ->
     attempts = 0
     counts = {"network": 0, "invalid_output": 0}
 
-    def finish(ok, value=None, error_kind=None):
+    def finish(ok, value=None, error_kind=None, error=None):
         result = LLMResult(
             ok=ok, value=value, error_kind=error_kind, attempts=attempts,
             prompt_version=prompt.version, duration_ms=int((perf_counter() - started) * 1000),
@@ -112,20 +131,21 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) ->
         current_event("llm_call", duration_ms=result.duration_ms, detail={
             "prompt_version": result.prompt_version, "ok": ok,
             "error_kind": error_kind, "attempts": attempts,
+            "error_code": _error_label(error) if error is not None else None,
         })
         return result
 
     try:
         rendered = prompt.TEMPLATE.format_map(variables)
-    except (KeyError, ValueError, TypeError):
-        return finish(False, error_kind="invalid_input")
+    except (KeyError, ValueError, TypeError) as error:
+        return finish(False, error_kind="invalid_input", error=error)
     try:
         backend = _override.get()
         if backend is None:
             backend = get_backend()
         structured = backend.with_structured_output(schema)
-    except Exception:
-        return finish(False, error_kind="internal")
+    except Exception as error:
+        return finish(False, error_kind="internal", error=error)
     while True:
         attempts += 1
         try:
@@ -139,8 +159,10 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) ->
                 "invalid_output": LIMITS["LLM_INVALID_OUTPUT_RETRIES"],
             }.get(kind, 0)
             if kind not in counts or counts[kind] >= budget:
-                return finish(False, error_kind=kind)
+                return finish(False, error_kind=kind, error=error)
             counts[kind] += 1
-            current_event("retry", detail={"error_kind": kind, "attempt": attempts + 1})
+            current_event("retry", detail={
+                "error_kind": kind, "error_code": _error_label(error), "attempt": attempts + 1,
+            })
             if kind == "network":
                 sleep(2 ** (counts[kind] - 1))
