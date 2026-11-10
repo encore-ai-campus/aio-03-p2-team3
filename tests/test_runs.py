@@ -4,16 +4,20 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from google.genai.errors import ClientError, ServerError
+import httpx
 
 from app.config import Settings
 from app.db.models import User
 from app.graph.build import build_graph
 from app.graph.run import start_run
 from app.main import create_app
+from app.llm import client as llm_client
 from app.runlog.export import export_jsonl
 from app.runlog.logger import current_event
 from app.runlog.mask import Masker
 from app.web.deps import current_user_id
+from tests.fakes.llm import FakeLLM
 
 # 지어낸 값이다(실제 개인정보 아님).
 PII = {
@@ -60,6 +64,36 @@ def client(tmp_path):
             ])
         app.dependency_overrides[current_user_id] = lambda: 1
         yield test_client
+
+
+@pytest.mark.parametrize("code, attempts, end_reason", [
+    ("HTTP 503", 3, "failed"), ("HTTP 429", 1, "awaiting_approval"), ("ReadTimeout", 3, "failed"),
+])
+def test_sdk_failure_codes_reach_run_page_and_export(client, email, monkeypatch, code, attempts, end_reason):
+    private = "private-mail-body fake-api-key sender@example.invalid 가상비밀이름 010-1234-5678"
+    error = {
+        "HTTP 503": ServerError(503, {"error": {"message": private}}),
+        "HTTP 429": ClientError(429, {"error": {"message": private}}),
+        "ReadTimeout": httpx.ReadTimeout(private),
+    }[code]
+    monkeypatch.setattr(llm_client, "sleep", lambda _: None)
+    monkeypatch.setattr(llm_client, "get_backend", lambda: pytest.fail("실제 LLM은 호출하면 안 됩니다"))
+    database = client.app.state.database
+    with llm_client.use_backend(FakeLLM([error] * attempts)):
+        result = start_run(user_id=1, email=email, database=database, reflection_enabled=False)
+    assert result["end_reason"] == end_reason and result["call_retries"] == attempts - 1
+
+    run_id = result["run_id"]
+    page = client.get(f"/runs/{run_id}")
+    exported = client.get(f"/runs/{run_id}/export")
+    assert page.status_code == exported.status_code == 200
+    assert code in page.text
+    rows = [json.loads(line) for line in exported.text.splitlines()]
+    failures = [row for row in rows if row.get("event") in {"retry", "llm_call"}]
+    assert len(failures) == attempts
+    assert all(row["detail"]["error_code"] == code for row in failures)
+    for value in private.split():
+        assert value not in page.text and value not in exported.text
 
 
 def test_masker_rules():

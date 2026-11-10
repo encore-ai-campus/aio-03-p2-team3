@@ -13,7 +13,7 @@
 from datetime import datetime, timedelta
 import logging
 
-from app.clients.gmail import GoogleError, TokenExpired
+from app.clients.gmail import GoogleError, TokenExpired, _error_label
 from app.config import LIMITS
 from app.db.models import GmailWatch
 from app.services.auth import GoogleAccess, get_access_token, utcnow
@@ -40,11 +40,12 @@ def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = No
     except TokenExpired:
         return "error"  # get_access_token이 이미 token_expired로 남겼다
     except GoogleError as error:
-        log.warning("사용자 %s: Gmail 감시 등록 실패 (%s)", user_id, error)
+        label = _error_label(error.__cause__ or error, include_reason=True)
+        log.warning("사용자 %s: Gmail 감시 등록 실패 (%s)", user_id, label)
         with access.database.session() as session:
             watch = _watch_row(session, user_id, access.topic)
             watch.status = "error"
-            watch.last_error = f"watch_failed: {error}"[:200]
+            watch.last_error = f"watch_failed: {label}"[:200]
         return "error"
     with access.database.session() as session:
         watch = _watch_row(session, user_id, access.topic)
@@ -73,7 +74,8 @@ def stop_watch(access: GoogleAccess, user_id: int) -> None:
     try:
         access.google.stop(get_access_token(access, user_id))
     except GoogleError as error:
-        log.warning("사용자 %s: Gmail 감시 중지 호출 실패 (%s)", user_id, error)
+        label = _error_label(error.__cause__ or error, include_reason=True)
+        log.warning("사용자 %s: Gmail 감시 중지 호출 실패 (%s)", user_id, label)
     with access.database.session() as session:
         watch = session.get(GmailWatch, user_id)
         if watch is not None:

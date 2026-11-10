@@ -3,6 +3,7 @@
 from base64 import b64encode
 from datetime import UTC, datetime, timedelta
 import json
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 from cryptography.fernet import Fernet
@@ -14,12 +15,13 @@ from itsdangerous import TimestampSigner
 import pytest
 from sqlalchemy import select
 
-from app.clients.gmail import GoogleClient, TokenExpired, WatchFailed, missing_scopes
+from app.clients.gmail import GoogleClient, GoogleUnavailable, TokenExpired, WatchFailed, _error_label, missing_scopes
 from app.config import Settings
 from app.db.models import GmailWatch, GoogleToken, ProcessedMessage, User
 from app.main import create_app
 from app.services.auth import GoogleAccess, TokenCipher, get_access_token, get_owned, save_login
 from app.services.watch import renew_watch_if_due
+from app.tools.send_email import google_error_kind
 from app.web.routes.auth import CONNECTION_NOTICES, LOGIN_NOTICES, require_user
 from tests.fakes.google import FakeGoogle, fake_login
 
@@ -223,6 +225,73 @@ def test_watch_failure_is_shown_and_retried(client, fake):
     page = client.get("/inbox")
     assert CONNECTION_NOTICES["watch_failed"] not in page.text and "새 메일 알림 켜짐" in page.text
     assert watch_of(client).status == "active" and len(fake.called("watch")) == 3
+
+
+@pytest.mark.parametrize("reason", ["forbidden", "accessNotConfigured"])
+def test_watch_http_reason_is_saved_and_logged_without_private_data(client, fake, settings, monkeypatch, caplog, reason):
+    private = "sender@example.invalid 가상비밀이름 010-1234-5678 private-mail-body fake-api-key"
+    error = HttpError(httplib2.Response({"status": 403}), json.dumps({"error": {
+        "message": private,
+        "errors": [{"reason": reason, "message": private, "location": private}],
+    }}).encode(), uri="https://example.invalid?key=fake-api-key")
+
+    def execute(**kwargs):
+        raise error
+
+    google = GoogleClient(settings)
+    request = SimpleNamespace(execute=execute)
+    users = SimpleNamespace(watch=lambda **kwargs: request)
+    monkeypatch.setattr(google, "gmail", lambda token: SimpleNamespace(users=lambda: users))
+    monkeypatch.setattr(fake, "watch", google.watch)
+
+    assert sign_in(client).headers["location"] == "/inbox"
+    watch = watch_of(client)
+    label = f"HTTP 403 ({reason})"
+    assert watch.status == "error" and watch.history_id is None
+    assert watch.last_error == f"watch_failed: {label}" and len(watch.last_error) <= 200
+    assert any(f"Gmail API 오류 {label}" in record.message for record in caplog.records)
+    assert any(f"Gmail 감시 등록 실패 ({label})" in record.message for record in caplog.records)
+    for value in private.split():
+        assert value not in watch.last_error and value not in caplog.text
+
+
+@pytest.mark.parametrize("content", [
+    b"not json", b"\xff", b"null", b"[]", b'{"error": null}',
+    b'{"error": {"errors": "private-data"}}',
+    b'{"error": {"errors": [null, 3, {"reason": []}]}}',
+    json.dumps({"error": {"errors": [{"reason": "private-body " + "fake-api-key" * 100}]}}).encode(),
+    b'{"error": {"errors": [{"reason": "fakeSecretKeyWithoutSpaces"}]}}',
+])
+def test_http_error_label_ignores_malformed_or_unknown_reason(content, caplog):
+    error = HttpError(httplib2.Response({"status": 403}), content)
+    assert _error_label(error, include_reason=True) == "HTTP 403"
+    assert "private-" not in caplog.text and "fake" not in caplog.text
+
+
+def test_watch_service_never_logs_arbitrary_wrapper_message(client, fake, caplog):
+    fake.watch_error = WatchFailed("private-body sender@example.invalid fake-api-key" * 100)
+    sign_in(client)
+    assert watch_of(client).last_error == "watch_failed: WatchFailed"
+    assert "private-body" not in caplog.text and "fake-api-key" not in caplog.text
+
+
+@pytest.mark.parametrize("status, reason, kind", [
+    (403, "forbidden", "auth"), (429, "rateLimitExceeded", "rate_limit"),
+])
+def test_diagnostic_reason_keeps_existing_send_error_classification(settings, status, reason, kind):
+    error = HttpError(httplib2.Response({"status": status}), json.dumps({"error": {
+        "errors": [{"reason": reason}],
+    }}).encode())
+
+    def execute(**kwargs):
+        raise error
+
+    messages = SimpleNamespace(send=lambda **kwargs: SimpleNamespace(execute=execute))
+    gmail = SimpleNamespace(users=lambda: SimpleNamespace(messages=lambda: messages))
+    with pytest.raises(GoogleUnavailable) as caught:
+        GoogleClient(settings).send_message(gmail, "fake-raw", "fake-thread")
+    assert str(caught.value) == f"HTTP {status}"
+    assert google_error_kind(caught.value) == kind
 
 
 def test_other_users_data_is_denied(client):

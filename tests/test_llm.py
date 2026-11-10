@@ -120,3 +120,59 @@ def test_model_name_default_and_override():
     assert client.DEFAULT_MODEL == "gemini-3.6-flash"
     assert client.model_name(Settings()) == "gemini-3.6-flash"
     assert client.model_name(Settings(gemini_model=" gemini-3.5-flash-lite ")) == "gemini-3.5-flash-lite"
+
+
+@pytest.mark.parametrize("error, code, kind, attempts", [
+    (ServerError(503, {"error": {"message": "private-body fake-api-key", "status": "UNAVAILABLE"}}),
+     "HTTP 503", "network", 3),
+    (ClientError(429, {"error": {"message": "private-body fake-api-key", "status": "RESOURCE_EXHAUSTED"}}),
+     "HTTP 429", "rate_limit", 1),
+    (httpx.ReadTimeout("private-body fake-api-key"), "ReadTimeout", "network", 3),
+    (google_errors.ServiceUnavailable("private-body fake-api-key"), "HTTP 503", "network", 3),
+    (httpx.HTTPStatusError("private-body fake-api-key",
+                           request=httpx.Request("GET", "https://example.invalid?key=fake-api-key"),
+                           response=httpx.Response(503)), "HTTP 503", "network", 3),
+])
+def test_failure_and_retries_record_only_short_codes(monkeypatch, error, code, kind, attempts):
+    logged = []
+    monkeypatch.setattr(client, "current_event", lambda event, **data: logged.append((event, data)))
+    result, _ = invoke([error] * attempts)
+
+    assert result.error_kind == kind and result.attempts == attempts
+    assert [event for event, _ in logged] == ["retry"] * (attempts - 1) + ["llm_call"]
+    assert all(data["detail"]["error_code"] == code for _, data in logged)
+    assert [data["detail"]["attempt"] for event, data in logged if event == "retry"] == list(range(2, attempts + 1))
+    assert "private-body" not in repr(logged) and "fake-api-key" not in repr(logged)
+
+
+def test_wrapped_sdk_code_and_recovery_are_recorded(monkeypatch):
+    logged = []
+    monkeypatch.setattr(client, "current_event", lambda event, **data: logged.append((event, data)))
+    error = RuntimeError("private-wrapper-message")
+    error.__cause__ = ServerError(503, {"error": {"message": "private-sdk-message"}})
+    result, _ = invoke([error, {"answer": "복구"}])
+
+    assert result.ok and result.attempts == 2
+    assert logged[0][1]["detail"]["error_code"] == "HTTP 503"
+    assert logged[-1][1]["detail"]["error_code"] is None
+    assert "private-" not in repr(logged)
+
+
+def test_error_label_stops_at_cause_cycle():
+    error = RuntimeError("private-cycle-message")
+    error.__cause__ = error
+    assert client._error_label(error) == "RuntimeError"
+
+
+def test_backend_setup_failure_records_only_exception_type(monkeypatch):
+    logged = []
+    monkeypatch.setattr(client, "current_event", lambda event, **data: logged.append((event, data)))
+
+    def fail():
+        raise ValueError("private-setup-message fake-api-key")
+
+    monkeypatch.setattr(client, "get_backend", fail)
+    result = client.call_structured(PROMPT, Answer, {"input": "가상 입력"})
+    assert result.error_kind == "internal" and result.attempts == 0
+    assert logged[-1][1]["detail"]["error_code"] == "ValueError"
+    assert "private-" not in repr(logged) and "fake-api-key" not in repr(logged)
