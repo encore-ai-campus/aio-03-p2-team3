@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% from 'components/card.html' import card %}
+{% from 'components/status_badge.html' import status_badge %}
+{% block title %}실행 {{ run.run_id[:8] }} · Gmail 견적 도우미{% endblock %}
+{% block content %}
+<div class="intro">{{ status_badge(run.end_label) }}<h1>실행 <span class="mono">{{ run.run_id[:8] }}</span></h1>
+<p class="muted">노드 전이·도구 선택과 이유·도구 호출·오류·재시도·소요 시간을 일어난 순서대로 보여 줍니다. <a href="/runs">목록으로</a></p></div>
+{% call card('요약') %}
+<dl class="facts">
+<div><dt>구분</dt><dd>{{ '시험: ' ~ (run.scenario or '이름 없음') if run.mode == 'test' else '실제 메일' }}</dd></div>
+<div><dt>성찰</dt><dd>{{ '켬' if run.reflection_enabled else '끔' }}</dd></div>
+<div><dt>시작</dt><dd>{{ run.started }}</dd></div>
+<div><dt>끝</dt><dd>{{ run.ended }}</dd></div>
+<div><dt>총 소요</dt><dd>{{ run.duration_ms ~ 'ms' if run.duration_ms is not none else '—' }}</dd></div>
+<div><dt>노드</dt><dd>{{ counts.nodes }}개</dd></div>
+<div><dt>도구 호출</dt><dd>{{ counts.tools }}회</dd></div>
+<div><dt>LLM 호출</dt><dd>{{ counts.llm }}회</dd></div>
+<div><dt>재시도</dt><dd>{{ counts.retries }}회</dd></div>
+<div><dt>오류</dt><dd>{{ counts.errors }}건</dd></div>
+<div><dt>성찰 단계</dt><dd>{{ counts.reflections }}회</dd></div>
+</dl>
+<p><a class="button-link" href="/runs/{{ run.run_id }}/export" download>기록 파일 내려받기(.jsonl)</a> <span class="muted">— 개인정보를 가린 파일입니다. 시험 기록은 <span class="mono">docs/test-records/</span>에 올립니다.</span></p>
+{% endcall %}
+{% call card('순서대로 본 기록 ' ~ events|length ~ '줄') %}
+<div class="table-wrap"><table>
+<thead><tr><th scope="col">#</th><th scope="col">경과</th><th scope="col">종류</th><th scope="col">노드</th><th scope="col">도구</th><th scope="col">내용</th><th scope="col">소요</th></tr></thead>
+<tbody>
+{% for e in events %}
+<tr class="{{ 'row-warn' if e.warn else '' }}" data-seq="{{ e.seq }}">
+<td>{{ e.seq }}</td>
+<td class="mono">+{{ e.elapsed_ms }}ms</td>
+<td>{{ status_badge(e.label) }}</td>
+<td class="mono">{{ e.node or '—' }}</td>
+<td class="mono">{{ e.tool or '—' }}</td>
+<td>{{ e.summary }}{% if e.detail %}<details><summary class="muted">전체 값</summary><pre class="raw">{{ e.raw }}</pre></details>{% endif %}</td>
+<td>{{ e.duration_ms ~ 'ms' if e.duration_ms is not none else '' }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endcall %}
+{% endblock %}

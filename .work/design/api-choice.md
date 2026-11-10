@@ -1,7 +1,7 @@
-# LLM·외부 API 선택 (세팅 3-2단계)
+# LLM·외부 API 선택
 
-세팅 3-2-1(LLM)·3-2-2(외부 API)에서 사용자가 고른 것과 그 근거다. 3-2-3에서 `.env.example`·`pyproject.toml`·README에 옮긴다. [Request]
-나중에 기능을 더하며 다른 LLM·API를 더하거나 바꾸면 요청자에게 묻고 이 파일을 고친다(FLOW.md '3-2단계 정한 것'). [Request]
+세팅 3-2-1(LLM)·3-2-2(외부 API)의 선택과, 요청자가 2026-11-09에 정한 Gmail 견적 MVP의 API 변경을 기록한다(`docs/plans/gmail-quote-mvp.md#3`, R-04·D-03). 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`·README에 반영한다. [Request]
+나중에 기능을 더하며 다른 LLM·API를 더하거나 바꾸면 요청자에게 묻고 이 파일을 고친다(`.work/TASK.md` 이 레포의 규칙). [Request]
 
 ## LLM
 확인일: 2026-11-05
@@ -24,7 +24,7 @@
 ### 설정 경로
 1. Google AI Studio의 API 키 화면(https://aistudio.google.com/app/apikey)에서 API 키를 만든다. 키는 비밀번호처럼 다루고 레포에 넣지 않는다.
 2. 환경변수는 `GEMINI_API_KEY` 하나만 쓴다. Google SDK는 `GEMINI_API_KEY`·`GOOGLE_API_KEY`를 모두 읽고 둘 다 있으면 `GOOGLE_API_KEY`가 앞서므로 하나만 둔다. [Claude proposal]
-3. 키는 로컬 `.env`, Render 환경변수, Codex 환경 비밀값에 둔다(TASK.md 환경 줄). 3-2-3에서 `.env.example`·`pyproject.toml`에 옮긴다.
+3. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않고 가짜 응답으로 테스트한다(`.work/TASK.md` 환경 줄).
 
 ### 출처
 - Gemini 한도: https://ai.google.dev/gemini-api/docs/rate-limits (2026-11-05)
@@ -36,35 +36,49 @@
 - 패키지·환경변수: PyPI `langchain-google-genai` 4.4.3, `langchain-groq` 1.1.3 소스 (2026-11-05)
 
 ## 외부 API
-확인일: 2026-11-05
+선택 갱신: 2026-11-09 · 콘솔 설정과 실제 API 시험은 별도 작업
 
-### 후보 (공식 문서 확인)
-| 항목 | Google Calendar | 특일 정보(천문연) | 단기예보(기상청) | 네이버 지역 검색(API HUB) | 네이버 Maps(네이버 클라우드) |
-|---|---|---|---|---|---|
-| 쓰임 | 일정 읽기·만들기 | 공휴일·절기 | 초단기·단기 예보 | 장소→주소·좌표(WGS84), 1회 1~5개 | 길찾기 Directions 5·15, 주소↔좌표, 지도 이미지 |
-| 무료 한도 | 프로젝트 분당 10,000회, 사용자 분당 600회 | 개발계정 10,000회 | 개발계정 하루 10,000회 | 하루 25,000회. 한시적 무료, 유료 전환 전 공지 | API마다 3,000~1억 건. 대표 계정 하나만 |
-| 인증 | OAuth 2.0(민감 범위) | 공공데이터포털 키, 자동승인 | 같음 | 헤더 `X-NCP-APIGW-API-KEY-ID`·`X-NCP-APIGW-API-KEY` | 헤더 `x-ncp-apigw-api-key-id` 등 |
-| 형식 | JSON, `google-api-python-client`·`google-auth` | XML | JSON·XML | JSON | JSON |
-- 네이버 개발자센터 검색 API는 NAVER API HUB로 옮겨 갔으므로 HUB로 쓴다. [Claude proposal]
-- Google OAuth 게시 상태: 테스트는 등록한 테스트 사용자 100명만, 승인 7일 뒤 만료. 프로덕션(검증 전)은 누구나 로그인하지만 '확인되지 않은 앱' 경고가 뜨고, 경고를 본 새 사용자는 프로젝트 전체 기간 100명까지.
+### 고른 것 (2026-11-09)
+| API | 쓰임 | 인증·설정 |
+|---|---|---|
+| Gmail API | 사용자별 메일 읽기, 감시 등록, 승인한 답장·견적서 첨부 발송 | 사용자별 Google OAuth 로그인 |
+| Cloud Pub/Sub | Gmail의 메일함 변경 알림을 서비스로 푸시 전달 | Gmail 감시 토픽, 푸시 구독과 수신 요청 인증 |
+| Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | 사용자별 Google OAuth 로그인. 일정 도구 구현 때 연결 |
 
-### 고른 것 (2026-11-05)
-- 캘린더는 B(사용자별 OAuth 로그인). 체험자는 자기 Google 계정으로 자기 캘린더를 쓴다. [Request]
-- OAuth는 프로덕션으로 게시하고 검증은 받지 않는다. 체험자는 경고 화면에서 '고급 → 이동'을 누른다. 100명을 넘으면 테스트 상태 등록 방식으로 바꾼다. [Request: 추천안]
-- 체험 화면에 '테스트용 Google 계정으로 로그인하세요'를 안내하고, LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다(Gemini 무료 등급 입력은 Google 개선에 쓰임). 구체 방법은 11/13 설계에서 정한다. [Request: 추천안]
-- 보조 API: 특일 정보, 단기예보, 네이버 지역 검색 + Directions 5. 지역 검색 결과에 좌표가 있어 Geocoding은 쓰지 않는다. 카카오 로컬은 쓰지 않는다. [Request]
-- Directions 5의 정확한 무료 건수는 미확인. 키를 만든 사람이 콘솔에서 보고 이 줄을 고치고, '이용 한도 설정'을 무료량 이하로 둔다. [Claude proposal]
+- LLM은 Gemini `gemini-3.8-flash`를 그대로 쓴다. Gmail API·Cloud Pub/Sub를 추가하고 Calendar를 유지하는 것은 요청자가 정한 변경이다. [Request]
+- 한국천문연구원 특일 정보·기상청 단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 뺀다. 아래 '일정 도구 추천 후보'에 보관하고, 현재 키 발급·환경변수 설정 대상에서는 제외한다. [Request]
+- 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. Gemini 무료 등급에 실제 개인정보를 넣지 않으며, 일정 도구를 연결할 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다.
+- OAuth 게시·권한 설정과 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 처리한다. 이 문서 갱신으로 콘솔 설정이나 연동이 완료된 것은 아니다.
 
 ### 설정 경로
-1. Google Cloud 콘솔: 프로젝트 → Google Calendar API 사용 설정 → Google Auth Platform에서 Branding·Audience(외부, 앱 게시)·Data Access(캘린더 범위) → Clients에서 웹 애플리케이션 클라이언트를 만들고 Render 주소의 리디렉션 URI를 넣는다. 비밀번호는 만들 때만 보인다. 환경변수 `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`.
-2. 공공데이터포털: 두 API 페이지에서 '활용신청'(자동승인) → 마이페이지에서 인증키 확인. 환경변수 `DATA_GO_KR_SERVICE_KEY`(메뉴 이름은 화면에서 확인).
-3. 네이버 클라우드 콘솔(대표 계정): All Services → Application Services → NAVER API HUB → Application 등록 → 인증 정보. 환경변수 `NAVER_HUB_CLIENT_ID`·`NAVER_HUB_CLIENT_SECRET`.
-4. 같은 콘솔의 Maps → Application 등록(Directions 5 선택) → 인증 정보 → '이용 한도 설정'. 환경변수 `NCP_MAPS_CLIENT_ID`·`NCP_MAPS_CLIENT_SECRET`.
-- 환경변수 이름은 [Claude proposal]. 3-2-3에서 `.env.example`에 옮긴다.
+1. Google Cloud 콘솔의 프로젝트에서 Gmail API·Cloud Pub/Sub API를 사용 설정한다. Google Calendar API는 도구 2용으로 유지한다.
+2. Google Auth Platform → Branding·Audience·Data Access에서 앱과 필요한 권한을 설정하고, Clients에서 OAuth 웹 애플리케이션 클라이언트를 만든다. `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`을 보관하고, 로컬·Render 각각의 콜백 주소를 등록해 `GOOGLE_OAUTH_REDIRECT_URI`에 맞춘다. 서비스 주소는 `APP_BASE_URL`이다.
+3. Pub/Sub에서 토픽과 푸시 구독을 설정한다. Gmail 감시 등록에 쓰는 토픽 전체 이름을 `GMAIL_PUBSUB_TOPIC`에 둔다. 추천하는 OIDC 확인 방식은 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`를 쓰며, 대체 비밀 토큰 방식을 택할 때만 `PUBSUB_PUSH_TOKEN`을 쓴다.
+4. 앱 설정으로 Google 토큰 암호화 키 `TOKEN_ENCRYPTION_KEY`, 로그인 세션 쿠키 서명 키 `SESSION_SECRET`, Postgres 접속 주소 `DATABASE_URL`, 성찰 기본값 `REFLECTION_ENABLED_DEFAULT`를 준비한다. 로컬에서 `DATABASE_URL`을 비우면 SQLite 파일을 쓴다. 이름·뜻은 `docs/CONTRACT.md` 11절, 값 없는 설정 틀은 `.env.example`에 있다.
+- 키와 설정값은 각자 로컬 `.env`와 Render 환경변수에만 둔다. 콘솔·계정 설정은 계획의 별도 작업에서 진행한다.
 
 ### 출처
 - Calendar 한도·범위: https://developers.google.com/workspace/calendar/api/guides/quota , .../guides/auth
 - OAuth 게시 상태: https://support.google.com/cloud/answer/15549945
+- Gmail 메일함 푸시 알림·Pub/Sub 연결: https://developers.google.com/workspace/gmail/api/guides/push
+- Pub/Sub 인증된 푸시: https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions
+- 선택 근거: `docs/plans/gmail-quote-mvp.md#3`(2026-11-09 요청), 환경변수 계약: `docs/CONTRACT.md` 11절
+
+## 일정 도구 추천 후보
+MVP에서 제외한 보조 API다(2026-11-09). 일정(캘린더) 도구 작업 때 AI가 아래 후보를 요청자에게 추천하고, 채택 여부를 확인한 뒤 API·환경변수를 추가한다. 현재 연동이나 키 발급은 하지 않는다. [Request]
+
+아래 형식·한도는 세팅 때 공식 문서를 확인한 기록(2026-11-05)이다. 채택할 때 최신 한도·요금·설정 경로를 다시 확인한다.
+
+| 후보 | 일정 도구에서의 쓰임 | 인증·형식 | 당시 확인한 한도 |
+|---|---|---|---|
+| 한국천문연구원 특일 정보 | 공휴일·절기를 고려한 일정 | 공공데이터포털 활용신청(자동승인), 인증키·XML | 개발계정 10,000회 |
+| 기상청 단기예보 | 날씨를 고려한 일정 | 공공데이터포털 활용신청(자동승인), 인증키·JSON/XML | 개발계정 하루 10,000회 |
+| 네이버 지역 검색(NAVER API HUB) | 장소→주소·좌표(WGS84), 1회 1~5개 | 네이버 클라우드 콘솔 API HUB Application 인증 정보·JSON | 하루 25,000회. 한시적 무료, 유료 전환 전 공지 |
+| 네이버 Maps Directions 5 | 장소 간 이동·길찾기 | 네이버 클라우드 콘솔 Maps Application 인증 정보·JSON | Directions 5의 정확한 무료 건수는 미확인. 채택 때 확인하고 이용 한도를 무료량 이하로 설정 |
+
+- 지역 검색 결과에 좌표가 있어 당시 Geocoding은 제외했고, 카카오 로컬도 고르지 않았다. 네이버 개발자센터 검색 API의 API HUB 이관 내용도 채택 시 다시 확인한다.
+
+### 출처
 - 특일 정보·단기예보: https://data.go.kr/data/15012690/openapi.do , https://www.data.go.kr/data/15084084/openapi.do
 - 지역 검색: https://api.ncloud-docs.com/docs/naver-api-hub-search-local
 - API HUB 무료·이관·콘솔 경로: https://guide.ncloud-docs.com/docs/apihub-overview , .../apihub-application

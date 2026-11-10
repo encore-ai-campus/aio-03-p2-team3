@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% from 'components/card.html' import card %}
+{% from 'components/status_badge.html' import status_badge %}
+{% block title %}실행 기록 · Gmail 견적 도우미{% endblock %}
+{% block content %}
+<div class="intro">{{ status_badge('실행 기록') }}<h1>에이전트 실행 기록</h1><p class="muted">메일 한 통을 처리한 과정을 실행 단위로 남깁니다. 본인 실행만 보이고, 개인정보는 가려서 보여 줍니다.</p></div>
+{% if runs %}
+{% call card('최근 실행 ' ~ runs|length ~ '개') %}
+<div class="table-wrap"><table>
+<thead><tr><th scope="col">시작</th><th scope="col">구분</th><th scope="col">성찰</th><th scope="col">결과</th><th scope="col">소요</th><th scope="col">기록</th></tr></thead>
+<tbody>
+{% for run in runs %}
+<tr>
+<td>{{ run.started }}</td>
+<td>{{ '시험: ' ~ (run.scenario or '이름 없음') if run.mode == 'test' else '실제 메일' }}</td>
+<td>{{ '켬' if run.reflection_enabled else '끔' }}</td>
+<td>{{ status_badge(run.end_label) }}</td>
+<td>{{ run.duration_ms ~ 'ms' if run.duration_ms is not none else '—' }}</td>
+<td><a href="/runs/{{ run.run_id }}" class="mono">{{ run.run_id[:8] }}</a></td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% endcall %}
+{% else %}
+{% call card('아직 실행 기록이 없습니다') %}
+<p>메일이 도착해 에이전트가 처리하면 여기에 기록이 쌓입니다.</p>
+{% endcall %}
+{% endif %}
+{% endblock %}
