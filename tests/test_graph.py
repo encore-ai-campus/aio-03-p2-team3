@@ -25,7 +25,18 @@ def events_for(database, run_id):
         ).order_by(RunEvent.seq)))
 
 
+def stub_drafts(state):
+    # 흐름 시험용. 실제 답장 후보 노드는 tests/test_mail_analysis.py가 시험한다.
+    return {"candidates": [], "step_status": "ok"}
+
+
+# 이 파일은 그래프 연결(전이)만 본다. 업무 본문을 채운 거래 노드도 빈 틀로 바꿔 끼운다
+# (거래 노드 본문 시험은 tests/test_deal.py).
+BLANK_NODES = {name: (lambda s: {}) for name in ("extract_deal", "check_required", "draft_followup")}
+
+
 def run(database, email, overrides=None, **kwargs):
+    overrides = {"draft_replies": stub_drafts, **BLANK_NODES, **(overrides or {})}
     return start_run(user_id=1, email=email, mode="test", database=database,
                      graph=build_graph(node_overrides=overrides), **kwargs)
 

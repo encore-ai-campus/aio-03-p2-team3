@@ -24,6 +24,11 @@ def recording(database: Database, run_id: str):
         _database.reset(db_token)
 
 
+def current_database() -> Database:
+    """지금 실행 중인 그래프가 기록하는 DB. 실행 밖에서는 기본 DB를 돌려준다."""
+    return _database.get() or get_database()
+
+
 def log_event(run_id: str, event: str, *, node: str | None = None,
               tool: str | None = None, detail: dict | None = None,
               duration_ms: int | None = None, database: Database | None = None):
@@ -34,6 +39,11 @@ def log_event(run_id: str, event: str, *, node: str | None = None,
             run_id=run_id, seq=0 if seq is None else seq + 1,
             event=event, node=node, tool=tool, detail=detail or {}, duration_ms=duration_ms,
         ))
+
+
+def current_database() -> Database:
+    """실행 중인 그래프가 쓰는 DB(시험은 메모리 DB). 실행 밖이면 기본 DB."""
+    return _database.get() or get_database()
 
 
 def current_event(event: str, **kwargs):
