@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import logging
 import secrets
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -10,13 +10,12 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.clients.gmail import GoogleClient
 from app.config import Settings, get_settings
 from app.db.engine import get_database
-from app.db.models import User
 from app.graph.run import get_graph
 from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
 from app.web import WEB, templates
 from app.web.deps import LoginRequired
-from app.web.routes import auth, gmail_push, pages, runs
+from app.web.routes import auth, candidates, gmail_push, inbox, pages, runs
 
 SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
@@ -69,13 +68,8 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     def home():
         return RedirectResponse("/inbox", status_code=303)
 
-    @app.get("/inbox", include_in_schema=False)
-    def inbox(request: Request, user: User | None = Depends(auth.current_user)):
-        status = auth.connection_status(request, user) if user else None
-        return templates.TemplateResponse(
-            request=request, name="pages/inbox.html", context={"user": user, "status": status},
-        )
-
+    app.include_router(inbox.router)
+    app.include_router(candidates.router)
     app.include_router(runs.router)
     return app
 
