@@ -69,6 +69,7 @@ app/
     mask.py                개인정보 가리기 — 8.3절
   web/
     routes/                auth.py · inbox.py · candidates.py · quotes.py · settings.py · runs.py · gmail_push.py
+    deps.py                current_user_id(로그인한 사용자 id) — 9절
     templates/
       base.html            기본 레이아웃
       components/          화면 조각 — 9절
@@ -425,7 +426,7 @@ class AgentError(TypedDict):
 
 ### 8.2 내보내기 파일 (`docs/test-records/`)
 - 실행 하나 = 파일 하나. 이름: `<YYYYMMDD-HHMM>_<scenario 또는 live>_<refl-on|refl-off>_<run_id 앞 8자>.jsonl`. [Claude proposal]
-- 내용: 첫 줄 `{"type": "run", …runs 열}`, 그 뒤 `{"type": "event", …run_events 열}`을 `seq` 순서로. 시험 실행기(17)의 준비된 응답·고의 실패 주입은 `detail.injected: true`로 표시해 실제 API 결과와 구분한다. [Request · Claude proposal]
+- 내용: 첫 줄 `{"type": "run", …runs 열}`, 그 뒤 `{"type": "event", …run_events 열(DB 줄 번호 `id`는 뺀다)}`을 `seq` 순서로. 시험 실행기(17)의 준비된 응답·고의 실패 주입은 `detail.injected: true`로 표시해 실제 API 결과와 구분한다. [Request · Claude proposal]
 
 ### 8.3 개인정보 가리기 (`app/runlog/mask.py`, 내보낼 때와 실행 기록 화면에 적용)
 | 대상 | 바꾸는 값 |
@@ -438,6 +439,7 @@ class AgentError(TypedDict):
 | 메일 본문·후보 본문(`mode=test`, 지어낸 메일) | 위 규칙만 적용하고 남긴다 |
 
 - 기록에 실제 개인정보가 남지 않게 하는 것이 목적이다(`.work/RULES.md` 3절). [Request · Claude proposal]
+- 이름 열·키(`from_name`·`display_name`·`contact_name`)에서 모은 이름은 오류 문구·시험 본문 같은 다른 글에 섞여 있어도 같은 `<이름N>`으로 바꾼다. 실행 id·메시지 id·시각처럼 기록을 따라가는 값은 가리지 않는다. [Claude proposal]
 
 ## 9. 화면 (R-14)
 - 디자인 토큰: `app/web/static/css/tokens.css` 한 파일에 CSS 변수로 둔다(`--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`). 다른 CSS와 템플릿은 색·글꼴·간격 값을 직접 쓰지 않고 토큰만 쓴다(한 곳을 고쳐도 다른 곳이 깨지지 않게). [Request]
@@ -457,6 +459,7 @@ class AgentError(TypedDict):
 
 - `kind=quote` 후보는 `/candidates/{id}/approve`로 보내지 않고 견적서 확인 화면의 승인으로만 보낸다(견적서를 확인해야 첨부해 보냄). [Request · Claude proposal]
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
+- 본인 확인: 로그인이 필요한 경로는 `app/web/deps.py`의 `current_user_id`를 `Depends`로 받는다. 로그인(6)이 세션 `user_id`를 넣고, 없으면 `/login`으로 보낸다(303). 라우터는 `request.app.state.templates`·`request.app.state.database`를 쓴다. [Claude proposal]
 
 ## 10. Google
 - OAuth 범위는 `app/config.py`의 `GOOGLE_SCOPES` 한 곳에서만 읽는다. 후보: `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.send`. 이 범위로 감시 등록·기록 조회·메일 읽기·발송이 되는지와 민감·제한 범위 구분은 5에서 공식 문서로 확인하고, 다르면 5의 결과대로 이 줄과 코드를 고친다. [Request]

@@ -10,6 +10,8 @@ from app.config import Settings, get_settings
 from app.db.engine import get_database
 from app.graph.run import get_graph
 from app.llm.client import get_backend
+from app.web.deps import LoginRequired
+from app.web.routes import runs
 
 WEB = Path(__file__).parent / "web"
 
@@ -32,6 +34,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Gmail 견적 도우미", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
     templates = Jinja2Templates(directory=WEB / "templates")
+    # 라우터 파일(app/web/routes/)은 request.app.state.templates로 같은 템플릿을 쓴다.
+    app.state.templates = templates
+
+    @app.exception_handler(LoginRequired)
+    def login_required(request: Request, _):
+        return RedirectResponse("/login", status_code=303)
 
     @app.get("/healthz")
     def healthz():
@@ -45,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def inbox(request: Request):
         return templates.TemplateResponse(request=request, name="pages/inbox.html")
 
+    app.include_router(runs.router)
     return app
 
 
