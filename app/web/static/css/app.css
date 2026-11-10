@@ -25,6 +25,8 @@ p { margin-block: var(--space-sm); }
 .banner { padding: var(--space-md); border-radius: var(--radius-sm); color: var(--color-warning); background: var(--color-warning-bg); }
 .badge { display: inline-block; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); color: var(--color-accent); background: var(--color-soft); font-size: var(--font-small); }
 .button { padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); border: var(--width-line) solid var(--color-line); background: var(--color-soft); color: var(--color-muted); font: inherit; }
+.button:not(:disabled) { cursor: pointer; }
+.button-primary { display: inline-block; border-color: var(--color-accent); background: var(--color-accent); color: var(--color-surface); text-decoration: none; }
 table { width: var(--width-full); border-collapse: collapse; }
 th, td { text-align: start; padding: var(--space-sm); border-bottom: var(--width-line) solid var(--color-line); }
 footer { margin-block: var(--space-xl); }

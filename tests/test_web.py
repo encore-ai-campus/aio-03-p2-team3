@@ -22,7 +22,7 @@ def test_health_home_and_local_assets(monkeypatch):
         home = client.get("/")
         assert home.status_code == 200 and home.url.path == "/inbox"
         assert '<html lang="ko">' in home.text and "Gmail 견적 도우미" in home.text
-        assert 'disabled' in home.text
+        assert 'href="/login"' in home.text
         for path in ["css/tokens.css", "css/app.css", "js/htmx.min.js"]:
             assert client.get(f"/static/{path}").status_code == 200
         assert 'https://' not in home.text
