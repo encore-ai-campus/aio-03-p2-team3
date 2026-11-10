@@ -97,7 +97,9 @@
 ## 7. 배포
 마지막 갱신: 2026-11-10
 
-- 아직 없음. 서버는 Render를 쓸 예정이다. 배포 주소, 첫 요청 지연 같은 주의점을 적는다.
+- Render 배포(2026-11-10, 계획 4절): 웹 서비스 `https://aio3-gmail-quote.onrender.com`(무료, Singapore, `main` 병합 시 자동 배포), `/healthz` 응답 확인(요청자). 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 넣은 환경변수: `DATABASE_URL`(Internal 주소)·`GEMINI_API_KEY`·`SESSION_SECRET`·`REFLECTION_ENABLED_DEFAULT`·`APP_BASE_URL`. Google 값과 `TOKEN_ENCRYPTION_KEY`는 아직 없음.
+- Render Postgres: 무료, Singapore(웹 서비스와 같은 지역), 2026-11-10 만듦 → 30일 뒤 2026-12-10경 만료, 14일 유예 뒤 2026-12-24경 삭제(11/19 제출까지는 충분).
+- 주의: 15분 동안 요청이 없으면 잠들고 깨는 데 최대 약 1분 걸린다. 재배포·재시작·잠들 때 로컬 파일이 사라지므로 저장은 Postgres에만 한다. 시연 전에 화면을 미리 열어 깨운다.
 - 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 키 없이 기본 화면을 열 수 있고, `DATABASE_URL`이 비면 커밋 제외된 `app/db/local.sqlite3`를 쓴다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render 연결 시험은 후속 작업이다.
 - 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
 - LLM·OAuth: `GEMINI_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`.
