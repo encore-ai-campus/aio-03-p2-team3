@@ -17,6 +17,13 @@
 - 요구사항 가리키기: 계획·설계서·시험 보고서·PR은 과제 요구사항을 `docs/REQUIREMENTS.md`의 R-ID(예: R-02)로 가리킨다. PR은 '관련 Issue·계획' 칸에 적는다. [Request · Claude proposal]
 - 환경: Python 3.12, uv. 환경변수 이름은 `.env.example`에 두고, 키는 각자 로컬 `.env`와 서버 환경(Render)에 둔다. Codex 환경에는 API 키를 넣지 않고, Codex에서 도는 테스트는 실제 API 대신 가짜 응답으로 한다. 실제 API 시험은 로컬과 Render에서 한다. [Request] 설치는 `uv sync`, 테스트는 `uv run pytest`. 패키지는 `uv add <패키지>==<버전>`(개발용은 `--dev`)으로 더하고, 버전은 `pip index versions <패키지>`로 확인하며, 바뀐 `pyproject.toml`·`uv.lock`을 함께 올린다. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다(README 실행 방법). [Claude proposal]
 - LLM·외부 API를 더하거나 바꾸는 작업은 요청자가 정한다(대화면 묻고, Codex 작업이면 질문을 결과로 돌려준다). 정한 것은 `.work/design/api-choice.md`·`.env.example`·README에 반영한다. [Request]
+- KE KOREA 로직 이식(`docs/plans/kekorea-port.md`): [Request · Claude proposal]
+  - 원본 사본은 `reference/kekorea/`(기준: `doomdiver100T/ai-agents` `main` `8d397a1`, 담은 것과 바꾼 것은 그 폴더의 README)다. 사본은 고치지 않고 앱에서 import하지 않는다. 팀원은 원본 레포 대신 이 사본을 본다. [Request]
+  - 계획 절 하나 = Issue 하나 = PR 하나. 원본 함수는 다시 쓰지 않고 복사한 뒤 고치며, 옮긴 함수 위에 원본 경로(`reference/kekorea/...`)를 주석으로 남긴다. [Request · Claude proposal]
+  - 원본 테스트를 함께 옮기고(`unittest` → pytest), 같은 입력에 사본과 이식본의 결과가 같은지 비교하는 테스트를 둔다. 다르게 하기로 한 동작은 PR에 이유를 적는다. [Claude proposal]
+  - 회사 고유 값(KE KOREA 연락처·계좌·직인·로고, ECLADO·Dear Glow 가격)은 코드·테스트·예시 데이터에 넣지 않는다. 사용자별 설정이나 가상 값으로 바꾼다. [Request]
+  - `reference/kekorea/PRESERVED_BEHAVIOR.md`의 동작을 지키고, `reference/kekorea/KNOWN_ERRORS.md`의 알려진 오류를 옮기지 않았는지 PR에서 점검한다. [Claude proposal]
+  - 상태·도구 스키마·그래프 노드를 바꾸는 절은 위 공통 부분 규칙(조율, 코드와 계약을 같은 PR에서)을 그대로 따른다. [Request]
 
 ## 파일 지도
 <!-- 형식: - `경로` — 무엇인지 [공통|과제별]. [공통] 다음 과제에도 그대로 씀 · [과제별] 이 과제용(템플릿에는 빈 틀) [Request]
@@ -41,6 +48,8 @@
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
 - `docs/plans/` — 큰 작업의 계획 파일 `<작업명>.md`(RULES 7절) [과제별]
+- `docs/plans/kekorea-port.md` — KE KOREA 무역서류(PI/PO/CI/PL) 로직 이식 계획(RULES 7절). 하위 작업은 자기 절만 읽는다 [과제별]
+- `reference/kekorea/` — KE KOREA 원본 사본(이식용, 읽기 전용, 고치지 않음·앱에서 import 안 함). 담은 것·바꾼 것·원본 테스트 실행법은 그 폴더의 `README.md`. 이식 작업에서만 읽는다 [과제별]
 - `docs/CONTRACT.md` — gmail-quote-mvp 공통 계약(폴더 구조, 그래프 상태·노드·전이·한도, 도구 입출력, 필수 항목 출처, LLM 호출, DB 표, 실행 기록, 화면, Google, 환경변수). 하위 작업은 13절에서 자기가 읽을 절만 연다 [과제별]
 - `docs/CHATGPT_GUIDE.md` — 팀원용 ChatGPT 사용 안내(연결 순서, Codex 환경 게시·공유 확인, 작업 요청 문구, 충돌 처리, 문서 작업용 프로젝트 지침) [과제별]
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]
