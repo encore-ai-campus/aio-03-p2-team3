@@ -108,7 +108,7 @@
 - 설계 결정·오류 사례·수정 이유·버전·재실행 결과는 Issue, PR('오류·재실행 기록' 칸), 팀 노션에도 남긴다.
 
 ## 9. 레포 세팅·작업 방식
-마지막 갱신: 2026-11-09
+마지막 갱신: 2026-11-10
 
 - 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜 둠). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
 - [공통] 파일은 두 레포에서 같게 둔다(읽음 확인 코드 줄만 다름). 이 레포의 고유 값(레포 주소 등)은 [공통] 파일에 쓰지 않고 `.work/TASK.md`에서 가리킨다(RULES 2절 4번의 Issue 주소가 그 예).
@@ -118,7 +118,7 @@
 - 기능이 둘 이상 섞인 요청과 '작업 분배'·'작업 배분'·'작업 나누기' 요청(세팅 단계 작업 제외, KB 재기·FLOW·STATUS 안 씀)은 먼저 `docs/plans/<작업명>.md`를 PR로 올리고, 그 AI가 하위 작업마다 Issue(`<작업명>#N <절 제목>`)를 만든다(못 만들면 요청자가 만듦). 절마다 '선행 작업'·'하는 사람(Codex/사람/Claude)'을 적어 선행 작업이 없는 절은 동시에 하고, 맡는 사람은 Issue Assignees에 자신을 넣고 하위 작업마다 새 작업으로 한다(2026-11-09, `.work/RULES.md` 7절, 형식 `docs/plans/README.md`).
 - PR '설명' 칸에는 '작동 방식(발표용)'(구현 방식 2~4문장)도 적고 마지막 답에서 요청자에게 따로 짚어 안내하며(Codex·Claude 모두), 계획·설계서·시험 보고서·PR은 요구사항을 `docs/REQUIREMENTS.md`의 R-ID로 가리킨다(2026-11-09, `.work/TASK.md` 이 레포의 규칙).
 - 작업 완료 답변에는 별도 요청이 없어도 다음 작업 1~3개의 담당·시작 조건·계획 절·Issue를 안내하고, Codex 하위 작업은 새 작업용 요청문을 함께 준다. 완료 여부를 확인하지 못했으면 `미확인`으로 표시한다(2026-11-09, `AGENTS.md` 5번·`.work/RULES.md` 5절 8번).
-- 담당: 미리 정하지 않는다. 누구나 어느 부분이든 맡는다. 프로젝트를 마친 뒤 팀원별 PR 내역을 바탕으로 맡은 바를 정리해 README에 적는다. [Request]
+- 담당(2026-11-10): 공통 기반(공통 계약, 서버·DB·배포, Google 로그인·Gmail 알림 수신)과 검토 기능은 김민성, 캘린더 연결 기능은 정원철, 이미지→견적서 기능은 임석원. 김진혁은 Assignees가 비어 있는 Issue에서 배정받는다. 담당은 Issue Assignees로 보고, 프로젝트를 마친 뒤 PR 내역으로 README에 정리한다(`.work/TASK.md`). [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다. 자세한 것은 README '실행 방법'.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
 - CI: `.github/workflows/rules-check.yml`. PR과 `main` 변경마다 `rules-check`(규칙 검사, 파일 지도에 없는 파일도 오류)와 `tests`(`uv sync --locked` 뒤 `uv run pytest`)가 따로 돈다. `uv.lock`이 `pyproject.toml`과 어긋나면 `tests`가 실패한다. PR에서는(본문을 고쳐도) `pr-check`도 돌아 PR 본문 '읽은 파일' 칸의 읽음 확인 코드(RULES.md·TASK.md·이 문서)와 '최신 흐름 갱신' 칸(이 문서를 안 고쳤으면 `해당 없음 — 이유`)을 본다.
