@@ -3,7 +3,7 @@
 from sqlalchemy import select
 
 from app.db.models import DealTerms as DealTermsRow
-from app.graph.nodes.tool_step import call_tool, failure_update
+from app.graph.nodes.common import call_tool, failure_update
 from app.graph.state import AgentState
 from app.quote.required_fields import get_required_fields
 from app.runlog.logger import current_database, current_event
@@ -15,24 +15,31 @@ TOOL = "check_required_fields"
 def check_required(state: AgentState) -> dict:
     deal_terms = state["deal_terms"]
     if deal_terms is None:
-        return failure_update(NODE, "invalid_input", "검토할 거래 항목이 없습니다")
+        return failure_update(state, NODE, "invalid_input", "검토할 거래 항목이 없습니다")
     required = get_required_fields(state["user_id"])
     keys = [field["key"] for field in required["fields"]]
     current_event("required_source", detail={
         "source": required["source"], "fields": keys, "evidence": required["evidence"],
     })
-    result, update = call_tool(NODE, TOOL, {"deal_terms": deal_terms, "required_fields": required}, {
+    result, update = call_tool(state, NODE, TOOL, {"deal_terms": deal_terms, "required_fields": required}, {
         "fields": keys, "items": len(deal_terms["items"]),
         "filled": sorted(k for k, v in deal_terms.items() if k not in ("items", "evidence") and v),
     })
     update["required_fields"] = required
     if not result.ok:
-        update["step_status"] = "failed"  # 코드 검사라 한도 오류가 없다
-        return update
+        return update  # 코드 검사라 한도 오류가 없다: 실패 종료
     missing = result.value["missing_fields"]
     update["missing_fields"] = missing
     if missing:
         update["reply_mode"] = "followup"
+        current_event("tool_select", tool="draft_followup_replies", detail={
+            "reason": f"필수 항목 {len(missing)}개가 빠져 견적서 대신 재질문 후보를 만듦",
+            "missing_fields": missing,
+        })
+    else:
+        current_event("tool_select", tool="create_quote", detail={
+            "reason": "필수 항목이 모두 있어 견적서를 만듦",
+        })
     save_deal_terms(state, deal_terms, missing, required["source"])
     return update
 

@@ -46,8 +46,8 @@ def no_real_llm(monkeypatch):
 
 
 def run(database, email, responses, overrides=None, **kwargs):
-    # 8(메일 분석)·11(견적서)·12(성찰)·13(기억)은 아직 빈 틀이므로 의도만 정해 둔다.
-    nodes = {"analyze_email": lambda s: {"intent": "deal"}, **(overrides or {})}
+    # 거래 경로만 본다: 메일 분석(8)은 의도만 정하고, 견적서 동봉 답장(11의 draft_replies quote)은 빈 틀로 둔다.
+    nodes = {"analyze_email": lambda s: {"intent": "deal"}, "draft_replies": lambda s: {}, **(overrides or {})}
     fake = FakeLLM(responses)
     with client.use_backend(fake):
         result = start_run(user_id=1, email=email, mode="test", database=database,
@@ -123,6 +123,8 @@ def test_rate_limit_uses_fallback_and_skips_reflection(database, deal_email, res
     assert result["end_reason"] == end_reason
     assert result["needs_review"] and result["notice"] == "rate_limit"
     assert len(result["candidates"]) == 1 and result["candidates"][0]["kind"] == kind
+    assert result["candidates"][0]["asks_fields"] == (["due_date"] if kind == "followup" else [])
+    assert result["errors"][-1]["kind"] == "rate_limit"
     assert "reflect" not in started_nodes(database, result["run_id"])
 
 
@@ -143,8 +145,7 @@ def test_reflection_feedback_reaches_extract_prompt(database, deal_email):
                  "retry_target": "extract_deal", "feedback": "가상 피드백: 수량을 다시 확인", "verified": None}
         return {"reflection": retry, "reflection_history": [retry]}
 
-    result, fake = run(database, deal_email, [COMPLETE, COMPLETE],
-                       {"reflect": reflect, "draft_replies": lambda s: {}}, reflection_enabled=True)
+    result, fake = run(database, deal_email, [COMPLETE, COMPLETE], {"reflect": reflect}, reflection_enabled=True)
     assert result["end_reason"] == "awaiting_approval"
     assert "가상 피드백" not in fake.calls[0] and "가상 피드백: 수량을 다시 확인" in fake.calls[1]
     with database.session() as session:  # 다시 검토해도 실행마다 한 줄
@@ -155,9 +156,10 @@ def test_reflection_feedback_reaches_extract_prompt(database, deal_email):
 def test_logs_tool_choice_and_required_source_without_body(database, deal_email):
     result, _ = run(database, deal_email, [NO_DUE_DATE, FOLLOWUP])
     events = events_for(database, result["run_id"])
-    names = [(e.event, e.tool) for e in events if e.event.startswith("tool_")]
-    assert ("tool_select", "extract_deal_terms") in names and ("tool_select", "draft_followup_replies") in names
-    assert ("tool_result", "check_required_fields") in names
+    names = [(e.event, e.node, e.tool) for e in events if e.event.startswith("tool_")]
+    assert ("tool_select", "check_required", "draft_followup_replies") in names
+    assert ("tool_result", "extract_deal_terms") in [(n[0], n[2]) for n in names]
+    assert ("tool_result", "draft_followup_replies") in [(n[0], n[2]) for n in names]
     source = next(e for e in events if e.event == "required_source")
     assert source.node == "check_required" and source.detail["fields"] == [
         "customer_name", "item_name", "quantity", "due_date"]

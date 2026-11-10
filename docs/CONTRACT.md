@@ -24,7 +24,7 @@ app/
   prompts/
     <프롬프트 이름>.py      NAME·VERSION·TEMPLATE (6절)
     VERSIONS.md            프롬프트 버전과 변경 이유 표
-    mail_text.py           메일·스레드를 프롬프트 변수 텍스트로 바꾸기(10에서 더함, 후보 프롬프트가 함께 씀)
+    format.py              메일·스레드·선호를 프롬프트 변수 텍스트로 바꾸기(8에서 더함, 10도 씀)
   clients/
     gmail.py               사용자별 Gmail API 클라이언트 만들기(토큰 갱신 포함), 재시도
   graph/
@@ -43,11 +43,11 @@ app/
       reflect.py           성찰
       save_pending.py      승인 대기 저장
       finish_failed.py     실패 종료
-      tool_step.py         노드의 도구 호출 공통 절차: tool_select·tool_call·tool_result 기록, ToolResult → 상태, 한도 오류 대체 후보, 성찰 피드백 읽기(10에서 더함)
+      common.py            업무 노드 공통: failure_update()(한도 오류 → 대체 후보, 그 밖 → 실패, 8에서 더함), call_tool()(tool_call·tool_result 기록, ToolResult → 상태)·retry_feedback()(10에서 더함)
   tools/
     base.py                ToolResult(공통 결과 형식) — 4.1절 (공통 부분)
     registry.py            도구 등록 목록 — 4.2절 (공통 부분)
-    fallback.py            fallback_candidates(reply_mode, email) — 한도 오류 때 기본 답장 틀(도구 아님, 등록하지 않음)
+    fallback.py            fallback_candidates(email, kind=, asks_fields=, preferences=) — 한도 오류 때 기본 답장 틀(도구 아님, 등록하지 않음)
     draft_replies.py       도구 하나 = 파일 하나 (4.4절)
     extract_deal_terms.py
     check_required_fields.py
@@ -168,7 +168,7 @@ save_pending → END
 finish_failed → END
 ```
 - 라우팅 함수는 `step_status`·`intent`·`missing_fields`·`reflection_enabled`·`reflection`만 읽고 상태를 고치지 않는다. 2에서 모두 만들고, 뒤 하위 작업은 `build.py`·`routing.py`를 고치지 않는다. 고쳐야 하면 공통 부분 변경으로 조율한다. [Request · Claude proposal]
-- 한도 오류(`rate_limit`)가 난 노드는 `fallback_candidates(reply_mode, email) -> list[ReplyCandidate]`(`app/tools/fallback.py`, LLM 없이 고정 문구, 10에서 정함)로 기본 답장 틀 후보 1개를 `candidates`에 넣고 `needs_review=True`, `notice="rate_limit"`, `step_status="rate_limit"`을 돌려준다. 이 경로는 성찰을 건너뛴다(성찰도 LLM을 부를 수 있어서). [Request · Claude proposal]
+- 한도 오류(`rate_limit`)가 난 노드는 `fallback_candidates(email, *, kind, asks_fields, preferences) -> list[ReplyCandidate]`(`app/tools/fallback.py`, LLM 없이 고정 문구. 재질문 노드는 `kind="followup"`, `asks_fields`=빠진 항목)로 기본 답장 틀 후보 1개를 `candidates`에 넣고 `needs_review=True`, `notice="rate_limit"`, `step_status="rate_limit"`을 돌려준다. 이 경로는 성찰을 건너뛴다(성찰도 LLM을 부를 수 있어서). [Request · Claude proposal]
 
 ### 3.3 종료 조건 (R-11)
 | `end_reason` | 뜻 | 언제 | 처리 상태(7절 `processed_messages.status`) |

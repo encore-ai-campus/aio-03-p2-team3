@@ -7,12 +7,13 @@ from pydantic import BaseModel, Field
 
 from app.config import LIMITS
 from app.graph.state import DealTerms, EmailMessage, ThreadContext
-from app.llm.client import call_structured
+from app.llm.client import MODEL_SOURCE as SOURCE, call_structured
 from app.prompts.draft_followup_replies import PROMPT
-from app.prompts.mail_text import NONE, email_text, thread_text
+from app.prompts.format import email_text, preferences_text, thread_context_text
 from app.tools.base import ToolResult
+from app.tools.fallback import reply_subject, with_signature
 
-SOURCE = "gemini:gemini-3.8-flash"
+NONE = "없음"
 
 
 class Input(BaseModel):
@@ -26,9 +27,8 @@ class Input(BaseModel):
 
 
 class FollowupCandidate(BaseModel):
-    label: str
-    subject: str
-    body: str
+    label: str = Field(min_length=1, description="후보 성격 한 줄")
+    body: str = Field(min_length=1, description="그대로 보낼 수 있는 답장 본문(제목 제외)")
 
 
 class FollowupDraft(BaseModel):
@@ -57,21 +57,20 @@ def draft_followup_replies(email: EmailMessage, deal_terms: DealTerms, missing_f
         result = call_structured(PROMPT, FollowupDraft, {
             "missing_labels": labels,
             "known_terms": known_terms_text(deal_terms),
-            "preferences": json.dumps(preferences, ensure_ascii=False) if preferences else NONE,
+            "preferences": preferences_text(preferences),
             "email": email_text(email),
-            "thread": thread_text(thread_context, email["gmail_message_id"]),
+            "thread": thread_context_text(thread_context),
             "feedback": feedback or NONE,
         })
         if not result.ok:
             return ToolResult(ok=False, error_kind=result.error_kind, source=SOURCE,
                               error_message="재질문 후보를 만들지 못했습니다",
                               attempts=result.attempts, duration_ms=result.duration_ms)
-        default_subject = email["subject"] if email["subject"].lower().startswith("re:") \
-            else f"Re: {email['subject']}"
+        # 제목·서명은 답장 후보(8)와 같은 방식으로 코드가 정한다.
         candidates = [{
-            "label": c.label.strip() or "재질문",
-            "subject": c.subject.strip() or default_subject,
-            "body": c.body.strip(),
+            "label": c.label.strip(),
+            "subject": reply_subject(email),
+            "body": with_signature(c.body.strip(), preferences),
             "kind": "followup",
             "asks_fields": list(missing_fields),
             "needs_review": False,

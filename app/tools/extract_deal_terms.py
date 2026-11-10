@@ -4,12 +4,10 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from app.graph.state import DealTerms, EmailMessage, ThreadContext
-from app.llm.client import call_structured
+from app.llm.client import MODEL_SOURCE as SOURCE, call_structured
 from app.prompts.extract_deal_terms import PROMPT
-from app.prompts.mail_text import NONE, email_text, thread_text
+from app.prompts.format import email_text, thread_context_text
 from app.tools.base import ToolResult
-
-SOURCE = "gemini:gemini-3.8-flash"
 TEXT_FIELDS = ("customer_name", "due_date", "contact_name", "contact_phone", "delivery_place", "note")
 
 
@@ -80,9 +78,9 @@ def extract_deal_terms(email: EmailMessage, thread_context: ThreadContext | None
     try:
         result = call_structured(PROMPT, ExtractedDealTerms, {
             "email": email_text(email),
-            "thread": thread_text(thread_context, email["gmail_message_id"]),
+            "thread": thread_context_text(thread_context),
             "received_date": email["received_at"][:10],
-            "feedback": feedback or NONE,
+            "feedback": feedback or "없음",
         })
         if not result.ok:
             return ToolResult(ok=False, error_kind=result.error_kind, source=SOURCE,
