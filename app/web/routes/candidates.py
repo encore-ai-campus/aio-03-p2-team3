@@ -60,9 +60,10 @@ def thread_view(database, user_id: int, thread_id: str) -> list[dict] | None:
         approval = approvals.get(c.id)
         by_source.setdefault(c.source_message_id, []).append({
             "id": c.id, "label": c.label, "subject": c.subject, "body": c.body,
-            "kind_label": KIND_LABELS.get(c.kind, c.kind), "quote_waiting": c.kind == "quote" and c.status == "pending",
+            "kind_label": KIND_LABELS.get(c.kind, c.kind), "quote_waiting": c.kind == "quote" and c.status in RESENDABLE,
             "status_label": label, "tone": tone, "needs_review": c.needs_review,
             "notice": NOTICE_MESSAGES.get(c.notice or ""),
+            "quote_id": c.quote_id if c.kind == "quote" else None,
             "approved_at": kst(approval.approved_at) if approval else None,
             "can_approve": c.kind != "quote" and c.status in RESENDABLE and c.source_message_id not in taken,
         })

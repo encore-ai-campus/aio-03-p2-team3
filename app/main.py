@@ -15,7 +15,7 @@ from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
 from app.web import WEB, templates
 from app.web.deps import LoginRequired
-from app.web.routes import auth, candidates, gmail_push, inbox, pages, runs
+from app.web.routes import auth, candidates, gmail_push, inbox, pages, quotes, runs, settings as settings_routes
 
 SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
@@ -55,6 +55,8 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(gmail_push.router)
     app.include_router(pages.router)
+    app.include_router(quotes.router)
+    app.include_router(settings_routes.router)
 
     @app.exception_handler(LoginRequired)
     def login_required(request: Request, _):

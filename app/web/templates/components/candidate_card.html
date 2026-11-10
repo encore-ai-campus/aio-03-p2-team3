@@ -13,6 +13,7 @@
 <form method="post" action="/candidates/{{ candidate.id }}/approve" hx-boost="true" hx-disabled-elt="find button">{{ submit_button('이 답장으로 승인하고 보내기', primary=true) }}</form>
 {% elif candidate.quote_waiting %}
 <p class="muted">견적서를 확인한 뒤 견적서 화면에서 승인합니다.</p>
+{% if candidate.quote_id %}<a class="button button-link" href="/quotes/{{ candidate.quote_id }}">견적서 확인 · PDF 첨부 승인</a>{% endif %}
 {% endif %}
 {% if candidate.approved_at %}<p class="muted">승인 {{ candidate.approved_at }}</p>{% endif %}
 </footer>

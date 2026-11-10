@@ -343,7 +343,7 @@ class AgentError(TypedDict):
 ### 4.4 도구 목록과 입출력
 | 도구 이름 | 뜻 | 입력(`Input`) | 성공 때 `value` | 방식 | 프롬프트 |
 |---|---|---|---|---|---|
-| `draft_replies` | 답장 후보 만들기 | `email`, `thread_context`, `reply_mode`("general"/"quote"), `quote_draft`(quote일 때), `preferences`, `feedback`(성찰 재실행 때) | `{"candidates": list[ReplyCandidate]}` 2~3개 | LLM 1회 | `draft_replies.v1` |
+| `draft_replies` | 답장 후보 만들기 | `email`, `thread_context`, `reply_mode`("general"/"quote"), `quote_draft`(quote일 때), `preferences`, `feedback`(성찰 재실행 때) | `{"candidates": list[ReplyCandidate]}` 2~3개 | LLM 1회 | `draft_replies.v2` |
 | `extract_deal_terms` | 거래 항목 추출 | `email`, `thread_context`, `feedback` | `DealTerms` | LLM 1회. 원문에 없는 값은 `None` | `extract_deal_terms.v1` |
 | `check_required_fields` | 필수 항목 검토 | `deal_terms`, `required_fields`(`RequiredFields`) | `{"missing_fields": list[str]}` | 코드(LLM 없음). 단가는 검사하지 않음 | 없음 |
 | `draft_followup_replies` | 재질문 후보 만들기 | `email`, `thread_context`, `deal_terms`, `missing_fields`, `field_labels`, `preferences`, `feedback` | `{"candidates": list[ReplyCandidate]}` 2~3개, 모두 `asks_fields`=빠진 항목 전부 | LLM 1회 | `draft_followup_replies.v1` |
@@ -353,6 +353,7 @@ class AgentError(TypedDict):
 - `send_email`은 승인 경로(3.1절)에서만 부른다. 그래프 노드는 부르지 않는다(승인 없이 보내지 않음). [Request]
 - 필수 항목 검사 규칙: `customer_name`·`due_date`는 값이 있어야 하고, `items`가 하나 이상이며 품목마다 `item_name`·`quantity`가 있어야 한다. 빠진 키는 5절의 키로 돌려준다. [Request · Claude proposal]
 - 견적서 PDF는 `app/quote/pdf.py`의 `render_quote_pdf(quote_draft) -> bytes`가 만든다. 견적서 확인 화면 미리보기와 승인 뒤 첨부에 쓴다. 첨부 파일 이름은 `견적서_<quote_no>.pdf`. [Claude proposal]
+  - 11 구현: `fpdf2==2.9.0`·저장소의 NanumGothic TTF(SIL OFL 1.1, `app/quote/fonts/OFL.txt`)로 한글 글꼴을 부분 포함하고 메모리에서 만든다. 단가 미입력 PDF에는 미완성 표시와 미정 금액을 보여 준다. `draft_replies.v2`는 이후 단가 입력으로 숫자가 바뀔 수 있어 본문에 금액·날짜를 복사하지 않고 첨부 견적서를 안내한다.
 
 ## 5. 필수 항목 출처 (`app/quote/required_fields.py`)
 - `get_required_fields(user_id: int) -> RequiredFields` 하나로 둔다. 필수 항목 검토 노드는 이 함수만 부르고, 목록을 직접 갖지 않는다. [Request]
@@ -400,6 +401,8 @@ class AgentError(TypedDict):
 | `counterparty_history` | 장기 기억: 상대방별 거래 기록 | `id` PK · `user_id` · `counterparty_email` · `thread_id` · `summary` · `deal_terms` JSON · `quote_id` · `sent_at` | 13 |
 | `runs` | 실행 | `run_id` PK · `user_id` · `mode` · `message_id` · `thread_id` · `reflection_enabled` · `started_at` · `ended_at` · `end_reason` · `duration_ms` · `scenario`(시험 실행기만) | 2, 14, 17 |
 | `run_events` | 실행 기록 한 줄 | `id` PK · `run_id` · `seq` · `at` · `event` · `node` · `tool` · `detail` JSON · `duration_ms` | 2, 12, 14, 17 |
+
+- 견적서(11): `create_quote`는 사용자 행을 잠그고 같은 날짜의 사용자별 일련번호로 저장한다(유일 제약 충돌은 최대 3회 시도). `make_quote`가 현재 실행의 `run_id`·`deal_terms_id`를 연결한다. 회사 정보·단가표는 새 견적서 생성 때 복사하며 설정 변경으로 기존 견적서를 바꾸지 않는다. `send_approved_quote()`는 일반 승인과 같은 사용자 잠금·후보의 조건부 UPDATE·승인 기록·결과 키를 쓰고, 성공 때 `quotes.status`·`draft.status`를 `sent`, `sent_at`을 UTC로 저장한다. Gmail 발송 자동 재시도는 없고 실패 후 같은 후보를 명시적으로 재승인할 수 있다.
 
 - Google 토큰은 `TOKEN_ENCRYPTION_KEY`로 암호화해 저장한다(방식은 6이 정하고 이 절에 적는다). [Request]
   - 방식(6): `cryptography`의 Fernet(AES-128-CBC + HMAC-SHA256). `TOKEN_ENCRYPTION_KEY`는 Fernet 키(만드는 명령은 `.env.example`)이고, 키를 바꾸면 저장된 토큰을 못 읽어 사용자가 다시 로그인해야 한다. 암호화·복호화는 `app/services/auth.py`의 `TokenCipher`, 토큰 꺼내기·갱신은 `get_access_token()`만 쓴다. [Claude proposal]
@@ -463,6 +466,8 @@ class AgentError(TypedDict):
 | 알림 수신 | 없음 | `POST /gmail/push` | 7 |
 
 - `kind=quote` 후보는 `/candidates/{id}/approve`로 보내지 않고 견적서 확인 화면의 승인으로만 보낸다(견적서를 확인해야 첨부해 보냄). [Request · Claude proposal]
+  - 11 구현: 스레드의 견적 후보에서 확인 화면으로 연결한다. `needs_price`는 빠진 단가 입력 폼만 열며 승인 요청도 거부한다. `/prices`는 `price_<행 번호>`로 빠진 단가 전부를 받고 기존 단가는 바꾸지 않는다. 미리보기·승인 첨부는 같은 PDF 함수를 사용한다. 승인 결과는 일반 후보와 같은 `ApprovalResult.outcome` 안내 키(`needs_price` 추가)로 303 이동해 표시한다.
+  - 설정(11): `/settings/company`는 `company_name`·`business_no`·`ceo_name`·`contact`, `/settings/prices`는 `item_name`·`unit`·`unit_price`를 받고 본인 행만 저장한다. 같은 품목명 저장은 단가·단위 갱신이다. 성찰 설정은 12가 구현한다.
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
 - 본인 확인: 로그인(6)이 세션(`SESSION_SECRET`으로 서명한 쿠키 `gq_session`, 14일)에 `user_id`만 넣는다. 로그인이 필요한 경로는 둘 중 하나를 `Depends`로 받고, 로그인 안 했으면 둘 다 `/login`으로 보낸다(303). ① `app/web/deps.py`의 `current_user_id`: id만 필요할 때(14가 씀). ② `app/web/routes/auth.py`의 `require_user`(없으면 `/login`, HTMX면 `HX-Redirect`)·`current_user`(없으면 None): `User` 행이 필요하거나 화면 요청 때 감시 갱신까지 걸 때(응답 뒤, 받은 메일 화면이 씀). id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user_id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 라우터는 `request.app.state.templates`(`app.web`의 `templates`와 같은 객체)·`request.app.state.database`를 쓴다. [Claude proposal]
 
@@ -509,6 +514,7 @@ class AgentError(TypedDict):
 - 감지는 규칙 검사(LLM 없음)로 하고, 문제가 있을 때만 `reflect_fix` 프롬프트로 원인을 적는다. 재실행 뒤 같은 기준으로 다시 검사해 `verified`를 남긴다. 한도는 3.4절. [Request]
 ### 12.2 단가 채우기 순서 (11)
 - 스레드에서 합의된 단가(`price_source="thread"`) → 단가표(`price_list`) → 없으면 `status="needs_price"`로 두고 견적서 확인 화면에서 입력(`user`). 단가는 상대방에게 묻는 필수 항목이 아니다. [Request]
+  - 11 구현: 단가표는 품목명과 단위가 모두 같은 행을 적용한다(단위가 다르면 사용자 입력). 0원도 합의·입력 단가로 인정한다. 단가는 0 이상의 원 단위 정수, 수량은 양의 정수다. 한 줄이라도 단가가 없으면 공급가액·부가세·합계는 모두 `None`, 다 채우면 `sum(수량×단가)`·`공급가액 // 10`·두 금액의 합으로 계산한다.
 ### 12.3 성찰 켬/끔 (12)
 - 우선순위: 시험 실행기 옵션 → 사용자 설정(`users.reflection_enabled`) → `REFLECTION_ENABLED_DEFAULT`. `start_run()`이 정해 `reflection_enabled`로 넣는다. [Request · Claude proposal]
 ### 12.4 기억 우선순위 (13, R-06~R-08)
