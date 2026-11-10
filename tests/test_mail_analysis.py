@@ -152,7 +152,7 @@ def test_tool_returns_result_and_fallback_shape(email):
         result = TOOLS["draft_replies"].invoke({
             "email": email, "reply_mode": "general", "preferences": {"signature": "가상 서명"},
         })
-    assert result.ok and result.source == "gemini:gemini-3.8-flash"
+    assert result.ok and result.source == client.model_source()
     assert all(c["body"].endswith("가상 서명") for c in result.value["candidates"])
     fallback = fallback_candidates({**email, "subject": "RE: 가상"}, kind="followup", asks_fields=["due_date"])
     assert fallback == [{

@@ -5,6 +5,7 @@ from langchain_google_genai.chat_models import GoogleRateLimitError
 from pydantic import BaseModel
 import pytest
 
+from app.config import Settings
 from app.llm import client
 from app.prompts import Prompt
 from tests.fakes.llm import FakeLLM
@@ -112,3 +113,10 @@ def test_backend_override_is_scoped():
         with client.use_backend(inner):
             assert client.call_structured(PROMPT, Answer, {"input": "입력"}).value.answer == "안쪽"
         assert client.call_structured(PROMPT, Answer, {"input": "입력"}).value.answer == "바깥"
+
+
+def test_model_name_default_and_override():
+    # 기본은 gemini-3.6-flash(#62), GEMINI_MODEL 값이 있으면 앞뒤 공백을 빼고 그 모델을 쓴다.
+    assert client.DEFAULT_MODEL == "gemini-3.6-flash"
+    assert client.model_name(Settings()) == "gemini-3.6-flash"
+    assert client.model_name(Settings(gemini_model=" gemini-3.5-flash-lite ")) == "gemini-3.5-flash-lite"

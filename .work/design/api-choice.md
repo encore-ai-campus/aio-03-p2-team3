@@ -21,6 +21,12 @@
 - 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다(RULES 3절). 11/19 상호 체험 때 화면에 '개인정보를 넣지 마세요'를 안내한다. [Claude proposal]
 - 쓰지 않는 것: Groq(분당 8K 토큰이 이 과제에 빠듯함), 다른 LLM으로 넘기는 대비책(모델이 바뀌면 응답 일관성 지표가 흔들림). 필요해지면 요청자에게 묻고 더한다. [Claude proposal]
 
+### 모델 변경 (2026-11-10, Issue #62)
+- 바꾼 것: 기본 모델을 `gemini-3.8-flash` → `gemini-3.6-flash`로 바꿨다. [Request: 요청자가 추천안을 고름]
+- 까닭: 실제 API 확인(#62)에서 Render의 메일 분석 호출 6번이 모두 `network`로 실패했고, 요청자 PC에서 같은 키로 짧은 요청(`hello`)을 보내도 `gemini-3.8-flash`는 5번 모두 HTTP 503(0.9~7.9초)이었다. 같은 때 `gemini-3.6-flash`·`gemini-3.5-flash-lite`는 3번 모두 200, `gemini-3.1-flash-lite`는 3번 모두 503이었다. 3.6은 응답한 모델 가운데 lite보다 성능이 높다. Google 개발자 포럼의 Google 측 답변은 무료 등급 3.8 Flash의 503을 서비스 일시 과부하로 설명한다(https://discuss.ai.google.dev/t/free-tier-interactions-api-getmodel-succeeds-but-generation-returns-503-on-gemini-3-8-flash-and-429-on-gemini-3-6-flash/189550 , 2026-11-10 조회).
+- 방식: 모델 이름은 `app/llm/client.py`의 `DEFAULT_MODEL`이고 환경변수 `GEMINI_MODEL`로 덮어쓴다. 시연 때 3.6도 막히면 Render 환경변수만 바꿔 다른 무료 모델로 옮긴다(재배포됨). 한 실행 안에서 모델을 섞는 대비책은 여전히 두지 않는다(응답 일관성). [Claude proposal]
+- 함께 한 일: 이전 키가 대화에 노출돼 같은 결제 없는 프로젝트에서 새 키를 만들어 Render `GEMINI_API_KEY`를 바꿨다(요청자, 2026-11-10). 키 값은 레포에 두지 않는다.
+
 ### 설정 경로
 1. Google AI Studio의 API 키 화면(https://aistudio.google.com/app/apikey)에서 API 키를 만든다. 키는 비밀번호처럼 다루고 레포에 넣지 않는다.
 2. 환경변수는 `GEMINI_API_KEY` 하나만 쓴다. Google SDK는 `GEMINI_API_KEY`·`GOOGLE_API_KEY`를 모두 읽고 둘 다 있으면 `GOOGLE_API_KEY`가 앞서므로 하나만 둔다. [Claude proposal]

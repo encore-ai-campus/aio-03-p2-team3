@@ -4,7 +4,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from app.graph.state import DealTerms, EmailMessage, ThreadContext
-from app.llm.client import MODEL_SOURCE as SOURCE, call_structured
+from app.llm.client import call_structured, model_source
 from app.prompts.extract_deal_terms import PROMPT
 from app.prompts.format import email_text, thread_context_text
 from app.tools.base import ToolResult
@@ -83,12 +83,12 @@ def extract_deal_terms(email: EmailMessage, thread_context: ThreadContext | None
             "feedback": feedback or "없음",
         })
         if not result.ok:
-            return ToolResult(ok=False, error_kind=result.error_kind, source=SOURCE,
+            return ToolResult(ok=False, error_kind=result.error_kind, source=model_source(),
                               error_message="거래 항목을 뽑지 못했습니다",
                               attempts=result.attempts, duration_ms=result.duration_ms)
-        return ToolResult(ok=True, value=to_deal_terms(result.value), source=SOURCE,
+        return ToolResult(ok=True, value=to_deal_terms(result.value), source=model_source(),
                           attempts=result.attempts, duration_ms=result.duration_ms)
     except Exception as error:
         # 예외 문자열에는 메일 본문이 섞일 수 있어 종류만 남긴다.
-        return ToolResult(ok=False, error_kind="internal", source=SOURCE,
+        return ToolResult(ok=False, error_kind="internal", source=model_source(),
                           error_message=f"거래 항목 추출 중 오류 ({type(error).__name__})")

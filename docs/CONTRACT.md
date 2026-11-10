@@ -210,7 +210,7 @@ finish_failed → END
 | `value` | 도구마다 다름(4.4절) \| `None` | 결과 값. 실패면 `None` |
 | `error_kind` | `None \| "rate_limit" \| "network" \| "invalid_output" \| "invalid_input" \| "auth" \| "not_found" \| "internal"` | 오류 종류 |
 | `error_message` | `str \| None` | 사람이 읽을 오류 설명(비밀값·본문 넣지 않음) |
-| `source` | `str` | 출처. 예: `gemini:gemini-3.8-flash`, `gmail`, `db:price_list_items`, `code`, `rag:data/quote-rules/<파일>` |
+| `source` | `str` | 출처. 예: `gemini:gemini-3.6-flash`(`model_source()`), `gmail`, `db:price_list_items`, `code`, `rag:data/quote-rules/<파일>` |
 | `fetched_at` | `str`(ISO 8601, UTC) | 조회·계산 시점(기억에 저장된 외부 데이터를 최신처럼 쓰지 않으려고) |
 | `attempts` | `int` | 실제 시도 횟수(재시도 포함) |
 | `duration_ms` | `int` | 걸린 시간 |
@@ -370,7 +370,7 @@ class AgentError(TypedDict):
 - 새 키가 생기면 `DealTerms`와 `FIELD_LABELS`(같은 파일)에 함께 더한다(공통 부분 변경). [Claude proposal]
 
 ## 6. LLM 호출 (`app/llm/client.py`)
-- 모델: Google Gemini `gemini-3.8-flash`, 패키지 `langchain-google-genai`, 키 `GEMINI_API_KEY`. 실제 개인정보를 넣지 않는다(무료 등급 입력은 Google 제품 개선에 쓰임). [Request]
+- 모델: Google Gemini `gemini-3.6-flash`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `GEMINI_MODEL`로 덮어씀. 2026-11-10 #62에서 무료 등급 `gemini-3.8-flash`의 503 반복으로 바꿈), 패키지 `langchain-google-genai`, 키 `GEMINI_API_KEY`. 실제 개인정보를 넣지 않는다(무료 등급 입력은 Google 제품 개선에 쓰임). [Request]
 - 호출은 모두 `call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) -> LLMResult` 하나로 한다. 구조화 출력(`with_structured_output(schema)`)만 쓴다. [Request · Claude proposal]
 - `LLMResult`: `ok`, `value`(schema 객체), `error_kind`(`rate_limit`/`network`/`invalid_output`/`invalid_input`/`internal`), `attempts`, `prompt_version`, `duration_ms`. 노드는 이것을 `ToolResult`로 옮긴다. [Claude proposal]
 - 오류 구분: HTTP 429·`RESOURCE_EXHAUSTED`는 `rate_limit`(재시도 안 함) · 제한 시간 초과·연결 오류·HTTP 500/503(`UNAVAILABLE`)은 `network`(`LLM_MAX_RETRIES`까지 재시도) · 스키마 검증 실패는 `invalid_output`(`LLM_INVALID_OUTPUT_RETRIES`까지) · HTTP 400은 `invalid_input`(재시도 안 함). 정확한 예외 클래스는 2가 패키지 문서로 확인해 코드에 적는다. [Request · Claude proposal]
@@ -486,6 +486,7 @@ class AgentError(TypedDict):
 | 이름 | 뜻 | 쓰는 하위 작업 |
 |---|---|---|
 | `GEMINI_API_KEY` | Gemini API 키 | 2, 8, 10, 12, 13 |
+| `GEMINI_MODEL` | 쓸 Gemini 모델 이름(비우면 `gemini-3.6-flash`) | 16 |
 | `GOOGLE_OAUTH_CLIENT_ID` | OAuth 클라이언트 ID | 6 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 클라이언트 비밀번호 | 6 |
 | `GOOGLE_OAUTH_REDIRECT_URI` | OAuth 리디렉션 주소(로컬·Render 각각) | 6 |
