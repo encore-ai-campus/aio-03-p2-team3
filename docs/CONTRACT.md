@@ -453,6 +453,9 @@ class AgentError(TypedDict):
 | 페이지 | 템플릿 | 경로 | 하위 작업 |
 |---|---|---|---|
 | 로그인 | `login.html` | `GET /login`, `GET /auth/google/start`, `GET /auth/google/callback`, `POST /logout` | 6 |
+| 앱 소개(로그인 없이) | `about.html` | `GET /about` | #82 |
+| 개인정보처리방침(로그인 없이) | `privacy.html` | `GET /privacy` | #82 |
+| 서비스 약관(로그인 없이) | `terms.html` | `GET /terms` | #82 |
 | 받은 메일·후보 목록 | `inbox.html` | `GET /` → `/inbox`, `GET /inbox`, `GET /inbox/list`(HTMX 조각, `INBOX_POLL_SECONDS`마다) | 9 |
 | 스레드·후보 고르기 | `thread.html` | `GET /threads/{thread_id}`, `POST /candidates/{candidate_id}/approve` | 9 |
 | 견적서 확인 | `quote.html` | `GET /quotes/{quote_id}`, `POST /quotes/{quote_id}/prices`, `GET /quotes/{quote_id}/preview.pdf`, `POST /quotes/{quote_id}/approve`(폼에 `candidate_id`) | 11 |

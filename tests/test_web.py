@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -37,3 +38,35 @@ def test_every_template_compiles():
     templates = Environment(loader=FileSystemLoader(directory))
     for name in templates.list_templates():
         templates.get_template(name)
+
+
+@pytest.mark.parametrize(("path", "heading", "required_text"), [
+    ("/about", "Gmail 견적 도우미", ["수업 과제용 시연", "답장 후보 2~3개", "승인해야만", "견적서"]),
+    ("/privacy", "개인정보처리방침", [
+        "gmail.readonly", "gmail.send", "이메일 주소", "Render Postgres", "암호화",
+        "Gemini 무료 등급", "Google 제품 개선", "과제 종료 뒤 삭제", "타사 액세스", "GitHub Issue",
+    ]),
+    ("/terms", "서비스 약관", ["수업 과제용 시연", "실제 업무", "실제 개인정보", "보증하지", "중단될 수"]),
+])
+def test_public_pages_without_login(path, heading, required_text):
+    # OAuth·LLM 키나 로그인 쿠키가 없어도 리디렉션 없이 읽을 수 있어야 한다.
+    with TestClient(create_app(Settings(database_url="sqlite://"))) as client:
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert f"<h1>{heading}</h1>" in response.text
+        assert "테스트용 Gmail" in response.text
+        for text in required_text:
+            assert text in response.text
+
+
+@pytest.mark.parametrize(("path", "links"), [
+    ("/about", ["/privacy", "/terms"]),
+    ("/login", ["/about", "/privacy", "/terms"]),
+])
+def test_public_page_links(path, links):
+    with TestClient(create_app(Settings(database_url="sqlite://"))) as client:
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 200
+        for link in links:
+            assert f'href="{link}"' in response.text
