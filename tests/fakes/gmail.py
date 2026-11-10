@@ -68,6 +68,10 @@ class _Messages:
     def get(self, **params):
         return _Request(self.mailbox, "message", params, self.mailbox.raw_messages[params["id"]])
 
+    def list(self, **params):
+        # 검색(q) 결과 페이지는 search_pages[pageToken]에서 꺼낸다(최신 메일이 앞).
+        return _Request(self.mailbox, "search", params, self.mailbox.search_pages[params.get("pageToken")])
+
     def send(self, **params):
         # 보낸 결과는 send_results에서 차례로 꺼낸다(예외를 넣으면 발송 실패). 비면 새 id를 만든다.
         value = self.mailbox.send_results.pop(0) if self.mailbox.send_results else {
@@ -85,6 +89,7 @@ class Mailbox:
         self.raw_messages = {"fake-message": message()}
         self.attachment_data = {}
         self.send_results = []
+        self.search_pages = {None: {"resultSizeEstimate": 0}}
         self.calls = []
 
     def called(self, kind):
