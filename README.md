@@ -29,9 +29,15 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 uv sync                  # 패키지 설치(.venv 생성, uv.lock 기준)
 cp .env.example .env     # 값을 채운다. .env는 올리지 않는다
 uv run pytest            # 테스트
+uv run uvicorn app.main:app --reload  # 로컬 서버
 ```
 
-- 서버 실행 명령은 코드 구조가 정해지면 여기에 더한다.
+- 기본 화면: `http://127.0.0.1:8000/`(`/inbox`로 이동). 상태 확인: `http://127.0.0.1:8000/healthz` → `{"status":"ok"}`. 화면·상태 확인에는 API 키가 필요 없다.
+- Render 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- 현재는 계획 2절의 앱 뼈대다. 업무 노드·도구, Gmail 로그인·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 기본 화면의 연결 버튼은 비활성 상태다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
+- `DATABASE_URL`을 비우면 `app/db/local.sqlite3`에 로컬 DB를 만든다(커밋 제외). Postgres는 `postgres://`·`postgresql://` 주소도 `psycopg` 드라이버로 연결한다. 서버 시작 때 없는 표를 만들며 이주 도구는 아직 없다. 테스트는 메모리 SQLite를 쓴다.
+- DB 엔진·세션 팩터리, 컴파일한 그래프, 설정한 LLM 클라이언트를 재사용한다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
+- HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
 - 패키지 추가: `uv add <패키지>==<버전>`(개발용은 `uv add --dev …`). 버전은 `pip index versions <패키지>`로 확인하고, 바뀐 `pyproject.toml`·`uv.lock`을 함께 PR에 올린다.
 
 ## 산출물 위치

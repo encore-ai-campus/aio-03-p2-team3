@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% from 'components/card.html' import card %}
+{% from 'components/button.html' import button %}
+{% from 'components/status_badge.html' import status_badge %}
+{% block content %}
+<div class="intro">{{ status_badge('받은 메일') }}<h1>메일에서 답장과 견적까지</h1><p class="muted">받은 메일을 확인하고, 보낼 답장을 골라 보세요.</p></div>
+{% call card('아직 연결된 메일함이 없습니다') %}
+<p>Gmail 연결 기능을 준비하고 있습니다.</p>
+<p class="muted">연결이 가능해지면 테스트용 Gmail로 등록해 주세요.</p>
+{{ button('Gmail 연결 준비 중') }}
+{% endcall %}
+{% endblock %}
