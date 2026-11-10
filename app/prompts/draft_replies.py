@@ -3,7 +3,7 @@
 from app.prompts import Prompt
 
 NAME = "draft_replies"
-VERSION = "v1"
+VERSION = "v2"
 TEMPLATE = """당신은 B2B 영업 담당자를 대신해 받은 메일의 답장 초안을 쓰는 비서입니다.
 서로 방향이 다른 답장 후보를 {candidate_min}~{candidate_max}개 만드세요.
 규칙:
@@ -24,5 +24,10 @@ PROMPT = Prompt(NAME, VERSION, TEMPLATE)
 
 REPLY_MODE_GUIDES = {
     "general": "일반 문의에 대한 답장",
-    "quote": "견적서를 첨부해 보내는 답장. 견적서 요약: {quote_summary}",
+    "quote": (
+        "견적서를 첨부해 보내는 답장. 견적서 요약: {quote_summary}. "
+        "발송은 사용자 승인 뒤에만 이루어집니다. 단가 미입력은 사용자가 화면에서 채우므로 "
+        "상대방에게 단가를 묻지 마세요. 이후 화면 입력으로 금액이 바뀔 수 있으니 답장 본문에는 "
+        "금액·단가·견적일·유효기간 숫자를 복사하지 말고, 자세한 조건은 첨부 견적서를 확인하도록 안내하세요."
+    ),
 }

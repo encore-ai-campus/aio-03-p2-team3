@@ -1,2 +1,40 @@
 {% extends 'base.html' %}
-{% block content %}<h1>견적서 확인</h1><p>기능을 준비하고 있습니다.</p>{% endblock %}
+{% from 'components/quote_table.html' import quote_table %}
+{% from 'components/button.html' import submit_button %}
+{% block content %}
+<h1>견적서 확인</h1>
+{% if notice %}<p class="banner">{{ notice }}</p>{% endif %}
+<section class="card">
+  <h2>{{ quote.draft.quote_no }}</h2>
+  <p>거래처: {{ quote.draft.customer_name }}</p>
+  <p>견적일: {{ quote.draft.quote_date }} · 유효기간: {{ quote.draft.valid_until }}</p>
+  {% for key, label in [('company_name','공급자'),('business_no','사업자번호'),('ceo_name','대표자'),('contact','연락처')] %}
+  <p>{{ label }}: {{ quote.draft.supplier.get(key) or '미입력' }}</p>
+  {% endfor %}
+  {{ quote_table(quote.draft.lines) }}
+  {% if quote.status == 'needs_price' %}
+  <p class="banner">단가를 입력해 주세요. 합계가 확정되면 승인할 수 있습니다.</p>
+  <form method="post" action="/quotes/{{ quote.id }}/prices" class="form-stack">
+    {% for line in quote.draft.lines %}{% if line.unit_price is none %}
+    <label>{{ loop.index }}. {{ line.item_name }} 단가(원) <input name="price_{{ loop.index0 }}" type="number" min="0" max="9223372036854775807" step="1" required></label>
+    {% endif %}{% endfor %}
+    {{ submit_button('단가 입력 · 합계 계산') }}
+  </form>
+  {% else %}
+  <p>공급가액 {{ '{:,}'.format(quote.draft.supply_amount) }}원 · 부가세(10%) {{ '{:,}'.format(quote.draft.vat) }}원 · <strong>합계 {{ '{:,}'.format(quote.draft.total) }}원</strong></p>
+  {% endif %}
+  <p><a href="/quotes/{{ quote.id }}/preview.pdf" target="_blank" rel="noopener">견적서 PDF 미리보기</a></p>
+  <object data="/quotes/{{ quote.id }}/preview.pdf" type="application/pdf" class="pdf-preview" aria-label="견적서 PDF"><p>위 링크에서 PDF를 열 수 있습니다.</p></object>
+</section>
+{% if quote.status == 'sent' %}<p class="banner">견적서를 첨부해 보냈습니다.</p>{% else %}
+<section class="card"><h2>답장 선택 · 승인</h2>
+  <p>PDF와 답장을 확인한 뒤 한 후보를 승인해 주세요.</p>
+  {% for candidate in candidates %}
+  <article class="card"><h2>{{ candidate.label }}</h2><p>{{ candidate.subject }}</p><p class="raw">{{ candidate.body }}</p>
+    {% if quote.status == 'ready' %}
+    <form method="post" action="/quotes/{{ quote.id }}/approve" hx-boost="true" hx-disabled-elt="find button"><input type="hidden" name="candidate_id" value="{{ candidate.id }}">{{ submit_button('승인 · PDF 첨부 발송', primary=true) }}</form>
+    {% else %}<button class="button" disabled>단가 입력 후 승인 가능</button>{% endif %}
+  </article>
+  {% else %}<p>승인할 답장 후보가 없습니다.</p>{% endfor %}
+</section>{% endif %}
+{% endblock %}

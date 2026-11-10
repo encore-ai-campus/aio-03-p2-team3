@@ -40,6 +40,12 @@ footer { margin-block: var(--space-xl); }
 .row-warn { background: var(--color-warning-bg); }
 .row-warn .badge { color: var(--color-warning); background: var(--color-surface); }
 .button-link { display: inline-block; text-decoration: none; color: var(--color-accent); }
+.form-stack { display: grid; gap: var(--space-md); margin-block: var(--space-md); }
+.form-stack label { display: grid; gap: var(--space-xs); }
+input { font: inherit; padding: var(--space-sm); border: var(--width-line) solid var(--color-line); border-radius: var(--radius-sm); }
+.pdf-preview { width: var(--width-full); height: var(--height-pdf-preview); border: var(--width-line) solid var(--color-line); }
+.quote-table { min-width: var(--width-quote-table); }
+.quote-table th { white-space: nowrap; }
 .badge-muted { color: var(--color-muted); background: var(--color-bg); }
 .badge-done { color: var(--color-done); background: var(--color-done-bg); }
 .badge-warn { color: var(--color-warning); background: var(--color-warning-bg); }
