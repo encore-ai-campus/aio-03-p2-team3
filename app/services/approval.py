@@ -53,12 +53,13 @@ def _user_lock(database, user_id: int) -> Lock:
 
 def send_approved_candidate(user_id: int, candidate_id: int, *, access: GoogleAccess) -> ApprovalResult:
     """로그인한 사용자가 고른 후보 하나를 같은 스레드로 보낸다. 다른 사용자 후보면 `not_found`."""
-    with access.database.session() as session:
-        candidate = get_owned(session, ReplyCandidate, candidate_id, user_id)
-        if candidate is None:
-            return ApprovalResult("not_found")
-        thread_id = candidate.thread_id
     with _user_lock(access.database, user_id):
+        # 최초 조회도 직렬화한다. 메모리 SQLite는 세션들이 DB 연결 하나를 공유한다.
+        with access.database.session() as session:
+            candidate = get_owned(session, ReplyCandidate, candidate_id, user_id)
+            if candidate is None:
+                return ApprovalResult("not_found")
+            thread_id = candidate.thread_id
         claimed = _claim(access, user_id, candidate_id)
         if isinstance(claimed, str):
             return ApprovalResult(claimed, thread_id)
