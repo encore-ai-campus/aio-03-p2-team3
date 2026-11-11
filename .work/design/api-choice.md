@@ -21,6 +21,17 @@
 - 무료 등급은 입력이 Google 제품 개선에 쓰이므로 실제 개인정보를 넣지 않는다(RULES 3절). 11/19 상호 체험 때 화면에 '개인정보를 넣지 마세요'를 안내한다. [Claude proposal]
 - 쓰지 않는 것: Groq(분당 8K 토큰이 이 과제에 빠듯함), 다른 LLM으로 넘기는 대비책(모델이 바뀌면 응답 일관성 지표가 흔들림). 필요해지면 요청자에게 묻고 더한다. [Claude proposal]
 
+### 모델 변경 (2026-11-10, Issue #62)
+- 바꾼 것: 기본 모델을 `gemini-3.8-flash` → `gemini-3.6-flash`로 바꿨다. [Request: 요청자가 추천안을 고름]
+- 까닭: 실제 API 확인(#62)에서 Render의 메일 분석 호출 6번이 모두 `network`로 실패했고, 요청자 PC에서 같은 키로 짧은 요청(`hello`)을 보내도 `gemini-3.8-flash`는 5번 모두 HTTP 503(0.9~7.9초)이었다. 같은 때 `gemini-3.6-flash`·`gemini-3.5-flash-lite`는 3번 모두 200, `gemini-3.1-flash-lite`는 3번 모두 503이었다. 3.6은 응답한 모델 가운데 lite보다 성능이 높다. Google 개발자 포럼의 Google 측 답변은 무료 등급 3.8 Flash의 503을 서비스 일시 과부하로 설명한다(https://discuss.ai.google.dev/t/free-tier-interactions-api-getmodel-succeeds-but-generation-returns-503-on-gemini-3-8-flash-and-429-on-gemini-3-6-flash/189550 , 2026-11-10 조회).
+- 방식: 모델 이름은 `app/llm/client.py`의 `DEFAULT_MODEL`이고 환경변수 `GEMINI_MODEL`로 덮어쓴다. 시연 때 3.6도 막히면 Render 환경변수만 바꿔 다른 무료 모델로 옮긴다(재배포됨). 한 실행 안에서 모델을 섞는 대비책은 여전히 두지 않는다(응답 일관성). [Claude proposal]
+- 함께 한 일: 이전 키가 대화에 노출돼 같은 결제 없는 프로젝트에서 새 키를 만들어 Render `GEMINI_API_KEY`를 바꿨다(요청자, 2026-11-10). 키 값은 레포에 두지 않는다.
+
+### 무역 문서 추출용 OpenAI Responses 추가 (2026-11-11)
+- 바꾼 것: 무역 도메인 AI 추출(PI·PO·CI·PL의 `POST /api/trade/{kind}/extract`)은 LangChain `ChatOpenAI(use_responses_api=True)`로 OpenAI Responses API를 기본 백엔드로 쓴다. 메일 그래프·견적 도구는 계속 Gemini를 쓴다. [Request: 요청자가 방향을 정함]
+- 까닭: 이식 원본(`reference/kekorea/Quotation_KEKOREA/agent/extractor.py`)이 OpenAI Responses API로 문서를 추출했다. 실제 Gemini 키 확인(2026-11-11)에서 도메인 추출 스키마의 HTTP 입력 제약(`pattern`·`maxLength`·`maxItems`)을 Gemini 구조화 출력이 400 INVALID_ARGUMENT로 거부했다(메일 그래프 스키마는 제약이 없어 동작). 또 숫자를 JSON number로 받으면 십진수 정밀도가 깨지므로 원본처럼 전부 문자열로 받는다.
+- 방식: 백엔드 선택은 `app/trade/common/extraction.py`의 `trade_backend()`(환경변수 `TRADE_EXTRACT_BACKEND`, 기본 `openai_responses`, `gemini`로 복귀 가능). 모델은 원본 기본값 `gpt-6-luna`이고 `OPENAI_MODEL`로 덮어쓴다. LLM에는 제약을 떼고 숫자를 문자열로 바꾼 wire 스키마를 주고, 돌려받은 값은 원래 스키마로 다시 검증해 Decimal로 바꾼다. 재시도·오류 분류·기록은 그래프와 같은 `call_structured()`를 공유하며 OpenAI SDK 예외(429·400·연결 오류) 분류를 더했다.
+
 ### 설정 경로
 1. Google AI Studio의 API 키 화면(https://aistudio.google.com/app/apikey)에서 API 키를 만든다. 키는 비밀번호처럼 다루고 레포에 넣지 않는다.
 2. 환경변수는 `GEMINI_API_KEY` 하나만 쓴다. Google SDK는 `GEMINI_API_KEY`·`GOOGLE_API_KEY`를 모두 읽고 둘 다 있으면 `GOOGLE_API_KEY`가 앞서므로 하나만 둔다. [Claude proposal]
@@ -63,6 +74,22 @@
 - Gmail 메일함 푸시 알림·Pub/Sub 연결: https://developers.google.com/workspace/gmail/api/guides/push
 - Pub/Sub 인증된 푸시: https://cloud.google.com/pubsub/docs/authenticate-push-subscriptions
 - 선택 근거: `docs/plans/gmail-quote-mvp.md#3`(2026-11-09 요청), 환경변수 계약: `docs/CONTRACT.md` 11절
+
+### 콘솔 설정 결과 (2026-11-10, 계획 5절)
+- 정한 것 [Request]: Gmail·OAuth·Pub/Sub 전용 Google Cloud 프로젝트 `aio3-gmail-quote`를 따로 만들고 이 프로젝트에만 결제 계정을 연결한다. Gemini 키가 있는 프로젝트에는 결제를 연결하지 않는다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 확인되지 않은 앱 경고와 사용자 100명 상한을 감수한다.
+- OAuth: 게시 상태 프로덕션 단계(검증 없음), 사용자 유형 외부. 범위 `openid`·`userinfo.email`·`gmail.readonly`·`gmail.send`(`app/config.py`의 `GOOGLE_SCOPES`와 같음). 웹 애플리케이션 클라이언트의 리디렉션 URI는 `https://aio3-gmail-quote.onrender.com/auth/google/callback`, `http://localhost:8000/auth/google/callback`.
+- 브랜딩: 앱 이름 `Gmail 견적 도우미`(화면 이름과 같음), 홈페이지 `/about`·개인정보처리방침 `/privacy`·서비스 약관 `/terms`(서비스 주소 아래, #82), 승인된 도메인 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있어 서비스 주소가 최상위 개인 도메인).
+- Pub/Sub: 토픽 `projects/aio3-gmail-quote/topics/gmail-notify`(게시자: `gmail-api-push@system.gserviceaccount.com`, 역할 Pub/Sub 게시자. 2026-11-10 실제 API 확인(#62) 때 이 권한이 빠져 있어 감시 등록이 HTTP 403으로 실패했고, 그때 추가했다), 푸시 구독 `gmail-notify-push` → `https://aio3-gmail-quote.onrender.com/gmail/push`, 인증 사용(서비스 계정 `gmail-push-auth@aio3-gmail-quote.iam.gserviceaccount.com`, 대상 = 엔드포인트 주소), 확인 기한 120초, 재시도 정책 지수 백오프(기본 10~600초).
+- Render 환경변수(이름): `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`·`GMAIL_PUBSUB_TOPIC`·`PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`. 값은 레포에 두지 않는다.
+
+### 공식 문서 확인 결과 (2026-11-09~10 조회, 계획 5절 항목별)
+1. 결제: Free Tier 범위 안이라도 Cloud Billing 계정이 있어야 한다. Pub/Sub Free Tier는 결제 계정당 월 10 GiB. Gemini는 결제를 연결하지 않은 프로젝트에 둬야 무료 등급이 유지되며, 무료 키와 유료 키는 프로젝트를 나누라고 안내한다. 출처: https://docs.cloud.google.com/billing/docs , https://docs.cloud.google.com/free/docs/free-cloud-features , https://cloud.google.com/pubsub/pricing , https://ai.google.dev/gemini-api/docs/billing
+2. 토큰 만료: 외부·테스트 상태면 갱신 토큰이 7일 뒤 만료된다(기본 신원 범위만 요청하면 예외). 프로덕션 상태에서는 갱신 토큰이 취소되거나 오래(보통 6개월) 쓰지 않을 때 말고는 대체로 만료되지 않는다(7일 만료 없음). 검증 안 된 게시 앱은 민감·제한 범위에 경고 화면과 전체 사용자 100명 상한이 있다. 출처: https://developers.google.com/identity/protocols/oauth2 , https://developers.google.com/health/setup , https://developers.google.com/identity/protocols/oauth2/production-readiness/overview , https://support.google.com/cloud/answer/15549945
+3. 범위 구분: `gmail.send`는 민감, `gmail.readonly`·`gmail.modify`는 제한 범위다. 출처: https://developers.google.com/workspace/gmail/api/auth/scopes . 이 범위로 감시 등록·기록 조회·메일 읽기·발송이 실제로 되는지는 계획 16(#62)에서 확인한다.
+4. 브랜딩: 외부 프로덕션 앱은 홈페이지·개인정보처리방침·서비스 약관 링크가 필요하고, 링크 도메인은 승인된 도메인이어야 한다. 도메인 소유 확인(Search Console)은 검증을 신청할 때 필요하다. 출처: https://support.google.com/cloud/answer/15549049 , https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification
+5. 토픽 권한: Gmail 문서는 `gmail-api-push@system.gserviceaccount.com`에 publish 권한을 주라고 하며 역할 이름은 적지 않는다(Pub/Sub 게시자 역할로 줌). 감시 등록은 최소 7일마다(하루 1번 권장) 다시 해야 하고, 사용자당 알림은 초당 1개까지다. 출처: https://developers.google.com/workspace/gmail/api/guides/push
+6. 푸시 인증: 인증을 켜면 Pub/Sub가 서명한 JWT를 `Authorization` 헤더로 보내고, 받는 쪽은 대상과 서비스 계정 이메일(`email`, `email_verified`)을 확인한다. 서비스 계정은 구독과 같은 프로젝트에 있어야 한다. 출처: https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions , https://docs.cloud.google.com/pubsub/docs/create-push-subscription
+7. 잠든 Render와 푸시: 푸시 요청 제한 시간은 확인 기한과 같고(기본 10초, 최대 600초), 기한 안에 성공 응답이 없으면 재시도 정책대로 다시 보낸다(지수 백오프 기본 10~600초). 확인되지 않은 메시지는 기본 7일 보관된다. Render 무료 서버는 15분 동안 요청이 없으면 잠들고 깨는 데 약 1분 걸리므로 확인 기한을 120초로 했다. 실제로 첫 푸시가 기다렸다 성공하는지, 재전송으로 처리되는지는 계획 16(#62)에서 확인한다. 출처: https://docs.cloud.google.com/pubsub/docs/subscription-properties , https://docs.cloud.google.com/pubsub/docs/subscription-retry-policy , https://docs.cloud.google.com/go/docs/reference/cloud.google.com/go/pubsub/latest , https://render.com/docs/faq
 
 ## 일정 도구 추천 후보
 MVP에서 제외한 보조 API다(2026-11-09). 일정(캘린더) 도구 작업 때 AI가 아래 후보를 요청자에게 추천하고, 채택 여부를 확인한 뒤 API·환경변수를 추가한다. 현재 연동이나 키 발급은 하지 않는다. [Request]

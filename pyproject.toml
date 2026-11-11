@@ -22,10 +22,14 @@ dependencies = [
     "sqlalchemy==2.1.8",
     "psycopg[binary]==3.3.8",
     "cryptography==50.0.2",
+    "fpdf2==2.9.0",
+    "alembic==1.20.1",
+    "langchain-openai==1.7.4",
 ]
 
 [dependency-groups]
 dev = [
+    "pypdf==7.0.0",
     "pytest==9.2.0",
 ]
 

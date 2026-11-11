@@ -36,7 +36,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - Render 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
 - 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 실제 Google 로그인에는 Google Cloud 설정(계획 5절)이 필요하고, 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py`로 실행한다.
-- `DATABASE_URL`을 비우면 `app/db/local.sqlite3`에 로컬 DB를 만든다(커밋 제외). Postgres는 `postgres://`·`postgresql://` 주소도 `psycopg` 드라이버로 연결한다. 서버 시작 때 없는 표를 만들며 이주 도구는 아직 없다. 테스트는 메모리 SQLite를 쓴다.
+- `DATABASE_URL`을 비우면 `app/db/local.sqlite3`에 로컬 DB를 만든다(커밋 제외). Postgres는 `postgres://`·`postgresql://` 주소도 `psycopg` 드라이버로 연결한다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신한다. SQLite의 기존 단가표 제약 변경은 테이블 복사 방식이고 Postgres는 트랜잭션 안에서 변경한다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 메모리 SQLite와 이전 스키마에서의 갱신을 확인한다.
 - DB 엔진·세션 팩터리, 컴파일한 그래프, 설정한 LLM 클라이언트를 재사용한다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
 - HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
 - 패키지 추가: `uv add <패키지>==<버전>`(개발용은 `uv add --dev …`). 버전은 `pip index versions <패키지>`로 확인하고, 바뀐 `pyproject.toml`·`uv.lock`을 함께 PR에 올린다.
@@ -59,7 +59,8 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|
-| Google Gemini API `gemini-3.8-flash`(무료 등급) | LLM | Google AI Studio API 키 화면(https://aistudio.google.com/app/apikey) | `GEMINI_API_KEY` |
+| Google Gemini API `gemini-3.6-flash`(무료 등급) | LLM(메일 그래프·답장·거래 추출 도구) | Google AI Studio API 키 화면(https://aistudio.google.com/app/apikey) | `GEMINI_API_KEY` · `GEMINI_MODEL`(선택, 비우면 `gemini-3.6-flash`) |
+| OpenAI Responses API `gpt-6-luna` | 무역 문서 AI 추출(PI·PO·CI·PL `POST /api/trade/{kind}/extract`) 전용 | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | `OPENAI_API_KEY` · `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`) · `TRADE_EXTRACT_BACKEND`(선택, 비우면 `openai_responses`, Gemini 복귀 시 `gemini`) |
 | Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
 | Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
 | Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | Calendar API와 사용자별 Google OAuth를 사용. 일정 도구 작업 때 연결 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
@@ -90,3 +91,14 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 | 정원철 | `krw82` | 프로젝트 끝에 PR 내역으로 정리 | 함께 배우며 꾸준히 성장하는 개발자입니다. |
 | 김진혁 | `rlawlsgura-stack` | 프로젝트 끝에 PR 내역으로 정리 | 안녕하세요 |
 | 임석원 | `swihm1989-ship-it` | 프로젝트 끝에 PR 내역으로 정리 | 코딩의 귀재 |
+
+
+## 독립 무역 문서 JSON API
+
+상세 경로·도메인 차이·요청 예시·폴더 구조는 [React 무역 문서 API](docs/trade-api.md)를 참고한다. PI와 같은 작성/수정/검토/선택/다운로드 경로를 PO·CI·PL에도 제공한다. CI는 승인된 PI 버전을 선택하고, PL은 최종 검토 전에 `/packing-review`의 합계를 확인한다.
+
+React는 기존 Google 로그인 세션으로 `GET /api/session`에서 CSRF 토큰을 받고, 변경 요청에 `X-CSRF-Token`과 세션 쿠키를 함께 보낸다. PI는 `/api/trade/pi`에서 작성/목록, `/extract`에서 텍스트 추출, `/{id}`에서 조회/전체 수정, `/{id}/versions/{revision}`에서 이전 버전을 조회한다. 입력 수량·금액은 정확한 십진수 문자열이며 API 형식은 `/docs`에서 확인한다.
+
+`POST /api/trade/pi/{id}/reviews`에 `revision`과 `formats`(`pdf`, `xlsx`)를 보내 검토 제안을 만든다. 반환된 제안의 ID·revision·content_hash를 그대로 `…/reviews/{proposal_id}/decisions`로 보내 `approve`, `cancel`, `modify` 중 하나를 선택한다. 수정 선택은 `document`에 새 입력 전체를 함께 보내며 새 버전·새 제안을 다시 확인한다. 부족한 수정 입력은 `needs_input`으로 돌아온다. 승인은 문서 확정과 파일 발급이며 메일 발송을 포함하지 않는다. 취소 시 파일을 발급하지 않고, 승인 재시도는 같은 파일을 반환한다. 파일은 로그인한 소유자만 `/api/trade/files/{file_id}`에서 내려받는다.
+
+회사·통화별 은행·단가는 `/api/trade/settings` 하위 API, 직인/로고 PNG는 `/branding/{seal|logo}`에 설정한다. 검토 제안에는 그 시점의 문서·계좌·이미지를 보관해 이후 설정 변경이 승인 파일을 바꾸지 않는다. 다른 주소의 React는 `FRONTEND_ORIGINS`에 허용 출처를 지정하고 `credentials: 'include'`를 사용한다. 서로 다른 사이트의 쿠키가 필요하면 HTTPS에서만 `SESSION_SAME_SITE=none`을 사용한다. 운영 배포·React 화면은 이번 백엔드 구현에 포함하지 않는다.

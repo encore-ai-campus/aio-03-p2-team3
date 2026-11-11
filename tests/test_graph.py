@@ -32,11 +32,18 @@ def stub_drafts(state):
 
 # 이 파일은 그래프 연결(전이)만 본다. 업무 본문을 채운 거래 노드도 빈 틀로 바꿔 끼운다
 # (거래 노드 본문 시험은 tests/test_deal.py).
-BLANK_NODES = {name: (lambda s: {}) for name in ("extract_deal", "check_required", "draft_followup")}
+BLANK_NODES = {name: (lambda s: {}) for name in ("extract_deal", "check_required", "draft_followup", "make_quote")}
+
+
+def pass_reflect(state):
+    # 흐름 시험용 통과 성찰. 실제 성찰(감지·수정·재검증)은 tests/test_reflect.py가 시험한다.
+    passed = {"passed": True, "issues": [], "cause": None, "strategy": None,
+              "retry_target": None, "feedback": None, "verified": None}
+    return {"reflection": passed, "reflection_history": [passed]}
 
 
 def run(database, email, overrides=None, **kwargs):
-    overrides = {"draft_replies": stub_drafts, **BLANK_NODES, **(overrides or {})}
+    overrides = {"draft_replies": stub_drafts, "reflect": pass_reflect, **BLANK_NODES, **(overrides or {})}
     return start_run(user_id=1, email=email, mode="test", database=database,
                      graph=build_graph(node_overrides=overrides), **kwargs)
 

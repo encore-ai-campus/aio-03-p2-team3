@@ -6,7 +6,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import Settings, get_settings
-from app.db.models import Base
 
 
 class Database:
@@ -30,7 +29,8 @@ class Database:
 
     def create_tables(self):
         if not self._initialized:
-            Base.metadata.create_all(self.engine)
+            from app.db.migrations import upgrade_database
+            upgrade_database(self.engine)
             self._initialized = True
 
     @contextmanager

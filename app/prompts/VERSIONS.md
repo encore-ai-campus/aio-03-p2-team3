@@ -5,3 +5,9 @@
 | 2026-11-09 | analyze_email.v1 · draft_replies.v1 · extract_deal_terms.v1 · draft_followup_replies.v1 · summarize_thread.v1 · reflect_fix.v1 | 호출·버전 기록을 검증할 빈 틀. 업무 지시는 후속 작업에서 채움 |
 | 2026-11-10 | analyze_email.v1 · draft_replies.v1 | 빈 틀을 업무 지시로 채움(계획 8절). 실제 호출에 쓴 적이 없는 빈 틀이라 버전은 v1 그대로 둠. 이 줄 뒤로 고치면 v2부터 올림 |
 | 2026-11-10 | extract_deal_terms.v1 · draft_followup_replies.v1 | 빈 틀을 업무 지시로 채움(계획 10절). 같은 이유로 v1 그대로 둠. 이 줄 뒤로 고치면 v2부터 올림 |
+| 2026-11-10 | draft_replies.v2 | 계획 11절: 단가는 사용자가 입력하며, 이후 금액 변경으로 답장과 PDF가 달라지지 않게 숫자를 본문에 복사하지 않고 첨부 견적서를 안내 |
+| 2026-11-10 | summarize_thread.v1 | 빈 틀을 누적 요약 지시·구조화 출력으로 채움(계획 13절). 이후 변경은 v2부터 올림. 분석·추출·후보의 템플릿은 유지하고 입력 문맥에 현재 메일 우선 지시·시점 있는 과거 기록·직전 결과를 더함 |
+| 2026-11-10 | reflect_fix.v1 | 빈 틀을 성찰 원인 분석·수정 지시(구조화 출력 `cause`·`feedback`)로 채움(계획 12절). 실제 호출에 쓴 적 없는 빈 틀이라 v1 그대로 둠. 규칙 검사가 문제를 찾았을 때만 부르며, 이후 변경은 v2부터 올림 |
+| 2026-11-10 | extract_trade_terms.v1 | kekorea-port 2절: 원본 extractor.py의 무역서류 지시 규칙(발행일 원문 복사 금지·빈 값 추측 금지·같은 뜻 라벨·통화 기호·다국어 영문 출력·프로모션 N+M·SHIP TO 명시 라벨)을 발행 회사·카탈로그 일반화해 새 버전으로 만듦. 첨부(PDF·이미지) 지시는 범위 밖이라 넣지 않음 |
+| 2026-11-10 | draft_replies.v3 | kekorea-port 6절: 무역서류(PI/PO/CI/PL) 동봉 답장 안내를 더함. 입력 변수 `trade_doc`(문서 종류·문서번호·합계 요약)를 새로 받고, 무역서류도 검토 입력·합계 승인으로 값이 바뀔 수 있어 본문에 금액·문서번호 숫자 복사를 금지하는 규칙으로 v2 안내를 넓힘 |
+| 2026-11-11 | pi_extract.v1 · po_extract.v1 · ci_extract.v1 · pl_extract.v1 | 독립 문서별 구조화 추출. 원문 사실만 추출하며 승인/저장/발송 권한 없음. CI는 사용자가 선택한 승인 PI 버전의 선적 정보만 보완하고, PL은 원본 합계를 자동 수정하지 않는다. 기존 LangChain Gemini 호출과 오류/재시도 기록을 재사용한다. |

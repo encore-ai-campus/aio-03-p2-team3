@@ -1,2 +1,32 @@
 {% extends 'base.html' %}
-{% block content %}<h1>답장 후보</h1><p>기능을 준비하고 있습니다.</p>{% endblock %}
+{% from 'components/card.html' import card %}
+{% from 'components/banner.html' import banner %}
+{% from 'components/status_badge.html' import status_badge %}
+{% from 'components/candidate_card.html' import candidate_card %}
+{% block title %}답장 고르기 · Gmail 견적 도우미{% endblock %}
+{% block content %}
+<div class="intro">{{ status_badge('답장 고르기') }}<h1>보낼 답장을 골라 주세요</h1><p class="muted">후보 하나를 승인해야만 같은 대화로 보냅니다. 하나를 보내면 같은 메일의 다른 후보는 보내지 않습니다.</p><p><a href="/inbox">← 받은 메일로</a></p></div>
+{% if notice %}{{ banner(notice, notice_tone) }}{% endif %}
+{# 처리 중에만 본문을 다시 읽고, 새 응답의 같은 영역으로 바꿔 승인 대기·실패 때 반복을 멈춘다 #}
+<div id="thread-content"{% if processing %} hx-get="{{ url_for('thread_page', thread_id=thread_id).path }}" hx-trigger="every {{ poll_seconds }}s" hx-select="#thread-content" hx-swap="outerHTML"{% endif %}>
+{% for entry in entries %}
+{% if entry.subject is not none %}
+{% call card(entry.subject) %}
+<p class="muted">{{ '보낸 메일' if entry.outgoing else '받은 메일' }} · {{ entry.from_addr }} · {{ entry.sent }}</p>
+<div class="mail-body">{{ entry.body }}</div>
+{% endcall %}
+{% endif %}
+{% if entry.status == 'processing' %}
+{{ banner('답장 후보를 만드는 중입니다. 준비되면 자동으로 보여 드립니다.', 'muted') }}
+{% elif entry.status == 'error' %}
+{{ banner('후보를 만들지 못했습니다.') }}
+{% if entry.run_id %}<p><a href="/runs/{{ entry.run_id }}">실행 기록 보기</a></p>{% endif %}
+{% endif %}
+{% if entry.candidates %}
+<section class="candidates" aria-label="답장 후보">
+{% for candidate in entry.candidates %}{{ candidate_card(candidate) }}{% endfor %}
+</section>
+{% endif %}
+{% endfor %}
+</div>
+{% endblock %}

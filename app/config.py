@@ -40,6 +40,10 @@ DEFAULT_REQUIRED_FIELDS = [
 class Settings:
     database_url: str = field(default="", repr=False)
     gemini_api_key: str = field(default="", repr=False)
+    gemini_model: str = ""
+    openai_api_key: str = field(default="", repr=False)
+    openai_model: str = ""
+    trade_extract_backend: str = ""
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = field(default="", repr=False)
     google_oauth_redirect_uri: str = ""
@@ -51,6 +55,8 @@ class Settings:
     session_secret: str = field(default="", repr=False)
     app_base_url: str = ""
     reflection_enabled_default: bool = False
+    frontend_origins: str = ""
+    session_same_site: str = "lax"
 
     @property
     def resolved_database_url(self) -> str:

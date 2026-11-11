@@ -13,6 +13,9 @@
 <p class="muted">새 메일이 오면 답장 후보를 만들어 이 화면에 보여 줍니다.</p>
 <form method="post" action="/logout">{{ submit_button('로그아웃') }}</form>
 {% endcall %}
+{% call card('받은 메일') %}
+<div id="inbox-list" hx-get="/inbox/list" hx-trigger="every {{ poll_seconds }}s" hx-swap="innerHTML">{% include 'pages/inbox_list.html' %}</div>
+{% endcall %}
 {% else %}
 {% call card('아직 연결된 메일함이 없습니다') %}
 <p>Google 계정으로 로그인해 테스트용 Gmail을 연결해 주세요.</p>

@@ -6,10 +6,13 @@
 from app.db.models import ReplyCandidate as ReplyCandidateRow
 from app.graph.state import AgentState
 from app.runlog.logger import current_database
+from app.services.memory import save_run_memory
 
 
 def save_pending(state: AgentState) -> dict:
     quote = state["quote_draft"]
+    trade = state["trade_doc_draft"]
+    end_reason = "followup_question" if state["reply_mode"] == "followup" else "awaiting_approval"
     if state["candidates"]:
         with current_database().session() as session:
             for candidate in state["candidates"]:
@@ -20,6 +23,8 @@ def save_pending(state: AgentState) -> dict:
                     asks_fields=candidate["asks_fields"], needs_review=candidate["needs_review"],
                     notice=candidate["notice"],
                     quote_id=quote["quote_id"] if quote and candidate["kind"] == "quote" else None,
+                    trade_doc_id=trade["trade_doc_id"] if trade and candidate["kind"] == "quote" else None,
                     status="pending",
                 ))
-    return {"end_reason": "followup_question" if state["reply_mode"] == "followup" else "awaiting_approval"}
+            save_run_memory(session, state, end_reason)
+    return {"end_reason": end_reason}

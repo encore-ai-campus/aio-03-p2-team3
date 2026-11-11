@@ -13,8 +13,10 @@ from email.message import Message
 from email.utils import getaddresses, parseaddr
 from functools import lru_cache
 from html.parser import HTMLParser
+import json
 import logging
 import os
+import re
 from time import monotonic
 
 from app.config import GOOGLE_SCOPES, LIMITS, Settings
@@ -34,6 +36,14 @@ SCOPE_ALIASES = {
 }
 
 log = logging.getLogger(__name__)
+
+# Google의 짧은 원인 코드만 허용한다. 응답의 message·details·알 수 없는 reason에는
+# 계정·메일·토큰이 들어 있을 수 있으므로 로그나 DB로 복사하지 않는다.
+ERROR_REASONS = frozenset({
+    "forbidden", "accessNotConfigured", "insufficientPermissions", "authError",
+    "rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded", "quotaExceeded",
+    "backendError", "notFound", "invalidArgument", "domainPolicy",
+})
 
 
 class GoogleError(Exception):
@@ -200,7 +210,7 @@ class GoogleClient:
                 num_retries=LIMITS["GMAIL_MAX_RETRIES"],
             )
         except Exception as error:  # HttpError·통신 오류
-            raise WatchFailed(_error_label(error)) from error
+            raise WatchFailed(_error_label(error, include_reason=True)) from error
         expiration = datetime.fromtimestamp(int(response["expiration"]) / 1000, UTC)
         return WatchResponse(str(response["historyId"]), expiration)
 
@@ -243,6 +253,30 @@ class GoogleClient:
             ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])["data"]
         except Exception as error:
             raise GoogleUnavailable(_error_label(error)) from error
+
+    def get_reply_headers(self, gmail, message_id: str) -> dict[str, str]:
+        """답장에 필요한 원본 머리글(From·Reply-To·Message-ID·References)만 읽는다. 읽기라 재시도한다."""
+        try:
+            raw = gmail.users().messages().get(
+                userId="me", id=message_id, format="metadata",
+                metadataHeaders=["From", "Reply-To", "Message-ID", "References"],
+            ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+        return {h["name"].lower(): h["value"] for h in raw.get("payload", {}).get("headers", [])}
+
+    def send_message(self, gmail, raw: str, thread_id: str) -> str:
+        """같은 threadId로 메일 하나를 보내고 보낸 메일 id를 돌려준다.
+
+        자동 재시도하지 않는다(num_retries=0): 시간 초과여도 실제로는 나갔을 수 있어 다시 보내면 두 번 갈 수 있다.
+        """
+        try:
+            response = gmail.users().messages().send(
+                userId="me", body={"raw": raw, "threadId": thread_id},
+            ).execute(num_retries=0)
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+        return str(response["id"])
 
 
 @lru_cache(maxsize=4)
@@ -326,10 +360,28 @@ def decode_message(raw: dict, own_email: str, attachment_loader=None) -> EmailMe
     }
 
 
-def _error_label(error: Exception) -> str:
+def _error_label(error: Exception, *, include_reason: bool = False) -> str:
+    """로그에는 원인을 더하되, 발송 등의 기존 HTTP 코드 판정에는 상태 코드만 돌려준다."""
     status = getattr(error, "status_code", None) or getattr(getattr(error, "resp", None), "status", None)
-    if status:
-        log.warning("Gmail API 오류 HTTP %s (%s)", status, type(error).__name__)
-        return f"HTTP {status}"
+    if isinstance(status, int) and 100 <= status <= 599:
+        label = f"HTTP {int(status)}"
+        # HttpError의 문자열에는 요청 URL과 오류 메시지가 포함되므로 content의 reason만 읽는다.
+        try:
+            payload = json.loads(getattr(error, "content", b"{}"))
+            reasons = payload["error"]["errors"]
+            if isinstance(reasons, list):
+                safe = sorted({entry["reason"] for entry in reasons
+                               if isinstance(entry, dict) and isinstance(entry.get("reason"), str)
+                               and entry["reason"] in ERROR_REASONS})
+                if safe:
+                    label += f" ({', '.join(safe)})"
+        except (ValueError, TypeError, KeyError):
+            pass
+        label = label[:180]  # watch_failed 접두사를 붙여도 last_error의 200자 제한 안에 둔다.
+        log.warning("Gmail API 오류 %s (%s)", label, type(error).__name__)
+        return label if include_reason else f"HTTP {int(status)}"
+    # 대역이나 상위 서비스가 만든 GoogleError도 검증된 HTTP 코드만 재사용한다.
+    if isinstance(error, GoogleError) and re.fullmatch(r"HTTP [1-5][0-9]{2}", str(error)):
+        return str(error)
     log.warning("Gmail API 호출 실패: %s", type(error).__name__)
     return type(error).__name__

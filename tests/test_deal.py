@@ -47,7 +47,8 @@ def no_real_llm(monkeypatch):
 
 def run(database, email, responses, overrides=None, **kwargs):
     # 거래 경로만 본다: 메일 분석(8)은 의도만 정하고, 견적서 동봉 답장(11의 draft_replies quote)은 빈 틀로 둔다.
-    nodes = {"analyze_email": lambda s: {"intent": "deal"}, "draft_replies": lambda s: {}, **(overrides or {})}
+    nodes = {"analyze_email": lambda s: {"intent": "deal"}, "draft_replies": lambda s: {},
+             "make_quote": lambda s: {}, **(overrides or {})}
     fake = FakeLLM(responses)
     with client.use_backend(fake):
         result = start_run(user_id=1, email=email, mode="test", database=database,

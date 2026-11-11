@@ -3,6 +3,7 @@
 from app.graph.nodes.common import call_tool, failure_update, preferences_of, retry_feedback
 from app.graph.state import AgentState
 from app.quote.required_fields import FIELD_LABELS
+from app.services.memory import context_for_model
 
 NODE = "draft_followup"
 TOOL = "draft_followup_replies"
@@ -17,7 +18,7 @@ def draft_followup(state: AgentState) -> dict:
         labels.update({field["key"]: field["label"] for field in state["required_fields"]["fields"]})
     feedback = retry_feedback(state, NODE)
     result, update = call_tool(state, NODE, TOOL, {
-        "email": state["email"], "thread_context": state["thread_context"],
+        "email": state["email"], "thread_context": context_for_model(state),
         "deal_terms": state["deal_terms"], "missing_fields": missing,
         "field_labels": {key: labels.get(key, key) for key in missing},
         "preferences": preferences_of(state), "feedback": feedback,

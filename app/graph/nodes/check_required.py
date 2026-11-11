@@ -16,7 +16,7 @@ def check_required(state: AgentState) -> dict:
     deal_terms = state["deal_terms"]
     if deal_terms is None:
         return failure_update(state, NODE, "invalid_input", "검토할 거래 항목이 없습니다")
-    required = get_required_fields(state["user_id"])
+    required = get_required_fields(state["user_id"], deal_terms.get("doc_kind", "quote"))
     keys = [field["key"] for field in required["fields"]]
     current_event("required_source", detail={
         "source": required["source"], "fields": keys, "evidence": required["evidence"],
