@@ -5,9 +5,10 @@ from copy import deepcopy
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import CompanyBankAccount, CompanyProfile, TradeDocument, User
+from app.db.models import CompanyBankAccount, CompanyProfile, TradeArtifact, TradeDocument, TradeDocumentVersion, TradeProposal, User, utcnow
 from app.services.locks import user_lock
 from app.trade.common.models import DocumentContext, DocumentError
+from app.trade.common.results import artifact_view
 from app.trade.store import counterparty_profiles, trade_price_rows
 
 ISSUER_FIELDS = ("company_name", "legal_name_en", "business_no", "ceo_name", "contact", "address",
@@ -70,12 +71,14 @@ class SQLDocuments:
                     session.add(row)
                     session.flush()
                     row.draft = self._snapshot(row)
+                    session.add(TradeDocumentVersion(document_id=row.id, user_id=self.user_id,
+                                                      revision=1, payload=deepcopy(row.draft)))
                     return deepcopy(row.draft)
             except IntegrityError:
                 if attempt == 2:
                     raise
 
-    def replace(self, document_id, revision, document):
+    def replace(self, document_id, revision, document, review_reference=None):
         if document.get("document_type") != self.document_type:
             raise DocumentError("DOCUMENT_TYPE_MISMATCH", "문서 종류가 일치하지 않습니다", 400)
         with user_lock(self.database, self.user_id), self.database.session() as session:
@@ -91,4 +94,49 @@ class SQLDocuments:
             ).values(draft=result, status=result["status"], revision=revision + 1)).rowcount
             if claimed != 1:
                 raise DocumentError("REVISION_CONFLICT", "최신 문서를 다시 확인하세요")
+            # 모든 복합 갱신은 문서 → 제안 순서로 잠근다(승인/수정 사이 교착 방지).
+            if review_reference is not None:
+                proposal_id, content_hash = review_reference
+                proposal_claimed = session.execute(update(TradeProposal).where(
+                    TradeProposal.id == proposal_id, TradeProposal.user_id == self.user_id,
+                    TradeProposal.document_id == document_id, TradeProposal.revision == revision,
+                    TradeProposal.status == "pending", TradeProposal.content_hash == content_hash,
+                ).values(status="superseded", decision="modify", decided_at=utcnow())).rowcount
+                if proposal_claimed != 1:
+                    raise DocumentError("PROPOSAL_CONFLICT", "현재 대기 중인 검토 제안을 다시 확인하세요")
+            session.add(TradeDocumentVersion(document_id=document_id, user_id=self.user_id,
+                                              revision=revision + 1, payload=deepcopy(result)))
+            session.execute(update(TradeProposal).where(
+                TradeProposal.document_id == document_id, TradeProposal.user_id == self.user_id,
+                TradeProposal.status == "pending",
+            ).values(status="superseded", decided_at=utcnow()))
             return result
+
+    def list(self, limit=50):
+        with user_lock(self.database, self.user_id), self.database.session() as session:
+            rows = session.scalars(select(TradeDocument).where(
+                TradeDocument.user_id == self.user_id, TradeDocument.doc_kind == self.document_type,
+            ).order_by(TradeDocument.id.desc()).limit(limit)).all()
+            return [self._snapshot(row) for row in rows]
+
+    def version(self, document_id, revision):
+        with user_lock(self.database, self.user_id), self.database.session() as session:
+            document = self._owned(session, document_id)
+            row = session.get(TradeDocumentVersion, (document_id, revision))
+            if row is None or row.user_id != self.user_id:
+                raise DocumentError("VERSION_NOT_FOUND", "문서 버전을 찾을 수 없습니다", 404)
+            return {**deepcopy(row.payload), "trade_doc_id": document_id, "revision": row.revision,
+                    "document_type": document.doc_kind, "doc_kind": document.doc_kind, "doc_no": document.doc_no}
+
+    def latest_review(self, document_id, revision):
+        with user_lock(self.database, self.user_id), self.database.session() as session:
+            row = session.scalar(select(TradeProposal).where(
+                TradeProposal.document_id == document_id, TradeProposal.user_id == self.user_id,
+                TradeProposal.revision == revision, TradeProposal.status.in_(("pending", "approved")),
+            ).order_by(TradeProposal.created_at.desc()).limit(1))
+            files = []
+            if row is not None and row.status == "approved":
+                files = [artifact_view(file) for file in session.scalars(select(TradeArtifact).where(
+                    TradeArtifact.proposal_id == row.id, TradeArtifact.user_id == self.user_id,
+                ).order_by(TradeArtifact.file_format))]
+            return {"proposal_id": row.id if row else None, "files": files}

@@ -52,6 +52,8 @@ class Settings:
     session_secret: str = field(default="", repr=False)
     app_base_url: str = ""
     reflection_enabled_default: bool = False
+    frontend_origins: str = ""
+    session_same_site: str = "lax"
 
     @property
     def resolved_database_url(self) -> str:

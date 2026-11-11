@@ -24,7 +24,7 @@ from decimal import Decimal
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import TradeDocument, User, utcnow
+from app.db.models import TradeDocument, TradeDocumentVersion, TradeProposal, User, utcnow
 from app.services.locks import user_lock as _user_lock
 from app.trade.counterparties import name_key
 from app.trade.packing_review import (
@@ -190,6 +190,8 @@ def save_trade_document(database, *, user_id: int, thread_id: str, draft: dict,
                 finalized = {**finalized, "trade_doc_id": row.id, "doc_no": row.doc_no,
                              "doc_kind": row.doc_kind, "revision": row.revision}
                 row.draft = finalized
+                session.add(TradeDocumentVersion(document_id=row.id, user_id=user_id,
+                                                  revision=row.revision, payload=deepcopy(finalized)))
             return finalized
         except IntegrityError:
             if attempt == 2:
@@ -212,7 +214,15 @@ def _store(session, row: TradeDocument, finalized: dict) -> dict | None:
         .values(draft=finalized, status=finalized["status"], revision=row.revision + 1)
         .execution_options(synchronize_session=False)
     ).rowcount
-    return finalized if claimed == 1 else None
+    if claimed != 1:
+        return None
+    session.add(TradeDocumentVersion(document_id=row.id, user_id=row.user_id,
+                                      revision=finalized["revision"], payload=deepcopy(finalized)))
+    session.execute(update(TradeProposal).where(
+        TradeProposal.document_id == row.id, TradeProposal.user_id == row.user_id,
+        TradeProposal.status == "pending",
+    ).values(status="superseded", decided_at=utcnow()))
+    return finalized
 
 
 def approve_packing_totals(user_id: int, trade_doc_id: int, *, database) -> dict | None:

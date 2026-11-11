@@ -749,3 +749,13 @@ TradeDocDraft(TypedDict, total=False):
 - 발송 서비스는 PDF를 만든 버전을 후보 승인과 같은 트랜잭션에서 조건부 확보한다(`ready` → `sending`). 버전이 바뀌었으면 후보 승인도 되돌리고 `document_changed`를 반환하며 발송하지 않는다. `sending`/`sent` 문서는 수정·PL 승인·취소가 차단된다. 발송 성공은 `sent`, 실패는 기존 명시적 재승인을 위해 `ready`로 돌아간다(자동 재발송 없음).
 - 동일 프로세스의 수정·발송은 `app/services/locks.py`의 같은 사용자 잠금을 사용한다. 프로세스 사이의 보호 근거는 이 잠금이 아닌 DB 버전·상태 조건이다.
 - 확인: `tests/test_trade_upgrade.py`(기존 SQLite 데이터 보존·가격 재검증·버전/서버 필드 보호·PDF 준비/발송 중 수정), `uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py`(가상 데이터만 사용하는 실제 임시 PostgreSQL).
+
+
+## 16. 독립 문서 API와 사용자 검토
+
+- JSON API는 기존 메일 그래프 밖의 `app/trade/` 도메인 업무를 호출한다. PI 경로는 `/api/trade/pi`이며 상세 입력·응답은 FastAPI OpenAPI(`/docs`)가 코드와 함께 제공한다. 모든 조회/다운로드는 세션 소유자 범위이며 변경 요청은 `/api/session`에서 발급한 CSRF 토큰을 요구한다.
+- 입력에는 서버의 상태·계산 결과·가격 인증·승인 표시를 허용하지 않는다. 정확한 숫자는 Decimal 문자열이다. 직접 입력과 LangChain 추출은 같은 업무 계산을 거친다. AI는 거래 단가 변경을 승인할 수 없다.
+- `trade_document_versions`는 문서 revision별 불변 초안을 저장한다. 문서 수정은 기대 revision을 조건으로 갱신하며 대기 제안을 무효화한다. `trade_proposals`는 확인할 문서·버전·출력 형식·직인/로고 bytes 및 해시를 고정한다. 선택 요청의 문서 ID·제안 ID·revision·내용 해시가 모두 일치해야 한다.
+- `approve`: ready/current인 문서를 issued로 만들고 PDF/XLSX bytes를 `trade_artifacts`에 같은 트랜잭션으로 저장한다. 중복·동시 승인은 같은 파일을 반환한다. `cancel`: 제안을 cancelled로 종료하며 문서나 파일을 발급하지 않는다. `modify`: 기존 제안을 superseded/modify로 기록하고 문서를 새 revision으로 만든 뒤 새 검토를 요구한다. 미완성 수정은 needs_input으로 돌아온다.
+- 계좌·회사·이미지 설정 변경은 이미 제안한 내용과 승인 파일을 바꾸지 않는다. 출력 실패 시 pending/ready를 보존해 명시적으로 재시도할 수 있다. 문서 확정 API는 Gmail을 호출하지 않는다. 기존 메일 발송 승인과 문서 발급은 서로 다른 동작이다.
+- 서버 기동의 Alembic 갱신은 기존 문서의 현재 버전을 버전 표에 채운다. `FRONTEND_ORIGINS`는 명시한 출처만 허용하고, `SESSION_SAME_SITE=none`은 HTTPS 설정에서만 허용한다.

@@ -30,6 +30,7 @@ class MemoryPIRepository:
         self.documents = {}
         self.settings = DocumentContext(
             issuer={"legal_name_en": "Testworks Trading Co", "address": "7 Test-ro, Seoul"},
+            bank={key: "Example" for key in ("BENEFICIARY", "BANK_NAME", "BRANCH", "SWIFT", "ACCOUNT_NUMBER", "BANK_ADDRESS")},
             price_rows=[{"id": 1, "role": "sale", "item_name": "Virtual Serum", "capacity": "50ml",
                          "currency": "USD", "unit_price_text": "8", "party_key": "", "price_basis": "PCS"}])
 
@@ -43,6 +44,9 @@ class MemoryPIRepository:
 
     def get(self, document_id):
         return deepcopy(self.documents[document_id])
+
+    def latest_review(self, document_id, revision):
+        return {"proposal_id": None, "files": []}
 
     def replace(self, document_id, revision, document):
         if self.documents[document_id]["revision"] != revision:

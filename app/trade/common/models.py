@@ -85,17 +85,33 @@ class DocumentResult(BaseModel):
     revision: int
     status: str
     document: dict
+    input: dict = Field(default_factory=dict)
     missing_fields: list[str] = Field(default_factory=list)
     issues: list[dict] = Field(default_factory=list)
     proposal_id: str | None = None
     files: list[dict] = Field(default_factory=list)
 
 
+class DocumentSummary(BaseModel):
+    document_id: int
+    document_type: str
+    document_number: str | None
+    doc_no: str
+    revision: int
+    status: str
+    currency: str | None
+    total: str | None
+
+
 class DocumentRepository(Protocol):
     def context(self, currency: str | None) -> DocumentContext: ...
     def create(self, document: dict) -> dict: ...
     def get(self, document_id: int) -> dict: ...
-    def replace(self, document_id: int, revision: int, document: dict) -> dict: ...
+    def list(self, limit: int = 50) -> list[dict]: ...
+    def version(self, document_id: int, revision: int) -> dict: ...
+    def latest_review(self, document_id: int, revision: int) -> dict: ...
+    def replace(self, document_id: int, revision: int, document: dict,
+                review_reference: tuple[str, str] | None = None) -> dict: ...
 
 
 class DocumentError(Exception):

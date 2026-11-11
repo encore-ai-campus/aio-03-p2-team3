@@ -20,7 +20,7 @@ def extract_pi(text: str) -> dict:
     result = call_structured(PROMPT, PIExtraction, {"text": text})
     if not result.ok:
         raise DocumentError("AI_" + (result.error_kind or "internal").upper(),
-                            "PI 내용을 추출하지 못했습니다. 입력을 보존하고 다시 시도하세요", 503)
+                            "PI 내용을 추출하지 못했습니다. 다시 시도하거나 직접 입력하세요", 503)
     draft = result.value.model_dump(mode="json")
     # AI의 근거 메모 하나가 모든 당사자·조건의 근거 검사를 우회하지 않게 한다.
     draft["source_notes"] = []

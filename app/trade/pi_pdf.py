@@ -134,6 +134,8 @@ def _read_png_rgb(data):
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError("Expected PNG")
     width, height, depth, color, compression, filtering, interlace = struct.unpack(">IIBBBBB", data[16:29])
+    if min(width, height) < 1 or max(width, height) > 4096 or width * height > 4194304:
+        raise ValueError("Brand image dimensions exceed the supported size")
     if depth != 8 or color not in (2, 6) or interlace != 0:
         raise ValueError("Only non-interlaced 8-bit RGB/RGBA PNGs are supported")
     pos, chunks = 8, []
@@ -141,11 +143,20 @@ def _read_png_rgb(data):
         length = struct.unpack(">I", data[pos:pos+4])[0]
         kind = data[pos+4:pos+8]
         payload = data[pos+8:pos+8+length]
+        if pos + 12 + length > len(data):
+            raise ValueError("Truncated PNG chunk")
+        crc = struct.unpack(">I", data[pos+8+length:pos+12+length])[0]
+        if crc != zlib.crc32(kind + payload) & 0xffffffff:
+            raise ValueError("Invalid PNG checksum")
         if kind == b"IDAT": chunks.append(payload)
         pos += 12 + length
         if kind == b"IEND": break
     bpp = 3 if color == 2 else 4
-    scan = zlib.decompress(b"".join(chunks))
+    expected_size = height * (1 + width * bpp)
+    decoder = zlib.decompressobj()
+    scan = decoder.decompress(b"".join(chunks), expected_size + 1)
+    if len(scan) != expected_size or not decoder.eof or decoder.unconsumed_tail:
+        raise ValueError("PNG data size does not match its dimensions")
     stride = width*bpp
     rows, offset, previous = [], 0, bytearray(stride)
     for _ in range(height):
@@ -378,7 +389,8 @@ def _paginate_rows(rows, first_table_top, review_height, is_packing_list, packin
 
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/pi_pdf.py render_trade_document
-def render_trade_document(data, bank_details=None, *, logo=None, seal=None):
+def render_trade_document(data, bank_details=None, *, logo=None, seal=None, issued_on=None,
+                          footer_label="DRAFT - NOT FOR ISSUE"):
     """Render all trade documents with measured rows, safe footer space, and automatic pagination."""
     # 바꾼 점: logo·seal을 PNG bytes로 받고, 발행사 이름·서명자를 issuer 스냅샷에서 읽고,
     # PL 합계를 data["packing_totals"]에서 읽는다(모듈 머리 주석 참고).
@@ -412,7 +424,7 @@ def render_trade_document(data, bank_details=None, *, logo=None, seal=None):
     chunks = _paginate_rows(rows, first_table_top, review_height, is_packing_list, len(packing_quantity_lines))
     canvases = []
     number = str(data.get("document_number") or "TBD")
-    issue_date = current_issue_date()
+    issue_date = issued_on or current_issue_date()
     number_label = {"PI": "INVOICE #", "CI": "INVOICE #", "PO": "PO #", "PL": "PACKING LIST #"}.get(doc_type, "DOCUMENT #")
 
     for page_index, page_rows in enumerate(chunks):
@@ -557,7 +569,7 @@ def render_trade_document(data, bank_details=None, *, logo=None, seal=None):
                 raise ValueError("Document content exceeds the reserved footer area; add a page break or shorten the source information")
 
         canvas.line(35, 778, 577, 778, (0.86, 0.85, 0.82), 0.5)
-        footer = f"DRAFT - NOT FOR ISSUE  |  PAGE {page_index + 1} OF {len(chunks)}"
+        footer = f"{footer_label}  |  PAGE {page_index + 1} OF {len(chunks)}"
         if not has_logo:
             canvas.text(468, 788, "LOGO ASSET PENDING", 5.0, True, BRAND_BLUE)
         canvas.text(35, 788, footer, 5.3, False, MUTED)

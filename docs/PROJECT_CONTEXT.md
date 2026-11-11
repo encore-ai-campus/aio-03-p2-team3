@@ -73,8 +73,8 @@
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
 마지막 갱신: 2026-11-11 · trade-domain-api 1·2절(기본 오류·PI 모듈)
 
-- 독립 문서 API 준비(`docs/plans/trade-domain-api.md`, Issue #108~#111): 요청 범위는 기본 오류 → PI 독립 모듈/API → PO·CI·PL이다. 마스터 챗봇은 제외한다. 1절에서 기존 DB Alembic 갱신, 수정 시 가격 재검증, 문서 revision과 수정/발송의 조건부 갱신을 추가했다(계약 15.9절). 문서별 API는 후속 단계다.
-- PI 독립 모듈(2절): `app/trade/pi/`의 `models.py`·`operations.py`·`agent.py`·`repository.py`가 PI 입력, 작성·수정, LangChain 구조화 추출, 사용자/PI 범위 저장을 담당한다. 업무는 저장소 인터페이스와 추출 함수를 주입받고 기존 메일 그래프·HTTP·구체 DB에 의존하지 않는다. 공통 입력 숫자는 정확한 Decimal 문자열이며 서버의 가격 인증·승인·상태 필드는 입력으로 받지 않는다. AI의 단가 변경 승인 값은 제거하고 상품 코드·당사자 근거도 검증한다. HTTP 연결은 3절에서 진행한다.
+- 독립 문서 API 준비(`docs/plans/trade-domain-api.md`, Issue #108~#111): 요청 범위는 기본 오류 → PI 독립 모듈/API → PO·CI·PL이다. 마스터 챗봇은 제외한다. 1절에서 기존 DB Alembic 갱신, 수정 시 가격 재검증, 문서 revision과 수정/발송의 조건부 갱신을 추가했다(계약 15.9절). PI JSON API와 검토·선택·파일 저장은 3절에서 구현했다.
+- PI 독립 모듈(2절): `app/trade/pi/`의 `models.py`·`operations.py`·`agent.py`·`repository.py`가 PI 입력, 작성·수정, LangChain 구조화 추출, 사용자/PI 범위 저장을 담당한다. 업무는 저장소 인터페이스와 추출 함수를 주입받고 기존 메일 그래프·HTTP·구체 DB에 의존하지 않는다. 공통 입력 숫자는 정확한 Decimal 문자열이며 서버의 가격 인증·승인·상태 필드는 입력으로 받지 않는다. AI의 단가 변경 승인 값은 제거하고 상품 코드·당사자 근거도 검증한다. HTTP 연결은 `/api/trade/pi`이며 작성·추출·조회·수정·버전·검토·승인/취소/수정·파일 다운로드를 제공한다. 문서 확정은 메일을 발송하지 않는다.
 
 - 계약의 입력 스키마·도구 6개 등록과 `ToolResult`를 구현했다(계획 2절, 2026-11-09). 잘못된 스키마 입력은 `invalid_input` 결과로 돌려준다. 견적서 만들기까지 도구 6개의 업무 본문을 채웠다(계획 11절, 2026-11-10).
 - `draft_replies` 구현(계획 8절, 2026-11-10): `call_structured()` 1회로 후보 2~3개(`label`·`body`)를 받는다. 개수가 2~3개가 아니면 형식 오류로 1회 다시 부른다. 제목은 코드가 `Re: <원래 제목>`으로 정하고, 사용자 선호의 `signature`가 있으면 본문 끝에 붙인다. `source`는 `model_source()`(`gemini:<모델>`, 기본 `gemini:gemini-3.6-flash`), DB 저장은 `save_pending` 노드가 한다. 계획 11절의 `draft_replies.v2`는 단가 미입력을 상대방에게 묻지 않고, 이후 화면 입력으로 금액이 바뀔 수 있어 숫자를 본문에 복사하지 않고 첨부 견적서를 안내한다.
@@ -112,6 +112,7 @@
 ## 6. 시험·평가
 마지막 갱신: 2026-11-11 · 기존 DB·가격·발송 충돌 회귀
 
+- PI 독립 API 검증(2026-11-11): 전체 573 passed·1 skipped, 별도 실제 임시 PostgreSQL 2 passed. 세션/CSRF·소유자 격리·검토/승인/취소/수정·불변 파일·동시 승인·재접속 복구를 확인했다. 실제 Gemini/Gmail·운영 DB는 호출하지 않았다.
 - `tests/test_trade_upgrade.py`가 기존 국내 견적 SQLite 스키마에서 데이터 보존 갱신·반복 실행·부분 유니크 제약, 통화/상품 수정 후 가격 재검증, 오래된 버전·서버 필드 수정 거부, PDF 준비 뒤 버전 변경·발송 중 수정 차단을 확인한다. `tests/test_trade_postgres.py`는 임시 PostgreSQL 서버로 같은 갱신의 실제 동작을 확인한다(`uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py`, 운영 DB/실제 API 사용 없음).
 - `tests/test_pi_domain.py`는 메모리 저장소로 PI의 독립 작성·수량 0·직접/가짜 AI의 동일 계산·기준 버전·회사 스냅숏을 확인하고, SQL 구현의 사용자/종류 격리와 실제 LangChain 호출 진입점의 가짜 모델·근거 검증을 확인한다.
 
@@ -135,6 +136,8 @@
 
 ## 7. 배포
 마지막 갱신: 2026-11-11
+
+- React API 설정: `FRONTEND_ORIGINS`(허용 출처), `SESSION_SAME_SITE`(기본 lax, none은 HTTPS만). 변경 API는 세션과 CSRF 토큰을 함께 요구한다. 검토 제안에 문서·회사·계좌·이미지를 고정하고 승인 파일을 DB에 보관한다(계약 16절).
 
 - DB 갱신 준비: 서버 시작 시 `app/db/migrations/`의 Alembic 리비전을 적용한다. 기존 데이터와 승인 이력을 유지하며 부분 유니크 제약도 변경한다(계약 15.9절). 운영 반영 전 DB 백업을 보관한다. 이번 작업에서는 Render·운영 DB·실제 메일을 변경하지 않았다.
 
