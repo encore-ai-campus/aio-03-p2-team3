@@ -88,7 +88,7 @@ sequenceDiagram
     participant Graph as LangGraph
     participant Analyze as analyze_email
     participant Tool as 도구 레지스트리
-    participant API as Gemini 또는 Gmail API
+    participant API as OpenAI 또는 Gmail API
     participant DB as Postgres
     participant UI as 승인 화면
     User->>Push: 메일 도착 알림

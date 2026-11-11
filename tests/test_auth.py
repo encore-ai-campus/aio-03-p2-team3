@@ -92,7 +92,7 @@ def cipher_of(client) -> TokenCipher:
 def test_login_page_guides_test_account(client):
     page = client.get("/login")
     assert page.status_code == 200
-    assert "테스트용 Gmail로 등록하세요" in page.text and "Gemini 무료 등급" in page.text
+    assert "테스트용 Gmail로 등록하세요" in page.text and "OpenAI API" in page.text
     assert 'href="/auth/google/start"' in page.text
     assert 'href="/login"' in client.get("/inbox").text  # 로그인 전 받은 메일 화면의 연결 링크
 

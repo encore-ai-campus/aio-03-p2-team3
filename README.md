@@ -55,12 +55,11 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 ## LLM·외부 API와 키 발급
 
-2026-11-09에 정한 Gmail 견적 MVP 기준이다(`docs/plans/gmail-quote-mvp.md#3`). 근거와 자세한 경로는 `.work/design/api-choice.md`. 환경변수 이름의 기준은 `docs/CONTRACT.md` 11절, 이름과 설명만 담은 설정 틀은 `.env.example`이다. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않는다(테스트는 가짜 응답, `docs/CHATGPT_GUIDE.md`). 콘솔 설정과 실제 연동은 별도 작업에서 진행한다.
+2026-11-11 요청에 따라 모든 LLM 호출을 OpenAI Responses API로 통일했다. 근거와 자세한 경로는 `.work/design/api-choice.md`. 환경변수 이름의 기준은 `docs/CONTRACT.md` 11절, 이름과 설명만 담은 설정 틀은 `.env.example`이다. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않는다(테스트는 가짜 응답, `docs/CHATGPT_GUIDE.md`). 콘솔 설정과 실제 연동은 별도 작업에서 진행한다.
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|
-| Google Gemini API `gemini-3.6-flash`(무료 등급) | LLM(메일 그래프·답장·거래 추출 도구) | Google AI Studio API 키 화면(https://aistudio.google.com/app/apikey) | `GEMINI_API_KEY` · `GEMINI_MODEL`(선택, 비우면 `gemini-3.6-flash`) |
-| OpenAI Responses API `gpt-6-luna` | 무역 문서 AI 추출(PI·PO·CI·PL `POST /api/trade/{kind}/extract`) 전용 | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | `OPENAI_API_KEY` · `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`) · `TRADE_EXTRACT_BACKEND`(선택, 비우면 `openai_responses`, Gemini 복귀 시 `gemini`) |
+| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | `OPENAI_API_KEY` · `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`) |
 | Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
 | Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
 | Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | Calendar API와 사용자별 Google OAuth를 사용. 일정 도구 작업 때 연결 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
@@ -79,9 +78,16 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 주의:
 
-- Gemini 무료 등급은 입력이 Google 제품 개선에 쓰인다. 테스트용 Google 계정과 가상 메일을 사용하고 실제 개인정보를 넣지 않는다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다.
+- 메일과 기억·추출에 필요한 내용을 OpenAI API로 전송한다. 테스트용 Google 계정과 가상 메일을 사용하고 실제 개인정보를 넣지 않는다. API 데이터 보관·이용은 [OpenAI 안내](https://platform.openai.com/docs/guides/your-data)와 계정 설정을 확인한다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다.
+- OpenAI API는 ChatGPT 구독과 별도로 과금된다. 키를 만든 프로젝트의 결제·사용 한도·선택 모델 이용 권한을 확인한다. 무료 이용이나 무제한 호출을 가정하지 않는다.
 - OAuth 게시·권한과 Pub/Sub 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 설정한다.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md`).
+
+전환 적용 순서:
+
+1. 로컬 `.env`와 Render에 `OPENAI_API_KEY`를 먼저 등록한다. 다른 모델을 쓸 때만 `OPENAI_MODEL`을 지정한다. 기존 Google OAuth·Gmail·Pub/Sub 값은 그대로 둔다.
+2. PR 병합 후 Render 자동 배포(`uv sync --locked`)가 끝나면 `/healthz`, 테스트용 Gmail의 분석·답장, 무역 문서 추출을 확인한다. 실제 API 시험은 로컬·Render에서 가상 메일로 한다.
+3. 전환 확인 후 기존 `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`를 로컬·Render에서 제거한다. 앱은 이 값을 더 이상 읽지 않는다. 이전 Gemini 실행 기록과 응답 시간은 과거 결과이며 OpenAI 성능은 다시 측정한다.
 
 ## 팀원
 

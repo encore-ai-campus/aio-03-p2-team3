@@ -100,7 +100,7 @@ def test_suite_runs_same_inputs_with_reflection_off_and_on(database, access, gma
     for judgment in result["judgments"]:
         llm = events_of(database, judgment["run_id"], "llm_call")
         assert llm and all(e.detail["injected"] is True for e in llm)
-    [rate_limited] = by(result, "gemini_rate_limit", True)[:1]
+    [rate_limited] = by(result, "openai_rate_limit", True)[:1]
     assert [e.detail["injection"] for e in events_of(database, rate_limited["run_id"], "llm_call")] == [
         "prepared", "failure"]
 
@@ -234,7 +234,7 @@ def test_gmail_search_picks_unused_matching_mails_oldest_first(database, access,
     assert [call[1]["q"] for call in searches] == [runner.DEFAULT_GMAIL_SEARCH] * 2
     assert [call[1].get("pageToken") for call in searches] == [None, "p2"]
 
-    # 찾은 메일로 실제 실행(실제 Gemini 자리는 대역)을 돌리면 그 메일에 답장하고, 다음 검색에서는 빠진다.
+    # 찾은 메일로 실제 실행(실제 OpenAI 자리는 대역)을 돌리면 그 메일에 답장하고, 다음 검색에서는 빠진다.
     real = FakeLLM([GENERAL, CLEAN, GENERAL, CLEAN])
     result = runner.run_suite(database, 1, scenarios=[scenario], repeat=1, mode="real", access=access,
                               real=lambda: real, gmail_sources=sources)

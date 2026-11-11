@@ -1,11 +1,10 @@
 """공통 구조화 호출·원문 확인. 프롬프트와 입력 형식은 문서별 agent가 소유한다.
 
-백엔드 선택(2026-11-11): 무역 문서 추출은 OpenAI Responses API를 기본으로 쓰고
-`TRADE_EXTRACT_BACKEND=gemini`로 Gemini를 고를 수 있다. 그래프(LangGraph)는 기존
-Gemini 백엔드를 그대로 쓴다. 원본 사본의 추출기도 OpenAI Responses API를 썼다
+메일 그래프와 무역 문서 추출 모두 공통 OpenAI Responses API 백엔드를 쓴다.
+원본 사본의 추출기도 OpenAI Responses API를 썼다
 (reference/kekorea/Quotation_KEKOREA/agent/extractor.py).
 
-LLM에는 wire 스키마를 준다: 입력 검증 모델에서 Gemini 구조화 출력이 거부하는 제약
+LLM에는 wire 스키마를 준다: 입력 검증 모델에서 전송 시 불필요한 제약
 (`pattern`·문자열/리스트 `max_length`)을 떼고, 숫자는 원본 사본처럼 전부 문자열로
 받는다(모델이 JSON 숫자를 내놓으면 십진수 정밀도가 깨진다). 돌려받은 값은 이 module이
 원래 스키마로 다시 검증해 Decimal로 바꾼다. HTTP 입력 검증은 그대로 입력 모델이 맡는다.
@@ -18,20 +17,15 @@ from typing import Union, get_args, get_origin
 from pydantic import ConfigDict, Field, ValidationError, create_model
 from pydantic import BaseModel as PydanticBaseModel
 
-from app.config import Settings, get_settings
-from app.llm.client import call_structured, get_backend, get_responses_backend
+from app.config import Settings
+from app.llm.client import call_structured, get_backend
 from app.trade.common.models import DocumentError
 from app.trade.common.verify_quotes import verify_item_quotes
 
 
 def trade_backend(settings: Settings | None = None):
-    """무역 문서 추출 백엔드. `TRADE_EXTRACT_BACKEND`(기본 `openai_responses`)."""
-    choice = ((settings or get_settings()).trade_extract_backend.strip() or "openai_responses").lower()
-    if choice == "gemini":
-        return get_backend(settings)
-    if choice == "openai_responses":
-        return get_responses_backend(settings)
-    raise ValueError(f"TRADE_EXTRACT_BACKEND은 openai_responses 또는 gemini여야 합니다(입력: {choice})")
+    """메일과 동일한 OpenAI Responses 백엔드를 사용한다."""
+    return get_backend(settings)
 
 
 def _core_type(annotation):

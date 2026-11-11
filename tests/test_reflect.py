@@ -8,7 +8,6 @@ from datetime import date
 import json
 
 from fastapi.testclient import TestClient
-from google.genai.errors import ClientError
 import pytest
 from sqlalchemy import select
 
@@ -25,7 +24,7 @@ from app.quote.calc import build_draft
 from app.quote.required_fields import get_required_fields
 from app.tools.fallback import NOTICE_MESSAGES
 from app.web.deps import current_user_id
-from tests.fakes.llm import FakeLLM
+from tests.fakes.llm import FakeLLM, openai_error
 
 GENERAL = {"intent": "general", "reason": "일반 문의"}
 DEAL = {"intent": "deal", "reason": "견적 요청"}
@@ -194,7 +193,7 @@ def test_reflection_error_ends_with_needs_review(database, email, monkeypatch):
 
 
 def test_reflect_fix_failure_uses_rule_feedback(database, email):
-    rate_limit = ClientError(429, {"error": {"status": "RESOURCE_EXHAUSTED"}})
+    rate_limit = openai_error(429)
     result, fake = run(database, email, [GENERAL, INVENTED, rate_limit, CLEAN])
     first = result["reflection_history"][0]
     assert first["cause"].startswith("규칙 검사") and "500만원" in first["feedback"]

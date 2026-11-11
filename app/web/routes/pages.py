@@ -11,7 +11,7 @@ from app.web import templates
 router = APIRouter()
 
 APP_NAME = "Gmail 견적 도우미"
-POLICY_DATE = "2026-11-10"
+POLICY_DATE = "2026-11-11"
 REPO_ISSUES = "https://github.com/encore-ai-campus/aio-03-p2-team3/issues"
 
 

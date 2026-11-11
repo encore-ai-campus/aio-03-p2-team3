@@ -2,7 +2,6 @@
 
 import json
 
-from google.genai.errors import ClientError
 import pytest
 from sqlalchemy import select
 
@@ -12,9 +11,9 @@ from app.graph.run import start_run
 from app.llm import client
 from app.tools.fallback import NOTICE_MESSAGES, fallback_candidates
 from app.tools.registry import TOOLS
-from tests.fakes.llm import FakeLLM
+from tests.fakes.llm import FakeLLM, openai_error
 
-RATE_LIMIT = ClientError(429, {"error": {"status": "RESOURCE_EXHAUSTED"}})
+RATE_LIMIT = openai_error(429)
 GENERAL = {"intent": "general", "reason": "제품 사용법을 묻는 일반 문의다."}
 DEAL = {"intent": "deal", "reason": "품목과 수량, 납기가 들어 있다."}
 IGNORE = {"intent": "ignore", "reason": "답장이 필요 없는 뉴스레터다."}

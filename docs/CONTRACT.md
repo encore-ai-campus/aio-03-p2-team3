@@ -7,7 +7,7 @@
 - 관련 요구사항: R-01·R-02·R-05·R-11·R-14(`docs/REQUIREMENTS.md`).
 
 ## 1. 구조와 폴더
-- 서버 하나(FastAPI) 안에 화면(Jinja2 템플릿 + HTMX), LangGraph 그래프, 도구, DB를 둔다. 도구는 같은 서버 안의 LangGraph 도구 함수이고, 그 안에서 실제 외부 API(Gemini·Gmail)를 부른다. 별도 서버로 떼지 않는다(왕복 지연이 늘어 속도 요구와 부딪침). [Request]
+- 서버 하나(FastAPI) 안에 화면(Jinja2 템플릿 + HTMX), LangGraph 그래프, 도구, DB를 둔다. 도구는 같은 서버 안의 LangGraph 도구 함수이고, 그 안에서 실제 외부 API(OpenAI·Gmail)를 부른다. 별도 서버로 떼지 않는다(왕복 지연이 늘어 속도 요구와 부딪침). [Request]
 - 알림 수신 경로는 Pub/Sub 요청을 확인하고 바로 응답한 뒤, 같은 프로세스의 백그라운드 작업(FastAPI `BackgroundTasks`)에서 그래프를 돌린다. 결과는 DB에 저장하고 화면은 저장된 결과만 읽는다. [Request · Claude proposal]
 - DB 연결, LLM 클라이언트, Gmail 클라이언트 생성 준비물, 컴파일한 그래프는 서버가 뜰 때 한 번 만들어 재사용한다(속도). [Request]
 - 파이썬 패키지 이름은 `app`이다. 테스트는 `tests/`에 둔다. [Claude proposal]
@@ -210,7 +210,7 @@ finish_failed → END
 | `value` | 도구마다 다름(4.4절) \| `None` | 결과 값. 실패면 `None` |
 | `error_kind` | `None \| "rate_limit" \| "network" \| "invalid_output" \| "invalid_input" \| "auth" \| "not_found" \| "internal"` | 오류 종류 |
 | `error_message` | `str \| None` | 사람이 읽을 오류 설명(비밀값·본문 넣지 않음) |
-| `source` | `str` | 출처. 예: `gemini:gemini-3.6-flash`(`model_source()`), `gmail`, `db:price_list_items`, `code`, `rag:data/quote-rules/<파일>` |
+| `source` | `str` | 출처. 예: `openai:gpt-6-luna`(`model_source()`), `gmail`, `db:price_list_items`, `code`, `rag:data/quote-rules/<파일>` |
 | `fetched_at` | `str`(ISO 8601, UTC) | 조회·계산 시점(기억에 저장된 외부 데이터를 최신처럼 쓰지 않으려고) |
 | `attempts` | `int` | 실제 시도 횟수(재시도 포함) |
 | `duration_ms` | `int` | 걸린 시간 |
@@ -371,10 +371,10 @@ class AgentError(TypedDict):
 - 새 키가 생기면 `DealTerms`와 `FIELD_LABELS`(같은 파일)에 함께 더한다(공통 부분 변경). [Claude proposal]
 
 ## 6. LLM 호출 (`app/llm/client.py`)
-- 모델: Google Gemini `gemini-3.6-flash`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `GEMINI_MODEL`로 덮어씀. 2026-11-10 #62에서 무료 등급 `gemini-3.8-flash`의 503 반복으로 바꿈), 패키지 `langchain-google-genai`, 키 `GEMINI_API_KEY`. 실제 개인정보를 넣지 않는다(무료 등급 입력은 Google 제품 개선에 쓰임). [Request]
-- 호출은 모두 `call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) -> LLMResult` 하나로 한다. 구조화 출력(`with_structured_output(schema)`)만 쓴다. [Request · Claude proposal]
+- 모델: OpenAI Responses API `gpt-6-luna`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `OPENAI_MODEL`로 덮어씀), 패키지 `langchain-openai`, 키 `OPENAI_API_KEY`. 2026-11-11 요청에 따라 메일·요약·성찰·독립 무역 문서 추출까지 모두 전환했다. 기본 모델은 앞서 채택한 무역 추출 모델을 유지한다. 실제 개인정보를 넣지 않는다. [Request]
+- 호출은 모두 `call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) -> LLMResult` 하나로 한다. 실제 백엔드는 `ChatOpenAI(use_responses_api=True, max_retries=0, timeout=20)`이고, `structured_output()`이 `with_structured_output(schema, method="function_calling", strict=False)`를 적용한다. 기존 스키마의 기본값·자유 키 dict를 유지하면서 반환값은 Pydantic으로 검증한다. 대역은 기존 `with_structured_output(schema)` 인터페이스를 유지한다. [Request · Claude proposal]
 - `LLMResult`: `ok`, `value`(schema 객체), `error_kind`(`rate_limit`/`network`/`invalid_output`/`invalid_input`/`internal`), `attempts`, `prompt_version`, `duration_ms`. 노드는 이것을 `ToolResult`로 옮긴다. [Claude proposal]
-- 오류 구분: HTTP 429·`RESOURCE_EXHAUSTED`는 `rate_limit`(재시도 안 함) · 제한 시간 초과·연결 오류·HTTP 500/503(`UNAVAILABLE`)은 `network`(`LLM_MAX_RETRIES`까지 재시도) · 스키마 검증 실패는 `invalid_output`(`LLM_INVALID_OUTPUT_RETRIES`까지) · HTTP 400은 `invalid_input`(재시도 안 함). 정확한 예외 클래스는 2가 패키지 문서로 확인해 코드에 적는다. [Request · Claude proposal]
+- 오류 구분: OpenAI SDK HTTP 429는 `rate_limit`(재시도 안 함) · 제한 시간 초과·연결 오류·HTTP 5xx는 `network`(`LLM_MAX_RETRIES`까지, 최초 포함 최대 3회·1초→2초 대기) · 스키마 검증 실패는 `invalid_output`(`LLM_INVALID_OUTPUT_RETRIES`까지 별도 1회) · 그 밖의 HTTP 4xx는 `invalid_input`(재시도 안 함). SDK 자동 재시도는 끄며 오류 원문·응답·키 대신 HTTP 코드나 예외 종류만 기록한다. [Request · Claude proposal]
 - 재시도한 횟수(`attempts - 1`)는 노드가 `call_retries`에 더한다. [Claude proposal]
 - 프롬프트: `app/prompts/<이름>.py`에 `NAME`, `VERSION`(`v1`, `v2` …), `TEMPLATE`을 둔다. 버전 이름은 `<이름>.<VERSION>`(예: `draft_replies.v1`)이고 호출마다 실행 기록에 남긴다. 고치면 `VERSION`을 올리고 `app/prompts/VERSIONS.md`에 날짜·버전·변경 이유를 한 줄 적는다(12, R-10). [Request · Claude proposal]
 - 프롬프트 이름: `analyze_email`, `draft_replies`, `extract_deal_terms`, `draft_followup_replies`, `summarize_thread`, `reflect_fix`. [Claude proposal]
@@ -486,8 +486,8 @@ class AgentError(TypedDict):
 ## 11. 환경변수 이름 (값은 `.env`와 Render 환경변수에만 둔다)
 | 이름 | 뜻 | 쓰는 하위 작업 |
 |---|---|---|
-| `GEMINI_API_KEY` | Gemini API 키 | 2, 8, 10, 12, 13 |
-| `GEMINI_MODEL` | 쓸 Gemini 모델 이름(비우면 `gemini-3.6-flash`) | 16 |
+| `OPENAI_API_KEY` | OpenAI API 키. 메일·요약·성찰·무역 문서 추출 공통 | 2, 8, 10, 12, 13, 무역 문서 API |
+| `OPENAI_MODEL` | 쓸 OpenAI 모델 이름(비우면 `gpt-6-luna`) | 모든 LLM 호출 |
 | `GOOGLE_OAUTH_CLIENT_ID` | OAuth 클라이언트 ID | 6 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 클라이언트 비밀번호 | 6 |
 | `GOOGLE_OAUTH_REDIRECT_URI` | OAuth 리디렉션 주소(로컬·Render 각각) | 6 |
@@ -503,6 +503,7 @@ class AgentError(TypedDict):
 
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
+- 2026-11-11 전환: `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다. OpenAI 키를 로컬·Render에 먼저 등록하고 병합·자동 배포 뒤 실제 연결을 확인한 다음 예전 변수를 제거한다. Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. OpenAI API 결제·모델 권한은 사용자 계정에서 확인하고 Codex에는 키를 넣지 않는다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)

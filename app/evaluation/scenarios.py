@@ -12,7 +12,8 @@
 
 from dataclasses import dataclass, field
 
-from google.genai.errors import ClientError
+import httpx
+from openai import RateLimitError
 
 from app.clients.gmail import GoogleUnavailable
 
@@ -27,9 +28,10 @@ QUOTE_TOOLS = frozenset({EXTRACT, CHECK, QUOTE, DRAFT})
 FOLLOWUP_TOOLS = frozenset({EXTRACT, CHECK, FOLLOWUP})
 
 
-def gemini_rate_limit():
-    """Gemini 한도 초과(429 RESOURCE_EXHAUSTED)와 같은 SDK 예외."""
-    return ClientError(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "injected"}})
+def openai_rate_limit():
+    """OpenAI API 한도 초과와 같은 SDK 예외. 실제 API는 호출하지 않는다."""
+    request = httpx.Request("POST", "https://api.openai.invalid/v1/responses")
+    return RateLimitError("injected", response=httpx.Response(429, request=request), body=None)
 
 
 def gmail_unavailable():
@@ -130,11 +132,11 @@ SCENARIOS: tuple[Scenario, ...] = (
         send_failures=(gmail_unavailable,),
     ),
     Scenario(
-        "gemini_rate_limit", "도구 실패", "답장 후보 중 Gemini 한도 → 기본 답장 틀·확인 필요", "제품 안내 자료 문의",
+        "openai_rate_limit", "도구 실패", "답장 후보 중 OpenAI 한도 → 기본 답장 틀·확인 필요", "제품 안내 자료 문의",
         GENERAL_BODY,
         Expect("awaiting_approval", "general", GENERAL_TOOLS, candidates=(1, 1), needs_review=True,
                notice="rate_limit"),
-        inject={"DraftOutput": [gemini_rate_limit]},
+        inject={"DraftOutput": [openai_rate_limit]},
         fake={"EmailAnalysis": [GENERAL]},
     ),
     Scenario(
