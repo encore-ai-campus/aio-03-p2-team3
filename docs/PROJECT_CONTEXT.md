@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-11 · 전체 LLM OpenAI 전환
+마지막 갱신: 2026-11-11 · OpenAI 전환·모바일 무역 문서 UI 시안
 
 - 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`.
 - 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
@@ -58,6 +58,7 @@
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
 
 - 독립 문서 작성(2026-11-11): React용 `/api/trade/{pi|po|ci|pl}`에서 직접 입력/문장 추출 → 수정 → 검토 → 승인·취소·수정 → PDF/XLSX 다운로드를 제공한다. 승인은 파일 발급이며 기존 Gmail 발송 승인을 호출하지 않는다. CI는 승인된 PI 특정 버전의 거래 사실을 보존하고, PL은 별도 포장 합계 확인 뒤 최종 검토한다. API 연결 안내는 `docs/trade-api.md`. React 화면·마스터 챗봇은 범위에서 제외했다.
+- 모바일 대화형 문서 UI 시안(2026-11-11): `prototypes/trade-agent.html`은 PI/PO/CI/PL 문서 선택, 채팅 입력, 편집 가능한 문서 요약, 미리보기, 검토 제안·승인 상태, PL 합계 안내를 갖춘 독립 정적 프로토타입이다. 브라우저에서 직접 열 수 있고 API·로그인·실제 파일 발급에는 연결되지 않는다. 실제 React 화면 범위·백엔드 연결 전 상호작용 검토용이다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
 마지막 갱신: 2026-11-10 · kekorea-port 6절(무역서류 초안 상태)
@@ -183,7 +184,7 @@
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
-| 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
+| 모바일 대화형 무역 문서 UI 시안 | `prototypes/trade-agent.html` | 독립 정적 프로토타입, API 연결 없음 |\n| 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |
