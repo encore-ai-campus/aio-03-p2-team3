@@ -51,6 +51,8 @@
 - `docs/plans/kekorea-port.md` — KE KOREA 무역서류(PI/PO/CI/PL) 로직 이식 계획(RULES 7절). 하위 작업은 자기 절만 읽는다 [과제별]
 - `reference/kekorea/` — KE KOREA 원본 사본(이식용, 읽기 전용, 고치지 않음·앱에서 import 안 함). 담은 것·바꾼 것·원본 테스트 실행법은 그 폴더의 `README.md`. 이식 작업에서만 읽는다 [과제별]
 - `docs/CONTRACT.md` — gmail-quote-mvp 공통 계약(폴더 구조, 그래프 상태·노드·전이·한도, 도구 입출력, 필수 항목 출처, LLM 호출, DB 표, 실행 기록, 화면, Google, 환경변수). 하위 작업은 13절에서 자기가 읽을 절만 연다 [과제별]
+- `Team/README.md` — 개인 계약 에이전트 변경 사례(K01~K08), 팀용 재구현 요청문, trade 도메인 비교 [과제별]
+- `Presentation/README.md` — 개인 에이전트 개선 사례의 발표 참고 안내, 팀 구현 상태와 분리 [과제별]
 - `docs/trade-api.md` — React 무역 문서 API 연결, 도메인별 폴더·원본 PI 선택·PL 합계 확인·승인/취소/수정·오류 안내 [과제별]
 - `docs/CHATGPT_GUIDE.md` — 팀원용 ChatGPT 사용 안내(연결 순서, Codex 환경 게시·공유 확인, 작업 요청 문구, 충돌 처리, 문서 작업용 프로젝트 지침) [과제별]
 - `.work/design/initial-setup.md` — 초기 세팅 인계(결정, 팀원, 단계 계획, 3단계 할 일). 세팅 단계 작업에서만 읽는다 [과제별]
