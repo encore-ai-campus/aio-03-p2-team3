@@ -27,6 +27,11 @@
 - 방식: 모델 이름은 `app/llm/client.py`의 `DEFAULT_MODEL`이고 환경변수 `GEMINI_MODEL`로 덮어쓴다. 시연 때 3.6도 막히면 Render 환경변수만 바꿔 다른 무료 모델로 옮긴다(재배포됨). 한 실행 안에서 모델을 섞는 대비책은 여전히 두지 않는다(응답 일관성). [Claude proposal]
 - 함께 한 일: 이전 키가 대화에 노출돼 같은 결제 없는 프로젝트에서 새 키를 만들어 Render `GEMINI_API_KEY`를 바꿨다(요청자, 2026-11-10). 키 값은 레포에 두지 않는다.
 
+### 무역 문서 추출용 OpenAI Responses 추가 (2026-11-11)
+- 바꾼 것: 무역 도메인 AI 추출(PI·PO·CI·PL의 `POST /api/trade/{kind}/extract`)은 LangChain `ChatOpenAI(use_responses_api=True)`로 OpenAI Responses API를 기본 백엔드로 쓴다. 메일 그래프·견적 도구는 계속 Gemini를 쓴다. [Request: 요청자가 방향을 정함]
+- 까닭: 이식 원본(`reference/kekorea/Quotation_KEKOREA/agent/extractor.py`)이 OpenAI Responses API로 문서를 추출했다. 실제 Gemini 키 확인(2026-11-11)에서 도메인 추출 스키마의 HTTP 입력 제약(`pattern`·`maxLength`·`maxItems`)을 Gemini 구조화 출력이 400 INVALID_ARGUMENT로 거부했다(메일 그래프 스키마는 제약이 없어 동작). 또 숫자를 JSON number로 받으면 십진수 정밀도가 깨지므로 원본처럼 전부 문자열로 받는다.
+- 방식: 백엔드 선택은 `app/trade/common/extraction.py`의 `trade_backend()`(환경변수 `TRADE_EXTRACT_BACKEND`, 기본 `openai_responses`, `gemini`로 복귀 가능). 모델은 원본 기본값 `gpt-6-luna`이고 `OPENAI_MODEL`로 덮어쓴다. LLM에는 제약을 떼고 숫자를 문자열로 바꾼 wire 스키마를 주고, 돌려받은 값은 원래 스키마로 다시 검증해 Decimal로 바꾼다. 재시도·오류 분류·기록은 그래프와 같은 `call_structured()`를 공유하며 OpenAI SDK 예외(429·400·연결 오류) 분류를 더했다.
+
 ### 설정 경로
 1. Google AI Studio의 API 키 화면(https://aistudio.google.com/app/apikey)에서 API 키를 만든다. 키는 비밀번호처럼 다루고 레포에 넣지 않는다.
 2. 환경변수는 `GEMINI_API_KEY` 하나만 쓴다. Google SDK는 `GEMINI_API_KEY`·`GOOGLE_API_KEY`를 모두 읽고 둘 다 있으면 `GOOGLE_API_KEY`가 앞서므로 하나만 둔다. [Claude proposal]

@@ -1,6 +1,7 @@
 from google.api_core import exceptions as google_errors
 from google.genai.errors import ClientError, ServerError
 import httpx
+import openai
 from langchain_google_genai.chat_models import GoogleRateLimitError
 from pydantic import BaseModel
 import pytest
@@ -173,6 +174,79 @@ def test_backend_setup_failure_records_only_exception_type(monkeypatch):
 
     monkeypatch.setattr(client, "get_backend", fail)
     result = client.call_structured(PROMPT, Answer, {"input": "가상 입력"})
+    assert result.error_kind == "internal" and result.attempts == 0
+    assert logged[-1][1]["detail"]["error_code"] == "ValueError"
+    assert "private-" not in repr(logged) and "fake-api-key" not in repr(logged)
+
+
+def _openai_status_error(cls, status):
+    request = httpx.Request("POST", "https://api.openai.invalid/v1/responses")
+    return cls("가상 오류", response=httpx.Response(status, request=request), body=None)
+
+
+def test_openai_rate_limit_and_bad_request_do_not_retry(no_network_or_wait):
+    for error, kind in [
+        (_openai_status_error(openai.RateLimitError, 429), "rate_limit"),
+        (_openai_status_error(openai.BadRequestError, 400), "invalid_input"),
+    ]:
+        result, fake = invoke([error, {"answer": "사용하면 안 되는 응답"}])
+        assert not result.ok and result.error_kind == kind
+        assert result.attempts == len(fake.calls) == 1 and no_network_or_wait == []
+
+
+def test_openai_connection_errors_retry_like_network(no_network_or_wait):
+    # APITimeoutError는 APIConnectionError를 상속한다(client 분류 주석 참고).
+    request = httpx.Request("POST", "https://api.openai.invalid")
+    timeout = openai.APITimeoutError(request=request)
+    for error in [openai.APIConnectionError(message="가상 연결 실패", request=request), timeout]:
+        no_network_or_wait.clear()
+        result, fake = invoke([error] * 3)
+        assert not result.ok and result.error_kind == "network"
+        assert result.attempts == len(fake.calls) == 3 and no_network_or_wait == [1, 2]
+
+
+def test_responses_model_default_and_override():
+    # 기본은 원본 사본 추출기와 같은 gpt-6-luna, OPENAI_MODEL 값이 있으면 그 모델을 쓴다.
+    assert client.RESPONSES_DEFAULT_MODEL == "gpt-6-luna"
+    assert client.responses_model_name(Settings()) == "gpt-6-luna"
+    assert client.responses_model_name(Settings(openai_model=" gpt-fake ")) == "gpt-fake"
+
+
+def test_responses_backend_requires_openai_key():
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        client.get_responses_backend(Settings())
+
+
+def test_backend_factory_supplies_the_backend():
+    fake = FakeLLM([{"answer": "팩토리 백엔드"}])
+    result = client.call_structured(PROMPT, Answer, {"input": "입력"}, backend_factory=lambda: fake)
+    assert result.ok and result.value.answer == "팩토리 백엔드" and fake.schemas == [Answer]
+
+
+def test_override_and_explicit_backend_beat_factory(no_network_or_wait):
+    def forbidden():
+        raise AssertionError("팩토리가 불리면 안 됩니다")
+
+    override = FakeLLM([{"answer": "오버라이드"}])
+    with client.use_backend(override):
+        result = client.call_structured(PROMPT, Answer, {"input": "입력"}, backend_factory=forbidden)
+    assert result.value.answer == "오버라이드"
+
+    explicit = FakeLLM([{"answer": "명시 백엔드"}])
+    unused = FakeLLM([])
+    result = client.call_structured(PROMPT, Answer, {"input": "입력"},
+                                    backend=explicit, backend_factory=lambda: unused)
+    assert result.value.answer == "명시 백엔드" and unused.calls == []
+
+
+def test_backend_factory_failure_records_only_exception_type(monkeypatch):
+    logged = []
+    monkeypatch.setattr(client, "current_event", lambda event, **data: logged.append((event, data)))
+
+    def fail():
+        raise ValueError("private-factory-message fake-api-key")
+
+    result = client.call_structured(PROMPT, Answer, {"input": "가상 입력"}, backend_factory=fail)
     assert result.error_kind == "internal" and result.attempts == 0
     assert logged[-1][1]["detail"]["error_code"] == "ValueError"
     assert "private-" not in repr(logged) and "fake-api-key" not in repr(logged)
