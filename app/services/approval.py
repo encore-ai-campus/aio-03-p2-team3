@@ -15,9 +15,7 @@ from dataclasses import dataclass
 from base64 import b64encode
 from email.utils import getaddresses
 import logging
-from threading import Lock
 from time import perf_counter
-from weakref import WeakKeyDictionary
 
 from sqlalchemy import select, update
 
@@ -27,6 +25,7 @@ from app.quote.pdf import render_quote_pdf
 from app.runlog.logger import log_event
 from app.services.auth import GoogleAccess, get_access_token, get_owned
 from app.services.memory import save_sent_memory
+from app.services.locks import user_lock as _user_lock
 from app.tools.base import ToolResult
 from app.tools.registry import TOOLS
 from app.tools.send_email import google_error_kind, use_google
@@ -35,8 +34,6 @@ from app.trade.ci_import import ci_render_data, is_pi_import
 from app.trade.pi_pdf import render_trade_document
 
 log = logging.getLogger(__name__)
-_locks_guard = Lock()
-_locks = WeakKeyDictionary()
 
 RESENDABLE = ("pending", "send_failed")
 TAKEN = ("approved", "sent")  # 보내는 중이거나 보낸 후보
@@ -46,17 +43,16 @@ class _SealMissing(Exception):
     """무역서류 PDF에 필요한 직인이 없거나 대조에 실패했다(원본 동작: 직인 없으면 생성 차단)."""
 
 
+class _DocumentChanged(Exception):
+    """후보 승인과 문서 버전 확보를 같은 트랜잭션에서 되돌린다."""
+
+
 @dataclass(frozen=True)
 class ApprovalResult:
     """`outcome`은 화면 안내 키(`app/web/routes/candidates.py`의 `APPROVAL_NOTICES`)."""
 
     outcome: str
     thread_id: str | None = None
-
-
-def _user_lock(database, user_id: int) -> Lock:
-    with _locks_guard:
-        return _locks.setdefault(database, {}).setdefault(user_id, Lock())
 
 
 def send_approved_candidate(user_id: int, candidate_id: int, *, access: GoogleAccess) -> ApprovalResult:
@@ -144,8 +140,9 @@ def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: 
                     or candidate.run_id != document.run_id):
                 return ApprovalResult("not_found")
             thread_id = document.thread_id
-            if document.status == "sent":
+            if document.status in {"sent", "sending"}:
                 return ApprovalResult("already_sent", thread_id)
+            revision = document.revision
             draft = document.draft if isinstance(document.draft, dict) else None
             if draft is None:
                 return ApprovalResult("not_found", thread_id)
@@ -162,7 +159,8 @@ def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: 
         except Exception as error:
             log.warning("무역서류 PDF 생성 실패 (%s)", type(error).__name__)
             return ApprovalResult("failed", thread_id)
-        claimed = _claim(access, user_id, candidate_id, trade_doc_id=trade_doc_id)
+        claimed = _claim(access, user_id, candidate_id, trade_doc_id=trade_doc_id,
+                         expected_revision=revision)
         if isinstance(claimed, str):
             return ApprovalResult(claimed, thread_id)
         _record(access, claimed, "approval", ok=True)
@@ -192,7 +190,15 @@ def _trade_pdf(access: GoogleAccess, user_id: int, draft: dict) -> bytes:
     return render_trade_document(render_input, draft.get("bank"), logo=logo, seal=seal)
 
 
-def _claim(access, user_id, candidate_id, *, quote_id=None, trade_doc_id=None):
+def _claim(access, user_id, candidate_id, **options):
+    try:
+        return _claim_candidate(access, user_id, candidate_id, **options)
+    except _DocumentChanged:
+        return "document_changed"
+
+
+def _claim_candidate(access, user_id, candidate_id, *, quote_id=None, trade_doc_id=None,
+                     expected_revision=None):
     """보낼 권리를 얻으면 보낼 값(dict), 못 얻으면 화면 안내 키(str)."""
     with access.database.session() as session:
         candidate = get_owned(session, ReplyCandidate, candidate_id, user_id)
@@ -219,6 +225,15 @@ def _claim(access, user_id, candidate_id, *, quote_id=None, trade_doc_id=None):
         ).rowcount
         if claimed != 1:
             return "already_sent"
+        if trade_doc_id is not None:
+            document_claimed = session.execute(
+                update(TradeDocument).where(
+                    TradeDocument.id == trade_doc_id, TradeDocument.user_id == user_id,
+                    TradeDocument.revision == expected_revision, TradeDocument.status == "ready",
+                ).values(status="sending").execution_options(synchronize_session=False)
+            ).rowcount
+            if document_claimed != 1:
+                raise _DocumentChanged()
         # candidate_id는 유일하다. 실패 뒤 다시 승인하면 같은 승인 기록을 '보내는 중'으로 되돌린다.
         approval = session.scalar(select(Approval).where(Approval.candidate_id == candidate_id))
         if approval is None:
@@ -233,6 +248,7 @@ def _claim(access, user_id, candidate_id, *, quote_id=None, trade_doc_id=None):
             "source_message_id": candidate.source_message_id, "subject": candidate.subject,
             "body": candidate.body, "quote_id": candidate.quote_id,
             "trade_doc_id": candidate.trade_doc_id,
+            "trade_revision": expected_revision,
         }
 
 
@@ -271,6 +287,11 @@ def _finish(access, user_id, claimed, result: ToolResult) -> None:
             approval.send_status = "failed"
             approval.error = f"{result.error_kind}: {result.error_message}"
             candidate.status = "send_failed"
+            if claimed.get("trade_doc_id") is not None:
+                session.execute(update(TradeDocument).where(
+                    TradeDocument.id == claimed["trade_doc_id"], TradeDocument.user_id == user_id,
+                    TradeDocument.revision == claimed["trade_revision"], TradeDocument.status == "sending",
+                ).values(status="ready"))
             return
         approval.send_status = "sent"
         approval.sent_message_id = result.value["sent_message_id"]

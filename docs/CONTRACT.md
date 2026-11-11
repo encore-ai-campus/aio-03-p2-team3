@@ -558,6 +558,7 @@ class AgentError(TypedDict):
 - `pyproject.toml`의 `[tool.pytest.ini_options]`에 `pythonpath = ["."]`를 더해 테스트가 `app`을 불러오게 한다(2). [Claude proposal]
 
 ## 15. 무역서류 (kekorea-port)
+- 2026-11-11 후속 구현: `docs/plans/trade-domain-api.md`의 1~4절을 요청받았다. 15.9절은 기존 이식본의 DB/수정/발송 규칙을 보완한다. React용 독립 API와 문서별 모듈은 해당 계획의 후속 단계다.
 - 이 절은 `docs/plans/kekorea-port.md` 하위 작업 2~6이 따르는 이름과 형식이다. 근거는 원본 사본 `reference/kekorea/`(README·SPEC.md·PRESERVED_BEHAVIOR.md·KNOWN_ERRORS.md)이고, 이식한 코드는 옮긴 함수 위에 원본 경로를 주석으로 남긴다. 관련 요구사항: R-02·R-03·R-04·R-11. [Request]
 - 팀 협의(계획 '팀 협의 항목' 표 0~14번) 결과가 아직 없다(2026-11-10). 이 절의 협의 관련 값은 표의 '추천'값을 임시로 적용했고 `[임시]`로 표시했다. 협의 결과가 나오면 이 절과 코드를 함께 고친다. [Request · Claude proposal]
 - 범위는 백엔드다. 상태·도구·서비스 함수·DB 표 형식만 정의하고 화면(템플릿·경로)은 정의하지 않는다. RAG 근거 표시(21·22)도 이번 범위 밖이라 `get_required_fields()`는 `source="config"`를 유지한다. PDF·이미지 첨부 읽기(`attachments.py`)·계약서 이식도 범위 밖이다(15.8절). [Request]
@@ -740,3 +741,11 @@ TradeDocDraft(TypedDict, total=False):
   - 직인: 원본 이미지 확인(PNG 매직·SHA-256)을 유지하고 직인·키를 Git·로그에 넣지 않는다. 직인이 없으면 PDF 생성을 차단한다(원본 동작 유지[임시: 협의 3 '차단은 선택' — 협의에서 재확인]).
 - `KNOWN_ERRORS.md` 반영 원칙: ERR-13(null·목록 당사자로 인한 구조 예외)은 빈 값을 안전하게 취급하는 이식 규칙에 따라 **고쳤고**(빈 dict 취급, 전용 테스트 있음), ERR-04·ERR-08 그 밖의 ERR은 사본·이식본 동일성 비교(각 절 완료 기준)를 위해 **원본 재현 상태로 둔다** — 6절 ERR 점검표에서 하나씩 확인한다. [Claude proposal]
 - 이번 범위 밖: 화면 정의(템플릿·경로 — React 프론트·PL 합계 승인 화면은 별도 작업) · RAG 근거 표시(21·22) · PDF·이미지 첨부 읽기(`attachments.py`, 이미지→견적서에서 정함) · renderers 출력(XLSX·HTML·검토 PDF)의 화면·메일 노출(이식은 15.4절대로 하되 테스트·검증용이다) · 계약서 이식 · `KNOWN_ERRORS.md` 재현 점검(6이 PR에 표로 남긴다).
+
+### 15.9 기존 DB 갱신과 수정·발송 일관성 (2026-11-11)
+- `Database.create_tables()`는 `app/db/migrations/`의 Alembic 리비전을 적용한다. 기존 국내 견적 표의 새 열·nullable 단가·부분 유니크 인덱스와 무역 문서 버전(`trade_documents.revision`, 기본값 1)을 데이터 보존 방식으로 갱신한다. 기존 이식본처럼 새 표만 생성한 DB에도 적용된다. PostgreSQL은 트랜잭션/스키마 잠금, SQLite는 `BEGIN IMMEDIATE`/배치 복사로 처리하며 갱신 실패는 시작 실패로 돌려준다. 데이터 삭제 방식의 역방향 갱신은 제공하지 않는다.
+- 문서 초안의 `revision`은 DB 열과 같다. 수정·PL 합계 승인·취소는 읽은 버전과 일치할 때만 갱신하고 버전을 1 올린다. `revise_trade_document(..., expected_revision=...)`가 명시된 요청은 오래된 버전을 거부한다. 기존 내부 호출 호환용 생략값은 유지하되 후속 JSON API는 기준 버전을 필수로 받는다.
+- 검토 입력은 명시된 일반 항목·당사자 항목·품목 항목만 허용한다. 승인 표시·가격 인증·계산 결과·원본 PI 근거는 수정할 수 없다. 통화·거래처·상품·단가 기준 변경은 이전 가격 인증을 해제하고 본인 카탈로그로 재검증한다. 품목별 거래처 가격이 없으면 그 품목의 공통 가격으로 찾는다.
+- 발송 서비스는 PDF를 만든 버전을 후보 승인과 같은 트랜잭션에서 조건부 확보한다(`ready` → `sending`). 버전이 바뀌었으면 후보 승인도 되돌리고 `document_changed`를 반환하며 발송하지 않는다. `sending`/`sent` 문서는 수정·PL 승인·취소가 차단된다. 발송 성공은 `sent`, 실패는 기존 명시적 재승인을 위해 `ready`로 돌아간다(자동 재발송 없음).
+- 동일 프로세스의 수정·발송은 `app/services/locks.py`의 같은 사용자 잠금을 사용한다. 프로세스 사이의 보호 근거는 이 잠금이 아닌 DB 버전·상태 조건이다.
+- 확인: `tests/test_trade_upgrade.py`(기존 SQLite 데이터 보존·가격 재검증·버전/서버 필드 보호·PDF 준비/발송 중 수정), `uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py`(가상 데이터만 사용하는 실제 임시 PostgreSQL).

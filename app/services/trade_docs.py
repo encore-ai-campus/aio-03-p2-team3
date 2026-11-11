@@ -20,13 +20,12 @@
 """
 from copy import deepcopy
 from decimal import Decimal
-from threading import Lock
-from weakref import WeakKeyDictionary
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import TradeDocument, User, utcnow
+from app.services.locks import user_lock as _user_lock
 from app.trade.counterparties import name_key
 from app.trade.packing_review import (
     PACKING_SOURCE_FIELDS,
@@ -40,13 +39,57 @@ from app.trade.trade_documents import validate_and_calculate
 
 DOC_KINDS = {"PI", "PO", "CI", "PL"}
 
-_locks_guard = Lock()
-_locks = WeakKeyDictionary()
+EDITABLE_FIELDS = {
+    "product_family", "currency", "incoterms", "payment_terms", "remarks", "document_number",
+    "ship_to", "bill_to", "shipment_reference", "country_of_origin", "hs_code", *PACKING_SOURCE_FIELDS,
+}
+PARTY_FIELDS = {"legal_name", "address", "contact", "phone", "email", "registration_details"}
+ITEM_FIELDS = {
+    "product_name", "product_code", "capacity", "quantity", "paid_quantity", "free_quantity",
+    "shipped_quantity", "unit", "unit_price", "price_basis", "discount_percent", "promotion",
+    "package_type", "package_count", "net_weight_kg", "gross_weight_kg", "volume_cbm", "hs_code",
+}
+PRICE_IDENTITY_FIELDS = {"product_name", "product_code", "capacity", "unit", "price_basis"}
 
 
-def _user_lock(database, user_id: int) -> Lock:
-    with _locks_guard:
-        return _locks.setdefault(database, {}).setdefault(user_id, Lock())
+def editable_path(key: str, draft: dict) -> tuple:
+    """검토 입력으로 서버 계산값·승인 표시·원본 PI 근거를 바꾸지 못하게 한다."""
+    parts = str(key).split(".")
+    if len(parts) == 1 and parts[0] in EDITABLE_FIELDS:
+        return tuple(parts)
+    if len(parts) == 2 and parts[0] in {"buyer", "seller"} and parts[1] in PARTY_FIELDS:
+        return tuple(parts)
+    if (len(parts) == 3 and parts[0] == "items" and parts[1].isdigit()
+            and int(parts[1]) < len(draft.get("items") or []) and parts[2] in ITEM_FIELDS):
+        return ("items", int(parts[1]), parts[2])
+    raise ValueError("수정할 수 없는 문서 항목입니다")
+
+
+def reprice_revision(session, user_id: int, draft: dict, changed: list[str]) -> None:
+    """통화·거래처·상품을 바꾼 뒤 이전 가격 인증을 재사용하지 않는다."""
+    if draft.get("document_type") not in {"PI", "PO"}:
+        return
+    context_changed = any(key in {"currency", "product_family", "buyer.legal_name", "seller.legal_name"}
+                          for key in changed)
+    affected = {int(key.split(".")[1]) for key in changed if key.startswith("items.")
+                and key.split(".")[-1] in PRICE_IDENTITY_FIELDS | {"unit_price"}}
+    if not context_changed and not affected:
+        return
+    for index, item in enumerate(draft.get("items") or []):
+        if not context_changed and index not in affected:
+            continue
+        if item.get("is_sample") is True:
+            continue
+        identity_changed = any(key.startswith(f"items.{index}.") and key.split(".")[-1] in PRICE_IDENTITY_FIELDS
+                               for key in changed)
+        for field in ("product_id", "master_price", "price_override_confirmed", "_catalog_currency_inferred"):
+            item.pop(field, None)
+        if (context_changed or identity_changed) and f"items.{index}.unit_price" not in changed:
+            item["unit_price"], item["price_source"] = None, None
+    from app.trade.ci_import import apply_document_prices
+    from app.trade.pricing import build_trade_catalog
+    from app.trade.store import trade_price_rows
+    apply_document_prices(draft, build_trade_catalog(trade_price_rows(session, user_id)))
 
 
 def issuer_key_of(draft: dict) -> str:
@@ -145,7 +188,7 @@ def save_trade_document(database, *, user_id: int, thread_id: str, draft: dict,
                 session.add(row)
                 session.flush()
                 finalized = {**finalized, "trade_doc_id": row.id, "doc_no": row.doc_no,
-                             "doc_kind": row.doc_kind}
+                             "doc_kind": row.doc_kind, "revision": row.revision}
                 row.draft = finalized
             return finalized
         except IntegrityError:
@@ -161,11 +204,12 @@ def _owned_draft(session, user_id: int, trade_doc_id: int) -> TradeDocument | No
 
 def _store(session, row: TradeDocument, finalized: dict) -> dict | None:
     """조건부 UPDATE로 저장한다. 이미 보내거나 중간에 바뀐 문서는 저장하지 않고 `None`."""
+    finalized = {**finalized, "revision": row.revision + 1}
     claimed = session.execute(
         update(TradeDocument)
         .where(TradeDocument.id == row.id, TradeDocument.user_id == row.user_id,
-               TradeDocument.status != "sent")
-        .values(draft=finalized, status=finalized["status"])
+               TradeDocument.status.not_in(("sent", "sending")), TradeDocument.revision == row.revision)
+        .values(draft=finalized, status=finalized["status"], revision=row.revision + 1)
         .execution_options(synchronize_session=False)
     ).rowcount
     return finalized if claimed == 1 else None
@@ -176,7 +220,7 @@ def approve_packing_totals(user_id: int, trade_doc_id: int, *, database) -> dict
     with _user_lock(database, user_id):
         with database.session() as session:
             row = _owned_draft(session, user_id, trade_doc_id)
-            if row is None or row.doc_kind != "PL" or row.status == "sent":
+            if row is None or row.doc_kind != "PL" or row.status in {"sent", "sending"}:
                 return None
             draft = row.draft
             if not isinstance(draft, dict):  # ERR-13 대응: 잘못 저장된 구조는 승인 대상이 아니다
@@ -203,7 +247,7 @@ def cancel_packing_approval(user_id: int, trade_doc_id: int, *, database) -> dic
     with _user_lock(database, user_id):
         with database.session() as session:
             row = _owned_draft(session, user_id, trade_doc_id)
-            if row is None or row.doc_kind != "PL" or row.status == "sent":
+            if row is None or row.doc_kind != "PL" or row.status in {"sent", "sending"}:
                 return None
             draft = row.draft
             if not isinstance(draft, dict):  # ERR-13 대응: 잘못 저장된 구조는 취소 대상이 아니다
@@ -221,13 +265,15 @@ def cancel_packing_approval(user_id: int, trade_doc_id: int, *, database) -> dic
             return _store(session, row, finalized)
 
 
-def revise_trade_document(user_id: int, trade_doc_id: int, values: dict, *, database) -> dict | None:
+def revise_trade_document(user_id: int, trade_doc_id: int, values: dict, *, database,
+                          expected_revision: int | None = None) -> dict | None:
     """빠진 문서값을 넣어(`apply_review_value`) 재검증·저장한다(계약 15.5절). 키는 점 표기
     (예: `document_number`, `buyer.legal_name`, `items.0.unit_price`)."""
     with _user_lock(database, user_id):
         with database.session() as session:
             row = _owned_draft(session, user_id, trade_doc_id)
-            if row is None or row.status == "sent":
+            if (row is None or row.status in {"sent", "sending"}
+                    or expected_revision is not None and row.revision != expected_revision):
                 return None
             draft = row.draft
             if not isinstance(draft, dict):  # ERR-13 대응: 잘못 저장된 구조는 수정 대상이 아니다
@@ -235,7 +281,7 @@ def revise_trade_document(user_id: int, trade_doc_id: int, values: dict, *, data
             draft = deepcopy(draft)  # ORM 인스턴스를 직접 바꾸지 않는다(저장은 조건부 UPDATE로)
             changed = []
             for key, value in (values or {}).items():
-                path = tuple(int(part) if part.isdigit() else part for part in str(key).split("."))
+                path = editable_path(key, draft)
                 field = ReviewField(path, label=str(key))
                 before = field_value(draft, field)
                 apply_review_value(draft, field, value)
@@ -243,6 +289,7 @@ def revise_trade_document(user_id: int, trade_doc_id: int, values: dict, *, data
                     changed.append(str(key))
             if not changed:
                 return draft
+            reprice_revision(session, user_id, draft, changed)
             was_approved = bool((draft.get("packing_totals") or {}).get("approved"))
             # 품목·원본 합계 값을 고치면 승인을 다시 받는다(원본 합계 스냅숏도 새로 만든다).
             packing_touched = row.doc_kind == "PL" and any(

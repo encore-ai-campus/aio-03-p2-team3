@@ -185,6 +185,7 @@ class TradeDocument(Base, Owned, Created):
     doc_kind: Mapped[str] = mapped_column(String)  # PI·PO·CI·PL(계약 15.1절)
     doc_no: Mapped[str] = mapped_column(String)  # 내부 관리 번호 <doc_kind>-YYYYMMDD-NNN
     draft: Mapped[dict] = mapped_column(JSON_VALUE)
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     status: Mapped[str] = mapped_column(String, default="needs_input")  # needs_input/ready/sent
     sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 

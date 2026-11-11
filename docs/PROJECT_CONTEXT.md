@@ -71,7 +71,9 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-10 · kekorea-port 6절(문서 생성 도구·답장 v3·계좌 표)
+마지막 갱신: 2026-11-11 · trade-domain-api 1절(기본 오류 수정)
+
+- 독립 문서 API 준비(`docs/plans/trade-domain-api.md`, Issue #108~#111): 요청 범위는 기본 오류 → PI 독립 모듈/API → PO·CI·PL이다. 마스터 챗봇은 제외한다. 1절에서 기존 DB Alembic 갱신, 수정 시 가격 재검증, 문서 revision과 수정/발송의 조건부 갱신을 추가했다(계약 15.9절). 문서별 API는 후속 단계다.
 
 - 계약의 입력 스키마·도구 6개 등록과 `ToolResult`를 구현했다(계획 2절, 2026-11-09). 잘못된 스키마 입력은 `invalid_input` 결과로 돌려준다. 견적서 만들기까지 도구 6개의 업무 본문을 채웠다(계획 11절, 2026-11-10).
 - `draft_replies` 구현(계획 8절, 2026-11-10): `call_structured()` 1회로 후보 2~3개(`label`·`body`)를 받는다. 개수가 2~3개가 아니면 형식 오류로 1회 다시 부른다. 제목은 코드가 `Re: <원래 제목>`으로 정하고, 사용자 선호의 `signature`가 있으면 본문 끝에 붙인다. `source`는 `model_source()`(`gemini:<모델>`, 기본 `gemini:gemini-3.6-flash`), DB 저장은 `save_pending` 노드가 한다. 계획 11절의 `draft_replies.v2`는 단가 미입력을 상대방에게 묻지 않고, 이후 화면 입력으로 금액이 바뀔 수 있어 숫자를 본문에 복사하지 않고 첨부 견적서를 안내한다.
@@ -107,7 +109,9 @@
 - 알림 → 그래프 연결(계획 7절, 2026-11-10): 같은 사용자 알림 처리를 단일 프로세스 안에서 직렬화하고, `(user_id, gmail_message_id)` 유일 제약을 통과한 메일만 `thread_messages`에 저장해 `start_run(mode="live")`을 부른다. 시작 입력의 메일·스레드 ID·사용자 성찰 설정을 기존 진입점이 채운다. 결과의 `run_id`·`notice`를 처리한 메일에 연결하고 승인 대기/추가 질문 → `awaiting_approval`, 처리 안 함 → `ignored`, 실패 → `error`로 남긴다. 모든 Gmail 조회가 성공한 뒤에만 `gmail_watches.history_id`를 옮긴다. Gmail 오류는 `last_error`에 원문 없이 남기고 다음 알림에서 저장된 메일을 건너뛰어 이어 읽는다. 로그아웃·재로그인 필요 상태의 알림은 처리하지 않는다. 계약의 `BackgroundTasks`는 프로세스 내 작업이므로 재시작 중 작업 복구나 만료된 historyId의 전체 동기화는 구현하지 않았다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-10 · kekorea-port 6절(무역서류 대표 흐름·ERR 점검표)
+마지막 갱신: 2026-11-11 · 기존 DB·가격·발송 충돌 회귀
+
+- `tests/test_trade_upgrade.py`가 기존 국내 견적 SQLite 스키마에서 데이터 보존 갱신·반복 실행·부분 유니크 제약, 통화/상품 수정 후 가격 재검증, 오래된 버전·서버 필드 수정 거부, PDF 준비 뒤 버전 변경·발송 중 수정 차단을 확인한다. `tests/test_trade_postgres.py`는 임시 PostgreSQL 서버로 같은 갱신의 실제 동작을 확인한다(`uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py`, 운영 DB/실제 API 사용 없음).
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
 - 오류 코드 기록(#95): `tests/test_llm.py`가 가짜 SDK 503·429·시간 초과, 감싼 예외·순환 원인·복구 성공·백엔드 준비 실패의 안전한 코드를 확인한다. `tests/test_auth.py`가 가짜 HttpError의 403 두 원인을 감시 기록·서버 로그에서 구분하고, 잘못된 JSON·알 수 없는 reason·민감한 래퍼 메시지를 버리며, 발송 403·429의 기존 분류를 유지함을 확인한다. `tests/test_runs.py`는 실제 그래프·가짜 LLM으로 오류 코드가 실행 기록 화면과 `.jsonl`에 표시되고 예외에 섞은 가짜 개인정보·본문·키는 노출되지 않음을 검증한다. 개인정보 가리기 코드는 바꾸지 않았다.
@@ -128,7 +132,9 @@
 - 같은 시나리오를 다시 돌릴 때의 편차보다 큰 차이만 개선으로 본다. [Past work: aio3]
 
 ## 7. 배포
-마지막 갱신: 2026-11-10
+마지막 갱신: 2026-11-11
+
+- DB 갱신 준비: 서버 시작 시 `app/db/migrations/`의 Alembic 리비전을 적용한다. 기존 데이터와 승인 이력을 유지하며 부분 유니크 제약도 변경한다(계약 15.9절). 운영 반영 전 DB 백업을 보관한다. 이번 작업에서는 Render·운영 DB·실제 메일을 변경하지 않았다.
 
 - Render 배포(2026-11-10, 계획 4절): 웹 서비스 `https://aio3-gmail-quote.onrender.com`(무료, Singapore, `main` 병합 시 자동 배포), `/healthz` 응답 확인(요청자). 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 넣은 환경변수: `DATABASE_URL`(Internal 주소)·`GEMINI_API_KEY`·`SESSION_SECRET`·`REFLECTION_ENABLED_DEFAULT`·`APP_BASE_URL`. `TOKEN_ENCRYPTION_KEY`와 Google 값(`GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`)도 넣음(2026-11-10, 계획 5절, 설정 결과는 `.work/design/api-choice.md` '콘솔 설정 결과').
 - Render Postgres: 무료, Singapore(웹 서비스와 같은 지역), 2026-11-10 만듦 → 30일 뒤 2026-12-10경 만료, 14일 유예 뒤 2026-12-24경 삭제(11/19 제출까지는 충분).

@@ -297,6 +297,13 @@ def apply_verified_catalog_prices(draft, catalog=None):
                 f"Exact catalog product match for {item.get('product_name') or 'item'}; capacity/SKU may be needed")
             continue
         product = match["product"]
+        product_prices = [row for row in price_rows if row.get("product_id") == product["id"]]
+        currency_prices = [row for row in product_prices
+                           if not draft.get("currency") or row.get("currency") == draft["currency"]]
+        stored_party_key = _matching_party_key(currency_prices, party_field, counterparty_key)
+        if stored_party_key is None:
+            stored_party_key = _matching_party_key(product_prices, party_field, counterparty_key)
+        party_matches = stored_party_key is not None
         if match.get("confirmation") and match["confirmation"] not in pending:
             pending.append(match["confirmation"])
         if not party_matches:
