@@ -14,16 +14,16 @@ import zlib
 from pathlib import Path
 from zipfile import ZipFile
 
-from app.trade.ci_import import (
+from app.trade.ci.imports import (
     apply_document_prices,
     ci_import_issues,
     ci_render_data,
     is_ci_conversion_request,
     prepare_ci_import,
 )
-from app.trade.renderers import document_lines, render_files
-from app.trade.trade_documents import validate_and_calculate
-from app.trade.verify_quotes import verify_item_quotes
+from app.trade.common.renderers import document_lines, render_files
+from app.trade.common.trade_documents import validate_and_calculate
+from app.trade.common.verify_quotes import verify_item_quotes
 
 ISSUER_NAME = "Testworks Trading Co"
 ISSUER_KEY = "testworkstrading"

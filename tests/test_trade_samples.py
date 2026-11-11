@@ -8,10 +8,10 @@
 """
 import copy
 
-from app.trade.pricing import apply_verified_catalog_prices
-from app.trade.promotions import apply_promotion_commands
-from app.trade.samples import ensure_sample_rows, new_sample, update_sample
-from app.trade.trade_documents import validate_and_calculate
+from app.trade.common.pricing import apply_verified_catalog_prices
+from app.trade.common.promotions import apply_promotion_commands
+from app.trade.pi.samples import ensure_sample_rows, new_sample, update_sample
+from app.trade.common.trade_documents import validate_and_calculate
 from tests.test_trade_promotions import ISSUER_KEY, order
 
 
@@ -37,7 +37,7 @@ def test_keyword_opens_one_manual_row_without_duplicate_or_other_document_change
 
 
 def test_regular_discount_confirmation_ignores_independent_manual_samples():
-    from app.trade.review_fields import apply_review_value, missing_review_fields
+    from app.trade.common.review_fields import apply_review_value, missing_review_fields
     doc = order()
     doc['items'][0]['discount_percent'] = None
     doc['conflicts'] = ['Discount was mentioned without a percentage; specify a single discount rate.']

@@ -3,13 +3,13 @@
 원본: reference/kekorea/Quotation_KEKOREA/agent/packing.py — 복사본(고침 없음).
 바꾼 것은 import 경로(`Quotation_KEKOREA.agent...` → `app.trade...`)뿐이다. 계약 15.4절 일정
 대응으로 3절(B)이 원본 복사본을 먼저 넣었고, 5절(D)이 그 위에서 PL 승인 흐름
-(`app/trade/packing_review.py`·`app/services/trade_docs.py`)을 이식했다. 검토 입력 정규화 문제까지
+(`app/trade/pl/packing_review.py`·`app/services/trade_docs.py`)을 이식했다. 검토 입력 정규화 문제까지
 더한 PL 합계 비교는 `packing_review.reconcile_packing`(래퍼)을 부른다(계약 15.5절).
 """
 from decimal import Decimal, InvalidOperation
 import re
 
-from app.trade.trade_documents import normalize_quantity_unit
+from app.trade.common.trade_documents import normalize_quantity_unit
 
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/packing.py _number

@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Counterparty, PriceListItem, User
-from app.trade.pricing import build_trade_catalog
-from app.trade.store import counterparty_profiles, trade_price_rows
+from app.trade.common.pricing import build_trade_catalog
+from app.trade.settings.repository import counterparty_profiles, trade_price_rows
 
 
 def test_domestic_rows_keep_user_item_uniqueness(database):
@@ -86,7 +86,7 @@ def test_counterparty_profiles_isolated_per_user_and_shaped_for_apply(database):
         ("company_key", "legal_name", "aliases", "address", "contact", "phone",
          "email", "registration_details", "default_ship_to", "ship_to_phone"))
     # 조회 결과는 apply_company_profiles 입력으로 바로 쓸 수 있다.
-    from app.trade.counterparties import apply_company_profiles
+    from app.trade.common.counterparties import apply_company_profiles
     draft = {"document_type": "PI", "buyer": {}, "seller": {"legal_name": "Testworks Trading Co"}}
     apply_company_profiles(draft, mine, prompt="Acme Buyer 인보이스 작성")
     assert draft["buyer"]["legal_name"] == "ACME BUYER PTE LTD"

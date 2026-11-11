@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 
 from app.db.models import CompanyBranding, TradeArtifact, TradeDocument, TradeProposal, utcnow
 from app.services.locks import user_lock
-from app.trade.branding import resolve_company_seal
+from app.trade.settings.repository import resolve_company_seal
 from app.trade.common.models import DocumentError
 from app.trade.common.repository import SQLDocuments
 from app.trade.common.results import artifact_view

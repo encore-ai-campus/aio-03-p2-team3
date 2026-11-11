@@ -4,7 +4,7 @@
 """
 from decimal import Decimal, InvalidOperation
 
-from app.trade.trade_documents import _decimal
+from app.trade.common.trade_documents import _decimal
 
 
 def validate_header(data, issuer, block):

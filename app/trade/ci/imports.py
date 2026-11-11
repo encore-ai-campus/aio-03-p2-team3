@@ -140,7 +140,7 @@ def prepare_ci_import(draft, *, requested_type, has_attachments):
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/ci_import.py apply_document_prices
 def apply_document_prices(draft, catalog=None):
     if draft.get('document_type') in {'CI', 'PL'}:
-        from app.trade.pricing import apply_catalog_product_matches
+        from app.trade.common.pricing import apply_catalog_product_matches
         apply_catalog_product_matches(draft, catalog)
         pi_required = 'CI must be created from an attached PI to use its transaction prices'
         draft['missing_fields'] = [entry for entry in draft.get('missing_fields', [])
@@ -152,7 +152,7 @@ def apply_document_prices(draft, catalog=None):
         return draft
     if is_pi_import(draft):
         return _sanitize_import(draft)
-    from app.trade.pricing import apply_verified_catalog_prices
+    from app.trade.common.pricing import apply_verified_catalog_prices
     return apply_verified_catalog_prices(draft, catalog)
 
 

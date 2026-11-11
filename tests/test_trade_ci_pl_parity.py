@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 
 from app.services.trade_docs import finalize_draft
-from app.trade import ci_import as port_ci_import
-from app.trade import packing_review as port_review
-from app.trade.trade_documents import validate_and_calculate
+from app.trade.ci import imports as port_ci_import
+from app.trade.pl import packing_review as port_review
+from app.trade.common.trade_documents import validate_and_calculate
 from tests.test_trade_packing import packing_example
 
 REFERENCE_ROOT = Path(__file__).resolve().parents[1] / "reference" / "kekorea"

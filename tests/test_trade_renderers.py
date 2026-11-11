@@ -12,7 +12,7 @@ from io import BytesIO
 
 import pytest
 
-from app.trade.renderers import (
+from app.trade.common.renderers import (
     _pdf_bytes, _xlsx_bytes, amount_in_english, document_lines, format_currency_amount, render_files,
 )
 

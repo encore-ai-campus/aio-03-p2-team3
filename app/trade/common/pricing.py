@@ -14,8 +14,8 @@ import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
 
-from app.trade.counterparties import name_key
-from app.trade.product_matching import match_product
+from app.trade.common.counterparties import name_key
+from app.trade.common.product_matching import match_product
 
 
 def _empty_catalog():
@@ -142,7 +142,7 @@ def _party_labels(rows, party_field, product_id):
 # (안내 문구의 회사 이름만 일반 문구로 바꿨다)
 def apply_catalog_product_matches(draft, catalog=None):
     """Attach confident catalog product identities without changing document prices."""
-    from app.trade.samples import is_manual_sample
+    from app.trade.pi.samples import is_manual_sample
     catalog = catalog if catalog is not None else _empty_catalog()
     products = catalog.get("products", [])
     product_ids = {product.get("id") for product in products}
@@ -199,7 +199,7 @@ def apply_verified_catalog_prices(draft, catalog=None):
     """Replace candidate prices with exact user-catalog prices or mark the uncertainty."""
     if draft.get("document_type") in {"CI", "PL"}:
         return apply_catalog_product_matches(draft, catalog)
-    from app.trade.samples import is_manual_sample
+    from app.trade.pi.samples import is_manual_sample
     catalog = catalog if catalog is not None else _empty_catalog()
     is_purchase_order = draft.get("document_type") == "PO"
     # Recompute catalog-owned warnings after the user completes buyer/product/currency fields.

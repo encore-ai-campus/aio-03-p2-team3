@@ -10,7 +10,7 @@ import zlib
 
 import pytest
 
-from app.trade.pi_pdf import _paginate_rows, render_trade_document
+from app.trade.common.pdf import _paginate_rows, render_trade_document
 
 BANK_KEYS = ("BENEFICIARY", "BANK_NAME", "BRANCH", "SWIFT", "ACCOUNT_NUMBER", "BANK_ADDRESS")
 

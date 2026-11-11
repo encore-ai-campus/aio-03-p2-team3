@@ -1,6 +1,6 @@
 from fastapi import Depends, Request
 
-from app.trade.api import require_write
+from app.trade.common.api import require_write
 from app.trade.common.models import DocumentResult
 from app.trade.common.rendering import render_approved_files
 from app.trade.common.router import document_router

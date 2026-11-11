@@ -18,7 +18,7 @@ import textwrap
 import struct
 import zlib
 
-from .trade_documents import current_issue_date
+from app.trade.common.trade_documents import current_issue_date
 
 
 PAGE_W, PAGE_H = 612, 792

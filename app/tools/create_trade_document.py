@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field
 from app.runlog.logger import current_database
 from app.services.trade_docs import save_trade_document
 from app.tools.base import ToolResult
-from app.trade.ci_import import apply_document_prices
-from app.trade.pricing import build_trade_catalog
+from app.trade.ci.imports import apply_document_prices
+from app.trade.common.pricing import build_trade_catalog
 
 
 class Input(BaseModel):

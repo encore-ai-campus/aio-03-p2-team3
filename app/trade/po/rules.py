@@ -1,5 +1,5 @@
 """PO 발행사 역할과 지급 조건."""
-from app.trade.counterparties import name_key
+from app.trade.common.counterparties import name_key
 
 
 def validate_header(data, issuer, block):

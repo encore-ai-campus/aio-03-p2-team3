@@ -101,7 +101,7 @@ def test_currency_revision_invalidates_old_verified_price(database):
 
 
 def test_counterparty_price_fallback_is_per_product():
-    from app.trade.pricing import apply_verified_catalog_prices, build_trade_catalog
+    from app.trade.common.pricing import apply_verified_catalog_prices, build_trade_catalog
     catalog = build_trade_catalog([
         {"id": 1, "role": "sale", "item_name": "Alpha Cream", "capacity": "50ml", "currency": "USD",
          "unit_price_text": "10", "party_key": "Acme Trading", "price_basis": "PCS"},

@@ -7,7 +7,7 @@
 """
 import copy
 
-from app.trade.counterparties import apply_company_profiles, name_key
+from app.trade.common.counterparties import apply_company_profiles, name_key
 
 
 PROFILE = dict(company_key='ACME_BUYER', legal_name='ACME BUYER PTE LTD',

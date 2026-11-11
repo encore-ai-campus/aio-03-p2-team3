@@ -7,13 +7,13 @@
 """
 import copy
 
-from app.trade.promotions import (
+from app.trade.common.promotions import (
     apply_promotion_commands,
     normalize_promotion,
     recalculate_order_promotions,
 )
-from app.trade.review_fields import apply_review_value, missing_review_fields
-from app.trade.trade_documents import validate_and_calculate
+from app.trade.common.review_fields import apply_review_value, missing_review_fields
+from app.trade.common.trade_documents import validate_and_calculate
 
 
 RULES = {'1+1': ('10', '20'), '2+1': ('5', '15'), '3+1': ('3', '13'),

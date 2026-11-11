@@ -26,16 +26,16 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models import TradeDocument, TradeDocumentVersion, TradeProposal, User, utcnow
 from app.services.locks import user_lock as _user_lock
-from app.trade.counterparties import name_key
-from app.trade.packing_review import (
+from app.trade.common.counterparties import name_key
+from app.trade.pl.packing_review import (
     PACKING_SOURCE_FIELDS,
     apply_approved_packing_totals,
     normalize_packing_inputs,
     packing_total_changes,
     reconcile_packing,
 )
-from app.trade.review_fields import ReviewField, apply_review_value, field_value
-from app.trade.trade_documents import validate_and_calculate
+from app.trade.common.review_fields import ReviewField, apply_review_value, field_value
+from app.trade.common.trade_documents import validate_and_calculate
 
 DOC_KINDS = {"PI", "PO", "CI", "PL"}
 
@@ -86,9 +86,9 @@ def reprice_revision(session, user_id: int, draft: dict, changed: list[str]) -> 
             item.pop(field, None)
         if (context_changed or identity_changed) and f"items.{index}.unit_price" not in changed:
             item["unit_price"], item["price_source"] = None, None
-    from app.trade.ci_import import apply_document_prices
-    from app.trade.pricing import build_trade_catalog
-    from app.trade.store import trade_price_rows
+    from app.trade.ci.imports import apply_document_prices
+    from app.trade.common.pricing import build_trade_catalog
+    from app.trade.settings.repository import trade_price_rows
     apply_document_prices(draft, build_trade_catalog(trade_price_rows(session, user_id)))
 
 
@@ -143,7 +143,7 @@ def finalize_draft(draft: dict, *, approved: bool = False) -> dict:
                 result["blocking_issues"].append(message)
     if result.get("document_type") == "CI":
         # 계약 15.5절 파이프라인 마지막 단계: CI 근거 문제(PI 원문 금액 불일치 등)도 차단 항목에 더한다.
-        from app.trade.ci_import import ci_import_issues
+        from app.trade.ci.imports import ci_import_issues
         for issue in ci_import_issues(result):
             if issue not in result["blocking_issues"]:
                 result["blocking_issues"].append(issue)

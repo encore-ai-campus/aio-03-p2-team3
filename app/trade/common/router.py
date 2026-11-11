@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field, create_model, model_validator
 
-from app.trade.api import require_write
+from app.trade.common.api import require_write
 from app.trade.common import operations as common
 from app.trade.common.models import DocumentResult, DocumentSummary, InputModel
 from app.trade.review import operations as review

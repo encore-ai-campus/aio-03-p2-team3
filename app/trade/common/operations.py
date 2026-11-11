@@ -2,10 +2,10 @@
 from copy import deepcopy
 
 from app.trade.common.models import DocumentContext, DocumentError, DocumentSummary
-from app.trade.counterparties import apply_company_profiles, name_key
-from app.trade.postprocess import apply_issuer_defaults, synchronize_quantities
-from app.trade.pricing import build_trade_catalog, apply_verified_catalog_prices
-from app.trade.trade_documents import validate_and_calculate
+from app.trade.common.counterparties import apply_company_profiles, name_key
+from app.trade.common.postprocess import apply_issuer_defaults, synchronize_quantities
+from app.trade.common.pricing import build_trade_catalog, apply_verified_catalog_prices
+from app.trade.common.trade_documents import validate_and_calculate
 
 
 def calculate(draft):

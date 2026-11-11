@@ -12,12 +12,12 @@
 """
 import pytest
 
-from app.trade.pricing import (
+from app.trade.common.pricing import (
     apply_verified_catalog_prices,
     build_trade_catalog,
     is_supplier_alias,
 )
-from app.trade.trade_documents import validate_and_calculate
+from app.trade.common.trade_documents import validate_and_calculate
 
 
 def partial_order():
@@ -282,5 +282,5 @@ def test_build_trade_catalog_dedupes_products_and_keeps_first_nonempty_values():
     assert catalog['purchase_prices'][0]['unit_price'] == '1,000'
     assert {row['currency'] for row in catalog['buyer_prices']} == {'USD', 'EUR'}
     # 매칭이 이름으로 product를 고르므로 중복 product가 없으면 ambiguous되지 않는다.
-    from app.trade.pricing import match_catalog_product
+    from app.trade.common.pricing import match_catalog_product
     assert match_catalog_product('Test Cream', '50ml', catalog['products'])['status'] == 'matched'

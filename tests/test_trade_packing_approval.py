@@ -20,7 +20,7 @@ from app.services.trade_docs import (
     revise_trade_document,
     save_trade_document,
 )
-from app.trade.packing_review import (
+from app.trade.pl.packing_review import (
     apply_approved_packing_totals,
     normalize_packing_inputs,
     packing_total_changes,

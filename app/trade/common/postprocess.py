@@ -10,7 +10,7 @@
 from decimal import Decimal, InvalidOperation
 import re
 
-from app.trade.trade_documents import apply_promotion, normalize_quantity_unit
+from app.trade.common.trade_documents import apply_promotion, normalize_quantity_unit
 
 
 # 원본: reference/kekorea/Quotation_KEKOREA/app_postprocess.py _apply_ke_korea_company_defaults

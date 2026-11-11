@@ -14,9 +14,9 @@
 from io import BytesIO
 from zipfile import ZipFile
 
-from app.trade.packing import reconcile_packing
-from app.trade.pricing import apply_verified_catalog_prices, build_trade_catalog
-from app.trade.renderers import _xlsx_bytes
+from app.trade.pl.packing import reconcile_packing
+from app.trade.common.pricing import apply_verified_catalog_prices, build_trade_catalog
+from app.trade.common.renderers import _xlsx_bytes
 from app.services.trade_docs import finalize_draft
 
 ISSUER_NAME = "Testworks Trading Co. Ltd"

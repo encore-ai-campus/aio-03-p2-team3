@@ -1,10 +1,10 @@
 """무역서류 검증·계산(kekorea-port 3절 B).
 
 원본: reference/kekorea/Quotation_KEKOREA/agent/trade_documents.py — 복사본.
-- current_issue_date: 문서 출력(kekorea-port 4절, app/trade/renderers.py·app/trade/pi_pdf.py)이
+- current_issue_date: 문서 출력(kekorea-port 4절, app/trade/common/renderers.py·app/trade/common/pdf.py)이
   쓴다(docs/CONTRACT.md 15.4절 import 관계).
 - normalize_quantity_unit·apply_promotion·상수(DOC_TYPES·FAMILIES·MONEY_QUANTUM·PRICE_QUANTUM):
-  추출 후처리(kekorea-port 2절, app/trade/postprocess.py)가 쓴다.
+  추출 후처리(kekorea-port 2절, app/trade/common/postprocess.py)가 쓴다.
 - 바꾼 것(계약 15.4절): 발행사 역할 검사의 "KE KOREA" 고정 문자열 → `issuer_key`(발행 회사
   이름 키, `counterparties.name_key` 규칙) 비교. PO는 buyer 이름 키에, PI/CI는 seller 이름 키에
   `issuer_key`가 포함돼야 통과하고 발행사 키가 반대 역할 이름 키에 포함되면 차단한다.
@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import re
 
-from app.trade.counterparties import name_key
+from app.trade.common.counterparties import name_key
 
 DOC_TYPES = {"PO", "PI", "CI", "PL"}
 FAMILIES = {"cosmetics", "polysilicon", "wafer", "solar_cell", "solar_module", "other"}
@@ -110,7 +110,7 @@ def validate_and_calculate(data, *, issuer_key):
     """Validate extracted user data, calculate sums, and identify issue blockers."""
     # Issue date is a system field: the issue date is always the current Seoul date.
     data = {**data, "issue_date": current_issue_date()}
-    from app.trade.promotions import recalculate_order_promotions
+    from app.trade.common.promotions import recalculate_order_promotions
     data = recalculate_order_promotions(data)
     issues, blocking = [], []
 
@@ -169,8 +169,8 @@ def validate_and_calculate(data, *, issuer_key):
     calculated, total = [], Decimal("0")
     for i, original in enumerate(items, 1):
         item = dict(original)
-        from app.trade.samples import is_manual_sample
-        from app.trade.ci_import import pi_source_zero_price
+        from app.trade.pi.samples import is_manual_sample
+        from app.trade.ci.imports import pi_source_zero_price
         sample = is_manual_sample(data, item)
         row_issue_start = len(issues)
         row_block_start = len(blocking)

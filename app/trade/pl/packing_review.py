@@ -3,7 +3,7 @@
 원본: reference/kekorea/Quotation_KEKOREA/agent/packing_review.py — 복사본.
 바꾼 것은 import 경로(`Quotation_KEKOREA.agent...` → `app.trade...`)뿐이다.
 - `reconcile_packing`(래퍼)은 계약 15.4·15.5절에서 다른 모듈이 부르는 PL 합계 비교 입구다
-  (`app/trade/packing.py`의 코어 함수에 `_packing_input_issues`를 더해 돌려준다).
+  (`app/trade/pl/packing.py`의 코어 함수에 `_packing_input_issues`를 더해 돌려준다).
 - 원본의 `apply_approved_packing_totals` ValueError는 그대로 두고, 서비스
   `app/services/trade_docs.py`의 `approve_packing_totals`가 이 반환 규칙(계약 15.5절)으로 바꾼다.
 - 보존 동작(PRESERVED_BEHAVIOR 'PL/CIPL 합계 승인'): 승인 시 원본 합계를 보존하고 계산 가능한
@@ -14,7 +14,7 @@ from decimal import Decimal
 import re
 
 from app.trade.pl.packing import reconcile_packing as _reconcile_packing, _number, _plain
-from app.trade.trade_documents import normalize_quantity_unit
+from app.trade.common.trade_documents import normalize_quantity_unit
 
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/packing_review.py reconcile_packing
