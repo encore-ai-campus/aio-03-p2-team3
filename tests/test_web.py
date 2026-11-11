@@ -37,3 +37,21 @@ def test_every_template_compiles():
     templates = Environment(loader=FileSystemLoader(directory))
     for name in templates.list_templates():
         templates.get_template(name)
+
+
+def test_app_initializes_llm_from_openai_settings(monkeypatch):
+    from app import main
+
+    settings = Settings(database_url="sqlite://", openai_api_key="fake-openai-key", openai_model="gpt-fake")
+    received = []
+    sentinel = object()
+
+    def backend(config):
+        received.append(config)
+        return sentinel
+
+    monkeypatch.setattr(main, "get_backend", backend)
+    app = create_app(settings)
+    with TestClient(app) as client:
+        assert client.get("/healthz").status_code == 200
+        assert app.state.llm is sentinel and received == [settings]

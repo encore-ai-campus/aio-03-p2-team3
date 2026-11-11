@@ -2,7 +2,6 @@
 
 import json
 
-from google.genai.errors import ClientError
 import pytest
 from sqlalchemy import select
 
@@ -14,7 +13,7 @@ from app.quote.required_fields import get_required_fields
 from app.tools.check_required_fields import find_missing
 from app.tools.extract_deal_terms import ExtractedDealTerms, to_deal_terms
 from app.tools.registry import TOOLS
-from tests.fakes.llm import FakeLLM
+from tests.fakes.llm import FakeLLM, openai_error
 
 COMPLETE = {
     "customer_name": "가상상사",
@@ -116,8 +115,8 @@ def test_extraction_failure_ends_failed(database, deal_email, response, attempts
 
 
 @pytest.mark.parametrize("responses, end_reason, kind", [
-    ([ClientError(429, {"error": {"status": "RESOURCE_EXHAUSTED"}})], "awaiting_approval", "general"),
-    ([NO_DUE_DATE, ClientError(429, {"error": {"status": "RESOURCE_EXHAUSTED"}})], "followup_question", "followup"),
+    ([openai_error(429)], "awaiting_approval", "general"),
+    ([NO_DUE_DATE, openai_error(429)], "followup_question", "followup"),
 ])
 def test_rate_limit_uses_fallback_and_skips_reflection(database, deal_email, responses, end_reason, kind):
     result, _ = run(database, deal_email, responses, reflection_enabled=True)

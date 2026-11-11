@@ -4,7 +4,7 @@
   써서 앞 실행의 단기 기억이 다음 실행에 섞이지 않게 하고, 같은 반복 번호의 끔/켬을 번갈아 돌린다.
 - 승인 발송 단계가 있는 시나리오(발송 성공이 장기 기억을 남김)는 다른 시나리오를 모두 돌린 뒤 맨 끝에 돌린다.
 - 가짜 LLM 실행(`mode="fake"`)은 시나리오의 준비된 응답만 쓰고, 실제 API 실행(`mode="real"`)은 주입 목록 말고는
-  실제 Gemini가 답한다. 주입한 호출은 실행 기록에 `detail.injected: true`로 표시한다(실제 API 결과와 구분).
+  실제 OpenAI가 답한다. 주입한 호출은 실행 기록에 `detail.injected: true`로 표시한다(실제 API 결과와 구분).
 - 끝나면 실행마다 판정(`metrics.judge_run`)하고 성찰 끔/켬의 4개 지표(`metrics.compute_metrics`)를 낸다.
 
 명령줄:
@@ -232,7 +232,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="시험 실행기: 같은 입력을 성찰 끔/켬으로 돌려 4개 지표를 계산한다")
     kind = parser.add_mutually_exclusive_group(required=True)
     kind.add_argument("--fake", action="store_true", help="가짜 LLM(준비된 응답), 메모리 DB")
-    kind.add_argument("--real", action="store_true", help="실제 Gemini(주입 목록 말고), DATABASE_URL의 DB")
+    kind.add_argument("--real", action="store_true", help="실제 OpenAI(주입 목록 말고), DATABASE_URL의 DB")
     who = parser.add_mutually_exclusive_group()
     who.add_argument("--user-email", help="실제 실행에 쓸 시험 계정 이메일(로컬 서버에서 로그인한 계정)")
     who.add_argument("--user-id", type=int, help="실제 실행에 쓸 시험 사용자 id")

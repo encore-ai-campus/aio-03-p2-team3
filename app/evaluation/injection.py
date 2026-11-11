@@ -1,7 +1,7 @@
 """준비된 응답·고의 실패 주입과 실행 기록 표시(계획 17절, CONTRACT 8.2절 `detail.injected`).
 
 - `ScenarioBackend`: `app/llm/client.py`의 `use_backend()`에 넣는 LLM 대역. 출력 형식(스키마) 이름마다
-  ① 주입 목록(`inject`) → ② 가짜 응답(`fake`, 가짜 LLM 실행에서만) → ③ 실제 Gemini(실제 API 실행) 순으로 답한다.
+  ① 주입 목록(`inject`) → ② 가짜 응답(`fake`, 가짜 LLM 실행에서만) → ③ 실제 OpenAI(실제 API 실행) 순으로 답한다.
   호출마다 주입 여부를 `calls`에 남긴다.
 - `InjectedSendFailure`: Google 호출 객체를 감싸 승인 발송(`send_message`)에 고의 실패를 차례로 넣는다.
 - `mark_injected()`·`mark_injected_sends()`: 실행이 끝난 뒤 주입한 호출에 해당하는 `llm_call`·`retry`·`send` 줄의
@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from app.db.engine import Database
 from app.db.models import RunEvent
+from app.llm.client import structured_output
 
 
 class _Bound:
@@ -54,7 +55,7 @@ class ScenarioBackend:
             self.calls.append((name, "prepared"))
             raise LookupError(f"준비된 응답 없음: {name}")   # 시나리오 정의 누락(internal로 분류됨)
         self.calls.append((name, None))
-        return self.real().with_structured_output(schema).invoke(prompt)
+        return structured_output(self.real(), schema).invoke(prompt)
 
 
 class InjectedSendFailure:

@@ -53,7 +53,7 @@ class Evidence(BaseModel):
 
 
 class ExtractedDealTerms(BaseModel):
-    """LLM 구조화 출력 형식. Gemini가 자유 키 dict를 다루기 어려워 evidence는 목록으로 받는다."""
+    """LLM 구조화 출력 형식. 필드별 근거를 일관되게 검증하도록 evidence는 목록으로 받는다."""
     customer_name: str | None = None
     items: list[ExtractedItem] = Field(default_factory=list)
     due_date: str | None = None

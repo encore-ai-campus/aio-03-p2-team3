@@ -8,7 +8,6 @@ requires-python = ">=3.12,<3.13"
 # 더할 때는 `uv add <패키지>==<버전>`을 쓴다(.work/TASK.md 환경 줄).
 dependencies = [
     "langgraph==1.2.20",
-    "langchain-google-genai==4.4.3",
     "google-api-python-client==2.201.0",
     "google-auth==2.62.1",
     "google-auth-oauthlib==1.5.0",
@@ -25,6 +24,7 @@ dependencies = [
     "fpdf2==2.9.0",
     "alembic==1.20.1",
     "langchain-openai==1.7.4",
+    "openai==3.49.0",
 ]
 
 [dependency-groups]

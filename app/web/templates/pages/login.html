@@ -4,7 +4,7 @@
 {% from 'components/button.html' import button, link_button %}
 {% block title %}로그인 · Gmail 견적 도우미{% endblock %}
 {% block content %}
-<div class="intro"><h1>테스트용 Gmail로 등록하세요</h1><p class="muted">받은 메일 내용은 Gemini 무료 등급으로 처리하며, 무료 등급은 입력이 Google 제품 개선에 쓰입니다. 실제 개인 메일 대신 테스트용 Gmail 계정으로 로그인해 주세요.</p></div>
+<div class="intro"><h1>테스트용 Gmail로 등록하세요</h1><p class="muted">답장 후보를 만들기 위해 받은 메일 내용 일부를 OpenAI API로 보냅니다. 실제 개인 메일이나 업무 메일 대신 테스트용 Gmail 계정과 가상 메일로 이용해 주세요.</p></div>
 {% if notice %}{{ banner(notice) }}{% endif %}
 {% call card('Google 계정으로 Gmail 연결') %}
 <p>로그인하면 새 메일 알림을 등록하고, 받은 메일마다 답장 후보를 만들어 둡니다. 답장은 직접 고르고 승인해야만 보냅니다.</p>

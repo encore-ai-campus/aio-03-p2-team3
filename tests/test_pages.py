@@ -10,7 +10,7 @@ from app.web.routes.pages import APP_NAME
     ("/about", APP_NAME, ["수업 과제", "테스트용 Gmail", "답장 후보 2~3개", "승인해야만", "견적서"]),
     ("/privacy", "개인정보처리방침", [
         "gmail.readonly", "gmail.send", "이메일 주소", "Render", "PostgreSQL", "암호화",
-        "Gemini API 무료 등급", "제품 개선", "과제 종료 뒤 삭제", "타사 앱", "GitHub Issue",
+        "OpenAI API", "API 데이터", "과제 종료 뒤 삭제", "타사 앱", "GitHub Issue",
     ]),
     ("/terms", "서비스 약관", ["수업 과제", "테스트용 Gmail", "실제 업무", "실제 개인정보", "보증 없이", "중단될 수"]),
 ])

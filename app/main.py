@@ -50,7 +50,7 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
         app.state.database = database
         app.state.graph = get_graph()
         # API 키가 없어도 기본 화면과 healthz는 사용할 수 있다.
-        app.state.llm = get_backend(config) if config.gemini_api_key else None
+        app.state.llm = get_backend(config) if config.openai_api_key.strip() else None
         app.state.google = google or GoogleClient(config)
         app.state.google_access = GoogleAccess(
             database, app.state.google, make_cipher(config), config.gmail_pubsub_topic,

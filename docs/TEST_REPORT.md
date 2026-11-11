@@ -12,12 +12,13 @@
 시험 실행기는 2번의 그래프를 알림 대신 저장된 시험 메일로 바로 시작하고(`start_run(mode="test", scenario=…)`), 승인 발송 시나리오만 3번의 승인 경로(`send_approved_candidate()`)까지 이어서 돈다.
 
 ## 2. 시험 환경·조건 (측정 전에 정함)
-- 같은 입력: 시나리오마다 같은 제목·본문·보낸 사람의 지어낸 메일을 성찰 끔(`reflection_enabled=False`)과 켬(`True`)으로 돌린다. 성찰 말고는 모델(`gemini-3.8-flash`)·프롬프트 버전·도구·한도 값(`app/config.py`의 `LIMITS`)을 같게 둔다. 다르면 6절에 적는다. [Request]
+- 같은 입력: 시나리오마다 같은 제목·본문·보낸 사람의 지어낸 메일을 성찰 끔(`reflection_enabled=False`)과 켬(`True`)으로 돌린다. 성찰 말고는 모델(기본 `gpt-6-luna`, `OPENAI_MODEL`로 지정한 실제 값 기록)·프롬프트 버전·도구·한도 값(`app/config.py`의 `LIMITS`)을 같게 둔다. 다르면 6절에 적는다. [Request]
 - 반복: 시나리오·성찰 설정마다 기본 3번(`--repeat 3`). 같은 반복 번호의 끔/켬을 번갈아 돌려 시간에 따른 차이가 한쪽에 몰리지 않게 한다. [Claude proposal]
 - 기억 섞임 막기: 실행마다 새 메일·스레드 ID를 써서 앞 실행의 단기 기억이 다음 실행에 들어가지 않게 한다. 승인 발송 성공은 장기 기억(상대방 거래 기록·승인 문체)을 남기므로 승인 발송 시나리오는 다른 보낸 사람 주소로 맨 끝에 돌린다. 실제 API 시험은 새 시험 사용자(테스트용 Google 계정)로 한다. [Claude proposal]
-- 실제 API와 주입 구분: 가짜 LLM 실행은 시나리오의 준비된 응답만 쓴다(Codex·CI용, 키 없음). 실제 API 실행은 시나리오의 주입 목록(고의 실패, 판단 오류를 일으키는 준비된 응답) 말고는 실제 Gemini·Gmail이 답한다. 주입한 호출의 실행 기록 줄(`llm_call`·`retry`·`send`)에는 `detail.injected: true`와 `detail.injection`(`prepared` 준비된 응답 / `failure` 고의 실패 / `mixed` 둘 다)을 단다(`docs/CONTRACT.md` 8.2절). [Request · Claude proposal]
+- 실제 API와 주입 구분: 가짜 LLM 실행은 시나리오의 준비된 응답만 쓴다(Codex·CI용, 키 없음). 실제 API 실행은 시나리오의 주입 목록(고의 실패, 판단 오류를 일으키는 준비된 응답) 말고는 실제 OpenAI·Gmail이 답한다. 주입한 호출의 실행 기록 줄(`llm_call`·`retry`·`send`)에는 `detail.injected: true`와 `detail.injection`(`prepared` 준비된 응답 / `failure` 고의 실패 / `mixed` 둘 다)을 단다(`docs/CONTRACT.md` 8.2절). [Request · Claude proposal]
 - 기록: 실행마다 `docs/test-records/`에 `.jsonl` 한 파일(이름 `<YYYYMMDD-HHMM>_<시나리오>_<refl-on|refl-off>_<run_id 앞 8자>.jsonl`, 개인정보 가림)을 남기고, 판정·지표 결과는 실행기의 `--out` JSON으로 남긴다. 판정 결과에는 메일·후보 본문을 넣지 않는다. [Claude proposal]
 - 개선 판단: 같은 시나리오를 다시 돌릴 때의 편차보다 큰 차이만 개선으로 본다. [Past work: aio3]
+- 공급자 변경(2026-11-11): 모든 LLM 호출을 OpenAI Responses API로 전환했다. `docs/test-records/`의 Gemini 기록·응답 시간은 당시 결과로 보존하고 OpenAI 성능 수치로 사용하지 않는다. 이 전환에서는 대역으로만 검증하며 실제 API 지표는 로컬·Render에서 같은 모델·조건으로 다시 측정한다.
 
 ## 3. 시나리오: 정상·오류 유형, 시험 입력과 기대 결과
 시험 메일은 모두 지어낸 내용이다(가상상사·가상오피스, `@example.invalid` 주소). 거래 메일 본문 예: '가상상사입니다. 가상 복사용지 100박스 견적 부탁드립니다. 11월 20일까지 필요합니다.' [Request · Claude proposal]
@@ -28,12 +29,12 @@
 | `normal_quote` | 정상 | 거래처·품목·수량·납기를 다 갖춘 견적 요청 | 없음 | 종료 `awaiting_approval`, 견적서 후보 2~3개, 이 실행의 견적서 초안 저장 | `extract_deal_terms`, `check_required_fields`, `create_quote`, `draft_replies` |
 | `missing_info` | 정보 부족 | 납기가 빠진 견적 요청 | 없음 | 종료 `followup_question`, 재질문 후보 2~3개가 모두 납기(`due_date`)를 물음 | `extract_deal_terms`, `check_required_fields`, `draft_followup_replies` |
 | `gmail_error` | 도구 실패 | 제목 `[evalsend] 제품 안내 자료 문의`의 일반 문의 → 첫 후보 승인 발송 | 첫 발송에 Gmail `HTTP 503` | 종료 `awaiting_approval`, 일반 후보 2~3개, 승인 결과가 차례로 `failed_unknown`(자동 재시도 없이 안내) → 다시 승인해 `sent` | `draft_replies` |
-| `gemini_rate_limit` | 도구 실패 | 일반 문의 | 답장 후보 생성에 Gemini 429(한도) | 종료 `awaiting_approval`, 기본 답장 틀 1개, 확인 필요·`rate_limit` 안내 | `draft_replies` |
+| `openai_rate_limit` | 도구 실패 | 일반 문의 | 답장 후보 생성에 OpenAI SDK 429(한도) | 종료 `awaiting_approval`, 기본 답장 틀 1개, 확인 필요·`rate_limit` 안내 | `draft_replies` |
 | `wrong_tool` | 판단 오류(성찰로 고침) | 필수 항목을 다 갖춘 견적 요청 | 메일 분석을 '일반 문의'로 준비 | `normal_quote`와 같음(성찰이 거래 경로로 고쳐야 완료) | `extract_deal_terms`, `check_required_fields`, `create_quote`, `draft_replies` |
 | `hallucination` | 판단 오류(성찰로 고침) | 일반 문의 | 첫 답장 후보에 원문에 없는 '500만원'·'11월 30일' | `normal_general`과 같고, 어느 후보에도 '500만원'·'11월 30일'이 없음 | `draft_replies` |
 
 - 공통 완료 조건: 종료 이유, 후보 개수(기본 2~3개), 후보 종류(`general`/`followup`/`quote`), 확인 필요 표시, 안내 종류가 위 표와 같다. 표에 적힌 추가 조건(재질문 항목·견적서·금지 표현·승인 결과)도 모두 맞아야 완료다. [Claude proposal]
-- 판단 오류 두 시나리오는 실제 API 실행에서도 같은 오류가 나도록 오류를 일으키는 응답을 주입하고, 그 뒤 호출(성찰의 원인 분석, 재실행)은 실제 Gemini가 답한다. [Claude proposal]
+- 판단 오류 두 시나리오는 실제 API 실행에서도 같은 오류가 나도록 오류를 일으키는 응답을 주입하고, 그 뒤 호출(성찰의 원인 분석, 재실행)은 실제 OpenAI가 답한다. [Claude proposal]
 - 승인 발송 시나리오(`gmail_error`)는 Gmail 연결이 있어야 돈다. 실제 실행에서는 상대방 역할 계정이 시험 계정으로 같은 제목·본문의 메일을 실행마다 한 통씩(반복 수 × 끔/켬) 보내 두고, 실행기가 `--gmail-search`로 시험 계정 Gmail을 검색해(기본 `in:inbox subject:evalsend newer_than:30d`) 받은 메일·같은 제목·본문 포함·앞 실행에 안 쓴 메일만 오래된 순으로 쓴다(메일 ID를 직접 줄 때는 `--gmail-source 메일ID:스레드ID`). 두 번째 승인은 실제로 상대방 역할 계정에 답장을 보낸다. 메일이 모자라면 남은 실행은 건너뛰고 이유를 남긴다. [Request · Claude proposal]
 
 ## 4. 판정 기준: 4개 필수 지표 (측정 전에 정함, 2026-11-10)

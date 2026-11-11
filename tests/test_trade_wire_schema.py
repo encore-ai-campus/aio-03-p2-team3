@@ -69,7 +69,7 @@ def _schema_violations(node):
 
 @pytest.mark.parametrize("schema", DOMAIN_SCHEMAS)
 def test_wire_json_schema_has_no_numbers_or_http_constraints(schema):
-    """숫자는 문자열로 받고(JSON number 정밀도·Gemini 거부 제약 방지) HTTP 입력 제약은 떼어냈다."""
+    """숫자는 문자열로 받고(JSON number 정밀도 보존·HTTP 제약 분리) HTTP 입력 제약은 떼어냈다."""
     assert _schema_violations(wire_schema(schema).model_json_schema()) == set()
 
 
@@ -109,14 +109,25 @@ def test_trade_backend_model_follows_settings():
     assert backend.model_name == "gpt-fake"
 
 
-def test_trade_backend_gemini_choice(monkeypatch):
-    monkeypatch.setattr(extraction, "get_backend", lambda settings=None: "가짜 gemini 백엔드")
-    assert trade_backend(Settings(trade_extract_backend=" Gemini ")) == "가짜 gemini 백엔드"
+def test_trade_backend_uses_the_shared_openai_backend(monkeypatch):
+    settings = Settings(openai_api_key="가짜 키", openai_model="gpt-fake")
+    received = []
+    sentinel = object()
+
+    def shared(config=None):
+        received.append(config)
+        return sentinel
+
+    monkeypatch.setattr(extraction, "get_backend", shared)
+    assert trade_backend(settings) is sentinel and received == [settings]
 
 
-def test_trade_backend_rejects_unknown_choice():
-    with pytest.raises(ValueError, match="TRADE_EXTRACT_BACKEND"):
-        trade_backend(Settings(trade_extract_backend="claude"))
+def test_old_gemini_env_does_not_enable_trade_fallback(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "unused-fake-key")
+    monkeypatch.setenv("GEMINI_MODEL", "unused-fake-model")
+    monkeypatch.setenv("TRADE_EXTRACT_BACKEND", "gemini")
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        trade_backend(Settings())
 
 
 def test_trade_backend_needs_openai_key_by_default():
