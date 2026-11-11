@@ -11,14 +11,17 @@ def draft_replies(state: AgentState) -> dict:
     reply_mode = "quote" if state["reply_mode"] == "quote" else "general"
     reflection = state["reflection"]
     feedback = reflection["feedback"] if reflection and not reflection["passed"] else None
+    trade_doc = state["trade_doc_draft"]  # 무역서류 동봉 답장(계약 15.6절)
     current_event("tool_call", tool="draft_replies", detail={
         "reply_mode": reply_mode, "body_chars": len(state["email"]["body_text"] or ""),
         "has_thread_context": state["thread_context"] is not None,
         "has_quote": state["quote_draft"] is not None, "has_feedback": feedback is not None,
+        "has_trade_doc": trade_doc is not None,
     })
     result = TOOLS["draft_replies"].invoke({
         "email": state["email"], "thread_context": context_for_model(state),
         "reply_mode": reply_mode, "quote_draft": state["quote_draft"],
+        "trade_doc_draft": trade_doc,
         "preferences": preferences_of(state), "feedback": feedback,
     })
     candidates = result.value["candidates"] if result.ok else []
