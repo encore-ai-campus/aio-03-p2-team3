@@ -119,7 +119,7 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-11 · 독립 문서 API·기존 DB·가격·승인 동시성
+마지막 갱신: 2026-11-11 · PDF 이미지 재사용·독립 문서 API·기존 DB·가격·승인 동시성
 
 - PI 독립 API 검증(2026-11-11): 전체 573 passed·1 skipped, 별도 실제 임시 PostgreSQL 2 passed. 세션/CSRF·소유자 격리·검토/승인/취소/수정·불변 파일·동시 승인·재접속 복구를 확인했다. 실제 Gemini/Gmail·운영 DB는 호출하지 않았다.
 - `tests/test_trade_upgrade.py`가 기존 국내 견적 SQLite 스키마에서 데이터 보존 갱신·반복 실행·부분 유니크 제약, 통화/상품 수정 후 가격 재검증, 오래된 버전·서버 필드 수정 거부, PDF 준비 뒤 버전 변경·발송 중 수정 차단을 확인한다. `tests/test_trade_postgres.py`는 임시 PostgreSQL 서버로 같은 갱신의 실제 동작을 확인한다(`uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py`, 운영 DB/실제 API 사용 없음).
@@ -146,6 +146,8 @@
 - 네 문서 검증: `tests/test_trade_domain_api.py`와 `test_trade_domain_operations.py`에서 직접/AI 같은 입력, 도메인별 가격·PI 버전 고정·샘플 0원/FOC·PL 합계 승인·취소/수정/발급·소유자 격리·통화별 출력 계좌를 확인한다. `test_trade_postgres.py`는 실제 임시 PostgreSQL에서 네 문서 HTTP 흐름과 서로 다른 DB 연결의 동시 승인을 검증한다. 이전 문서 버전 backfill도 별도 회귀로 확인한다. 최종 로컬 결과는 전체 590 passed·1 skipped, 실제 PostgreSQL 3 passed이며 근거표는 `docs/test-records/20261111_trade_domain_api.md`다.
 
 - 루트 정리 검증: 이동한 함수/클래스는 import를 제외한 AST가 이전과 동일하다. 기존 테스트 590 passed·1 skipped로 계산·원본 parity·승인·파일·기존 메일 흐름을 확인했다. 실제 임시 PostgreSQL 3개 시험도 통과했다. 앱/테스트에 폐기 경로 import가 남지 않았고 루트에는 `__init__.py`만 있다.
+
+- PDF 공통 렌더러(PI·PO·CI·PL): 한 문서 렌더링 안에서 같은 PNG와 crop 조건의 RGB 변환·압축 결과를 재사용하고, 여러 페이지에서 같은 이미지 PDF 객체를 공유한다. 페이지별 콘텐츠 스트림과 이미지 배치 명령은 유지한다. `tests/test_trade_pdf_pagination.py`는 이미지 종류 수만큼만 변환·압축하며 PDF 이미지 객체가 중복되지 않고 각 페이지가 같은 객체를 참조하는지 확인한다.
 
 ## 7. 배포
 마지막 갱신: 2026-11-11
@@ -180,6 +182,8 @@
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
+| KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
+| 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |
 
 - 위치는 Claude가 정한 처음 값이다. 팀이 바꾸면 이 표와 README를 함께 고친다. [Claude proposal]

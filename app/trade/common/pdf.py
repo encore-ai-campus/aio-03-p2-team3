@@ -52,9 +52,10 @@ def _pdf_escape(value):
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/pi_pdf.py _Canvas
 class _Canvas:
-    def __init__(self):
+    def __init__(self, image_cache=None):
         self.commands = []
         self.images = []
+        self.image_cache = image_cache if image_cache is not None else {}
 
     @staticmethod
     def _rgb(color):
@@ -88,19 +89,26 @@ class _Canvas:
         if not data:
             return False
         try:
-            width, height, pixels = _read_png_rgb(data)
-            if crop_box:
-                crop_x, crop_y, crop_w, crop_h = crop_box
-                pixels = _crop_rgb(pixels, width, height, crop_x, crop_y, crop_w, crop_h)
-                width, height = crop_w, crop_h
-            raw = zlib.compress(pixels, level=9)
+            crop = tuple(crop_box) if crop_box else None
+            key = (data, crop)
+            image = self.image_cache.get(key)
+            if image is None:
+                width, height, pixels = _read_png_rgb(data)
+                if crop:
+                    crop_x, crop_y, crop_w, crop_h = crop
+                    pixels = _crop_rgb(pixels, width, height, crop_x, crop_y, crop_w, crop_h)
+                    width, height = crop_w, crop_h
+                image = {"bytes": zlib.compress(pixels, level=9),
+                         "width": width, "height": height}
+                self.image_cache[key] = image
         except Exception as exc:
             raise ValueError("Could not load the brand PNG image") from exc
         crop_x = crop_y = 0
+        width, height = image["width"], image["height"]
         crop_w, crop_h = width, height
         scale = min(max_w / width, max_h / height)
         draw_w, draw_h = width * scale, height * scale
-        self.images.append({"bytes": raw, "width": width, "height": height, "watermark": watermark})
+        self.images.append(image)
         image_id = len(self.images)
         image_x = x - crop_x * scale
         image_top = top - crop_y * scale
@@ -254,16 +262,22 @@ def _serialize_trade_pages(canvases):
                b"<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> /DW 1000 >>",
                b"<< /Type /ExtGState /ca 0.075 /CA 0.075 >>",
                b"<< /Type /ExtGState /ca 1 /CA 1 >>"]
+    image_object_ids = {}
     page_image_ids = []
     for canvas in canvases:
         ids = []
         for image in canvas.images:
-            ids.append(len(objects) + 1)
-            raw = image["bytes"]
-            objects.append(b"<< /Type /XObject /Subtype /Image /Width " + str(image["width"]).encode() +
-                           b" /Height " + str(image["height"]).encode() +
-                           b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length " +
-                           str(len(raw)).encode() + b" >>\nstream\n" + raw + b"\nendstream")
+            image_key = id(image)
+            image_id = image_object_ids.get(image_key)
+            if image_id is None:
+                image_id = len(objects) + 1
+                image_object_ids[image_key] = image_id
+                raw = image["bytes"]
+                objects.append(b"<< /Type /XObject /Subtype /Image /Width " + str(image["width"]).encode() +
+                               b" /Height " + str(image["height"]).encode() +
+                               b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length " +
+                               str(len(raw)).encode() + b" >>\nstream\n" + raw + b"\nendstream")
+            ids.append(image_id)
         page_image_ids.append(ids)
 
     first_page_id = len(objects) + 1
@@ -423,12 +437,13 @@ def render_trade_document(data, bank_details=None, *, logo=None, seal=None, issu
     packing_quantity_lines = _wrap("TOTAL QUANTITY: " + total_quantity, 130)
     chunks = _paginate_rows(rows, first_table_top, review_height, is_packing_list, len(packing_quantity_lines))
     canvases = []
+    image_cache = {}
     number = str(data.get("document_number") or "TBD")
     issue_date = issued_on or current_issue_date()
     number_label = {"PI": "INVOICE #", "CI": "INVOICE #", "PO": "PO #", "PL": "PACKING LIST #"}.get(doc_type, "DOCUMENT #")
 
     for page_index, page_rows in enumerate(chunks):
-        canvas = _Canvas()
+        canvas = _Canvas(image_cache)
         canvases.append(canvas)
         canvas.rect(0, 0, PAGE_W, PAGE_H, (1, 1, 1))
         canvas.rect(0, 0, PAGE_W, 94, (1, 1, 1))

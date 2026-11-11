@@ -10,6 +10,7 @@ import zlib
 
 import pytest
 
+import app.trade.common.pdf as trade_pdf
 from app.trade.common.pdf import _paginate_rows, render_trade_document
 
 BANK_KEYS = ("BENEFICIARY", "BANK_NAME", "BRANCH", "SWIFT", "ACCOUNT_NUMBER", "BANK_ADDRESS")
@@ -74,6 +75,40 @@ def test_pdf_does_not_move_last_product_or_split_bank_and_seal_panels():
     for value in bank.values():
         assert value.encode() in pages[1]
     assert b"/Im1 Do" in pages[1]
+
+
+def test_pdf_reuses_brand_image_processing_and_objects_across_pages(monkeypatch):
+    doc = {"document_type": "PI", "currency": "USD", "remarks": "N/A", "total": "200",
+           "seller": {"legal_name": "Test Seller"}, "buyer": {"legal_name": "Test Buyer"},
+           "items": [{"product_name": f"Product-{i:02}", "quantity": "10", "unit": "PCS",
+                      "unit_price": "1", "line_total": "10"} for i in range(20)]}
+    bank = {key: f"TEST_{key}" for key in BANK_KEYS}
+    logo, seal = seal_png(width=2), seal_png()
+    decode_calls = 0
+    compression_calls = 0
+    read_png = trade_pdf._read_png_rgb
+    compress = trade_pdf.zlib.compress
+
+    def counted_read(data):
+        nonlocal decode_calls
+        decode_calls += 1
+        return read_png(data)
+
+    def counted_compress(data, *args, **kwargs):
+        nonlocal compression_calls
+        compression_calls += 1
+        return compress(data, *args, **kwargs)
+
+    monkeypatch.setattr(trade_pdf, "_read_png_rgb", counted_read)
+    monkeypatch.setattr(trade_pdf.zlib, "compress", counted_compress)
+    pdf = render_trade_document(doc, bank, logo=logo, seal=seal)
+
+    assert len(re.findall(rb"DRAFT - NOT FOR ISSUE", pdf)) == 2
+    assert decode_calls == compression_calls == 2  # one decode/compression per distinct PNG
+    assert len(re.findall(rb"/Subtype /Image", pdf)) == 2  # logo XObject is shared by both pages
+    page_resources = re.findall(rb"/XObject <<(.*?)>>", pdf)
+    logo_ids = [re.search(rb"/Im1 (\d+) 0 R", resource).group(1) for resource in page_resources]
+    assert len(logo_ids) == 2 and logo_ids[0] == logo_ids[1]
 
 
 def test_missing_seal_blocks_pdf_creation():
