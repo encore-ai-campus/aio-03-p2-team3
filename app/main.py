@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 import logging
 import secrets
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
 from app.clients.gmail import GoogleClient
 from app.config import Settings, get_settings
@@ -13,6 +15,13 @@ from app.db.engine import get_database
 from app.graph.run import get_graph
 from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
+from app.trade.common.models import DocumentError
+from app.trade import api as trade_api
+from app.trade.pi import router as pi_routes
+from app.trade.po import router as po_routes
+from app.trade.ci import router as ci_routes
+from app.trade.pl import router as pl_routes
+from app.trade.settings import router as trade_settings
 from app.web import WEB, templates
 from app.web.deps import LoginRequired
 from app.web.routes import auth, candidates, gmail_push, inbox, pages, quotes, runs, settings as settings_routes
@@ -23,6 +32,16 @@ SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     """google: Google 호출 객체. 비우면 실제 `GoogleClient`, 테스트는 가짜를 넣는다."""
     config = settings or get_settings()
+    same_site = config.session_same_site or "lax"
+    if same_site not in {"lax", "strict", "none"}:
+        raise ValueError("SESSION_SAME_SITE는 lax·strict·none 중 하나여야 합니다")
+    if same_site == "none" and not config.app_base_url.startswith("https://"):
+        raise ValueError("사이트가 다른 React와 세션을 공유하려면 HTTPS가 필요합니다")
+    origins = [value.strip().rstrip("/") for value in config.frontend_origins.split(",") if value.strip()]
+    for origin in origins:
+        parsed = urlsplit(origin)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.path or parsed.query or parsed.fragment:
+            raise ValueError("FRONTEND_ORIGINS에는 허용할 웹 출처만 입력하세요")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -46,9 +65,13 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
         logging.getLogger(__name__).warning("SESSION_SECRET이 비어 임시 키를 씁니다(재시작하면 로그인이 풀림)")
     app.add_middleware(
         SessionMiddleware, secret_key=config.session_secret or secrets.token_urlsafe(32),
-        session_cookie="gq_session", max_age=SESSION_MAX_AGE_SECONDS, same_site="lax",
+        session_cookie="gq_session", max_age=SESSION_MAX_AGE_SECONDS, same_site=same_site,
         https_only=config.app_base_url.startswith("https://"),
     )
+    if origins:
+        app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
+                           allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+                           allow_headers=["Content-Type", "X-CSRF-Token"])
     app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
     # 라우터 파일(app/web/routes/)은 request.app.state.templates(= app.web.templates)로 같은 템플릿을 쓴다.
     app.state.templates = templates
@@ -57,10 +80,22 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     app.include_router(pages.router)
     app.include_router(quotes.router)
     app.include_router(settings_routes.router)
+    app.include_router(trade_api.router)
+    app.include_router(pi_routes.router)
+    app.include_router(po_routes.router)
+    app.include_router(ci_routes.router)
+    app.include_router(pl_routes.router)
+    app.include_router(trade_settings.router)
 
     @app.exception_handler(LoginRequired)
     def login_required(request: Request, _):
+        if request.url.path.startswith("/api/"):
+            return JSONResponse({"error": {"code": "LOGIN_REQUIRED", "message": "로그인이 필요합니다"}}, status_code=401)
         return RedirectResponse("/login", status_code=303)
+
+    @app.exception_handler(DocumentError)
+    def document_error(request: Request, error: DocumentError):
+        return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
 
     @app.get("/healthz")
     def healthz():

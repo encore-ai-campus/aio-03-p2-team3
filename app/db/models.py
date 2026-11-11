@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -185,8 +185,45 @@ class TradeDocument(Base, Owned, Created):
     doc_kind: Mapped[str] = mapped_column(String)  # PI·PO·CI·PL(계약 15.1절)
     doc_no: Mapped[str] = mapped_column(String)  # 내부 관리 번호 <doc_kind>-YYYYMMDD-NNN
     draft: Mapped[dict] = mapped_column(JSON_VALUE)
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     status: Mapped[str] = mapped_column(String, default="needs_input")  # needs_input/ready/sent
     sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class TradeDocumentVersion(Base, Owned, Created):
+    __tablename__ = "trade_document_versions"
+    document_id: Mapped[int] = mapped_column(ForeignKey("trade_documents.id"), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSON_VALUE)
+
+
+class TradeProposal(Base, Owned, Created):
+    __tablename__ = "trade_proposals"
+    __table_args__ = (ForeignKeyConstraint(
+        ["document_id", "revision"],
+        ["trade_document_versions.document_id", "trade_document_versions.revision"]),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("trade_documents.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[dict] = mapped_column(JSON_VALUE)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String, default="pending")
+    decision: Mapped[str | None] = mapped_column(String)
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    logo: Mapped[bytes | None] = mapped_column(LargeBinary)
+    seal: Mapped[bytes | None] = mapped_column(LargeBinary)
+
+
+class TradeArtifact(Base, Owned, Created):
+    __tablename__ = "trade_artifacts"
+    __table_args__ = (UniqueConstraint("proposal_id", "file_format"),)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    proposal_id: Mapped[str] = mapped_column(ForeignKey("trade_proposals.id"), index=True)
+    file_format: Mapped[str] = mapped_column(String)
+    filename: Mapped[str] = mapped_column(String)
+    media_type: Mapped[str] = mapped_column(String)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
 
 
 class UserPreference(Base, Updated):
