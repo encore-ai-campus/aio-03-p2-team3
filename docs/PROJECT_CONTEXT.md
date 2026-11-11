@@ -168,7 +168,7 @@
 - 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-11
+마지막 갱신: 2026-11-11 · 무역 문서 React UI 계획
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -180,6 +180,7 @@
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
+| 무역 문서 React UI 설계·구현 계획 | `docs/plans/trade-ui.md` | 계획 제안. React 독립 UI 선택, 목록/세션·설정·PI·PO·CI·PL·통합 제공의 7개 하위 작업. UI는 아직 미구현 |
 | 발표 PPT | 미정 | 아직 없음 |
 
 - 위치는 Claude가 정한 처음 값이다. 팀이 바꾸면 이 표와 README를 함께 고친다. [Claude proposal]
