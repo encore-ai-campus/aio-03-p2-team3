@@ -175,19 +175,19 @@ def test_json_api_login_csrf_and_other_user_isolation(pi_client):
 
 
 def test_render_failure_preserves_waiting_proposal_for_retry(pi_client, monkeypatch):
-    from app.trade.pi import router
+    from app.trade.common import rendering
     created = create_pi(pi_client)
     proposal = propose(pi_client, created)
-    original = router.render_pi_files
+    original = rendering.render_trade_document
     def fail(*_):
         raise ValueError("fake invalid image")
-    monkeypatch.setattr(router, "render_pi_files", fail)
+    monkeypatch.setattr(rendering, "render_trade_document", fail)
     assert decide(pi_client, proposal, "approve").status_code == 422
     with pi_client.app.state.database.session() as session:
         assert session.get(TradeProposal, proposal["id"]).status == "pending"
         assert session.get(TradeDocument, created["document_id"]).status == "ready"
         assert session.scalar(select(func.count()).select_from(TradeArtifact)) == 0
-    monkeypatch.setattr(router, "render_pi_files", original)
+    monkeypatch.setattr(rendering, "render_trade_document", original)
     assert decide(pi_client, proposal, "approve").status_code == 200
 
 

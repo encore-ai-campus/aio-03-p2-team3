@@ -18,6 +18,9 @@ from app.services.auth import GoogleAccess, make_cipher
 from app.trade.common.models import DocumentError
 from app.trade import api as trade_api
 from app.trade.pi import router as pi_routes
+from app.trade.po import router as po_routes
+from app.trade.ci import router as ci_routes
+from app.trade.pl import router as pl_routes
 from app.trade.settings import router as trade_settings
 from app.web import WEB, templates
 from app.web.deps import LoginRequired
@@ -79,6 +82,9 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     app.include_router(settings_routes.router)
     app.include_router(trade_api.router)
     app.include_router(pi_routes.router)
+    app.include_router(po_routes.router)
+    app.include_router(ci_routes.router)
+    app.include_router(pl_routes.router)
     app.include_router(trade_settings.router)
 
     @app.exception_handler(LoginRequired)

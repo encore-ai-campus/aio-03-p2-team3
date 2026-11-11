@@ -146,34 +146,22 @@ def validate_and_calculate(data, *, issuer_key):
             if _has_chinese(party.get(field)):
                 block(f"{display} {field} must be English only")
 
-    issuer = str(issuer_key or "").strip()
+    # 기존 생성 경로도 도메인이 소유한 규칙을 사용한다. 계산·반올림은 아래에서 공유한다.
     if doc_type == "PO":
-        if not issuer:
-            block("Issuing company name is not configured")
-        else:
-            buyer_key = name_key((data.get("buyer") or {}).get("legal_name"))
-            if issuer not in buyer_key:
-                block("PO buyer must be the issuing company")
-            seller_name = (data.get("seller") or {}).get("legal_name")
-            seller_key = name_key(seller_name)
-            if not seller_name or issuer in seller_key:
-                block("PO seller must be the supplier and buyer must be the issuing company")
-    elif doc_type in {"PI", "CI"}:
-        if not issuer:
-            block("Issuing company name is not configured")
-        else:
-            seller_key = name_key((data.get("seller") or {}).get("legal_name"))
-            if issuer not in seller_key:
-                block(f"{doc_type} seller must be the issuing company")
+        from app.trade.po.rules import validate_header
+    elif doc_type == "PI":
+        from app.trade.pi.rules import validate_header
+    elif doc_type == "CI":
+        from app.trade.ci.rules import validate_header
+    elif doc_type == "PL":
+        from app.trade.pl.rules import validate_header
+    if doc_type in DOC_TYPES:
+        validate_header(data, str(issuer_key or "").strip(), block)
 
     if not data.get("document_number"):
         block("Document number is required or must be marked DRAFT")
     if not data.get("incoterms"):
         block("Incoterms and named place")
-    if doc_type in {"PO", "PI"} and not data.get("payment_terms"):
-        block("Payment terms")
-    if doc_type in {"CI", "PL"} and not data.get("shipment_reference"):
-        block("Shipment reference")
 
     items = data.get("items") or []
     if not items:
@@ -245,39 +233,9 @@ def validate_and_calculate(data, *, issuer_key):
     total = total.quantize(money_quantum, rounding=ROUND_HALF_UP)
 
     if doc_type == "PL":
-        from app.trade.packing import reconcile_packing
-        packing = reconcile_packing({**data, "items": calculated})
-        for issue in packing["issues"]:
-            block("Packing: " + issue)
-        for discrepancy in packing["discrepancies"]:
-            block("Packing source discrepancy: " + discrepancy)
-        packages = data.get("packages") or []
-        has_item_packing = any(item.get("net_weight_kg") or item.get("gross_weight_kg") or item.get("package_count") or item.get("volume_cbm") for item in calculated)
-        if not has_item_packing and (not packages or not data.get("actual_package_count")):
-            block("Actual package count and weights")
-        actual_count = Decimal("0")
-        if not has_item_packing:
-            try:
-                actual_count = Decimal(str(data.get("actual_package_count")))
-                if not actual_count.is_finite() or actual_count <= 0 or actual_count != actual_count.to_integral_value():
-                    raise InvalidOperation
-            except (InvalidOperation, TypeError, ValueError):
-                block("Actual package count must be a positive whole number")
-        declared_count = Decimal("0")
-        for i, package in enumerate(packages if not has_item_packing else [], 1):
-            net = _decimal(package.get("net_weight_kg"), f"package {i} net weight", issues, allow_zero=False)
-            gross = _decimal(package.get("gross_weight_kg"), f"package {i} gross weight", issues, allow_zero=False)
-            count = _decimal(package.get("package_count"), f"package {i} count", issues, allow_zero=False)
-            if count != count.to_integral_value():
-                block(f"Package count for package {i} must be a whole number")
-            declared_count += count
-            if net > gross:
-                block(f"Net weight cannot exceed gross weight for package {i}")
-        if packages and not has_item_packing and declared_count != actual_count:
-            block("Sum of package counts must equal actual package count")
+        from app.trade.pl.rules import validate_packing
+        validate_packing(data, calculated, issues, block)
 
-    if doc_type == "CI" and not data.get("country_of_origin"):
-        block("Country of origin must be confirmed")
     for field in ("incoterms", "payment_terms", "remarks", "ship_to", "bill_to", "country_of_origin",
                   "document_number", "issue_date", "shipment_reference", "actual_package_count"):
         if _has_chinese(data.get(field)):

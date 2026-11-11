@@ -93,3 +93,15 @@ def test_postgres_pi_api_and_concurrent_approval_without_shared_python_lock(tmp_
                     assert session.scalar(select(func.count()).select_from(TradeArtifact)) == 4  # 두 문서 × 두 형식
             finally:
                 second_database.close()
+
+
+def test_postgres_po_ci_pl_full_http_flows(tmp_path):
+    from app.web.deps import current_user_id
+    from tests.test_pi_api import configured_client
+    from tests.test_trade_domain_api import test_each_domain_cancel_modify_approve_download_and_version_history
+
+    with pgserver.get_server(Path(tmp_path) / "domain-data", cleanup_mode="delete") as server:
+        with configured_client(server.get_uri()) as client:
+            for kind in ("po", "ci", "pl"):
+                client.app.dependency_overrides[current_user_id] = lambda: 1
+                test_each_domain_cancel_modify_approve_download_and_version_history(client, kind)

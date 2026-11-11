@@ -753,9 +753,16 @@ TradeDocDraft(TypedDict, total=False):
 
 ## 16. 독립 문서 API와 사용자 검토
 
-- JSON API는 기존 메일 그래프 밖의 `app/trade/` 도메인 업무를 호출한다. PI 경로는 `/api/trade/pi`이며 상세 입력·응답은 FastAPI OpenAPI(`/docs`)가 코드와 함께 제공한다. 모든 조회/다운로드는 세션 소유자 범위이며 변경 요청은 `/api/session`에서 발급한 CSRF 토큰을 요구한다.
+- JSON API는 기존 메일 그래프 밖의 `app/trade/` 도메인 업무를 호출한다. 문서별 경로는 `/api/trade/{pi|po|ci|pl}`이며 상세 입력·응답은 FastAPI OpenAPI(`/docs`)가 코드와 함께 제공한다. 모든 조회/다운로드는 세션 소유자 범위이며 변경 요청은 `/api/session`에서 발급한 CSRF 토큰을 요구한다.
 - 입력에는 서버의 상태·계산 결과·가격 인증·승인 표시를 허용하지 않는다. 정확한 숫자는 Decimal 문자열이다. 직접 입력과 LangChain 추출은 같은 업무 계산을 거친다. AI는 거래 단가 변경을 승인할 수 없다.
 - `trade_document_versions`는 문서 revision별 불변 초안을 저장한다. 문서 수정은 기대 revision을 조건으로 갱신하며 대기 제안을 무효화한다. `trade_proposals`는 확인할 문서·버전·출력 형식·직인/로고 bytes 및 해시를 고정한다. 선택 요청의 문서 ID·제안 ID·revision·내용 해시가 모두 일치해야 한다.
 - `approve`: ready/current인 문서를 issued로 만들고 PDF/XLSX bytes를 `trade_artifacts`에 같은 트랜잭션으로 저장한다. 중복·동시 승인은 같은 파일을 반환한다. `cancel`: 제안을 cancelled로 종료하며 문서나 파일을 발급하지 않는다. `modify`: 기존 제안을 superseded/modify로 기록하고 문서를 새 revision으로 만든 뒤 새 검토를 요구한다. 미완성 수정은 needs_input으로 돌아온다.
 - 계좌·회사·이미지 설정 변경은 이미 제안한 내용과 승인 파일을 바꾸지 않는다. 출력 실패 시 pending/ready를 보존해 명시적으로 재시도할 수 있다. 문서 확정 API는 Gmail을 호출하지 않는다. 기존 메일 발송 승인과 문서 발급은 서로 다른 동작이다.
 - 서버 기동의 Alembic 갱신은 기존 문서의 현재 버전을 버전 표에 채운다. `FRONTEND_ORIGINS`는 명시한 출처만 허용하고, `SESSION_SAME_SITE=none`은 HTTPS 설정에서만 허용한다.
+
+### 16.1. 도메인별 조건
+
+- PO는 발행사가 buyer이며 매입 단가를 사용한다. PI는 발행사가 seller이고 판매 단가·통화별 계좌를 쓴다. PI 샘플은 사용자 지정 수량/가격(0원 포함)을 보존하고 AI의 샘플 표시는 원문 근거를 검사한다. 계산·반올림·가격 조회 구현은 재사용한다.
+- CI API는 `source_pi_id`·`source_revision`으로 본인이 승인한 PI 버전을 선택한다. 해당 버전의 품목·당사자·통화·단가·할인·증정/무상 금액을 복사하고 현재 카탈로그로 대체하지 않는다. 결제/계좌 정보는 제외하며 PDF의 FOC는 한 번만 표시한다. 원본 변경은 새 CI를 요구한다. 과거 메일 경로의 원문 기반 CI는 기존 동작을 유지하며, 새 API 조회에서 원본 선택 필요를 안내한다.
+- PL API는 원본 합계를 보존해 `/packing-review`에서 행 계산과 비교한다. 합계 선택은 revision·전체 문서 해시에 묶이고 `approve`는 계산 가능한 합계만 적용, `cancel`은 원본 복귀다. 각각 새 문서 버전과 이력을 남기며 대기 최종 제안을 무효화한다. 문서 수정은 합계를 재확인하게 한다. 단위별 수량을 섞지 않고 컨테이너 개수와 FT 규격을 곱하지 않는다. 합계 승인을 거친 ready 문서만 최종 검토할 수 있다.
+- `models/operations/agent/repository/router`는 각 도메인에 두며 역할/필수 조건은 각 `rules.py`에서 검사한다. common에는 실제 같은 HTTP·조회·입력 숫자·가격 준비·SQL 저장·출력 흐름만 둔다. 상세 요청은 `docs/trade-api.md`와 OpenAPI를 따른다.

@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.engine import Database
 from app.db.migrations import upgrade_database
-from app.db.models import CompanyProfile, PriceListItem, ReplyCandidate, TradeDocument, User
+from app.db.models import (CompanyProfile, PriceListItem, ReplyCandidate, TradeDocument, User,
+                           TradeArtifact, TradeDocumentVersion, TradeProposal)
 from app.services.approval import send_approved_trade_document
 from app.services.trade_docs import revise_trade_document
 from tests.test_trade_flow import (
@@ -58,6 +59,25 @@ def test_existing_database_preserves_rows_and_replaces_price_constraint():
         assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
     assert "revision" in {column["name"] for column in inspect(db.engine).get_columns("trade_documents")}
     db.close()
+
+
+def test_review_migration_backfills_existing_document_version_without_losing_data(database):
+    payload = {"document_type": "PI", "document_number": "OLD-PI", "total": "80.00"}
+    with database.session() as session:
+        row = TradeDocument(user_id=1, thread_id="old-thread", run_id="", doc_kind="PI", doc_no="OLD-PI",
+                            draft=payload, revision=7, status="ready")
+        session.add(row)
+        session.flush()
+        document_id = row.id
+    for model in (TradeArtifact, TradeProposal, TradeDocumentVersion):
+        model.__table__.drop(database.engine)
+    with database.engine.begin() as connection:
+        connection.exec_driver_sql("UPDATE alembic_version SET version_num='20261111_trade_schema'")
+    upgrade_database(database.engine)
+    upgrade_database(database.engine)
+    with database.session() as session:
+        assert session.get(TradeDocument, document_id).draft == payload
+        assert session.get(TradeDocumentVersion, (document_id, 7)).payload == payload
 
 
 def ready_pi(database):

@@ -196,7 +196,7 @@ def document_lines(doc, bank_details=None):
                            ("Account Number", "ACCOUNT_NUMBER"), ("Bank Address", "BANK_ADDRESS")):
             value = bank_details.get(key)
             if key == "ACCOUNT_NUMBER" and value:
-                value = str(value) + " (USD)"
+                value = str(value) + f" ({doc.get('currency') or ''})"
             lines.append(f"{label}: {_english(value or '[BANK DETAIL REQUIRED]')}")
     lines += ["", "AUTHORIZED SIGNATURE", issuer_signer(doc), issuer_name,
               "[OFFICIAL COMPANY SEAL TO BE INSERTED]"]
@@ -283,7 +283,7 @@ def _xlsx_bytes(doc, bank_details=None, *, seal=None):
                  ["", "Bank Name", bank_details.get("BANK_NAME") or "[BANK DETAIL REQUIRED]"],
                  ["", "Branch Name", bank_details.get("BRANCH") or "[BANK DETAIL REQUIRED]"],
                  ["", "SWIFT Code", bank_details.get("SWIFT") or "[BANK DETAIL REQUIRED]"],
-                 ["", "Account Number (USD)", bank_details.get("ACCOUNT_NUMBER") or "[BANK DETAIL REQUIRED]"],
+                 ["", f"Account Number ({doc.get('currency') or ''})", bank_details.get("ACCOUNT_NUMBER") or "[BANK DETAIL REQUIRED]"],
                  ["", "Bank Address", bank_details.get("BANK_ADDRESS") or "[BANK DETAIL REQUIRED]"]]
     seal_bytes = seal if seal else None
     if seal_bytes:

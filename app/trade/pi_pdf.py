@@ -547,13 +547,13 @@ def render_trade_document(data, bank_details=None, *, logo=None, seal=None, issu
                 panel_top, panel_height = bottom, 86
                 canvas.rect(35, panel_top, 350, panel_height, (1, 1, 1), PALE, 0.7)
                 canvas.rect(35, panel_top, 350, 15, PALE)
-                canvas.text(44, panel_top + 11, "USD BANK INFORMATION - PI ONLY", 5.8, True, BRAND_BLUE)
+                canvas.text(44, panel_top + 11, f"{currency} BANK INFORMATION - PI ONLY", 5.8, True, BRAND_BLUE)
                 bank_rows = [("BENEFICIARY", "BENEFICIARY"), ("BANK NAME", "BANK_NAME"), ("BRANCH NAME", "BRANCH"),
                              ("SWIFT CODE", "SWIFT"), ("ACCOUNT NUMBER", "ACCOUNT_NUMBER"), ("BANK ADDRESS", "BANK_ADDRESS")]
                 for index, (label, key) in enumerate(bank_rows):
                     value = (bank_details or {}).get(key) or "[BANK DETAIL REQUIRED]"
                     if key == "ACCOUNT_NUMBER" and value != "[BANK DETAIL REQUIRED]":
-                        value += " (USD)"
+                        value += f" ({currency})"
                     canvas.text(44, panel_top + 25 + index * 9, label, 5.0, True, MUTED)
                     canvas.text(136, panel_top + 25 + index * 9, value, 5.0, key == "ACCOUNT_NUMBER", INK)
                 sign_x, sign_width = 398, 179

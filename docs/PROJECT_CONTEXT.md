@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-10 · kekorea-port 6절(무역서류 승인·발송 경로)
+마지막 갱신: 2026-11-11 · 독립 문서 작성·검토 API
 
 - 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`.
 - 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
@@ -56,6 +56,8 @@
 - 무역서류 승인·발송(kekorea-port 6절, 2026-11-10): 무역 문서(PI/PO/CI/PL) 후보도 일반·견적 후보와 같은 잠금·조건부 승인·`ApprovalResult` 규칙을 쓰되, 문서 확정과 메일 발송 승인을 구분한다. 문서 확정은 그래프 밖 `app/services/trade_docs.py`(빠진 값 `revise_trade_document`, PL 원본/계산 합계 비교의 명시적 승인 `approve_packing_totals`·취소)이, 메일 발송 승인은 `app/services/approval.py`의 `send_approved_trade_document()`가 담당한다. 발송 조건은 `trade_documents.status="ready"`(PL은 `packing_totals.approved` 포함)이고 CI는 PI 원문 근거(`is_pi_import`)가 있어야 하며, PDF는 `render_trade_document`(CI는 렌더 직전 `ci_render_data` 통과, 직인 필수)로 만들어 `<doc_no>.pdf`로 첨부한다. 성공 때 문서 `sent`·`sent_at`·초안 `status="sent"`, 같은 메일의 나머지 후보 `superseded`는 기존 규칙과 같다. 대표 흐름 시험은 `tests/test_trade_flow.py`(가짜 LLM·Gmail, 6절).
 - 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. 일정 도구 연결 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다. 근거·키 발급 경로는 `.work/design/api-choice.md`, 요약은 README 'LLM·외부 API와 키 발급', 환경변수는 `docs/CONTRACT.md` 11절·`.env.example`.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md` 이 레포의 규칙).
+
+- 독립 문서 작성(2026-11-11): React용 `/api/trade/{pi|po|ci|pl}`에서 직접 입력/문장 추출 → 수정 → 검토 → 승인·취소·수정 → PDF/XLSX 다운로드를 제공한다. 승인은 파일 발급이며 기존 Gmail 발송 승인을 호출하지 않는다. CI는 승인된 PI 특정 버전의 거래 사실을 보존하고, PL은 별도 포장 합계 확인 뒤 최종 검토한다. API 연결 안내는 `docs/trade-api.md`. React 화면·마스터 챗봇은 범위에서 제외했다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
 마지막 갱신: 2026-11-10 · kekorea-port 6절(무역서류 초안 상태)
@@ -71,7 +73,7 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-11 · trade-domain-api 1·2절(기본 오류·PI 모듈)
+마지막 갱신: 2026-11-11 · trade-domain-api 1~4절
 
 - 독립 문서 API 준비(`docs/plans/trade-domain-api.md`, Issue #108~#111): 요청 범위는 기본 오류 → PI 독립 모듈/API → PO·CI·PL이다. 마스터 챗봇은 제외한다. 1절에서 기존 DB Alembic 갱신, 수정 시 가격 재검증, 문서 revision과 수정/발송의 조건부 갱신을 추가했다(계약 15.9절). PI JSON API와 검토·선택·파일 저장은 3절에서 구현했다.
 - PI 독립 모듈(2절): `app/trade/pi/`의 `models.py`·`operations.py`·`agent.py`·`repository.py`가 PI 입력, 작성·수정, LangChain 구조화 추출, 사용자/PI 범위 저장을 담당한다. 업무는 저장소 인터페이스와 추출 함수를 주입받고 기존 메일 그래프·HTTP·구체 DB에 의존하지 않는다. 공통 입력 숫자는 정확한 Decimal 문자열이며 서버의 가격 인증·승인·상태 필드는 입력으로 받지 않는다. AI의 단가 변경 승인 값은 제거하고 상품 코드·당사자 근거도 검증한다. HTTP 연결은 `/api/trade/pi`이며 작성·추출·조회·수정·버전·검토·승인/취소/수정·파일 다운로드를 제공한다. 문서 확정은 메일을 발송하지 않는다.
@@ -90,6 +92,8 @@
 - CI·PL 이식(kekorea-port 5절, 2026-11-10): `app/trade/ci_import.py`(첨부 PI → CI: PI 거래가격 그대로, 결제·계좌 정보는 CI에서 제외·PI 근거 없는 CI는 생성 차단)과 `app/trade/packing.py`·`app/trade/packing_review.py`(PL 원본/계산 합계 비교, 명시적 수정 승인, PCS/KG 단위 불일치 합침 금지)을 계약 15.4절 대응표대로 확정했다(원본 경로 주석 포함, 사본·이식본 동일성은 `tests/test_trade_ci_pl_parity.py`). PL 합계 승인 백엔드는 `app/services/trade_docs.py`가 담당한다(화면 없음): `save_trade_document`가 문서 초안을 검증·저장하며 합계 비교 제안(`packing_totals.changes`·`discrepancies`)을 남기고, `approve_packing_totals`(계약 15.5절 (1)~(4), 원본 합계 보존)·`cancel_packing_approval`(원본 합계로 복귀)·`revise_trade_document`(빠진 값 보충, 품목·원본 합계 수정 시 재승인)이 승인·취소·수정 이력(`packing_approval_log`)을 남긴다. 중복 방지는 `approval.py`와 같은 사용자별 잠금·조건부 UPDATE다. 무역서류 저장 표 `trade_documents`(계약 15.7절)를 `app/db/models.py`에 더했다. 원본 테스트는 `tests/test_trade_ci_import.py`·`test_trade_packing.py`·`test_trade_packing_approval.py`로 옮겼다(실제 매입가는 가상 값 8000). 문서 생성 도구(`create_trade_document`) 연결과 승인 발송 경로는 kekorea-port 6절이 잇는다.
 - 무역서류 연결(kekorea-port 6절, 2026-11-10): 도구 `create_trade_document`(`app/tools/create_trade_document.py`)가 무역 초안의 발행사·계좌 스냅숏을 담아 카탈로그 가격·검증·PL 합계 제안·CI 근거 차단(계약 15.5절 파이프라인)까지 돌아 `trade_documents`에 저장한다. `finalize_draft`는 CI 근거 문제(`ci_import_issues`)도 blocking에 더한다. DB는 계약 15.7절이 정한 나머지를 채웠다: `company_bank_accounts`(PI 하단 계좌, 통화별 1행), `company_profiles` 확장 열(`legal_name_en`·`address`·`phone`·`email`·`registration_details`), `reply_candidates.trade_doc_id`. `draft_replies`는 v3으로 올라 무역 문서 요약(`trade_doc` 변수: 문서 종류·문서번호·합계)을 받고, 본문에 금액·문서번호 숫자 복사를 금지하는 안내로 v2 규칙을 넓혔다.
 - 일정(캘린더) 도구 작업 때 AI가 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천한다. Calendar는 도구 2용으로 유지하며, 후보 API는 채택 확인 후 추가한다.
+
+- PO·CI·PL 독립 모듈(4절): 각 도메인에 입력·업무·규칙·LangChain 추출·저장소·router를 뒀다. 같은 HTTP/검토/버전/출력 흐름만 common/review로 공유한다. CI 원문 변환·PL 포장 계산·PI 샘플의 실제 구현도 해당 폴더로 옮겼고 기존 import 경로는 호환 입구로 유지한다. PO는 매입가격, CI는 승인 PI 버전·0원/증정 수량·금액, PL은 단위별 합계와 원본 보존을 각각 담당한다. 새 마스터 그래프는 추가하지 않았다.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
 마지막 갱신: 2026-11-10 · kekorea-port 6절(무역서류 문서 생성·후보 연결)
@@ -110,7 +114,7 @@
 - 알림 → 그래프 연결(계획 7절, 2026-11-10): 같은 사용자 알림 처리를 단일 프로세스 안에서 직렬화하고, `(user_id, gmail_message_id)` 유일 제약을 통과한 메일만 `thread_messages`에 저장해 `start_run(mode="live")`을 부른다. 시작 입력의 메일·스레드 ID·사용자 성찰 설정을 기존 진입점이 채운다. 결과의 `run_id`·`notice`를 처리한 메일에 연결하고 승인 대기/추가 질문 → `awaiting_approval`, 처리 안 함 → `ignored`, 실패 → `error`로 남긴다. 모든 Gmail 조회가 성공한 뒤에만 `gmail_watches.history_id`를 옮긴다. Gmail 오류는 `last_error`에 원문 없이 남기고 다음 알림에서 저장된 메일을 건너뛰어 이어 읽는다. 로그아웃·재로그인 필요 상태의 알림은 처리하지 않는다. 계약의 `BackgroundTasks`는 프로세스 내 작업이므로 재시작 중 작업 복구나 만료된 historyId의 전체 동기화는 구현하지 않았다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-11 · 기존 DB·가격·발송 충돌 회귀
+마지막 갱신: 2026-11-11 · 독립 문서 API·기존 DB·가격·승인 동시성
 
 - PI 독립 API 검증(2026-11-11): 전체 573 passed·1 skipped, 별도 실제 임시 PostgreSQL 2 passed. 세션/CSRF·소유자 격리·검토/승인/취소/수정·불변 파일·동시 승인·재접속 복구를 확인했다. 실제 Gemini/Gmail·운영 DB는 호출하지 않았다.
 - `tests/test_trade_upgrade.py`가 기존 국내 견적 SQLite 스키마에서 데이터 보존 갱신·반복 실행·부분 유니크 제약, 통화/상품 수정 후 가격 재검증, 오래된 버전·서버 필드 수정 거부, PDF 준비 뒤 버전 변경·발송 중 수정 차단을 확인한다. `tests/test_trade_postgres.py`는 임시 PostgreSQL 서버로 같은 갱신의 실제 동작을 확인한다(`uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py`, 운영 DB/실제 API 사용 없음).
@@ -134,6 +138,8 @@
 - 시험 시나리오·지표·시험 실행기(계획 17절, R-12·R-13·D-02, 2026-11-10): `app/evaluation/`. 시나리오 7개(정상 `normal_general`·`normal_quote`, 정보 부족 `missing_info`, 도구 실패 `gmail_error`·`gemini_rate_limit`, 판단 오류 `wrong_tool`·`hallucination`)는 지어낸 메일과 완료 조건·정답 도구 조합·주입(고의 실패, 판단 오류를 일으키는 준비된 응답)을 `scenarios.py`에 둔다. 실행기(`runner.py`, `uv run python -m app.evaluation.runner --fake|--real …`)는 같은 메일을 반복마다 새 메일·스레드 ID로 성찰 끔/켬 번갈아 `start_run(mode="test", reflection_enabled=…, scenario=키)`에 넣고, 승인 발송 시나리오는 맨 끝에 `send_approved_candidate()`까지 돈다(첫 발송에 Gmail 503 주입 → `failed_unknown` → 다시 승인 `sent`). LLM 대역(`injection.py`의 `ScenarioBackend`)이 출력 형식 이름별로 주입 → 가짜 응답(가짜 실행) → 실제 Gemini(실제 실행) 순으로 답하고, 실행 뒤 주입한 호출의 `llm_call`·`retry`·`send` 줄에 `detail.injected: true`·`injection`(`prepared`/`failure`/`mixed`)을 단다. `metrics.py`가 실행 기록(`runs`·`run_events`·후보·견적서)으로 실행마다 판정하고 성찰 끔/켬별 4개 지표(완료율, 부른 도구 집합 = 정답 조합인 비율과 불필요·누락, 반복 실행 쌍의 사실·사용자 조건·응답 구조 일치율 평균, `call_retries`+`reflection_retries`+재승인의 평균)를 낸다. 판정 결과에는 본문을 넣지 않는다. 실제 실행(18)은 `--real --user-email <시험 계정> --gmail-search`로 시험 사용자를 이메일로 찾고, 승인 발송 시나리오에 쓸 실제 메일을 시험 계정 Gmail 검색(`users.messages.list`의 `q`, gmail.readonly, 기본 `in:inbox subject:evalsend newer_than:30d`)으로 찾는다. 받은 메일이고 제목이 같고 본문에 시나리오 본문이 들어 있으며 앞 실행(`runs.message_id`)에 쓰지 않은 메일만 오래된 순으로 쓴다(`gmail_error` 제목 `[evalsend] 제품 안내 자료 문의`). 판정 기준·시험 환경은 측정 전에 `docs/TEST_REPORT.md` 1~5절에 적었다. `tests/test_evaluation.py`가 가짜 LLM·가짜 Gmail로 전체 시나리오를 2번씩 돌려 성찰 끔(완료 10/14, 도구 12/14)과 켬(14/14, 14/14)의 지표, 주입 표시, 기록 파일, 실제 실행 대역의 주입 구분, 일관성 계산, Gmail 연결이 없을 때 건너뜀, 가짜 Gmail 검색으로 실제 메일 고르기(쓴 메일·다른 제목·내가 보낸 메일 제외, 페이지 이어 읽기)와 이메일로 시험 사용자 찾기를 확인한다. 성찰 노드·그래프 연결은 바꾸지 않았다.
 - 같은 시나리오를 다시 돌릴 때의 편차보다 큰 차이만 개선으로 본다. [Past work: aio3]
 
+- 네 문서 검증: `tests/test_trade_domain_api.py`와 `test_trade_domain_operations.py`에서 직접/AI 같은 입력, 도메인별 가격·PI 버전 고정·샘플 0원/FOC·PL 합계 승인·취소/수정/발급·소유자 격리·통화별 출력 계좌를 확인한다. `test_trade_postgres.py`는 실제 임시 PostgreSQL에서 네 문서 HTTP 흐름과 서로 다른 DB 연결의 동시 승인을 검증한다. 이전 문서 버전 backfill도 별도 회귀로 확인한다. 최종 로컬 결과는 전체 590 passed·1 skipped, 실제 PostgreSQL 3 passed이며 근거표는 `docs/test-records/20261111_trade_domain_api.md`다.
+
 ## 7. 배포
 마지막 갱신: 2026-11-11
 
@@ -154,7 +160,7 @@
 - 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-10
+마지막 갱신: 2026-11-11
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -165,6 +171,7 @@
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
+| 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
 | 발표 PPT | 미정 | 아직 없음 |
 
 - 위치는 Claude가 정한 처음 값이다. 팀이 바꾸면 이 표와 README를 함께 고친다. [Claude proposal]
