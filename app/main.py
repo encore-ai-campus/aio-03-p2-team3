@@ -16,7 +16,7 @@ from app.graph.run import get_graph
 from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
 from app.trade.common.models import DocumentError
-from app.trade import api as trade_api
+from app.trade.common import api as trade_api
 from app.trade.pi import router as pi_routes
 from app.trade.po import router as po_routes
 from app.trade.ci import router as ci_routes

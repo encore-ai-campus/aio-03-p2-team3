@@ -1,7 +1,7 @@
 """공통 구조화 호출·원문 확인. 프롬프트와 입력 형식은 문서별 agent가 소유한다."""
 from app.llm.client import call_structured
 from app.trade.common.models import DocumentError
-from app.trade.verify_quotes import verify_item_quotes
+from app.trade.common.verify_quotes import verify_item_quotes
 
 
 def extract_facts(prompt, schema, text):

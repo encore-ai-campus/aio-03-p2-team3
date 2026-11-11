@@ -8,7 +8,7 @@ PNG 매직 검사와 SHA-256 대조(오래된 직인이 조용히 쓰이지 않�
 import hashlib
 
 from app.db.models import CompanyBranding, User
-from app.trade.branding import resolve_company_seal
+from app.trade.settings.repository import resolve_company_seal
 
 SEAL = b"\x89PNG\r\n\x1a\n" + b"seal-image-bytes-for-test"
 

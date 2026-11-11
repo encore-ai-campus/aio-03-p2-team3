@@ -16,13 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from app.trade import counterparties as port_counterparties
-from app.trade import packing as port_packing
-from app.trade import pricing as port_pricing
-from app.trade import product_matching as port_matching
-from app.trade import promotions as port_promotions
-from app.trade import samples as port_samples
-from app.trade import trade_documents as port_trade
+from app.trade.common import counterparties as port_counterparties
+from app.trade.pl import packing as port_packing
+from app.trade.common import pricing as port_pricing
+from app.trade.common import product_matching as port_matching
+from app.trade.common import promotions as port_promotions
+from app.trade.pi import samples as port_samples
+from app.trade.common import trade_documents as port_trade
 
 REFERENCE_ROOT = Path(__file__).resolve().parents[1] / "reference" / "kekorea"
 HAS_REFERENCE = (REFERENCE_ROOT / "Quotation_KEKOREA" / "agent" / "trade_documents.py").exists()
@@ -244,7 +244,7 @@ def test_packing_and_ci_import_match(ref):
                 "conflicts": ["Currency conflict: USD vs EUR"]}
     reference = ref["ci_import"].prepare_ci_import(copy.deepcopy(ci_draft),
                                                    requested_type="CI", has_attachments=True)
-    from app.trade import ci_import as port_ci_import
+    from app.trade.ci import imports as port_ci_import
     ported = port_ci_import.prepare_ci_import(copy.deepcopy(ci_draft),
                                               requested_type="CI", has_attachments=True)
     assert ported == reference

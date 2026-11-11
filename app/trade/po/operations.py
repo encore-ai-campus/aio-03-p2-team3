@@ -2,7 +2,7 @@
 from app.trade.common import operations as common
 from app.trade.common.results import document_result, editable_values
 from app.trade.po.models import POInput, POItem, PORepository
-from app.trade.counterparties import name_key
+from app.trade.common.counterparties import name_key
 from app.trade.common.models import DocumentError
 
 

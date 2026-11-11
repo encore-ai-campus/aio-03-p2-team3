@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Path, Request, UploadFile
 
-from app.trade.api import require_write
+from app.trade.common.api import require_write
 from app.trade.settings import operations
 from app.trade.settings.models import BankInput, CompanyInput, PriceInput
 from app.trade.settings.repository import SQLSettings

@@ -9,14 +9,14 @@
 """
 from decimal import Decimal
 
-from app.trade.counterparties import name_key
-from app.trade.pricing import (
+from app.trade.common.counterparties import name_key
+from app.trade.common.pricing import (
     apply_verified_catalog_prices,
     build_trade_catalog,
     match_catalog_product,
     resolve_price,
 )
-from app.trade.trade_documents import validate_and_calculate
+from app.trade.common.trade_documents import validate_and_calculate
 
 
 ISSUER_NAME = "Testworks Trading Co"
@@ -99,7 +99,7 @@ def test_conflicting_or_unknown_price_basis_blocks_document():
 
 
 def test_promotion_separates_paid_free_and_shipped_quantities():
-    from app.trade.trade_documents import apply_promotion
+    from app.trade.common.trade_documents import apply_promotion
     item = apply_promotion("5", "2+1")
     assert item == {"paid_quantity": "5", "free_quantity": "2", "shipped_quantity": "7"}
 

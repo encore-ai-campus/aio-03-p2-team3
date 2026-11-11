@@ -1,8 +1,9 @@
 """검토용 PDF·XLSX·HTML 렌더러(외부 라이브러리 없이 직접 생성).
 
 원본: reference/kekorea/Quotation_KEKOREA/agent/renderers.py
-서비스 경로(발송 첨부·미리보기)가 쓰는 PDF는 app.trade.pi_pdf.render_trade_document이고,
-이 모듈의 출력(XLSX·HTML·검토 PDF)은 테스트·사본 비교 검증용이다(docs/CONTRACT.md 15.4절).
+서비스 경로(발송 첨부·미리보기)가 쓰는 PDF는 app.trade.common.pdf.render_trade_document이고,
+이 모듈의 _xlsx_bytes는 문서 API의 Excel 발급도 담당한다. HTML·검토 PDF 보조는
+테스트·사본 비교 검증에서 사용한다(docs/CONTRACT.md 15.4절).
 원본과 다른 점:
 - 발행 회사 이름·서명자를 원본 고정 문구 대신 문서 초안의 issuer 스냅샷(legal_name_en →
   company_name, 서명자 ceo_name)에서 읽는다[임시: 협의 1].
@@ -19,8 +20,8 @@ import zipfile
 from xml.sax.saxutils import escape as xml_escape
 from decimal import Decimal, ROUND_HALF_UP
 
-from .pi_pdf import issuer_display_name, issuer_signer
-from .trade_documents import current_issue_date
+from app.trade.common.pdf import issuer_display_name, issuer_signer
+from app.trade.common.trade_documents import current_issue_date
 
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/renderers.py _english
@@ -336,7 +337,7 @@ def render_files(doc, output_dir, *, bank_details=None, logo=None, seal=None):
     html_rows = "".join("<tr>" + "".join(f"<td>{escape(_english(v))}</td>" for v in row) + "</tr>" for row in _rows(doc))
     html_doc = "<!doctype html><meta charset='utf-8'><title>Trade Document Draft</title><h1>" + escape(dtype) + "</h1><h2>" + escape(doc.get("status", "DRAFT")) + "</h2><table border='1'>" + html_rows + "</table><pre>" + escape("\n".join(lines)) + "</pre>"
     paths = {"pdf": directory / f"{stem}.pdf", "xlsx": directory / f"{stem}.xlsx", "html": directory / f"{stem}.html"}
-    from .pi_pdf import render_trade_document
+    from app.trade.common.pdf import render_trade_document
     paths["pdf"].write_bytes(render_trade_document(
         doc, bank_details or {}, logo=logo, seal=seal))
     paths["xlsx"].write_bytes(_xlsx_bytes(doc, bank_details, seal=seal))

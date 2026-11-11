@@ -1,6 +1,6 @@
 """승인된 스냅숏만 읽어 PDF/XLSX bytes를 만든다. 저장·계산·외부 호출은 하지 않는다."""
-from app.trade.pi_pdf import render_trade_document
-from app.trade.renderers import _xlsx_bytes
+from app.trade.common.pdf import render_trade_document
+from app.trade.common.renderers import _xlsx_bytes
 from app.trade.review.models import Branding, RenderedFile
 
 

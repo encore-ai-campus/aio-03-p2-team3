@@ -17,7 +17,9 @@ app/trade/
 
 각 문서는 `models.py`, `operations.py`, `agent.py`, `repository.py`, `router.py`를 가진다. 역할·필수 항목은 `rules.py`, CI 출력 수량 조정은 `ci/rendering.py`에 둔다. 업무는 구체 DB·FastAPI·모델 공급자를 import하지 않고 저장소/추출 함수를 주입받는다. 저장 표는 실제 같은 문서 형식을 공유하며 문서별 저장소가 사용자와 문서 종류 범위를 고정한다. 문서별 DB 서버나 범용 에이전트 기반 클래스는 두지 않는다.
 
-기존 계산·가격·프로모션·PDF/XLSX는 재사용한다. 옛 `ci_import.py`, `packing.py`, `packing_review.py`, `samples.py`는 기존 메일 경로와 import를 위한 얇은 호환 입구이며 실제 구현은 CI·PL·PI 폴더로 옮겼다. 기존 메일 그래프를 새 마스터로 바꾸지 않았다.
+`trade` 바로 아래에는 `__init__.py`만 둔다. 공통 계산·가격·상품 매칭·원문 검증·후처리·PDF/XLSX/HTML 구현과 세션/다운로드 API는 `common/`에 둔다. 네 문서의 PDF 구현 이름은 `common/pdf.py`다. 단가표·거래처·직인 DB 조회는 `settings/repository.py`, 문서 저장은 `common/repository.py`, 검토/파일 저장은 `review/repository.py`가 담당한다.
+
+기존 호환 입구 4개는 제거했다. CI는 `ci/imports.py`, PL은 `pl/packing.py`·`pl/packing_review.py`, 샘플은 `pi/samples.py`를 직접 import한다. 회사·은행 필드 목록은 `settings/models.py`에 둬 저장소끼리 순환 import가 생기지 않게 한다. 기존 메일 서비스·도구·노드·테스트도 같은 실제 구현 경로를 사용한다. 계산·검증·승인·오류 반환·API URL과 DB 형식은 이번 폴더 정리로 변경하지 않는다.
 
 ## 연결 준비
 

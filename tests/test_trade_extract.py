@@ -26,9 +26,9 @@ from app.tools.extract_deal_terms import (
     postprocess_trade_draft,
 )
 from app.tools.registry import TOOLS
-from app.trade import postprocess
-from app.trade.trade_documents import current_issue_date
-from app.trade.verify_quotes import verify_item_quotes
+from app.trade.common import postprocess
+from app.trade.common.trade_documents import current_issue_date
+from app.trade.common.verify_quotes import verify_item_quotes
 from tests.fakes.llm import FakeLLM
 
 REPOSITORY = Path(__file__).resolve().parents[1]

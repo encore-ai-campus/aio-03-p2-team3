@@ -9,11 +9,8 @@ from app.db.models import CompanyBankAccount, CompanyProfile, TradeArtifact, Tra
 from app.services.locks import user_lock
 from app.trade.common.models import DocumentContext, DocumentError
 from app.trade.common.results import artifact_view
-from app.trade.store import counterparty_profiles, trade_price_rows
-
-ISSUER_FIELDS = ("company_name", "legal_name_en", "business_no", "ceo_name", "contact", "address",
-                 "phone", "email", "registration_details")
-BANK_FIELDS = ("beneficiary", "bank_name", "branch", "swift", "account_number", "bank_address")
+from app.trade.settings.repository import counterparty_profiles, trade_price_rows
+from app.trade.settings.models import BANK_FIELDS, ISSUER_FIELDS
 
 
 class SQLDocuments:

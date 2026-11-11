@@ -266,7 +266,7 @@ class CompanyBankAccount(Base, Owned, Updated):
 
 class CompanyBranding(Base, Updated):
     """CONTRACT 15.7절 company_branding — 사용자별 직인·로고(kekorea-port 4). seal_sha256은
-    업로드할 때 seal bytes의 SHA-256을 저장한 값이고 app.trade.branding이 대조에 쓴다."""
+    업로드할 때 seal bytes의 SHA-256을 저장한 값이고 app.trade.settings.repository.resolve_company_seal이 대조에 쓴다."""
     __tablename__ = "company_branding"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     logo: Mapped[bytes | None] = mapped_column(LargeBinary)
@@ -301,7 +301,7 @@ class PriceListItem(Base, Owned, Updated):
 
 class Counterparty(Base, Owned, Updated):
     """CONTRACT 15.7절 counterparties — 거래처(별칭·기본 정보). 추출 경로의 거래처 자동
-    채움(app.trade.counterparties.apply_company_profiles)이 읽는다[임시: 협의 5·6]."""
+    채움(app.trade.common.counterparties.apply_company_profiles)이 읽는다[임시: 협의 5·6]."""
     __tablename__ = "counterparties"
     __table_args__ = (UniqueConstraint("user_id", "company_key"),)
     id: Mapped[int] = mapped_column(primary_key=True)

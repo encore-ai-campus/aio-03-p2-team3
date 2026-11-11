@@ -1,5 +1,5 @@
 """CI 발행사·선적 정보. 결제 조건을 요구하지 않는다."""
-from app.trade.counterparties import name_key
+from app.trade.common.counterparties import name_key
 
 
 def validate_header(data, issuer, block):

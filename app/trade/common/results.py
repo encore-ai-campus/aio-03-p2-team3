@@ -1,5 +1,5 @@
 from app.trade.common.models import DocumentResult, Party
-from app.trade.review_fields import missing_review_fields
+from app.trade.common.review_fields import missing_review_fields
 
 
 def editable_values(document, fields, item_fields):

@@ -3,8 +3,8 @@ import struct
 import zlib
 
 from app.trade.common.models import DocumentError
-from app.trade.counterparties import name_key
-from app.trade.pi_pdf import _read_png_rgb
+from app.trade.common.counterparties import name_key
+from app.trade.common.pdf import _read_png_rgb
 from app.trade.settings.models import BankInput, CompanyInput, PriceInput, SettingsRepository
 
 MAX_BRANDING_BYTES = 2 * 1024 * 1024

@@ -16,7 +16,7 @@ from app.prompts.extract_deal_terms import PROMPT
 from app.prompts.extract_trade_terms import PROMPT as TRADE_PROMPT
 from app.prompts.format import email_text, thread_context_text
 from app.tools.base import ToolResult
-from app.trade.postprocess import (
+from app.trade.common.postprocess import (
     apply_issuer_defaults,
     discount_instruction,
     explicit_remark,
@@ -213,12 +213,12 @@ def postprocess_trade_draft(draft: dict, doc_kind: str, prompt: str, company: di
       create_trade_document(kekorea-port 3절)로 옮겼다.
     - 지연 import·호출 순서는 원본 그대로 둔다(계약 15.4절: 모듈 top import로 올리지 않는다).
     """
-    from app.trade.ci_import import prepare_ci_import, is_pi_import
-    from app.trade.counterparties import apply_company_profiles
-    from app.trade.promotions import apply_promotion_commands
-    from app.trade.samples import ensure_sample_rows, is_manual_sample
-    from app.trade.trade_documents import current_issue_date
-    from app.trade.verify_quotes import verify_item_quotes
+    from app.trade.ci.imports import prepare_ci_import, is_pi_import
+    from app.trade.common.counterparties import apply_company_profiles
+    from app.trade.common.promotions import apply_promotion_commands
+    from app.trade.pi.samples import ensure_sample_rows, is_manual_sample
+    from app.trade.common.trade_documents import current_issue_date
+    from app.trade.common.verify_quotes import verify_item_quotes
 
     prepare_ci_import(draft, requested_type=doc_kind, has_attachments=True)
     draft = normalize_quantity_aliases(draft, prompt)

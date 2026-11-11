@@ -18,8 +18,8 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 
-from app.trade.pi_pdf import render_trade_document
-from app.trade.renderers import _pdf_bytes, _xlsx_bytes, document_lines
+from app.trade.common.pdf import render_trade_document
+from app.trade.common.renderers import _pdf_bytes, _xlsx_bytes, document_lines
 
 REFERENCE_ROOT = Path(__file__).resolve().parents[1] / "reference" / "kekorea"
 if str(REFERENCE_ROOT) not in sys.path:

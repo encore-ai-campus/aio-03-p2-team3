@@ -45,7 +45,7 @@ def recalculate_order_promotions(draft):
     if draft.get('document_type') not in {'PO', 'PI'} or not any(i.get('promotion') for i in draft.get('items', [])):
         return draft
     # Local import avoids changing the original arithmetic function or a cycle.
-    from app.trade.trade_documents import apply_promotion
+    from app.trade.common.trade_documents import apply_promotion
     result = {**draft, 'items': [dict(item) for item in draft.get('items', [])]}
     for item in result['items']:
         if draft.get('document_type') == 'PI' and item.get('is_sample') is True:
@@ -84,7 +84,7 @@ def apply_promotion_commands(draft, prompt, *, products=()):
             continue
         names = {str(item.get('product_name') or '')}
         if products:
-            from app.trade.product_matching import match_product
+            from app.trade.common.product_matching import match_product
             match = match_product(item.get('product_name'), item.get('capacity'), products, item.get('product_code'))
             if match['status'] == 'matched':
                 names.add(match['product']['item_name'])

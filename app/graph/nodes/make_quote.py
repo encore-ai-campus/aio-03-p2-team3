@@ -11,7 +11,7 @@ from app.db.models import CompanyBankAccount, CompanyProfile, DealTerms, PriceLi
 from app.graph.nodes.common import call_tool, failure_update
 from app.graph.state import AgentState
 from app.runlog.logger import current_database
-from app.trade.store import trade_price_rows
+from app.trade.settings.repository import trade_price_rows
 
 # 무역서류 발행사 스냅숏 키(계약 15.7절 company_profiles 열).
 ISSUER_FIELDS = ("company_name", "business_no", "ceo_name", "contact",

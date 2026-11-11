@@ -6,11 +6,11 @@ from decimal import Decimal
 from app.trade.common.models import DocumentError
 from app.trade.common.operations import calculate, check_revision, revision_context
 from app.trade.common.results import document_result, editable_values
-from app.trade.counterparties import apply_company_profiles
+from app.trade.common.counterparties import apply_company_profiles
 from app.trade.pl.packing_review import (PACKING_SOURCE_FIELDS, apply_approved_packing_totals,
                                      normalize_packing_inputs, packing_total_changes, reconcile_packing)
 from app.trade.pl.models import PLInput, PLItem, PLRepository, PackingDecision
-from app.trade.postprocess import apply_issuer_defaults
+from app.trade.common.postprocess import apply_issuer_defaults
 from app.trade.review.operations import content_hash
 
 

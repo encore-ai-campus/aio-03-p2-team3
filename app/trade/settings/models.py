@@ -6,6 +6,10 @@ from pydantic import BeforeValidator, Field
 from app.trade.common.models import InputModel, Text, decimal_input
 
 
+ISSUER_FIELDS = ("company_name", "legal_name_en", "business_no", "ceo_name", "contact", "address",
+                 "phone", "email", "registration_details")
+BANK_FIELDS = ("beneficiary", "bank_name", "branch", "swift", "account_number", "bank_address")
+
 class CompanyInput(InputModel):
     company_name: Text | None = None
     legal_name_en: Text | None = None

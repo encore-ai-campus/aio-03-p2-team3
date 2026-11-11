@@ -10,7 +10,7 @@
 """
 import copy
 
-from app.trade.pricing import (
+from app.trade.common.pricing import (
     apply_catalog_product_matches,
     apply_verified_catalog_prices,
     match_catalog_product,
