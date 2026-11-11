@@ -217,7 +217,8 @@ def test_domain_langchain_entry_points_are_used_by_http(pi_client, kind):
     fake = FakeLLM([values])
     with use_backend(fake):
         result = post(pi_client, f"/api/trade/{kind}/extract", {"text": text, **source_fields})
-    assert len(fake.calls) == 1 and fake.schemas[0].__name__ == kind.upper() + "Extraction"
+    # LLM에는 도메인 스키마에서 파생한 wire 스키마(숫자=문자열·제약 제거)가 간다.
+    assert len(fake.calls) == 1 and fake.schemas[0].__name__.removesuffix("Wire") == kind.upper() + "Extraction"
     assert result["document_type"] == kind.upper()
     assert result["status"] == ("needs_input" if kind == "pl" else "ready"), result
 

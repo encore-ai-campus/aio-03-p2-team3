@@ -73,7 +73,7 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-11 · trade 루트 정리 및 도메인 API
+마지막 갱신: 2026-11-11 · 무역 문서 추출 OpenAI Responses 전환
 
 - 독립 문서 API 준비(`docs/plans/trade-domain-api.md`, Issue #108~#111): 요청 범위는 기본 오류 → PI 독립 모듈/API → PO·CI·PL이다. 마스터 챗봇은 제외한다. 1절에서 기존 DB Alembic 갱신, 수정 시 가격 재검증, 문서 revision과 수정/발송의 조건부 갱신을 추가했다(계약 15.9절). PI JSON API와 검토·선택·파일 저장은 3절에서 구현했다.
 - PI 독립 모듈(2절): `app/trade/pi/`의 `models.py`·`operations.py`·`agent.py`·`repository.py`가 PI 입력, 작성·수정, LangChain 구조화 추출, 사용자/PI 범위 저장을 담당한다. 업무는 저장소 인터페이스와 추출 함수를 주입받고 기존 메일 그래프·HTTP·구체 DB에 의존하지 않는다. 공통 입력 숫자는 정확한 Decimal 문자열이며 서버의 가격 인증·승인·상태 필드는 입력으로 받지 않는다. AI의 단가 변경 승인 값은 제거하고 상품 코드·당사자 근거도 검증한다. HTTP 연결은 `/api/trade/pi`이며 작성·추출·조회·수정·버전·검토·승인/취소/수정·파일 다운로드를 제공한다. 문서 확정은 메일을 발송하지 않는다.
@@ -96,6 +96,7 @@
 - PO·CI·PL 독립 모듈(4절): 각 도메인에 입력·업무·규칙·LangChain 추출·저장소·router를 뒀다. 같은 HTTP/검토/버전/출력 흐름만 common/review로 공유한다. CI 원문 변환·PL 포장 계산·PI 샘플의 실제 구현도 해당 폴더로 옮겼고 기존 호출 경로를 모두 갱신해 루트 호환 입구 4개도 제거했다. PO는 매입가격, CI는 승인 PI 버전·0원/증정 수량·금액, PL은 단위별 합계와 원본 보존을 각각 담당한다. 새 마스터 그래프는 추가하지 않았다.
 
 - trade 루트 정리: 루트에는 `__init__.py`만 남겼다. 공통 업무·출력·세션 API는 `common/`, 단가표·거래처·직인 DB 조회는 `settings/repository.py`로 이동했다. 호환 입구 대신 도메인 실제 경로를 직접 사용하고 API·DB·업무 규칙은 유지한다(계약 16.2절).
+- 무역 문서 AI 추출 백엔드(2026-11-11): 네 도메인 `POST /api/trade/{kind}/extract`의 `extract_facts`는 OpenAI Responses API(LangChain `ChatOpenAI`, 기본 모델 `gpt-6-luna`, 이식 원본 추출기와 같은 경로)를 기본 백엔드로 쓰고 `TRADE_EXTRACT_BACKEND=gemini`로 되돌릴 수 있다. 메일 그래프는 계속 Gemini다. LLM에는 입력 검증 모델에서 제약(`pattern`·`maxLength`·`maxItems`)을 떼고 숫자를 문자열로 바꾼 wire 스키마(`app/trade/common/extraction.py`의 `wire_schema`)를 주고(실제 Gemini 확인에서 제약을 400 INVALID_ARGUMENT로 거부·JSON number 정밀도 방지), 돌려받은 값은 원래 스키마로 다시 검증해 Decimal로 바꾼다. 재시도·오류 분류·기록은 `call_structured()`를 공유하며 백엔드 주입은 `backend_factory=`로 고르고(우선순위 `use_backend` 오버라이드 > 명시 백엔드 > 팩토리 > 기본 Gemini), OpenAI SDK 예외(429 `rate_limit`·400 `invalid_input`·연결 오류 `network`) 분류를 더했다. 단위 테스트는 `tests/test_trade_wire_schema.py`·`tests/test_llm.py`.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
 마지막 갱신: 2026-11-11 · 무역 설정 조회 import 경로 정리
@@ -160,6 +161,7 @@
 - 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 키 없이 기본 화면을 열 수 있고, `DATABASE_URL`이 비면 커밋 제외된 `app/db/local.sqlite3`를 쓴다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render 연결 시험은 후속 작업이다.
 - 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
 - LLM·OAuth: `GEMINI_API_KEY`, `GEMINI_MODEL`(선택, 비우면 `gemini-3.6-flash`. 그 모델이 막힐 때 Render에서만 바꿈), `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`.
+- LLM(무역 추출, 2026-11-11): `OPENAI_API_KEY`, `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`), `TRADE_EXTRACT_BACKEND`(선택, 비우면 `openai_responses`, Gemini 복귀 시 `gemini`). 무역 도메인 AI 추출 전용이며 아직 Render에는 넣지 않았다(실제 키 확인 뒤 추가).
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
 - 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
 - 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
