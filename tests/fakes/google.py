@@ -54,5 +54,9 @@ class FakeGoogle:
     def stop(self, access_token):
         self.calls.append(("stop", access_token))
 
+    def get_history_id(self, access_token):
+        self.calls.append(("profile", access_token))
+        return next(self.history_ids)
+
     def called(self, name):
         return [call for call in self.calls if call[0] == name]

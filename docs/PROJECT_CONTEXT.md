@@ -42,7 +42,9 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-12 · 사용자별 OpenAI 키·전용 로컬 모드
+마지막 갱신: 2026-11-12 · 로컬 Gmail 연결·새 메일 수집
+
+- 로컬 Gmail(계획 local-openai-execution 2절, #154): 개인 OAuth 앱·루프백 콜백으로 Pub/Sub 토픽 없이 로그인한다. 처음 연결은 `users.getProfile`의 현재 historyId부터 시작하고 본인 sub로 검증된 사용자만 30초 간격으로 새 메일을 읽는다. 기존 MIME·필터·중복 방지·`start_run()`과 승인 후 1회 발송을 재사용한다. 로컬에서는 Google watch/stop을 호출하지 않는다. 로그아웃·동의 취소·연결 만료·PC 종료는 추가 수집을 멈추고 history 404는 과거 전체 재처리 없이 재로그인을 안내한다. 공용 Pub/Sub와 본인 키 제한은 유지한다.
 
 - 사용자별 AI 키: 기본 `AI_RUNTIME=server`에서는 Google 로그인 후 `/settings`에서 본인 키를 등록·교체·삭제한다. 키는 `user_openai_keys`의 사용자별 행에 Fernet 암호문으로 저장한다. 서버 `OPENAI_API_KEY`는 호출에 사용하지 않으며 사용자 키 누락·복호화 실패 시 차단한다. 전용 `AI_RUNTIME=local`에서는 명시한 본인 Google sub와 일치하는 검증 사용자만 개인 `.env` 키를 사용하고 DB 키는 읽거나 저장하지 않는다. 저장 시 API 호출은 없고 수동 문서 작성·파일 발급은 키 없이 유지한다.
 
@@ -126,7 +128,11 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-12 · 로컬 .env·소유자 경계·서버 차단 검증
+마지막 갱신: 2026-11-12 · 로컬 Gmail 수집·실제 루프백 프로세스 검증
+
+- #154 최종 검사: `uv run pytest` **716 passed·1 skipped**(선택 pgserver 모듈), 별도 `uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py -q` **3 passed**, 규칙 검사 경고 0개. 로컬 Gmail 시험은 실제 루프백 프로세스를 포함해 31개다. 프로세스 시험은 AI 응답 횟수가 아닌 후보 DB 저장 완료를 기다려 비동기 경합을 제거했다.
+
+- 로컬 Gmail(#154): `tests/test_local_gmail.py`는 토픽 없는 로그인·현재 위치 시작·지정 소유자만 수집·페이지/중복·조회 실패 재개·history 만료·Google 토큰 갱신/취소·로그아웃/동의 취소·프로그램 재시작/종료와 공용 watch/stop 유지를 확인한다. 실제 `.env` 로더와 LangChain/OpenAI SDK 모의 HTTP로 환경 키 사용·승인 전 미발송·승인 후 1회 발송·키 비노출을 검증한다. 별도 프로세스에서 실제 `app.local` 루프백 리스너를 열어 화면 요청 없는 주기 수집 → 후보 생성 → 승인 두 번/발송 한 번 → 로그아웃 후 조회 중단 → lifespan 정상 종료까지 확인한다. `tests/fakes/local_server.py`는 이 시험 전용이며 운영 앱에 시험 경로를 추가하지 않는다. 실제 Google/OpenAI·운영 설정·개인 메일은 사용하지 않았다.
 
 - 로컬 키 모드(#153): `tests/test_local_openai.py` 27개가 실제 `.env` 로더·가짜 검증 로그인·LangChain/OpenAI SDK 모의 HTTP로 본인 메일/4종 문서의 환경 키 사용, 사용자 범위 밖·소유자 미지정·미검증/다른 사용자·키 누락·공용 실행/Render 차단, DB 키 조회/저장 금지·키 비노출·설정 안내·가짜 주입을 확인한다. 기존 설정 시험은 server/local별 환경 키 로딩 차이를 검증하도록 갱신했다. `uv run pytest`는 **685 passed·1 skipped**(기본 환경의 선택 pgserver 모듈 제외), 별도 `uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py -q`는 **3 passed**다. 전용 명령을 실제 프로세스로 띄워 health/login 200·공개 Host 400·종료와 일반 공개 Uvicorn/Render의 로컬 모드 시작 거부도 확인했다. 규칙 검사는 경고 0개로 통과했다. 실제 OpenAI/Gmail·운영 비밀값·Render·운영 DB는 사용하지 않았다.
 
@@ -163,9 +169,9 @@
 - PDF 공통 렌더러(PI·PO·CI·PL): 한 문서 렌더링 안에서 같은 PNG와 crop 조건의 RGB 변환·압축 결과를 재사용하고, 여러 페이지에서 같은 이미지 PDF 객체를 공유한다. 페이지별 콘텐츠 스트림과 이미지 배치 명령은 유지한다. `tests/test_trade_pdf_pagination.py`는 이미지 종류 수만큼만 변환·압축하며 PDF 이미지 객체가 중복되지 않고 각 페이지가 같은 객체를 참조하는지 확인한다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-12 · 전용 루프백 로컬 키 모드
+마지막 갱신: 2026-11-12 · 개인 OAuth·로컬 Gmail 수집 절차
 
-- 개인 PC `.env` 키 모드(계획 1절 구현, #153): `AI_RUNTIME` 기본은 `server`다. 개인 `.env`에 `local`을 지정하고 `uv run python -m app.local [--port 8000]`로 실행한다. 실제 소켓을 `127.0.0.1`에만 열고 검증한 소켓을 Uvicorn에 전달하며 공개 바인딩·리로드 옵션은 없다. 일반 앱 실행·Render·`PORT`가 있는 공용 실행에서는 로컬 모드 시작을 거부한다. Host·`APP_BASE_URL`은 허가 근거가 아니다. 최초 Google 로그인 후 본인 로컬 `/settings`에 표시된 검증 식별자를 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 개인 키를 채운 뒤 재시작한다. 최초 방문 자동 등록은 없다. 공용 서버의 환경 키 대체 금지는 유지한다. 개인 PC Gmail 연결·수집(2절), Render 장치 연결·큐(3절), 개인 실행 프로그램(4절)은 아직 없다. 공용 Pub/Sub 설정과 실제 키·운영 설정은 변경하지 않았다.
+- 개인 PC `.env` 키 모드(계획 1~2절 구현, #153·#154): `AI_RUNTIME` 기본은 `server`다. 개인 `.env`에 `local`을 지정하고 `uv run python -m app.local [--port 8000]`로 실행한다. 실제 소켓을 `127.0.0.1`에만 열고 검증한 소켓을 Uvicorn에 전달하며 공개 바인딩·리로드 옵션은 없다. 일반 앱 실행·Render·`PORT`가 있는 공용 실행에서는 로컬 모드 시작을 거부한다. Host·`APP_BASE_URL`은 허가 근거가 아니다. 최초 Google 로그인 후 본인 로컬 `/settings`에 표시된 검증 식별자를 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 개인 키를 채운 뒤 재시작한다. 최초 방문 자동 등록은 없다. 공용 서버의 환경 키 대체 금지는 유지한다. 개인 OAuth 앱 생성·localhost 콜백·토큰 암호화 키·개인 DB·토픽 불필요·재연결/중지 안내는 README '로컬 Gmail 연결과 새 메일 수집'에 있다. 앱이 켜진 동안만 수집하며 화면을 닫아도 계속한다. Render 장치 연결·큐(3절), 개인 실행 프로그램(4절)은 아직 없다. 공용 Pub/Sub 설정과 실제 키·운영 설정은 변경하지 않았다.
 
 - 사용자별 키 전환: 기존 DB 백업 후 배포한다. `20261112_user_openai_keys` 마이그레이션은 기존 데이터와 승인 이력을 유지한다. 기존 `TOKEN_ENCRYPTION_KEY`는 유지하고 서버 `OPENAI_API_KEY`는 제거한다. 사용자는 배포 후 `/settings`에 개인 키를 등록한다. 등록 전 실패 메일은 자동 재처리하지 않으며 이미 시작한 작업은 키 삭제로 취소되지 않는다. Render 설정 변경·실제 사용자 키 등록은 이 작업에서 하지 않았다.
 
@@ -183,7 +189,7 @@
 - 전체 LLM 전환 적용(2026-11-11): 각 사용자가 개인 설정에 OpenAI 키를 등록하고 API 결제·권한을 확인한다. 모델 설정은 서버 `OPENAI_MODEL`을 따른다. 병합 시 자동 배포 후 가상 메일(분석→후보·요약·성찰)과 PI·PO·CI·PL 추출을 확인한 뒤 예전 Gemini 변수·백엔드 선택 변수를 제거한다. 이 작업에서는 실제 키·Render 설정을 변경하거나 실제 API를 호출하지 않았다(설정·연동 확인 미완료). OpenAI API 이용료는 ChatGPT 구독과 별개다.
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
 - 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
-- 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
+- 로그인(계획 6절): `GOOGLE_OAUTH_*`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 필요하고 `server`에서는 `GMAIL_PUBSUB_TOPIC`도 있어야 로그인 버튼이 켜진다. `local`은 개인 OAuth 앱과 루프백 콜백을 사용하며 토픽 없이 가능하다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
 - 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
@@ -196,7 +202,7 @@
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 틀 있음(2026-11-10, 시나리오·판정 기준·시험 환경. 결과는 18·19) |
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
-| 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1절 로컬 키 모드·공통 실행 계약 구현, Gmail/장치 연결/큐·실제 연동 미완료 |
+| 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1~2절 로컬 키 모드·Gmail 수집·공통 실행 계약 구현, 장치 연결/큐·실제 API 연동 미완료 |
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |

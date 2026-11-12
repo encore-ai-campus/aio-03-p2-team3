@@ -396,7 +396,7 @@ class AgentError(TypedDict):
 - 최초 설정: 소유자/키가 비어 있어도 전용 로컬 앱과 로그인 화면은 열 수 있다. Google 로그인 후 본인 `/settings`에 표시된 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 로컬 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 `OPENAI_API_KEY`를 채운 뒤 재시작한다. 식별자는 인증된 본인 로컬 화면에만 표시하며 응답은 `private, no-store`다. 서버 설정 화면에는 표시하지 않는다. 실제 계정·키를 채팅·레포에 옮기지 않는다.
 - 로컬 설정 화면은 `.env` 키 사용 가능/불가와 안전한 차단 이유만 표시하며 키 원문·해시·앞뒤 문자열·DB 키 등록 폼은 제공하지 않는다. 등록/삭제 POST를 직접 호출해도 `LOCAL_KEY_ENV_ONLY`(409)로 거부한다. 저장된 DB 사용자 키가 있어도 읽지 않는다.
 - 로컬 오류: `LOCAL_OWNER_REQUIRED`(409), `LOCAL_OWNER_MISMATCH`(403, 검증 로그인 없음/다른 사용자/없는 사용자 포함), `LOCAL_KEY_REQUIRED`(409), `LOCAL_RUNTIME_REQUIRED`(409). 문서 API는 해당 코드를 반환한다. 메일은 기존 `openai_key_required` 안내로 실패 종료한다. 키는 AgentState·세션·실행 기록에 넣지 않으며 노드·엣지는 유지한다.
-- 이 절은 키 모드만 구현한다. 개인 PC Gmail 연결·수집(계획 2절), 서버 장치 연결·작업 큐(3절), 개인 실행 프로그램(4절)은 아직 없다. 기존 Gmail 감시·수집 동작을 로컬용으로 변경하지 않는다.
+- 개인 PC Gmail 연결·수집은 계획 2절에서 구현했다(7·9·10절). 서버 장치 연결·작업 큐(3절), 개인 실행 프로그램(4절)은 아직 없다. 공용 Gmail 감시·Pub/Sub 설정은 유지한다.
 
 ### 6.2 서버의 사용자별 실행 방식 (후속 3·4절용 계약, 미구현)
 
@@ -467,6 +467,7 @@ class AgentError(TypedDict):
 - Google 토큰은 `TOKEN_ENCRYPTION_KEY`로 암호화해 저장한다(방식은 6이 정하고 이 절에 적는다). [Request]
   - 방식(6): `cryptography`의 Fernet(AES-128-CBC + HMAC-SHA256). `TOKEN_ENCRYPTION_KEY`는 Fernet 키(만드는 명령은 `.env.example`)이고, 키를 바꾸면 저장된 토큰을 못 읽어 사용자가 다시 로그인해야 한다. 암호화·복호화는 `app/services/auth.py`의 `TokenCipher`, 토큰 꺼내기·갱신은 `get_access_token()`만 쓴다. [Claude proposal]
 - `gmail_watches`(6): `status`가 `error`일 때 `last_error`는 `token_expired`(갱신 토큰 만료·취소·읽기 실패: 저장한 토큰을 지우고 다시 로그인을 안내) 또는 `watch_failed: <HTTP 상태 등>`(감시 등록 실패: 다음 갱신 때 다시 시도). `history_id`는 처음 등록하거나 `stopped`에서 다시 등록할 때만 watch 응답 값으로 정하고, 켜져 있는 감시를 갱신할 때는 그대로 둔다(7이 이어 읽음). `stopped`(로그아웃) 사용자의 알림은 처리하지 않는다. [Claude proposal]
+- 로컬 수집(계획 local-openai-execution 2절): 같은 `gmail_watches` 표를 개인 DB에서 사용하며 `topic="local:history"`는 로컬 표시자이지 Pub/Sub 토픽이 아니다. 명시적 로그인 때 `users.getProfile`의 현재 historyId로 시작하고 `expiration=NULL`, `last_renewed_at`은 연결 시각(세대)을 기록한다. `active`는 수집 가능, `stopped`는 로그아웃/동의 취소, `error`는 `token_expired`·`history_expired`(재로그인 전 중단) 또는 `local_connect: <안전 코드>`·`local_poll: <안전 코드>`(다음 주기 재시도)다. 모든 페이지/메일 조회 성공 뒤에만 커서를 갱신하고 중지·다른 연결 세대의 늦은 결과는 적용하지 않는다. 스키마는 추가하지 않는다.
 - 처리 상태와 화면 표시: `processing` 처리 중 · `awaiting_approval` 승인 대기 · `sent` 보냄 · `error` 오류(`notice=rate_limit`이면 '한도 초과' 표시) · `ignored`는 목록에 보이지 않는다. [Request · Claude proposal]
 
 ## 8. 실행 기록
@@ -529,6 +530,7 @@ class AgentError(TypedDict):
   - 11 구현: 스레드의 견적 후보에서 확인 화면으로 연결한다. `needs_price`는 빠진 단가 입력 폼만 열며 승인 요청도 거부한다. `/prices`는 `price_<행 번호>`로 빠진 단가 전부를 받고 기존 단가는 바꾸지 않는다. 미리보기·승인 첨부는 같은 PDF 함수를 사용한다. 승인 결과는 일반 후보와 같은 `ApprovalResult.outcome` 안내 키(`needs_price` 추가)로 303 이동해 표시한다.
   - 설정(11): `/settings/company`는 `company_name`·`business_no`·`ceo_name`·`contact`, `/settings/prices`는 `item_name`·`unit`·`unit_price`를 받고 본인 행만 저장한다. 같은 품목명 저장은 단가·단위 갱신이다. 성찰 설정은 12가 구현한다.
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
+- 로컬 모드 로그인은 `GMAIL_PUBSUB_TOPIC` 없이 허용하며 개인 PC에서 새 메일만 조회한다는 안내를 보인다. 연결 상태는 `로컬 새 메일 수집 켜짐`·`로컬 수집 확인 필요`·`로컬 수집 꺼짐`이며 본인 소유자 미지정/불일치면 `로컬 수집 대기`다. `history_expired`는 다시 로그인하면 현재 위치로 재설정되고 이전 메일을 자동 처리하지 않는다고 안내한다. 수집은 화면 요청과 독립적이며 받은 메일 목록의 기존 90초 갱신은 유지한다.
 - 본인 확인: 로그인(6)이 세션(`SESSION_SECRET`으로 서명한 쿠키 `gq_session`, 14일)에 `user_id`만 넣는다. 로그인이 필요한 경로는 둘 중 하나를 `Depends`로 받고, 로그인 안 했으면 둘 다 `/login`으로 보낸다(303). ① `app/web/deps.py`의 `current_user_id`: id만 필요할 때(14가 씀). ② `app/web/routes/auth.py`의 `require_user`(없으면 `/login`, HTMX면 `HX-Redirect`)·`current_user`(없으면 None): `User` 행이 필요하거나 화면 요청 때 감시 갱신까지 걸 때(응답 뒤, 받은 메일 화면이 씀). id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user_id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 라우터는 `request.app.state.templates`(`app.web`의 `templates`와 같은 객체)·`request.app.state.database`를 쓴다. [Claude proposal]
 
 ## 10. Google
@@ -541,6 +543,9 @@ class AgentError(TypedDict):
   - 어느 쪽이든 확인에 실패하면 403으로 응답하고 실행 기록 없이 서버 로그에만 남긴다. [Claude proposal]
 - 감시 등록 토픽은 `GMAIL_PUBSUB_TOPIC`(`projects/<프로젝트>/topics/<토픽>`). [Request]
 - Google 호출(6): 실제 호출은 `app/clients/gmail.py`의 `GoogleClient` 하나(로그인 주소·코드 교환(PKCE)·토큰 갱신·`gmail(접근 토큰)`·`watch`·`stop`)이고 서버가 뜰 때 `app.state.google`, 준비물 묶음은 `app.state.google_access`(`GoogleAccess`)에 둔다. 테스트는 `tests/fakes/google.py`의 `FakeGoogle`을 `create_app(settings, google=...)`로 넣는다. 감시 등록은 `labelIds: ["INBOX"]`로 받은편지함 변경만 알린다. 7은 알림을 받을 때 `renew_watch_if_due(access, user_id)`, Gmail을 읽을 때 `get_access_token()` → `google.gmail(토큰)`을 쓴다. `TokenExpired`·`GoogleUnavailable`·`WatchFailed`는 모두 `GoogleError`다. [Claude proposal]
+- 로컬 모드(계획 2절)는 본인 Google Cloud 프로젝트의 OAuth 웹 앱과 루프백 콜백을 사용한다(설정 절차 README). 운영 OAuth 비밀값을 공유하지 않는다. `GoogleAccess.settings`로 실행 모드를 구분하며 로컬의 등록/중지는 DB 수집 상태만 바꾸고 `users.watch`·`users.stop`을 호출하지 않는다. 공용 로그인·watch 갱신·stop·Pub/Sub 인증과 토픽/구독 주소는 유지한다. 로컬에서는 Pub/Sub 알림으로 처리를 시작하지 않는다.
+- `app/services/local_gmail.py`의 `LocalGmailCollector`는 전용 로컬 앱 수명 안에서 동작한다. 살아 있는 루프백 리스너와 `LOCAL_OWNER_GOOGLE_SUB`에 일치하는 검증된 사용자만 선택하고, 본인의 `get_access_token()`·`history.list`를 30초 간격으로 호출한다. `gmail_push.collect_history()`의 기존 모든 페이지 읽기·MIME/HTML 변환·필터·유일 제약·`start_run()`을 재사용한다. 키는 6.1절 제한을 그대로 적용하고 자동 발송은 하지 않는다.
+- 최초 연결/명시적 재로그인은 현재 historyId부터 시작한다. 프로그램만 재시작하면 개인 DB의 유효한 커서로 재개한다. 통신 실패는 커서를 보존해 다음 주기 재시도하며 history.list 404(`HistoryExpired`, `GoogleUnavailable` 하위형)는 `history_expired`로 중단한다. Google 401/403·갱신 토큰 만료/취소는 토큰을 지우고 `token_expired`로 중단하되, 403의 사용량 제한 원인(`rateLimitExceeded`·`userRateLimitExceeded`·`dailyLimitExceeded`·`quotaExceeded`)은 토큰을 보존하고 재시도한다. 로그아웃·재연결 취소·종료는 페이지/메일 사이에서 추가 처리를 막고, 앱 종료는 진행 중인 수집 스레드가 끝난 다음 DB를 닫는다. 이미 시작한 AI 호출은 6절의 기존 취소 한계를 따른다. 전체 메일함 자동 동기화·공개 터널은 없다.
 
 ## 11. 환경변수 이름 (값은 `.env`와 Render 환경변수에만 둔다)
 | 이름 | 뜻 | 쓰는 하위 작업 |
