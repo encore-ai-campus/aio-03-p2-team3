@@ -49,12 +49,28 @@ class FakeJwks:
                                   _jwk("ES256", self.ec_key, self.ec_kid)]}
         self.error = None
         self.calls = 0
+        self.admin_users = {}   # Supabase UUID(문자열) -> admin 사용자 응답(공급자 identity)
+        self.admin_error = None
+        self.admin_calls = 0
 
     def serve(self):
         self.calls += 1
         if self.error is not None:
             raise self.error
         return self.document
+
+    def admin_serve(self, url):
+        """`TokenVerifier.provider_google_subject`가 부르는 admin 사용자 조회 가짜."""
+        self.admin_calls += 1
+        if self.admin_error is not None:
+            raise self.admin_error
+        return self.admin_users.get(url.rsplit("/", 1)[-1], {"identities": []})
+
+    def with_google_identity(self, sub, google_sub):
+        """Supabase 사용자 `sub`가 Google 로그인(google_sub)으로 가입했게 만든다."""
+        self.admin_users[str(sub)] = {"identities": [
+            {"provider": "google", "id": google_sub, "identity_data": {"sub": google_sub}},
+        ]}
 
     def token(self, *, key=None, kid="default", sub=None, exp=None, iss=None, aud=None,
               alg="RS256", email="supabase@example.invalid", with_kid=True, extra_headers=None):

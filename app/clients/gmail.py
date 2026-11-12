@@ -29,6 +29,7 @@ os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URI = "https://oauth2.googleapis.com/token"
+REVOKE_URI = "https://oauth2.googleapis.com/revoke"
 HTTP_TIMEOUT_SECONDS = 15
 SCOPE_ALIASES = {
     "email": "https://www.googleapis.com/auth/userinfo.email",
@@ -189,6 +190,22 @@ class GoogleClient:
         except TransportError as error:
             raise GoogleUnavailable(type(error).__name__) from error
         return AccessToken(credentials.token, _utc(credentials.expiry))
+
+    def revoke(self, token: str) -> None:
+        """토큰을 Google에서 폐기한다(연결 해제). 이미 폐기됐으면 TokenExpired로 알린다."""
+        import httpx
+
+        try:
+            response = httpx.post(REVOKE_URI, data={"token": token}, timeout=HTTP_TIMEOUT_SECONDS,
+                                  headers={"Content-Type": "application/x-www-form-urlencoded"})
+        except httpx.HTTPError as error:
+            raise GoogleUnavailable(type(error).__name__) from error
+        if response.status_code == 200:
+            return
+        if response.status_code == 400:
+            raise TokenExpired("invalid_grant")
+        # 응답 본문에는 계정·토큰이 섞일 수 있으므로 상태 코드만 오류로 쓴다.
+        raise GoogleUnavailable(f"HTTP {response.status_code}")
 
     def gmail(self, access_token: str):
         """접근 토큰 하나로 Gmail API 클라이언트를 만든다(7·9가 메일 읽기·보내기에 쓴다)."""

@@ -9,7 +9,9 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.auth import gmail as gmail_connection
 from app.auth import router as supabase_me
+from app.auth.gmail import GmailConnectionError
 from app.auth.supabase import BearerAuthError, TokenVerifier
 from app.clients.gmail import GoogleClient
 from app.config import Settings, get_settings
@@ -54,7 +56,8 @@ def create_app(settings: Settings | None = None, google=None,
         app.state.database = database
         app.state.graph = get_graph()
         app.state.supabase_auth = supabase_auth or (
-            TokenVerifier(config.supabase_url) if config.supabase_url.strip() else None
+            TokenVerifier(config.supabase_url, secret_key=config.supabase_secret_key)
+            if config.supabase_url.strip() else None
         )
         # API 키가 없어도 기본 화면과 healthz는 사용할 수 있다.
         app.state.llm = get_backend(config) if config.openai_api_key.strip() else None
@@ -88,6 +91,7 @@ def create_app(settings: Settings | None = None, google=None,
     app.include_router(quotes.router)
     app.include_router(settings_routes.router)
     app.include_router(supabase_me.router)
+    app.include_router(gmail_connection.router)
     app.include_router(trade_api.router)
     app.include_router(pi_routes.router)
     app.include_router(po_routes.router)
@@ -107,6 +111,10 @@ def create_app(settings: Settings | None = None, google=None,
 
     @app.exception_handler(BearerAuthError)
     def bearer_auth_error(request: Request, error: BearerAuthError):
+        return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
+
+    @app.exception_handler(GmailConnectionError)
+    def gmail_connection_error(request: Request, error: GmailConnectionError):
         return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
 
     @app.get("/healthz")

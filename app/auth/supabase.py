@@ -54,11 +54,14 @@ class VerifiedToken:
 class TokenVerifier:
     """JWKS를 가져와 Supabase access token을 검증한다. 앱마다 하나를 만들어 재사용한다."""
 
-    def __init__(self, supabase_url: str, fetch_jwks=None):
+    def __init__(self, supabase_url: str, fetch_jwks=None, *, secret_key: str = "", fetch_admin_user=None):
         base = supabase_url.strip().rstrip("/")
         self.jwks_url = base + JWKS_PATH
         self.issuer = base + "/auth/v1"
+        self._admin_users_url = base + "/auth/v1/admin/users"
+        self.secret_key = secret_key
         self._fetch_jwks = fetch_jwks or self._fetch_over_http
+        self._fetch_admin_user = fetch_admin_user or self._fetch_admin_user_over_http
         self._keys: dict[str, jwt.PyJWK] = {}
         self._fetched_at = float("-inf")
 
@@ -67,6 +70,46 @@ class TokenVerifier:
                              headers={"Accept": "application/json"})
         response.raise_for_status()
         return response.json()
+
+    def _fetch_admin_user_over_http(self, url: str) -> dict:
+        # 서버 비밀 키로 Auth 서비스의 사용자 조회(admin)를 부른다. 사용자가 고칠 수 있는
+        # user_metadata이 아니라 서버 쪽 identities만 계정 연결 근거로 쓴다(CONTRACT 9.1).
+        response = httpx.get(url, timeout=JWKS_TIMEOUT_SECONDS, headers={
+            "apikey": self.secret_key, "Authorization": f"Bearer {self.secret_key}",
+            "Accept": "application/json",
+        })
+        response.raise_for_status()
+        return response.json()
+
+    def provider_google_subject(self, sub: UUID) -> str | None:
+        """Supabase Auth가 확인한 공급자 identity에서 Google subject를 읽는다(계획 7절).
+
+        Google 로그인 사용자면 Google 계정의 subject(= 기존 `users.google_sub` 값)를 돌려주고,
+        다른 방법으로 가입한 사용자면 None. 사용자가 고칠 수 있는 값(user_metadata)은 읽지 않는다.
+        """
+        if not self.secret_key:
+            raise BearerAuthError(503, "auth_not_configured",
+                                  "SUPABASE_SECRET_KEY가 설정되지 않아 Google 계정 일치를 확인할 수 없습니다.")
+        try:
+            document = self._fetch_admin_user(f"{self._admin_users_url}/{sub}")
+        except BearerAuthError:
+            raise
+        except (httpx.HTTPError, ValueError) as error:
+            log.warning("Supabase 사용자 조회 실패: %s", type(error).__name__)
+            raise BearerAuthError(503, "auth_unavailable",
+                                  "로그인 서버에서 계정 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.") from error
+        # GoTrue 버전에 따라 identities·user_identities 둘 다 쓰인다. 둘 다 서버가 만든 값이다.
+        identities = (document.get("identities") or document.get("user_identities")) \
+            if isinstance(document, dict) else None
+        if not isinstance(identities, list):
+            identities = []
+        for identity in identities:
+            if not isinstance(identity, dict) or identity.get("provider") != "google":
+                continue
+            subject = identity.get("id") or (identity.get("identity_data") or {}).get("sub")
+            if isinstance(subject, str) and subject:
+                return subject
+        return None
 
     def _refresh(self) -> None:
         try:

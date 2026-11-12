@@ -491,16 +491,19 @@ class AgentError(TypedDict):
 
 | 경로 | 인증 | 기간·역할 |
 |---|---|---|
-| HTML 화면(`/`·`/inbox`·`/threads/*`·`/quotes/*`·`/settings`·`/runs/*`), 로그인(`/login`·`/auth/*`), 기존 JSON `/api/session`·`/api/trade/*` | `gq_session` 쿠키 + `X-CSRF-Token`(변경 요청) | [현재 구현] 전환 기간 병행 유지(legacy). 계획 21절 같은 출처 배포 때 React 화면으로 대체를 시작하고 22절 운영 전환 확인 뒤 닫는다. `/api/session`의 의미(쿠키 세션·CSRF 발급)는 이 기간 그대로다 |
-| React JSON API: `GET /api/me`, `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [적용 2026-11-12, 계획 5절] `/api/me`·`/api/trade/*`(문서·설정)는 `Authorization` 헤더가 있으면 Bearer만 검증하고(쿠키 우회 금지, Bearer 변경 요청은 CSRF 토큰 불필요) 헤더가 없으면 legacy 쿠키+CSRF를 그대로 쓴다. CORS의 `Authorization` 헤더를 허용했다. `/api/files*`·메일·실행 기록 Bearer 연결은 계획 8·19·20절 |
+| HTML 화면(`/`·`/inbox`·`/threads/*`·`/quotes/*`·`/settings`·`/runs/*`), 로그인(`/login`·`/auth/google/start`), 기존 JSON `/api/session`·`/api/trade/*` | `gq_session` 쿠키 + `X-CSRF-Token`(변경 요청) | [현재 구현] 전환 기간 병행 유지(legacy). 계획 21절 같은 출처 배포 때 React 화면으로 대체를 시작하고 22절 운영 전환 확인 뒤 닫는다. `/api/session`의 의미(쿠키 세션·CSRF 발급)는 이 기간 그대로다 |
+| React JSON API: `GET /api/me`, `/api/gmail/*`(연결·해제·로그아웃), `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [적용 2026-11-12, 계획 5·7절] `/api/me`·`/api/gmail/*`·`/api/trade/*`(문서·설정)는 `Authorization` 헤더가 있으면 Bearer만 검증하고(쿠키 우회 금지, Bearer 변경 요청은 CSRF 토큰 불필요) 헤더가 없으면 legacy 쿠키+CSRF를 그대로 쓴다. CORS의 `Authorization` 헤더를 허용했다. `/api/files*`·메일·실행 기록 Bearer 연결은 계획 8·19·20절 |
+
+- Gmail 연결 API(적용 2026-11-12, 계획 7절, `app/auth/gmail.py`): 앱 로그인(legacy 로그인)과 흐름을 분리한 Bearer 전용 경로다. `POST /api/gmail/connect`가 state·PKCE 검증값·연결할 내부 사용자·기대 Google subject를 서명된 세션 쿠키(`gq_session`, 10분·일회용)에 담아 Google 동의 화면 주소를 JSON으로 돌려주면, `GET /auth/google/callback`이 대기 값의 내부 사용자가 있을 때만 이 흐름으로 완성해 React 앱(`/app/settings?gmail=<결과>`)으로 안내한다. 결과 키: `connected`·`cancelled`·`login_failed`·`scope_missing`·`config_missing`·`expired`·`different_account`·`account_conflict`. 대기 값에 내부 사용자가 없으면 기존 legacy 로그인 콜백 그대로다(같은 redirect URI를 공유한다). 연결은 기존 `store_login`(토큰 암호화 저장)·`register_watch`(감시 등록)·`get_access_token`(갱신)을 그대로 재사용하고, `POST /api/gmail/logout`은 앱 로그아웃 때 감시만 멈추며, `POST /api/gmail/disconnect`는 Google 토큰 폐기(`GoogleClient.revoke`)까지 하는 연결 해제다(해제 후에도 `google_sub`는 남겨 같은 계정만 다시 연결한다). `GET /api/me`의 `gmail` 객체가 연결 상태이며, 그 요청 뒤 감시 갱신(`renew_watch_if_due`)을 건다(legacy HTML 방문뿐 아니라 알림 수신·API 경로에서도 갱신).
+- 계정 연결 규칙(적용 2026-11-12, 계획 7절): 연결 시작 때 서버가 `SUPABASE_SECRET_KEY`로 Supabase Auth의 사용자 조회(admin)를 불러 공급자 identity의 Google subject를 구한다(사용자가 고칠 수 있는 `user_metadata`는 근거로 안 씀). 콜백의 Google subject가 이 값이나 이미 연결된 `google_sub`와 다르면 `different_account`, 같은 Google 계정의 기존 행이 이미 다른 Supabase 로그인에 연결됐거나 확인 근거가 없으면 `account_conflict`로 거부한다. 확인 근거가 있을 때만 기존 정수 ID(자료)를 보존해 연결한다(빈 껍데기 사용자 행 삭제, 양쪽에 자료가 있으면 외래 키가 삭제를 막아 `account_conflict`). 서버 비밀 키가 없으면 연결 시작이 503 `auth_not_configured`, 계정 조회 장애는 503 `auth_unavailable`, Google 로그인 설정 누락은 503 `config_missing`이다.
 
 - `GET /api/me`(Bearer 전용, 적용 2026-11-12): 인증 상태·내부 `user_id`·프로필(표시 이름·이메일)·Gmail 연결 상태(`gmail.connected`·`gmail.watch`)를 하나의 JSON으로 돌려준다. React 로그인·새로고침 복구가 이 경로부터 시작한다. 토큰이 없거나 검증에 실패하면 401.
 - 토큰 검증(적용 2026-11-12, `app/auth/supabase.py`의 `TokenVerifier`·검증 라이브러리 `pyjwt`): 신뢰한 Supabase 프로젝트의 비대칭 signing key(JWKS)로 서명·issuer(`{SUPABASE_URL}/auth/v1`)·audience(`authenticated`)·exp·알고리즘(RS256·ES256만)·subject(UUID)를 확인한다. JWKS 주소는 설정에서만 정하고 요청이 지정한 임의 JWKS URL(jku 헤더 등)은 부르지 않는다. kid 캐시(300초)를 두고 unknown kid는 JWKS를 다시 가져온다(키 회전 대응). 다른 프로젝트·변조 토큰은 401(`invalid_token`)로 거부하고, 인증 실패(401)와 인증 서버 일시 장애(503 `auth_unavailable`)·미설정(503 `auth_not_configured`)을 구분한다. 비밀값은 로그에 남기지 않는다.
 - 사용자 매핑(적용 2026-11-12, 7.1절 `supabase_uid`): 검증된 UUID로 기존 정수 `id`를 찾고, 없으면 한 번만 생성한다. 동시 첫 접속은 `supabase_uid` 유일 제약으로 한 행으로 끝난다. 요청 본문의 `user_id`·이메일·파일 경로는 권한 근거로 쓰지 않는다.
 - 기존 계정 연결 증명 [확정]: 같은 이메일이라는 이유로 자동 병합하지 않는다. 서버가 Supabase Auth가 확인한 공급자 identity와 기존 Google 계정 재인증 결과의 provider subject 일치를 확인한 뒤 기존 행에 `supabase_uid`를 연결한다(신규 자료 작성 전에 안내). 양쪽에 이미 자료가 있으면 자동 합병하지 않는다. 사용자가 고칠 수 있는 `user_metadata` 값은 근거로 믿지 않는다.
-- CSRF·OAuth: Bearer 전용 JSON 경로는 위 cookie/CSRF 의존성과 구분한다. Google OAuth 연결의 state·PKCE·일회성 상태 검사는 유지한다(10절). Gmail 연결 시작은 인증된 API에서 시작 의도를 만들고 짧게 유효한 state로 기존 Google 동의 화면으로 이동하며, callback은 state에 결합된 내부 사용자만 갱신한다(계획 7절).
-- Gmail 계정 [확정]: 초기에는 앱 로그인과 같은 Google 계정만 연결한다. 다른 메일함 연결은 별도 요구다.
-- 로그아웃·watch [확정]: 앱 로그아웃은 연결된 Gmail watch 중지를 명시적으로 시도하고 Supabase 로그아웃·화면 상태를 초기화한다. Google 토큰까지 폐기하는 연결 해제는 별도 동작이다.
+- CSRF·OAuth: Bearer 전용 JSON 경로는 위 cookie/CSRF 의존성과 구분한다. Google OAuth 연결의 state·PKCE·일회성 상태 검사는 유지한다(10절). Gmail 연결 시작은 인증된 API에서 시작 의도를 만들고 짧게 유효한 state로 기존 Google 동의 화면으로 이동하며, callback은 state에 결합된 내부 사용자만 갱신한다(적용 2026-11-12, 계획 7절 — 위 Gmail 연결 API 문단).
+- Gmail 계정 [확정, 적용 2026-11-12 계획 7절]: 초기에는 앱 로그인과 같은 Google 계정만 연결한다. 다른 메일함 연결은 별도 요구다.
+- 로그아웃·watch [확정, 적용 2026-11-12 계획 7절]: 앱 로그아웃(`POST /api/gmail/logout`)은 연결된 Gmail watch 중지를 명시적으로 시도하고 Supabase 로그아웃·화면 상태를 초기화한다. Google 토큰까지 폐기하는 연결 해제는 별도 동작(`POST /api/gmail/disconnect`)이다.
 - 만료·실패: 401이면 화면은 로그인 복구를 안내한다. 유효한 access token의 남은 수명 동안 로그아웃 즉시 폐기가 보장되는 것은 아니다(안내 문구에 명시).
 
 ## 10. Google
@@ -532,7 +535,7 @@ class AgentError(TypedDict):
 | `APP_BASE_URL` | 서비스 주소(링크·리디렉션 확인용) | 6, 7 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값(`true`/`false`) | 12 |
 | `SUPABASE_URL` | Supabase 프로젝트 URL. 서버 JWT 검증·Storage 호출 공통. 5절 적용(2026-11-12): Bearer 토큰 검증의 JWKS 주소·issuer를 여기서 정한다(비면 Bearer 인증 503) | react-supabase 5·8절 |
-| `SUPABASE_SECRET_KEY` | Supabase 서버 비밀 키. 서버 전용이며 브라우저·프론트 빌드 산출물에 넣지 않는다 [목표] | react-supabase 5·8절 |
+| `SUPABASE_SECRET_KEY` | Supabase 서버 비밀 키. 서버 전용이며 브라우저·프론트 빌드 산출물에 넣지 않는다. 7절 적용(2026-11-12): Gmail 연결 시작 때 Auth 서비스의 사용자 조회(admin)로 공급자 Google subject를 확인한다(비면 연결 시작 503 `auth_not_configured`) | react-supabase 5·7·8절 |
 | `SUPABASE_STORAGE_BUCKET` | 비공개 파일 버킷 이름. 기본 `trade-files` [목표] | react-supabase 8절 |
 | `VITE_SUPABASE_URL` | React 브라우저용 Supabase URL. `frontend/.env`에 두고 서버 환경과 분리 [적용 2026-11-12, 계획 6절 — `frontend/src/supabase.js`가 읽는다] | react-supabase 6절 |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 publishable 키(공개 가능 값. 서버 비밀 아님) [적용 2026-11-12, 계획 6절] | react-supabase 6절 |
@@ -540,7 +543,7 @@ class AgentError(TypedDict):
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
 - 2026-11-11 전환: `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다. OpenAI 키를 로컬·Render에 먼저 등록하고 병합·자동 배포 뒤 실제 연결을 확인한 다음 예전 변수를 제거한다. Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. OpenAI API 결제·모델 권한은 사용자 계정에서 확인하고 Codex에는 키를 넣지 않는다.
-- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. `SUPABASE_URL`은 계획 5절부터 서버 JWT 검증에 읽는다(2026-11-12 적용). `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`는 계획 6절의 React 앱이 읽는다(2026-11-12 적용). `SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`은 계획 8절 구현부터 적용한다. 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
+- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. `SUPABASE_URL`은 계획 5절부터 서버 JWT 검증에 읽는다(2026-11-12 적용). `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`는 계획 6절의 React 앱이 읽는다(2026-11-12 적용). `SUPABASE_SECRET_KEY`는 계획 7절부터 Gmail 연결의 계정 일치 확인에 읽는다(2026-11-12 적용), `SUPABASE_STORAGE_BUCKET`은 계획 8절 구현부터 적용한다. 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)

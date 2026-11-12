@@ -76,7 +76,7 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 |
 | `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값. 설정할 때 `true` 또는 `false` 지정 |
-| `SUPABASE_URL` `SUPABASE_SECRET_KEY` `SUPABASE_STORAGE_BUCKET` | Supabase 전환용 서버 설정. `SUPABASE_URL`은 Bearer 토큰 검증(JWKS·issuer)에 읽는다(계획 5절 적용), 나머지는 Storage 전환(계획 8절)부터 적용 |
+| `SUPABASE_URL` `SUPABASE_SECRET_KEY` `SUPABASE_STORAGE_BUCKET` | Supabase 전환용 서버 설정. `SUPABASE_URL`은 Bearer 토큰 검증(JWKS·issuer)에 읽는다(계획 5절 적용). `SUPABASE_SECRET_KEY`는 Gmail 연결 시작의 계정 일치 확인(계획 7절 적용, 2026-11-12)과 Storage 전환(계획 8절)에, `SUPABASE_STORAGE_BUCKET`은 Storage 전환(계획 8절)부터 적용 |
 | `VITE_SUPABASE_URL` `VITE_SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 Supabase 설정(계획 6절 적용, 2026-11-12). `frontend/.env`에만 두고 서버 비밀과 분리한다 |
 
 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외했다. 일정(캘린더) 도구 작업 때 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천하고 채택 여부를 확인한다.
