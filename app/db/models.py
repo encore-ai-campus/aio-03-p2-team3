@@ -203,6 +203,9 @@ class TradeDocumentVersion(Base, Owned, Created):
 
 
 class TradeProposal(Base, Owned, Created):
+    """검토 제안. 회사 이미지는 제안 시점의 `logo_file_id`/`seal_file_id`로 고정하고(계획 9절)
+    렌더 때 Storage에서 bytes를 읽는다. `logo`/`seal` 바이너리 열은 9절 이전 행 보존용이며
+    backfill(app.trade.settings.backfill) 뒤 22절에서 삭제한다."""
     __tablename__ = "trade_proposals"
     __table_args__ = (ForeignKeyConstraint(
         ["document_id", "revision"],
@@ -217,6 +220,8 @@ class TradeProposal(Base, Owned, Created):
     decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     logo: Mapped[bytes | None] = mapped_column(LargeBinary)
     seal: Mapped[bytes | None] = mapped_column(LargeBinary)
+    logo_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
+    seal_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
 
 
 class TradeArtifact(Base, Owned, Created):
@@ -300,13 +305,16 @@ class CompanyBankAccount(Base, Owned, Updated):
 
 
 class CompanyBranding(Base, Updated):
-    """CONTRACT 15.7절 company_branding — 사용자별 직인·로고(kekorea-port 4). seal_sha256은
-    업로드할 때 seal bytes의 SHA-256을 저장한 값이고 app.trade.settings.repository.resolve_company_seal이 대조에 쓴다."""
+    """CONTRACT 15.7절 company_branding — 사용자별 직인·로고(kekorea-port 4). 현재 설정은
+    `logo_file_id`/`seal_file_id`가 file_assets의 이미지를 가리키고(계획 9절) bytes는 Storage에만
+    있다. `logo`/`seal`/`seal_sha256` 바이너리 열은 9절 이전 행 보존용이며 backfill 뒤 22절에서 삭제한다."""
     __tablename__ = "company_branding"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     logo: Mapped[bytes | None] = mapped_column(LargeBinary)
     seal: Mapped[bytes | None] = mapped_column(LargeBinary)
     seal_sha256: Mapped[str | None] = mapped_column(String)
+    logo_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
+    seal_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
 
 
 class PriceListItem(Base, Owned, Updated):

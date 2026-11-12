@@ -61,12 +61,12 @@ def test_postgres_pi_api_and_concurrent_approval_without_shared_python_lock(data
         test_pi_http_end_to_end_approval_and_idempotent_download(client)
         database = client.app.state.database
         document = create_pi(client)
-        first_repository = SQLReviews(database, 1, "PI")
+        first_repository = SQLReviews(database, 1, "PI", storage=client.app.state.storage)
         proposal = propose(document["document_id"], ReviewRequest(revision=1), repository=first_repository,
                            check_document=check_pi_for_review)
         second_database = Database(database_url)
         second_database.create_tables()
-        second_repository = SQLReviews(second_database, 1, "PI")
+        second_repository = SQLReviews(second_database, 1, "PI", storage=client.app.state.storage)
         barrier = Barrier(2)
         choice = Decision(action="approve", revision=1, content_hash=proposal["content_hash"])
 

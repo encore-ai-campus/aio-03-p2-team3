@@ -1,9 +1,15 @@
-"""사용자 설정 저장 및 문서 작성용 단가표·거래처·직인 조회."""
-import hashlib
+"""사용자 설정 저장 및 문서 작성용 단가표·거래처·직인 조회.
+
+회사 로고·직인은 비공개 Storage의 file_assets 이미지를 가리킨다(계획 9절). 업로드 검증은
+app.trade.settings.operations(2MiB·PNG)이 하고 이 모듈은 Storage 저장·조회 원본 대조를 담당한다.
+"""
+from hashlib import sha256
+from uuid import uuid4
 
 from sqlalchemy import select
 
-from app.db.models import CompanyBankAccount, CompanyBranding, CompanyProfile, Counterparty, PriceListItem, User
+from app.db.models import CompanyBankAccount, CompanyBranding, CompanyProfile, Counterparty, FileAsset, PriceListItem, User
+from app.files.storage import StorageError
 from app.services.locks import user_lock
 from app.trade.common.models import DocumentError
 from app.trade.settings.models import BANK_FIELDS, ISSUER_FIELDS
@@ -33,8 +39,8 @@ class SQLSettings:
                     "prices": [{"id": price.id, "unit_price": price.unit_price_text,
                                 **{key: getattr(price, key) for key in ("item_name", "role", "currency", "party_key",
                                    "unit", "price_basis", "product_code", "capacity")}} for price in prices],
-                    "branding": {"has_logo": bool(branding and branding.logo),
-                                 "has_seal": bool(branding and branding.seal)}}
+                    "branding": {"has_logo": bool(branding and branding.logo_file_id),
+                                 "has_seal": bool(branding and branding.seal_file_id)}}
 
     def save_company(self, values):
         with user_lock(self.database, self.user_id), self.database.session() as session:
@@ -72,19 +78,33 @@ class SQLSettings:
                 setattr(row, key, value)
         return self.read()
 
-    def save_branding(self, kind, content, content_hash):
+    def save_branding(self, kind, content, content_hash, storage):
+        if kind not in ("seal", "logo"):
+            raise DocumentError("INVALID_IMAGE_KIND", "직인 또는 로고를 선택하세요", 422)
+        if storage is None:
+            raise DocumentError("STORAGE_NOT_CONFIGURED",
+                                "SUPABASE_URL·SUPABASE_SECRET_KEY가 설정되지 않아 이미지를 저장할 수 없습니다.", 503)
+        object_key = f"{self.user_id}/branding/{uuid4().hex}"
+        try:
+            storage.upload(object_key, content, "image/png")
+        except StorageError as error:
+            raise DocumentError("STORAGE_UNAVAILABLE", error.message, 503) from error
+        # Storage 저장이 성공한 뒤에만 메타데이터를 확정한다(계약 16.3절). 이 SQL이 실패하면 위
+        # 객체는 미참조로 남고 cleanup 명령이 정리한다.
         with user_lock(self.database, self.user_id), self.database.session() as session:
             self._user(session)
+            asset = FileAsset(user_id=self.user_id, original_filename=f"{kind}.png", content_type="image/png",
+                              size_bytes=len(content), sha256=content_hash, object_key=object_key)
+            session.add(asset)
+            session.flush()
             row = session.get(CompanyBranding, self.user_id)
             if row is None:
                 row = CompanyBranding(user_id=self.user_id)
                 session.add(row)
             if kind == "seal":
-                row.seal, row.seal_sha256 = content, content_hash
-            elif kind == "logo":
-                row.logo = content
+                row.seal_file_id = asset.id
             else:
-                raise DocumentError("INVALID_IMAGE_KIND", "직인 또는 로고를 선택하세요", 422)
+                row.logo_file_id = asset.id
         return self.read()
 
 
@@ -114,27 +134,62 @@ def counterparty_profiles(session, user_id):
             for row in rows]
 
 
+def branding_file_assets(session, user_id):
+    """company_branding이 가리키는 (로고, 직인) file_assets 행. 소유자가 다른 파일은 없음으로 본다."""
+    row = session.get(CompanyBranding, user_id)
+
+    def owned(file_id):
+        if file_id is None:
+            return None
+        asset = session.get(FileAsset, file_id)
+        return asset if asset is not None and asset.user_id == user_id else None
+
+    return owned(row.logo_file_id if row is not None else None), owned(row.seal_file_id if row is not None else None)
+
+
+def download_verified_image(storage, asset: FileAsset) -> bytes:
+    """Storage에서 이미지 bytes를 읽어 file_assets에 기록된 SHA-256과 대조한다(계획 9절).
+
+    Storage 미설정·호출 실패·대조 불일치는 StorageError로 나간다. 이미지 손상을 성공으로 돌려주지 않는다.
+    """
+    if storage is None:
+        raise StorageError("storage_not_configured",
+                           "SUPABASE_URL·SUPABASE_SECRET_KEY가 설정되지 않아 이미지를 읽을 수 없습니다.")
+    data = storage.download(asset.object_key)
+    if sha256(data).hexdigest() != asset.sha256:
+        raise StorageError("image_corrupted",
+                           "저장된 회사 이미지가 기록과 일치하지 않습니다. 관리자에게 문의해 주세요.")
+    return data
+
+
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/branding.py resolve_company_seal(반환 형식은 계약 15.4절)
-def resolve_company_seal(user_id, *, database=None):
-    """company_branding 표에서 사용자별 직인 PNG bytes를 꺼낸다.
+def resolve_company_seal(user_id, *, database=None, storage=None):
+    """company_branding이 가리키는 직인 PNG bytes를 Storage에서 꺼낸다(계획 9절).
 
     반환: (직인 bytes | None, 오류 문구 | None). 오류 문구는 화면 안내용이고 비밀값을 담지 않는다.
+    Storage 미설정·호출 실패·원본 대조 불일치는 StorageError를 던진다(성공으로 처리하지 않는다).
     database를 주지 않으면 앱 기본 DB(app.db.engine.get_database)를 쓴다.
     """
     from app.db.engine import get_database
-    from app.db.models import CompanyBranding
 
     db = database or get_database()
     with db.session() as session:
-        row = session.get(CompanyBranding, user_id)
-        seal = row.seal if row is not None else None
-        expected = row.seal_sha256 if row is not None else None
-    if not seal:
-        return None, "회사 직인이 업로드되지 않았습니다. 설정에서 직인을 업로드해 주세요."
+        _, asset = branding_file_assets(session, user_id)
+        if asset is None:
+            return None, "회사 직인이 업로드되지 않았습니다. 설정에서 직인을 업로드해 주세요."
+        seal = download_verified_image(storage, asset)
     if not seal.startswith(PNG_MAGIC):
         return None, "저장된 회사 직인이 PNG 이미지가 아닙니다. 직인을 다시 업로드해 주세요."
-    if not expected:
-        return None, "직인 대조값(SHA-256)이 저장되어 있지 않습니다. 직인을 다시 업로드해 주세요."
-    if hashlib.sha256(seal).hexdigest() != expected:
-        return None, "저장된 직인이 업로드할 때의 값(SHA-256)과 다릅니다. 직인을 다시 업로드해 주세요."
     return seal, None
+
+
+def resolve_company_logo(user_id, *, database=None, storage=None):
+    """company_branding이 가리키는 로고 bytes(없으면 None). 실패는 resolve_company_seal과 같다."""
+    from app.db.engine import get_database
+
+    db = database or get_database()
+    with db.session() as session:
+        asset, _ = branding_file_assets(session, user_id)
+        if asset is None:
+            return None
+        return download_verified_image(storage, asset)

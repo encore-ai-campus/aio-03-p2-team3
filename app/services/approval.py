@@ -20,7 +20,7 @@ from time import perf_counter
 from sqlalchemy import select, update
 
 from app.clients.gmail import GoogleError
-from app.db.models import Approval, CompanyBranding, ProcessedMessage, Quote, ReplyCandidate, TradeDocument, utcnow
+from app.db.models import Approval, ProcessedMessage, Quote, ReplyCandidate, TradeDocument, utcnow
 from app.quote.pdf import render_quote_pdf
 from app.runlog.logger import log_event
 from app.services.auth import GoogleAccess, get_access_token, get_owned
@@ -29,7 +29,7 @@ from app.services.locks import user_lock as _user_lock
 from app.tools.base import ToolResult
 from app.tools.registry import TOOLS
 from app.tools.send_email import google_error_kind, use_google
-from app.trade.settings.repository import resolve_company_seal
+from app.trade.settings.repository import resolve_company_logo, resolve_company_seal
 from app.trade.ci.imports import ci_render_data, is_pi_import
 from app.trade.common.pdf import render_trade_document
 
@@ -123,13 +123,14 @@ def send_approved_quote(user_id: int, quote_id: int, candidate_id: int, *, acces
 
 
 def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: int,
-                                 *, access: GoogleAccess) -> ApprovalResult:
+                                 *, access: GoogleAccess, storage=None) -> ApprovalResult:
     """무역서류 확인 승인(계약 15.6절). 일반·견적 승인과 같은 사용자 잠금·조건부 claim·결과 키를 쓴다.
 
     발송 조건: `status="ready"`(PL은 `packing_totals.approved` 포함)이고 CI는 PI 원문 근거
     (`is_pi_import`)가 있어야 한다. PDF는 `render_trade_document`으로 만들되 CI는 렌더 직전에
     `ci_render_data`를 통과시킨 값으로 만든다(계약 15.5절). 직인이 없으면 생성을 차단한다(원본 동작).
     성공 때 `trade_documents.status="sent"`·`sent_at`(UTC)·`draft["status"]="sent"`를 저장한다.
+    storage: 회사 로고·직인을 읽을 비공개 Storage 호출기(계획 9절). 호출자(app.state.storage)가 넣는다.
     """
     with _user_lock(access.database, user_id):
         with access.database.session() as session:
@@ -153,7 +154,7 @@ def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: 
                 return ApprovalResult("needs_input", thread_id)
         try:
             attachments = [{"filename": f"{draft['doc_no']}.pdf", "mime_type": "application/pdf",
-                            "content_b64": b64encode(_trade_pdf(access, user_id, draft)).decode("ascii")}]
+                            "content_b64": b64encode(_trade_pdf(access, user_id, draft, storage)).decode("ascii")}]
         except _SealMissing:
             return ApprovalResult("needs_seal", thread_id)
         except Exception as error:
@@ -178,13 +179,13 @@ def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: 
     return ApprovalResult("failed", thread_id)
 
 
-def _trade_pdf(access: GoogleAccess, user_id: int, draft: dict) -> bytes:
-    """무역서류 PDF(계약 15.6절). CI(PI 변환)는 렌더 직전 `ci_render_data`를 통과시킨다."""
+def _trade_pdf(access: GoogleAccess, user_id: int, draft: dict, storage) -> bytes:
+    """무역서류 PDF(계약 15.6절). CI(PI 변환)는 렌더 직전 `ci_render_data`를 통과시킨다.
+    회사 로고·직인은 Storage의 file_assets 이미지에서 읽는다(계획 9절). Storage 장애는 예외로
+    나가 바깥의 일반 실패 처리를 받는다(이미지 손상을 성공으로 처리하지 않는다)."""
     render_input = ci_render_data(draft) if is_pi_import(draft) else draft
-    with access.database.session() as session:
-        branding = session.get(CompanyBranding, user_id)
-        logo = branding.logo if branding is not None else None
-    seal, _error = resolve_company_seal(user_id, database=access.database)
+    logo = resolve_company_logo(user_id, database=access.database, storage=storage)
+    seal, _error = resolve_company_seal(user_id, database=access.database, storage=storage)
     if seal is None:
         raise _SealMissing()
     return render_trade_document(render_input, draft.get("bank"), logo=logo, seal=seal)

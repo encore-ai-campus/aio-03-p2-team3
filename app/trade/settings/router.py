@@ -36,4 +36,5 @@ def price(command: PriceInput, request: Request, user_id: int = Depends(require_
 async def branding(kind: Literal["logo", "seal"], request: Request,
                    image: Annotated[UploadFile, File()], user_id: int = Depends(require_write)):
     content = await image.read(operations.MAX_BRANDING_BYTES + 1)
-    return operations.save_branding(kind, content, repository=SQLSettings(request.app.state.database, user_id))
+    return operations.save_branding(kind, content, repository=SQLSettings(request.app.state.database, user_id),
+                                    storage=request.app.state.storage)

@@ -65,12 +65,12 @@ def decide(proposal_id: str, document_id: int, decision: Decision, *, repository
     document = repository.document(document_id)
     if document["revision"] != decision.revision or document["status"] != "ready":
         raise DocumentError("REVISION_CONFLICT", "최신 문서를 다시 확인하세요")
-    branding = proposal["branding"]
+    branding = repository.proposal_branding(proposal)
     if (sha256(branding.seal).hexdigest() != proposal["payload"]["seal_sha256"]
             or (sha256(branding.logo).hexdigest() if branding.logo else None) != proposal["payload"]["logo_sha256"]):
         raise DocumentError("PROPOSAL_MISMATCH", "검토한 회사 이미지와 저장된 이미지가 일치하지 않습니다")
     try:
-        files = renderer(proposal["payload"], proposal["branding"])
+        files = renderer(proposal["payload"], branding)
     except (ValueError, ArithmeticError, TypeError) as error:
         raise DocumentError("RENDER_FAILED", "파일을 만들지 못했습니다. 문서와 회사 이미지를 확인하세요", 422) from error
     if (sorted(file.file_format for file in files) != sorted(proposal["payload"]["formats"])

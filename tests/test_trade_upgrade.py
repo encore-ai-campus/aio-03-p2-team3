@@ -15,6 +15,7 @@ from app.db.models import (CompanyProfile, PriceListItem, ReplyCandidate, TradeD
                            TradeArtifact, TradeDocumentVersion, TradeProposal)
 from app.services.approval import send_approved_trade_document
 from app.services.trade_docs import revise_trade_document
+from tests.fakes.storage import FakeStorage
 from tests.test_trade_flow import (
     approval_access, item, put_settings, run_flow, stored_candidates, trade_email, trade_response,
 )
@@ -84,8 +85,8 @@ def test_review_migration_backfills_existing_document_version_without_losing_dat
         assert session.get(TradeDocumentVersion, (document_id, 7)).payload == payload
 
 
-def ready_pi(database):
-    put_settings(database)
+def ready_pi(database, storage):
+    put_settings(database, storage)
     response, _ = run_flow(database, trade_email(
         "PI 작성 요청", "PI Virtual Serum 100 PCS at USD 8.00 per PCS. FOB Busan, payment T/T."),
         trade_response("PI", items=[item(unit_price="8.00")]))
@@ -96,7 +97,7 @@ def ready_pi(database):
 
 
 def test_currency_revision_invalidates_old_verified_price(database):
-    _, document_id = ready_pi(database)
+    _, document_id = ready_pi(database, FakeStorage())
     revised = revise_trade_document(1, document_id, {"currency": "KRW"}, database=database)
     assert revised["status"] == "needs_input"
     assert revised["items"][0].get("master_price") is not True
@@ -122,7 +123,7 @@ def test_counterparty_price_fallback_is_per_product():
 
 
 def test_item_identity_revision_does_not_keep_previous_price(database):
-    _, document_id = ready_pi(database)
+    _, document_id = ready_pi(database, FakeStorage())
     revised = revise_trade_document(1, document_id, {"items.0.product_name": "Different Product"}, database=database)
     assert revised["status"] == "needs_input"
     assert revised["items"][0].get("master_price") is not True
@@ -130,7 +131,7 @@ def test_item_identity_revision_does_not_keep_previous_price(database):
 
 
 def test_stale_revision_and_server_fields_cannot_be_overwritten(database):
-    _, document_id = ready_pi(database)
+    _, document_id = ready_pi(database, FakeStorage())
     assert revise_trade_document(1, document_id, {"document_number": "V-STALE"}, database=database,
                                   expected_revision=1) is None
     for key in ("packing_totals.approved", "items.0.master_price", "_ci_from_pi", "revision", "status"):
@@ -139,17 +140,18 @@ def test_stale_revision_and_server_fields_cannot_be_overwritten(database):
 
 
 def test_edit_between_pdf_snapshot_and_claim_cannot_send_stale_document(database):
-    response, document_id = ready_pi(database)
+    storage = FakeStorage()
+    response, document_id = ready_pi(database, storage)
     access = approval_access(database)
     candidate = stored_candidates(database, response)[0]
 
-    def render_and_edit(access, user_id, draft):
+    def render_and_edit(access, user_id, draft, storage=None):
         assert draft["document_number"] == "V-100"
         assert revise_trade_document(user_id, document_id, {"document_number": "V-CHANGED"}, database=database)
         return b"%PDF-fake"
 
     with patch("app.services.approval._trade_pdf", side_effect=render_and_edit):
-        outcome = send_approved_trade_document(1, document_id, candidate.id, access=access)
+        outcome = send_approved_trade_document(1, document_id, candidate.id, access=access, storage=storage)
     assert outcome.outcome == "document_changed"
     assert access.google.mailbox.called("send") == []
     with database.session() as session:
@@ -159,7 +161,8 @@ def test_edit_between_pdf_snapshot_and_claim_cannot_send_stale_document(database
 
 
 def test_sending_document_is_not_editable_and_failed_send_releases_claim(database):
-    response, document_id = ready_pi(database)
+    storage = FakeStorage()
+    response, document_id = ready_pi(database, storage)
     access = approval_access(database)
     candidate = stored_candidates(database, response)[0]
     from app.services.approval import _send
@@ -169,7 +172,7 @@ def test_sending_document_is_not_editable_and_failed_send_releases_claim(databas
         return _send(access, user_id, claimed, **options)
 
     with patch("app.services.approval._send", side_effect=send_while_editing):
-        outcome = send_approved_trade_document(1, document_id, candidate.id, access=access)
+        outcome = send_approved_trade_document(1, document_id, candidate.id, access=access, storage=storage)
     assert outcome.outcome == "sent"
     with database.session() as session:
         assert session.get(TradeDocument, document_id).draft["document_number"] == "V-100"

@@ -9,10 +9,10 @@
 from hashlib import sha256
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import FileAsset, TradeDocumentSource
+from app.db.models import CompanyBranding, FileAsset, TradeDocumentSource, TradeProposal
 from app.files.storage import StorageClient, StorageError
 from app.files.validation import MAX_ATTACHMENT_BYTES, detect_content_type, extension_content_type
 from app.services.locks import user_lock
@@ -108,23 +108,33 @@ def download_file(database, storage: StorageClient, user_id: int, file_id: int) 
     return {"filename": filename, "content_type": content_type, "content": content}
 
 
+def _file_in_use(session, file_id: int) -> bool:
+    """문서 출처·회사 설정(로고/직인)·검토 제안이 가리키는 파일은 사용 중이다(계획 9절)."""
+    return any(session.scalar(select(column).where(condition).limit(1)) is not None for column, condition in (
+        (TradeDocumentSource.id, TradeDocumentSource.file_id == file_id),
+        (CompanyBranding.user_id, or_(CompanyBranding.logo_file_id == file_id,
+                                      CompanyBranding.seal_file_id == file_id)),
+        (TradeProposal.id, or_(TradeProposal.logo_file_id == file_id,
+                               TradeProposal.seal_file_id == file_id)),
+    ))
+
+
 def delete_file(database, storage: StorageClient, user_id: int, file_id: int) -> None:
     with user_lock(database, user_id), database.session() as session:
         row = _owned(session, user_id, file_id)
         if row is None:
             raise FileError(404, "file_not_found", "파일을 찾을 수 없습니다.")
         object_key = row.object_key
-        if session.scalar(select(TradeDocumentSource.id).where(
-                TradeDocumentSource.file_id == file_id).limit(1)) is not None:
+        if _file_in_use(session, file_id):
             raise FileError(409, "file_in_use",
-                            "문서 출처로 참조 중인 파일은 삭제할 수 없습니다. 연결을 먼저 바꿔 주세요.")
+                            "다른 기록에서 참조 중인 파일은 삭제할 수 없습니다. 참조를 먼저 바꿔 주세요.")
         try:
             claimed = session.execute(delete(FileAsset).where(
                 FileAsset.id == file_id, FileAsset.user_id == user_id)).rowcount
         except IntegrityError as error:
-            # 프로세스 밖에서 동시에 연결이 생기면 외래 키가 삭제를 막는다(기록은 그대로).
+            # 프로세스 밖에서 동시에 참조가 생기면 외래 키가 삭제를 막는다(기록은 그대로).
             raise FileError(409, "file_in_use",
-                            "문서 출처로 참조 중인 파일은 삭제할 수 없습니다.") from error
+                            "다른 기록에서 참조 중인 파일은 삭제할 수 없습니다.") from error
         if claimed != 1:
             raise FileError(404, "file_not_found", "파일을 찾을 수 없습니다.")
     try:

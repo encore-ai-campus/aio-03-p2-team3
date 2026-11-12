@@ -13,13 +13,15 @@ from app.config import Settings
 from app.db.models import TradeArtifact, TradeDocument, TradeDocumentVersion, TradeProposal, User
 from app.main import create_app
 from app.web.deps import current_user_id
+from tests.fakes.storage import FakeStorage
 from tests.test_pi_domain import pi_input
 from tests.test_trade_flow import seal_png
 
 
 @contextmanager
 def configured_client(database_url):
-    app = create_app(Settings(database_url=database_url, session_secret="fake-test-session-key"))
+    app = create_app(Settings(database_url=database_url, session_secret="fake-test-session-key"),
+                     storage=FakeStorage())  # 회사 이미지는 Storage에서 읽는다(계획 9절)
     app.dependency_overrides[current_user_id] = lambda: 1
     with TestClient(app) as client:
         with app.state.database.session() as session:

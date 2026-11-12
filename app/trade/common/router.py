@@ -32,7 +32,8 @@ def document_router(kind, input_model, operations, repository_factory, extractor
 
     def repositories(request, user_id):
         database = request.app.state.database
-        return repository_factory(database, user_id), SQLReviews(database, user_id, kind)
+        return repository_factory(database, user_id), SQLReviews(database, user_id, kind,
+                                                                 storage=request.app.state.storage)
 
     @router.get("", response_model=list[DocumentSummary])
     def list_documents(request: Request, user_id: int = Depends(current_user_id)):

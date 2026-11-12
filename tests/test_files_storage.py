@@ -210,6 +210,8 @@ def test_delete_only_unreferenced_files_and_rejects_linked_files(database_url):
     with make_client(database_url, jwks, storage) as client:
         headers = bearer(jwks.token())
         document = create_pi_document(client, headers)
+        branding_row = file_rows(client)[0]  # 설정 직인 이미지(회사 설정이 참조 중, 계획 9절)
+        assert client.delete(f"/api/files/{branding_row.id}", headers=headers).status_code == 409
         linked = uploaded(client, headers)
         free = uploaded(client, headers)
 
@@ -226,7 +228,7 @@ def test_delete_only_unreferenced_files_and_rejects_linked_files(database_url):
         assert client.get(f"/api/files/{free['file_id']}", headers=headers).status_code == 404
         assert client.delete(f"/api/files/{free['file_id']}", headers=headers).status_code == 404  # 재요청 404
         linked_row = [row for row in file_rows(client) if row.id == linked["file_id"]][0]
-        assert set(storage.objects) == {linked_row.object_key}  # 삭제한 객체는 Storage에서도 없어졌다
+        assert set(storage.objects) == {branding_row.object_key, linked_row.object_key}  # 삭제한 객체만 Storage에서 없어졌다
 
 
 def test_delete_storage_failure_returns_error_and_cleanup_reclaims(database_url):

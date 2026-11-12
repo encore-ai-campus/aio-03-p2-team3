@@ -1,34 +1,78 @@
-"""검토 제안·선택·파일 저장. 상태 전이와 문서 버전 확보를 하나의 트랜잭션으로 처리한다."""
+"""검토 제안·선택·파일 저장. 상태 전이와 문서 버전 확보를 하나의 트랜잭션으로 처리한다.
+
+회사 이미지는 제안이 file ID로 고정하고 렌더 때 Storage에서 bytes를 읽는다(계획 9절).
+설정을 바꿔도 과거 제안은 같은 이미지를 쓴다.
+"""
 from copy import deepcopy
 from hashlib import sha256
 from uuid import uuid4
 
 from sqlalchemy import select, update
 
-from app.db.models import CompanyBranding, TradeArtifact, TradeDocument, TradeProposal, utcnow
+from app.db.models import FileAsset, TradeArtifact, TradeDocument, TradeProposal, utcnow
+from app.files.storage import StorageError
 from app.services.locks import user_lock
-from app.trade.settings.repository import resolve_company_seal
+from app.trade.settings.repository import PNG_MAGIC, branding_file_assets, download_verified_image
 from app.trade.common.models import DocumentError
 from app.trade.common.repository import SQLDocuments
 from app.trade.common.results import artifact_view
-from app.trade.review.models import Branding
+from app.trade.review.models import Branding, BrandingFiles
+
+
+def _image_document_error(error: StorageError) -> DocumentError:
+    """Storage 장애와 이미지 손상을 구분해 둘 다 성공으로 돌려주지 않는다(계획 9절)."""
+    code = "IMAGE_CORRUPTED" if error.code == "image_corrupted" else "STORAGE_UNAVAILABLE"
+    return DocumentError(code, error.message, 503)
 
 
 class SQLReviews:
-    def __init__(self, database, user_id, document_type):
+    def __init__(self, database, user_id, document_type, storage=None):
         self.database, self.user_id, self.document_type = database, user_id, document_type
+        self.storage = storage
         self.documents = SQLDocuments(database, user_id, document_type)
 
     def document(self, document_id):
         return self.documents.get(document_id)
 
     def branding(self):
-        seal, error = resolve_company_seal(self.user_id, database=self.database)
-        if seal is None:
-            raise DocumentError("SEAL_REQUIRED", error, 409)
         with self.database.session() as session:
-            row = session.get(CompanyBranding, self.user_id)
-            return Branding(logo=row.logo if row else None, seal=seal)
+            logo_asset, seal_asset = branding_file_assets(session, self.user_id)
+        if seal_asset is None:
+            raise DocumentError("SEAL_REQUIRED", "회사 직인이 업로드되지 않았습니다. 설정에서 직인을 업로드해 주세요.", 409)
+        try:
+            seal = download_verified_image(self.storage, seal_asset)
+            logo = download_verified_image(self.storage, logo_asset) if logo_asset is not None else None
+        except StorageError as error:
+            raise _image_document_error(error) from error
+        if not seal.startswith(PNG_MAGIC):
+            raise DocumentError("SEAL_REQUIRED", "저장된 회사 직인이 PNG 이미지가 아닙니다. 직인을 다시 업로드해 주세요.", 409)
+        return Branding(seal=seal, logo=logo, seal_file_id=seal_asset.id,
+                        logo_file_id=logo_asset.id if logo_asset is not None else None)
+
+    def _proposal_asset(self, session, file_id):
+        """제안이 고정한 이미지 파일. 없거나 타인 소유면 더 읽지 않고 실패시킨다(성공 아님)."""
+        if file_id is None:
+            raise DocumentError("IMAGE_UNAVAILABLE",
+                                "제안이 가리키는 회사 이미지를 찾을 수 없습니다. 관리자에게 문의해 주세요.", 503)
+        asset = session.get(FileAsset, file_id)
+        if asset is None or asset.user_id != self.user_id:
+            raise DocumentError("IMAGE_UNAVAILABLE",
+                                "제안이 가리키는 회사 이미지를 찾을 수 없습니다. 관리자에게 문의해 주세요.", 503)
+        return asset
+
+    def proposal_branding(self, proposal):
+        files = proposal["branding"]
+        try:
+            with self.database.session() as session:
+                seal_asset = self._proposal_asset(session, files.seal_file_id)
+                logo_asset = (self._proposal_asset(session, files.logo_file_id)
+                              if files.logo_file_id is not None else None)
+                seal = download_verified_image(self.storage, seal_asset)
+                logo = download_verified_image(self.storage, logo_asset) if logo_asset is not None else None
+        except StorageError as error:
+            raise _image_document_error(error) from error
+        return Branding(seal=seal, logo=logo, seal_file_id=files.seal_file_id,
+                        logo_file_id=files.logo_file_id)
 
     def _owned(self, session, proposal_id):
         row = session.scalar(select(TradeProposal).join(TradeDocument).where(
@@ -47,7 +91,7 @@ class SQLReviews:
                 "status": row.status, "decision": row.decision,
                 "created_at": row.created_at.isoformat(),
                 "decided_at": row.decided_at.isoformat() if row.decided_at else None,
-                "branding": Branding(logo=row.logo, seal=row.seal),
+                "branding": BrandingFiles(seal_file_id=row.seal_file_id, logo_file_id=row.logo_file_id),
                 "files": [artifact_view(file) for file in files]}
 
     def create(self, document_id, revision, payload, content_hash, branding):
@@ -65,7 +109,8 @@ class SQLReviews:
             ).values(status="superseded", decided_at=utcnow()))
             row = TradeProposal(id=uuid4().hex, user_id=self.user_id, document_id=document_id,
                                 revision=revision, payload=deepcopy(payload), content_hash=content_hash,
-                                status="pending", logo=branding.logo, seal=branding.seal)
+                                status="pending", logo_file_id=branding.logo_file_id,
+                                seal_file_id=branding.seal_file_id)
             session.add(row)
             session.flush()
             return self._view(session, row)

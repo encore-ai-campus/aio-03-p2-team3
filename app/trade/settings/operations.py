@@ -31,11 +31,11 @@ def save_price(command: PriceInput, *, repository: SettingsRepository) -> dict:
     return repository.save_price(values)
 
 
-def save_branding(kind: str, content: bytes, *, repository: SettingsRepository) -> dict:
+def save_branding(kind: str, content: bytes, *, repository: SettingsRepository, storage) -> dict:
     if not content or len(content) > MAX_BRANDING_BYTES:
         raise DocumentError("INVALID_IMAGE_SIZE", "이미지는 2MB 이하의 PNG로 업로드하세요", 413)
     try:
         _read_png_rgb(content)
     except (ValueError, ArithmeticError, IndexError, struct.error, zlib.error) as error:
         raise DocumentError("INVALID_PNG", "지원하는 RGB/RGBA PNG 이미지를 업로드하세요", 422) from error
-    return repository.save_branding(kind, content, sha256(content).hexdigest())
+    return repository.save_branding(kind, content, sha256(content).hexdigest(), storage)
