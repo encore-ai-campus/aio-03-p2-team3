@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "check:env": "node scripts/check-env.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.119.0",
