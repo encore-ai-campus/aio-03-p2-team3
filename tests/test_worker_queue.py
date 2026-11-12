@@ -191,7 +191,11 @@ def test_other_user_cannot_reapprove_a_used_code(web):
 
 
 def test_device_token_has_no_session_gmail_or_download_authority(web):
+    from app.auth.supabase import TokenVerifier
+    from tests.test_supabase_auth import FakeJwks, SUPABASE_URL
+
     client, config, clock = web
+    client.app.state.supabase_auth = TokenVerifier(SUPABASE_URL, fetch_jwks=FakeJwks().serve)
     device, _, _ = pair(web)
     job = enqueue(web)
     assert claim(web, device).status_code == 200

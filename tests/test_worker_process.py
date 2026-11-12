@@ -112,7 +112,8 @@ def system(tmp_path, database_url):
             session.add(ThreadMessage(user_id=1, thread_id="fake-thread", gmail_message_id=f"old-{index}",
                 direction="in", from_addr="sender@example.invalid", to_addrs=["demo@example.invalid"],
                 subject="가상 과거 문의", body_text="가상 과거 내용", sent_at=datetime(2026, 11, 9, index, tzinfo=UTC)))
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("OPENAI_", "LOCAL_OWNER_", "AI_RUNTIME"))}
+    settings_names = {name.upper() for name in Settings.__dataclass_fields__}
+    env = {k: v for k, v in os.environ.items() if k not in settings_names}
     env["SSL_CERT_FILE"] = str(cert)
     with process(["server", "--env", str(envfile), "--port", str(ports[0]), "--cert", str(cert), "--key", str(key)], env), \
          process(["openai", "--port", str(ports[1]), "--cert", str(cert), "--key", str(key)], env), \

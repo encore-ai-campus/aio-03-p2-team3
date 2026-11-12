@@ -1,6 +1,7 @@
 """별도 실제 프로세스 시험 전용. 운영 실행기의 목적지/인증 검증 옵션은 추가하지 않는다."""
 import argparse
 import json
+import os
 import sys
 
 from fastapi import FastAPI, Request
@@ -28,7 +29,12 @@ def serve():
         pc._backend = backend
         raise SystemExit(pc.main([*rest, "--env", args.env]))
     if args.role == "server":
-        from app.config import get_settings
+        from app.config import Settings, get_settings
+        from dotenv import load_dotenv
+        for name in Settings.__dataclass_fields__:
+            os.environ[name.upper()] = ""
+        load_dotenv(args.env, override=True)
+        settings = get_settings(args.env)
         from app.llm import client
         from app.main import create_app
         from tests.fakes.gmail import FakeGmailGoogle
@@ -39,7 +45,7 @@ def serve():
         google = FakeGmailGoogle()
         from tests.fakes.gmail import message
         google.mailbox.raw_messages["fake-message"] = message(body="REFLECT 가상 문의입니다.")
-        app = create_app(get_settings(args.env), google=google, storage=FakeStorage())
+        app = create_app(settings, google=google, storage=FakeStorage())
         @app.get("/test/state")
         def state():
             return {"sends": len(google.mailbox.called("send")), "watches": len(google.called("watch"))}

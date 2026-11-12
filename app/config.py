@@ -45,10 +45,11 @@ _local_listener = ContextVar("local_listener", default=None)
 
 
 @contextmanager
-def local_listener(listener: socket.socket):
+def local_listener(listener: socket.socket | None):
     """전용 실행기가 연 실제 소켓을 보관한다. 환경변수·요청 헤더는 허가가 아니다."""
     # listen 성공으로 수신 소켓임을 보장한다. SO_ACCEPTCONN 조회는 macOS에서 지원하지 않는다.
-    listener.listen(128)
+    if listener is not None:
+        listener.listen(128)
     token = _local_listener.set(listener)
     try:
         yield

@@ -30,6 +30,7 @@ async function applySession(session, setState, signal) {
 
 export function AuthProvider({ children }) {
   const currentRequest = useRef(null)
+  const sessionUser = useRef(null)
   const [state, setState] = useState({
     phase: supabase ? "loading" : "unconfigured",
     me: null,
@@ -40,9 +41,15 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!supabase) return undefined
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!["SIGNED_IN", "INITIAL_SESSION", "TOKEN_REFRESHED", "SIGNED_OUT"].includes(event)) return
       currentRequest.current?.abort()
       const controller = new AbortController()
       currentRequest.current = controller
+      const nextUser = session?.user?.id ?? session?.access_token ?? null
+      if (nextUser !== sessionUser.current) {
+        sessionUser.current = nextUser
+        setState((prev) => ({ ...prev, phase: session ? "loading" : "signed-out", me: null, accessToken: null }))
+      }
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED")) {
         applySession(session, setState, controller.signal)
       } else if (!session && (event === "SIGNED_OUT" || event === "INITIAL_SESSION")) {
