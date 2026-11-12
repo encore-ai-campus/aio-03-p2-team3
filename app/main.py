@@ -27,6 +27,8 @@ from app.trade.settings import router as trade_settings
 from app.web import WEB, templates
 from app.web.deps import LoginRequired
 from app.web.routes import auth, candidates, gmail_push, inbox, pages, quotes, runs, settings as settings_routes
+from app.worker import router as worker_routes, service as worker_service
+from app.worker.protocol import WorkerError
 
 SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
@@ -62,9 +64,26 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
         collector = LocalGmailCollector(app.state.google_access) if config.ai_runtime == "local" else None
         app.state.local_gmail = collector
         task = asyncio.create_task(collector.run()) if collector else None
+        worker_stop = asyncio.Event()
+        async def clean_worker_queue():
+            while not worker_stop.is_set():
+                try:
+                    await asyncio.wait_for(worker_stop.wait(), timeout=5)
+                except TimeoutError:
+                    try:
+                        await asyncio.to_thread(worker_service.cleanup, database)
+                    except Exception as error:
+                        logging.getLogger(__name__).error("장치 큐 정리 실패 (%s)", type(error).__name__)
+
+        if config.ai_runtime == "server":
+            worker_service.cleanup(database)
+        worker_task = asyncio.create_task(clean_worker_queue()) if config.ai_runtime == "server" else None
         try:
             yield
         finally:
+            if worker_task:
+                worker_stop.set()
+                await worker_task  # 정리 스레드가 끝난 다음 DB를 닫는다.
             if collector:
                 collector.stop()
                 await task  # 작업 스레드가 멈춘 다음 DB를 닫는다.
@@ -92,6 +111,7 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     app.include_router(pages.router)
     app.include_router(quotes.router)
     app.include_router(settings_routes.router)
+    app.include_router(worker_routes.router)
     app.include_router(trade_api.router)
     app.include_router(pi_routes.router)
     app.include_router(po_routes.router)
@@ -108,6 +128,12 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     @app.exception_handler(DocumentError)
     def document_error(request: Request, error: DocumentError):
         return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
+
+    @app.exception_handler(WorkerError)
+    def worker_error(request: Request, error: WorkerError):
+        return JSONResponse({"error": {"code": error.code}}, status_code=error.status,
+                            headers={"Cache-Control": "private, no-store", "Retry-After": "5"} if error.status == 429
+                            else {"Cache-Control": "private, no-store"})
 
     @app.get("/healthz")
     def healthz():

@@ -2,6 +2,38 @@
 {% from 'components/button.html' import submit_button %}
 {% block content %}
 <h1>설정</h1>
+{% if not local_mode %}
+<section class="card" id="local-worker"><h2>AI 실행 방식과 개인 장치</h2>
+  <p>현재 방식: <strong>{{ worker.ai_execution_mode }}</strong></p>
+  <p role="status">개인 장치를 연결하고 상태를 확인할 수 있습니다. 개인 PC의 실제 AI 실행은 아직 지원하지 않습니다. 개인 실행 프로그램을 선택하면 AI 요청은 차단되며 서버 저장 키로 자동 전환하지 않습니다.</p>
+  {% if worker_https %}
+  <form method="post" action="/settings/worker/mode" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>실행 방식 <select name="ai_execution_mode">
+      <option value="stored_key"{% if worker.ai_execution_mode == 'stored_key' %} selected{% endif %}>서버에 등록한 본인 키</option>
+      <option value="local_worker"{% if worker.ai_execution_mode == 'local_worker' %} selected{% endif %}>개인 실행 프로그램 (AI 연결 준비 중)</option>
+    </select></label>
+    <p class="muted">방식을 변경하면 기존 장치와 미완료 작업을 취소합니다.</p>
+    {{ submit_button('실행 방식 저장') }}
+  </form>
+  {% if worker.ai_execution_mode == 'local_worker' %}
+  <form method="post" action="/settings/worker/approve" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>연결 코드 <input name="pairing_code" required maxlength="100" autocomplete="off"></label>
+    <label>장치에 표시된 이름 <input name="device_name" required maxlength="80" autocomplete="off"></label>
+    <p class="muted">본인 PC에 표시된 코드와 이름을 확인하세요. 승인 후 새 장치가 토큰을 받을 때 기존 연결은 해제됩니다.</p>
+    {{ submit_button('본인 장치 연결 승인') }}
+  </form>
+  {% endif %}
+  {% else %}<p>장치 연결과 실행 방식 변경은 HTTPS 서버에서 제공합니다.</p>{% endif %}
+  {% for device in worker.devices %}
+  <p>{{ device.name }} — {{ '온라인' if device.status == 'online' else '오프라인' }} · 만료 {{ device.expires_at }}</p>
+  {% if worker_https %}<form method="post" action="/settings/worker/devices/{{ device.device_id }}/disconnect">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">{{ submit_button('장치 연결 해제') }}
+  </form>{% endif %}
+  {% else %}<p>연결된 개인 장치가 없습니다.</p>{% endfor %}
+</section>
+{% endif %}
 <section class="card" id="openai-key"><h2>내 OpenAI API 키</h2>
   {% if local_mode %}
   <p>로컬 .env 키 모드입니다. AI 이용료는 본인 키의 OpenAI 프로젝트에 청구됩니다.</p>
@@ -10,7 +42,7 @@
   {% if local_key_error %}<p role="alert">{{ local_key_error }}</p>{% endif %}
   {% if local_google_sub %}<p>현재 로그인으로 검증된 본인 Google 식별자: <code>{{ local_google_sub }}</code></p>{% endif %}
   <p class="muted">본인 계정인지 확인한 뒤 로컬 .env의 LOCAL_OWNER_GOOGLE_SUB에 위 식별자를 직접 지정하세요. 최초 방문자를 자동 등록하지 않습니다. 키는 OPENAI_API_KEY에 지정하고 앱을 다시 시작하세요. 키와 식별자는 채팅·Issue·PR에 올리지 마세요.</p>
-  <p class="muted">키는 화면에 표시하거나 DB에 저장하지 않습니다. 기존 DB 키는 사용하지 않습니다. 로컬 Gmail 수집과 Render 장치 연결은 아직 지원하지 않습니다.</p>
+  <p class="muted">키는 화면에 표시하거나 DB에 저장하지 않습니다. 기존 DB 키는 사용하지 않습니다. 로컬 Gmail 수집은 앱이 켜져 있을 때 동작하며, Render의 개인 PC AI 실행은 준비 중입니다.</p>
   {% else %}
   <p>AI 기능은 본인이 등록한 키로만 실행하며, 이용료는 해당 키의 OpenAI 프로젝트에 청구됩니다. ChatGPT 구독과는 별도입니다.</p>
   <p><strong>{{ '등록됨' if openai_registered else '미등록 — AI 기능 사용 불가' }}</strong></p>
