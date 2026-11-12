@@ -45,6 +45,11 @@ def test_postgres_reconnection_and_late_completion(pgweb):
     suite.test_rotation_requires_new_approval_revokes_old_credentials_and_jobs(pgweb)
 
 
+def test_postgres_encrypted_delivery_between_connections_and_revocation(pgweb):
+    from tests.test_worker_execution import test_queue_result_is_encrypted_consumed_once_and_rechecked_after_disconnect
+    test_queue_result_is_encrypted_consumed_once_and_rechecked_after_disconnect(pgweb)
+
+
 def test_postgres_existing_user_upgrade_preserves_default_and_data(tmp_path):
     with pgserver.get_server(Path(tmp_path) / "worker-upgrade-pg", cleanup_mode="delete") as server:
         db = Database(server.get_uri())

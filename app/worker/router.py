@@ -176,4 +176,5 @@ async def heartbeat(request: Request, device_id: str, job_id: str):
 async def complete(request: Request, device_id: str, job_id: str):
     limited(request, "complete")
     parsed = await body(request)
-    return response(service.complete(request.app.state.database, device_id, bearer(request), job_id, parsed))
+    return response(service.complete(request.app.state.database, device_id, bearer(request), job_id, parsed,
+                                     cipher=request.app.state.google_access.cipher))

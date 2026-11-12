@@ -33,6 +33,7 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
         local_sub = user.google_sub if local_mode and user and user.last_login_at is not None else None
     local_error = None
     from app.worker.service import status as worker_status
+    from app.worker.adapter import ERRORS
     worker = None if local_mode else worker_status(request.app.state.database, user_id)
     if local_mode:
         try:
@@ -47,6 +48,8 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
                  "openai_storage_ready": request.app.state.google_access.cipher is not None,
                  "csrf_token": csrf_token,
                  "worker": worker, "worker_https": config.app_base_url.startswith("https://"),
+                 "worker_google_sub": user.google_sub if user and user.last_login_at is not None else None,
+                 "worker_errors": {kind: message for kind, (_, message, _) in ERRORS.items()},
                  "key_notice": {"saved": "OpenAI API 키를 저장했습니다. 키의 유효성은 실제 AI 요청 시 확인합니다.",
                                 "deleted": "OpenAI API 키를 삭제했습니다. 이후 AI 요청은 차단됩니다."}.get(
                                     request.query_params.get("key_notice", ""))},

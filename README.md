@@ -56,7 +56,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 ## LLM·외부 API와 키 발급
 
-모든 LLM 호출은 OpenAI Responses API를 사용한다. 공용 서버(기본 `AI_RUNTIME=server`)에서는 각 사용자가 Google 로그인 후 `/settings`의 **내 OpenAI API 키**에서 등록·교체·삭제한다. Gmail 자동 처리(분석·답장·요약·성찰)와 PI·PO·CI·PL AI 추출은 해당 사용자의 DB 키만 쓰며, 키가 없거나 암호문을 읽지 못하면 API 호출 전에 차단한다. 공용 `.env`·Render의 `OPENAI_API_KEY`로 대체하지 않는다. 개인 PC의 전용 로컬 실행에서만 지정 소유자의 `.env` 키를 지원한다. 근거는 `.work/design/api-choice.md`, 실행 계약은 `docs/CONTRACT.md` 6절·11절·`.env.example`이다. Codex 검증은 가짜 응답만 사용한다.
+모든 LLM 호출은 OpenAI Responses API를 사용한다. 공용 서버(기본 `AI_RUNTIME=server`)에서는 각 사용자가 Google 로그인 후 `/settings`의 **내 OpenAI API 키**에서 등록·교체·삭제한다. `stored_key`의 Gmail 자동 처리(분석·답장·요약·성찰)와 PI·PO·CI·PL AI 추출은 해당 사용자의 DB 키만 쓰며, 키가 없거나 암호문을 읽지 못하면 API 호출 전에 차단한다. 공용 `.env`·Render의 `OPENAI_API_KEY`로 대체하지 않는다. 개인 PC의 전용 로컬 앱과 HTTPS 서버에 연결한 개인 실행기는 지정 소유자의 `.env` 키만 사용한다. 근거는 `.work/design/api-choice.md`, 실행 계약은 `docs/CONTRACT.md` 6절·11절·`.env.example`이다. Codex 검증은 가짜 응답만 사용한다.
 
 ### 개인 PC의 .env 키로 실행
 
@@ -79,15 +79,24 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 **현재 구현 범위:** 로컬 키·소유자 제한과 Gmail 연결·새 메일 수집, 서버의 장치 연결·사용자별 작업 큐까지다. 개인 실행 프로그램과 기존 AI 호출 연결은 아직 없다(계획 4절). 실제 키·Google 식별자는 채팅·Codex·Issue·PR·레포에 넣지 않는다.
 
-### HTTPS 서버의 개인 장치 연결과 작업 큐 (준비 단계)
+### 개인 PC AI 실행 — HTTPS 서버와 연결
 
-Google 로그인 후 `/settings`에서 `stored_key`(기존 본인 DB 키) 또는 `local_worker`를 선택한다. **현재 local_worker는 연결/큐 준비 단계이므로 AI 요청을 차단한다.** 서버 저장 키나 공용 환경 키로 자동 전환하지 않는다. 실제 PC 실행 명령은 계획 4절에서 제공한다.
+Google 로그인 후 `/settings`에서 `stored_key`(기존 본인 DB 키) 또는 `local_worker`(개인 PC 키)를 선택한다. `local_worker`는 서버 저장 키나 공용 환경 키로 자동 전환하지 않는다. 메일 분석·답장·거래 추출·요약·성찰과 PI/PO/CI/PL AI 추출을 PC에서 실행한다. 수동 문서 작성·검토·파일 발급과 메일의 사용자 승인 후 발송은 유지한다.
+
+1. 본인 PC의 macOS/Linux/WSL에 Python 3.12·uv와 같은 버전의 저장소를 준비하고 `uv sync`한다. 장치 토큰 파일의 소유자/600 권한을 검증하므로 네이티브 Windows는 `private_file_permissions_required`로 중단하며 WSL 내부 개인 경로를 사용한다. 개인 `.env`에 `OPENAI_API_KEY`, `LOCAL_OWNER_GOOGLE_SUB`(본인 로그인으로 검증된 서버 `/settings` 식별자), 선택 모델 `OPENAI_MODEL`을 지정한다. 키를 Render·채팅·Issue에 넣지 않는다. 실행기는 지정한 `.env` 파일만 읽으며 파일을 올리지 않는다.
+2. 본인 서버 설정에서 `local_worker`를 선택한다. PC에서 `uv run python -m app.worker.pc pair --service https://<본인-서비스> --name "내 PC"`를 실행하고, 표시된 서비스 주소·장치 이름·일회용 코드를 본인 Google 계정의 서버 화면과 대조해 승인한다. 연결 계정의 검증 식별자가 로컬 설정과 다르면 중단한다.
+3. `uv run python -m app.worker.pc run --service https://<본인-서비스> --max-output-tokens 2048 --requests-per-minute 10 --max-concurrency 1`로 시작한다. `--env`와 `--credentials`로 개인 파일 위치를 지정할 수 있다. 기본 `.worker-device.json`은 커밋 제외·사용자 전용(600)이며 토큰을 출력하지 않는다. 기존 파일을 덮지 않으므로 재연결 때 본인이 기존 파일을 삭제하거나 새 파일 경로를 선택한다.
+4. **PC와 프로그램을 켜 두어야 AI가 동작한다.** 브라우저를 닫아도 실행기는 계속된다. 중지는 `Ctrl+C`, 연결 해제는 서버 `/settings`에서 한다. 이미 OpenAI에 전송한 요청의 취소는 보장하지 않지만 해제 후 결과는 거부한다. 키 교체·삭제는 개인 `.env` 수정 후 실행기를 중지하고 재시작한다. 모드 변경·장치 교체는 미완료 작업을 취소하고 재승인을 요구한다.
+
+모델은 PC `OPENAI_MODEL`과 서버 모델이 같아야 하며 임의 모델로 대체하지 않는다. 출력 토큰(기본 2048, 최대 32768), 호출 빈도(기본 분당 10회, 최대 60회), 동시 작업 1개는 PC가 강제한다. 서버는 이 상한·OpenAI URL·헤더를 작업으로 지정하지 못한다. 인증서 검증과 환경의 프록시·CA 신뢰를 유지하며, 인증서 검사 해제나 리다이렉트는 제공하지 않는다. 서버는 여전히 Gmail 메일·스레드·프롬프트 변수·AI 결과·문서를 본다. 이 방식은 OpenAI 키만 PC에 두며 메일을 서버로부터 숨기는 방식은 아니다.
+
+문제 해결: `WORKER_UNAVAILABLE`은 PC 오프라인/해제이므로 실행·연결을 확인한다. `WORKER_TIMEOUT`은 PC 종료·임대/전체 기한 초과이므로 상태를 확인한 뒤 새 요청을 시작한다. `WORKER_VERSION_MISMATCH`는 동일 코드 버전·모델로 갱신하고 재연결한다. `WORKER_KEY_REQUIRED`는 `.env` 키 누락 또는 OpenAI 401/403이므로 키·결제·권한을 확인하고 재시작한다. `WORKER_OWNER_MISMATCH`는 본인 식별자와 연결 계정을 확인한다. `WORKER_RATE_LIMIT`은 OpenAI 429 또는 PC 상한이므로 기다린다. `WORKER_NETWORK`는 OpenAI 연결/503 재시도 소진이다. 프로그램의 안전한 `unauthorized`/`expired` 중단은 해제·토큰 30일 만료를 확인하고 다시 연결한다. 실패한 메일은 자동 재처리하거나 발송하지 않는다.
 
 서버 프로토콜 시험은 `GET /api/worker/protocol`의 설치 정의·모델을 확인한 뒤 `POST /api/worker/pairings`로 이름과 지원 정의를 보내 시작한다. PC에 전달된 연결 코드와 이름을 본인 서버 화면에서 확인·승인하면 PC가 secret으로 조회해 장치 토큰을 한 번 받는다. 코드는 10분·1회, 토큰은 30일이며 서버에는 해시만 남긴다. 화면에는 온라인/오프라인·만료와 해제 기능을 제공한다. 재연결/교체는 새 승인으로 진행하고 기존 장치·미완료 작업을 취소한다.
 
 PC는 outbound HTTPS로 본인 작업을 claim/heartbeat/complete하며 수신 포트나 터널이 필요 없다. 큐는 설치된 구조화 AI 요청만 받으며 장치 토큰에는 메일 승인·발송·파일 권한이 없다. OpenAI 키 입력 필드는 장치 API와 DB에 추가하지 않는다. 임대 만료만으로 이미 전송됐을 수 있는 요청을 자동 재배포하지 않으며 외부 API의 exactly-once를 보장하지 않는다. 세부 경로·한도·오류는 `docs/CONTRACT.md` 6절이다.
 
-새 DB 마이그레이션은 기존 사용자·키·메일·승인을 보존한다. 운영 DB 백업 뒤 배포하며 Google OAuth·토큰 암호화 키·공용 Pub/Sub 설정은 유지한다. 검증은 `uv run pytest tests/test_worker_queue.py`와 실제 임시 PostgreSQL을 쓰는 `uv run --with pgserver==0.1.4 pytest tests/test_worker_postgres.py`로 한다. 실제 PC·OpenAI·Render 확인은 계획 4·5절에서 수행한다.
+DB 마이그레이션은 기존 사용자·키·메일·승인을 보존한다. 운영 DB 백업 뒤 배포하며 Google OAuth·토큰 암호화 키·공용 Pub/Sub 설정은 유지한다. 전송 변수는 완료 때 삭제하며 검증 결과는 호출자에게 전달할 때까지만 암호화해 보관한다(소비·해제·원래 120초 기한에 삭제). 검증은 `uv run pytest tests/test_worker_execution.py tests/test_worker_process.py tests/test_worker_queue.py`와 임시 PostgreSQL의 `uv run --with pgserver==0.1.4 pytest tests/test_worker_postgres.py`로 한다. 실제 키·Gmail·Render 확인은 사람이 계획 5절에서 수행한다. 전용 로컬 앱 방식은 위의 `uv run python -m app.local` 설치·시작·중지 안내를 따른다.
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|

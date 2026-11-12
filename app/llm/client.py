@@ -25,6 +25,7 @@ from app.runlog.logger import current_event
 
 _override = ContextVar("llm_backend", default=None)
 _user_key = ContextVar("llm_user_key", default=None)
+_worker_call = ContextVar("llm_worker_call", default=None)
 # 무역 추출에서 사용하던 기본 모델을 모든 LLM 호출에 사용한다. OPENAI_MODEL로 덮어쓴다.
 DEFAULT_MODEL = "gpt-6-luna"
 RESPONSES_DEFAULT_MODEL = DEFAULT_MODEL
@@ -121,6 +122,21 @@ def use_backend(fake):
         _override.reset(token)
 
 
+@contextmanager
+def use_worker_call(callback):
+    token = _worker_call.set(callback)
+    try:
+        yield
+    finally:
+        _worker_call.reset(token)
+
+
+def require_completed_ai():
+    """실패한 PC 호출이 성찰의 대체 경로를 통해 후보로 저장되지 않게 한다."""
+    if _worker_call.get() is not None and _override.get() is None:
+        _worker_call.get().guard()
+
+
 def _http_code(error: Exception):
     if isinstance(error, httpx.HTTPStatusError):
         return error.response.status_code
@@ -172,6 +188,8 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict,
     `backend`는 백엔드 인스턴스, `backend_factory`는 인자 없는 팩토리. 팩토리는 앞선
     둘이 없을 때만 부른다(가짜 주입 테스트에서 키 없는 팩토리가 먼저 실패하는 일이
     없게 한다)."""
+    if _worker_call.get() is not None and _override.get() is None and backend is None:
+        return _worker_call.get()(prompt, schema, variables)
     started = perf_counter()
     attempts = 0
     counts = {"network": 0, "invalid_output": 0}

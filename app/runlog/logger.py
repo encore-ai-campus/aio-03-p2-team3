@@ -53,6 +53,11 @@ def current_event(event: str, **kwargs):
         log_event(run_id, event, **kwargs)
 
 
+def current_run_id() -> str | None:
+    """큐 작업도 현재 메일 실행의 추적 ID를 사용한다. 독립 추출은 별도 UUID를 만든다."""
+    return _run_id.get()
+
+
 def traced_node(name: str):
     def decorate(function):
         @wraps(function)

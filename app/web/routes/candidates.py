@@ -59,7 +59,9 @@ def thread_view(database, user_id: int, thread_id: str) -> list[dict] | None:
     if not messages and not candidates and not processed:
         return None
     taken = {c.source_message_id for c in candidates if c.status in TAKEN}
+    from app.web.routes.inbox import worker_notice
     by_source = {p.gmail_message_id: {"status": p.status, "run_id": p.run_id, "candidates": [],
+                                    "worker_notice": worker_notice(p.notice),
                                     "key_required": p.notice == "openai_key_required"} for p in processed}
     for c in candidates:
         label, tone = CANDIDATE_STATUS.get(c.status, (c.status, "muted"))

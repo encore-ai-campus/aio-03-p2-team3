@@ -122,7 +122,7 @@ tests/
 | `reflection_retries_by_type` | 오류 유형별 성찰 재실행 횟수 | `dict[str,int]` | `{}` | `reflect` | `reflect` |
 | `errors` | 오류 기록(쌓기) | `list[AgentError]` | `[]` | `finish_failed`, `save_pending`, 실행 기록기 | 모든 노드 |
 | `needs_review` | '확인 필요' 표시(대체 경로로 끝남) | `bool` | `False` | `save_pending`, 화면 | 한도 오류 노드, `reflect`, `start_run` |
-| `notice` | 화면 안내 종류 | `Literal["rate_limit","reflection_limit","openai_key_required"] \| None` | `None` | `save_pending`, 화면 | 한도 오류 노드, `reflect`, `start_run` |
+| `notice` | 화면 안내 종류 | `Literal["rate_limit","reflection_limit","openai_key_required", "worker_unavailable", "worker_timeout", "worker_version_mismatch", "worker_key_required", "worker_owner_mismatch", "worker_rate_limit", "worker_network", "worker_invalid_output", "worker_invalid_input", "worker_failed"] \| None` | `None` | `save_pending`, 화면 | 한도 오류 노드, `reflect`, `start_run` |
 | `end_reason` | 종료 이유(3.3절) | `Literal["awaiting_approval","followup_question","ignored","failed"] \| None` | `None` | `start_run`, 실행 기록 | `analyze_email`(ignored), `save_pending`, `finish_failed` |
 
 - '후보 노드'는 `draft_replies`·`draft_followup`이다. 위 자료 형식(`EmailMessage` 등)은 4.3절에 정의한다. [Claude proposal]
@@ -393,18 +393,21 @@ class AgentError(TypedDict):
 - 로더는 `local`일 때만 `OPENAI_API_KEY`를 Settings에 읽는다. 키·소유자 식별자는 Settings의 repr에서 제외한다. `.env` 변경은 재시작 후 적용한다. `local`과 서버 등록 키 사이의 자동 전환은 없다.
 - 로컬 실행기는 `127.0.0.1`에 실제 소켓을 열고 검증한 소켓 자체를 Uvicorn에 전달한다. 공개 바인딩·리로드·다중 워커 옵션은 제공하지 않는다. 앱 생성과 키 조회 시 현재 실행 범위의 살아 있는 루프백 리스너를 확인한다. 일반 `uvicorn app.main:app` 실행에서는 `local` 설정을 거부한다. `RENDER`·`RENDER_SERVICE_ID`·`RENDER_EXTERNAL_URL`·`PORT` 중 값이 있는 공용 환경에서도 시작을 거부한다. Host·`APP_BASE_URL`은 실행 허가의 근거가 아니며, 허가 후에도 로컬 Host만 허용한다.
 - `LOCAL_OWNER_GOOGLE_SUB`는 본인이 명시한다. 기존 Google OAuth의 서명·발급자·대상 검증을 통과해 저장된 `User.google_sub`와 `last_login_at`을 사용하며, 로그인 사용자 또는 백그라운드 실행의 사용자 행이 지정 식별자와 일치해야 한다. 이메일·요청 user_id·최초 방문자를 소유자 판정에 사용하지 않는다.
-- 최초 설정: 소유자/키가 비어 있어도 전용 로컬 앱과 로그인 화면은 열 수 있다. Google 로그인 후 본인 `/settings`에 표시된 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 로컬 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 `OPENAI_API_KEY`를 채운 뒤 재시작한다. 식별자는 인증된 본인 로컬 화면에만 표시하며 응답은 `private, no-store`다. 서버 설정 화면에는 표시하지 않는다. 실제 계정·키를 채팅·레포에 옮기지 않는다.
+- 최초 설정: 소유자/키가 비어 있어도 전용 로컬 앱과 로그인 화면은 열 수 있다. Google 로그인 후 본인 `/settings`에 표시된 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 로컬 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 `OPENAI_API_KEY`를 채운 뒤 재시작한다. 식별자는 인증된 본인 설정 화면에만 표시하며 응답은 `private, no-store`다. 서버에서도 개인 PC 연결 대상 확인을 위해 본인 설정에서만 제공한다(6.2절). 실제 계정·키를 채팅·레포에 옮기지 않는다.
 - 로컬 설정 화면은 `.env` 키 사용 가능/불가와 안전한 차단 이유만 표시하며 키 원문·해시·앞뒤 문자열·DB 키 등록 폼은 제공하지 않는다. 등록/삭제 POST를 직접 호출해도 `LOCAL_KEY_ENV_ONLY`(409)로 거부한다. 저장된 DB 사용자 키가 있어도 읽지 않는다.
 - 로컬 오류: `LOCAL_OWNER_REQUIRED`(409), `LOCAL_OWNER_MISMATCH`(403, 검증 로그인 없음/다른 사용자/없는 사용자 포함), `LOCAL_KEY_REQUIRED`(409), `LOCAL_RUNTIME_REQUIRED`(409). 문서 API는 해당 코드를 반환한다. 메일은 기존 `openai_key_required` 안내로 실패 종료한다. 키는 AgentState·세션·실행 기록에 넣지 않으며 노드·엣지는 유지한다.
-- 개인 PC Gmail 연결·수집은 계획 2절에서 구현했다(7·9·10절). 서버 장치 연결·작업 큐는 3절에서 구현했다. 개인 실행 프로그램과 기존 AI 호출의 큐 연결은 4절에서 구현한다. 공용 Gmail 감시·Pub/Sub 설정은 유지한다.
+- 개인 PC Gmail 연결·수집은 계획 2절에서 구현했다(7·9·10절). 서버 장치 연결·작업 큐는 3절에서 구현했다. 개인 실행 프로그램과 기존 AI 호출의 큐 연결도 4절에서 구현했다. 공용 Gmail 감시·Pub/Sub 설정은 유지한다.
 
-### 6.2 서버의 사용자별 실행 방식 (3절 구현, AI 연결은 4절)
+### 6.2 서버의 사용자별 실행 방식 (3·4절 구현)
 
-- 서버 사용자 설정의 필드 이름은 `users.ai_execution_mode: stored_key | local_worker`, 기본값은 `stored_key`다. `20261112_worker_queue` 마이그레이션은 기존 사용자·키·메일·승인 데이터를 보존하고 이 열과 장치/작업 표를 추가한다. HTTPS 서버 `/settings`에서 선택·연결 상태 확인·해제를 제공한다. 3절 단계의 `local_worker`는 연결/큐 준비이며 실제 AI 실행은 아직 제공하지 않는다. 기존 AI 요청은 `LOCAL_WORKER_NOT_READY`(409)로 차단하고, 테스트의 명시적 가짜 백엔드 주입은 유지한다.
+- 서버 사용자 설정의 필드 이름은 `users.ai_execution_mode: stored_key | local_worker`, 기본값은 `stored_key`다. `20261112_worker_queue` 마이그레이션은 기존 사용자·키·메일·승인 데이터를 보존하고 이 열과 장치/작업 표를 추가한다. HTTPS 서버 `/settings`에서 선택·연결 상태 확인·해제를 제공한다. `user_openai()` 범위가 `local_worker` 사용자에게만 큐 어댑터를 연결하고, `call_structured()`는 백엔드를 만들기 전에 그 어댑터로 보낸다. 메일 분석·답장·거래/무역 추출·요약·성찰과 네 문서 `/extract`가 동일 경로를 쓴다. 테스트의 명시적 가짜 백엔드 주입은 유지한다.
 - `stored_key`: 사용자 DB 암호문만 선택한다. `local_worker`: 해당 사용자에게 연결·승인된 활성 장치에 구조화 AI 호출만 위임한다. 장치가 없거나 오프라인·만료·인증 오류면 차단하며 DB 키나 서버 환경 키로 대체하지 않는다. 로컬 서비스 전체 실행(`AI_RUNTIME=local`)과 서버 사용자의 `local_worker` 선택은 별개다.
 - 장치 프로그램은 본인 PC의 `.env`에서만 OpenAI 키를 읽고, 연결 계정의 검증된 Google sub가 `LOCAL_OWNER_GOOGLE_SUB`와 일치할 때만 실행한다. 키·Google OAuth 토큰은 서버에 전송하거나 장치 연결 응답에 포함하지 않는다. 서버의 Gmail·문서 저장·승인·발송은 기존 사용자 격리를 그대로 유지한다.
+- `uv run python -m app.worker.pc pair|run --service https://<서비스>`는 명시한 HTTPS 원점만 사용한다. 본인 로그인 `/settings`에서 확인한 검증 식별자를 개인 `.env`에 직접 지정한다(이 화면은 private/no-store). 장치 자격증명은 macOS/Linux/WSL의 개인 경로에서 기본 `.worker-device.json`에 600으로 생성하고 기존 파일/심볼릭 링크를 덮지 않는다. run 때 파일 권한·소유자·원점·만료를 검사한다. 네이티브 Windows는 권한을 검증할 수 없어 `private_file_permissions_required`로 중단하며 WSL 내부 개인 경로를 사용한다. `.env` 키 교체/삭제는 재시작으로 적용하며, PC/프로그램을 켜 두어야 AI가 동작한다. Ctrl+C로 중지하고 서버 화면에서 해제한다.
+- PC가 모델(로컬 `OPENAI_MODEL`), 출력 토큰(기본 2048, 1~32768), 요청 빈도(기본 분당 10, 1~60), 동시 작업(1개)을 강제한다. 서버가 보낸 토큰/URL/헤더 필드는 허용하지 않는다. OpenAI 목적지는 설치 코드의 `https://api.openai.com/v1`이고 SDK 자동 재시도는 0이다. HTTPS 인증서 검증·환경 프록시/CA 신뢰를 유지하며 리다이렉트는 따르지 않는다. 키·장치 토큰이 출력에 포함되면 결과를 버린다.
+- 문서 API 오류 코드는 `WORKER_UNAVAILABLE`(409, 오프라인/해제), `WORKER_TIMEOUT`(504, 종료/임대/전체 기한 초과), `WORKER_VERSION_MISMATCH`(409), `WORKER_KEY_REQUIRED`(409, 키 누락/401/403), `WORKER_OWNER_MISMATCH`(403), `WORKER_RATE_LIMIT`(429), `WORKER_NETWORK`(503), `WORKER_INVALID_OUTPUT`(503), `WORKER_INVALID_INPUT`(409), `WORKER_FAILED`(503)다. 메일은 같은 코드의 소문자를 `notice`에 남겨 화면에서 안내한다. 미완료/거부 결과는 문서로 저장하지 않으며 `save_pending`도 PC 호출 실패를 검사해 후보 저장을 막는다. 수동 문서·파일 발급·승인 후 발송은 유지한다.
 
-### 6.3 장치 연결 인증 (서버 API 구현, PC 프로그램은 4절)
+### 6.3 장치 연결 인증 (3·4절 구현)
 
 - HTTPS 서버를 사용한다. 장치가 연결 요청을 만들면 서버가 32바이트 이상 난수인 `device_secret`과 별도 일회용 `pairing_code`를 발급한다. 연결 유효기간은 10분, 연결 조회는 5초 이상 간격이다. 서버는 비밀값의 해시만 보관하며 코드·토큰 원문을 로그에 남기지 않는다.
 - 본인이 Google 로그인한 서버 화면에서 CSRF 검증 후 pairing code와 장치 이름을 확인하고 승인해야 연결된다. 최초 연결·방문 자동 승인은 없다. 장치는 연결 전에는 작업을 받을 수 없고, 승인 뒤 전달받은 검증 계정 sub와 로컬 소유자 설정을 대조한다.
@@ -425,7 +428,7 @@ class AgentError(TypedDict):
 - 연결 코드는 18바이트 난수, secret/장치 토큰은 각각 32바이트 난수다. DB에는 각각 SHA-256만 저장하며 토큰의 재조회/복구 API가 없다. 교체는 새 코드·본인 승인·새 토큰 전달로만 하며, 새 토큰 발급 트랜잭션에서 기존 장치·미완료 작업을 취소한다. 사용자별 활성 장치 1대는 DB 부분 유니크 인덱스로도 제한한다.
 - 횟수 제한은 DB 고정 시간 창으로 공유한다. 클라이언트 IP별 연결 요청 10분당 6회, 연결 조회 분당 120회(개별 연결은 5초 간격), 프로토콜 조회 분당 60회다. 사용자별 승인 시도 10분당 10회, 모드/해제 분당 20회, 상태 조회 분당 60회, 작업 취소 분당 30회다. 장치 claim/heartbeat/complete는 각각 IP당 분당 120회다. 실패 요청도 별도 트랜잭션에 횟수를 남기며 429를 반환한다. IP 원문은 저장하지 않는다.
 
-### 6.4 구조화 AI 작업 프로토콜 v1 (서버 검증/큐 구현, 실행 어댑터는 4절)
+### 6.4 구조화 AI 작업 프로토콜 v1 (3·4절 구현)
 
 - 작업 종류는 `structured_ai_call` 하나다. 서버·PC 모두 설치된 코드의 동일한 허용 목록을 사용한다. 프롬프트 원문/출력 JSON Schema/실행 코드/셸 명령/임의 URL/임의 HTTP 헤더/도구 실행 명세를 작업으로 받지 않는다. OpenAI 목적지와 인증 헤더는 PC의 공통 SDK 어댑터가 정한다. 모델 출력은 데이터로만 검증하며 도구·승인·발송을 실행하지 않는다.
 - 요청 필드: `protocol_version: 1`, `kind: structured_ai_call`, `job_id`(논리 호출 UUID), `attempt_id`(시도마다 새 UUID), `device_id`, `run_id`(메일 실행 UUID 또는 독립 추출 추적 UUID), `prompt_id`, `prompt_version`, `schema_id`, `schema_version`, `variables`, `requested_model`, `created_at`, `expires_at`(UTC RFC3339). 알 수 없는 필드·버전·ID 조합·중첩 명령은 거부한다. 서버가 생성한 소유자 정보와 작업/시도/장치 ID를 수정할 수 없다.
@@ -450,13 +453,13 @@ class AgentError(TypedDict):
 - PC는 wire 스키마로 검증한 결과만 보내고 서버가 같은 스키마로 다시 검증한다. 독립 문서는 이후 기존 원본 PI/PO/CI/PL 스키마·근거·업무 검증도 거친다. 키/소유자 오류는 기존 `OpenAIKeyError` 계열 안내로, 버전/입력 오류는 `invalid_input`, 오프라인/만료는 `network`로 기존 `LLMResult`에 연결한다. 결과가 저장·승인·발송 권한을 만들지 않는다.
 - 요청의 전체 수명은 생성부터 120초이며 재시도를 포함한 논리 호출 기한이다. claim 대기는 최대 25초, 임대는 30초, heartbeat는 10초 간격이며 원래 `expires_at` 안에서만 연장한다. 장치 무응답 45초면 오프라인이다. SDK 1회 호출 제한은 기존 20초·자동 재시도 0이며 PC는 시도당 한 번만 호출한다. 서버가 기존 network 2회·invalid_output 1회 재시도 예산을 관리하고 새 `attempt_id`를 배정한다(429·키 오류 재시도 없음). 기한이 남지 않으면 재시도하지 않는다.
 - 상태는 `queued → leased → succeeded|failed|expired|cancelled`다. 임대된 장치·현재 attempt만 결과를 확정하는 조건부 갱신을 통과할 수 있다. 중복 완료는 같은 확정 결과만 반환하고, 이전 attempt·다른 사용자/장치·만료/폐기 뒤 늦은 응답은 적용하지 않는다. 임대 만료 때 같은 attempt를 재실행하지 않고 서버 예산 안에서만 새 attempt를 만든다. OpenAI에 이미 전송된 요청 자체의 취소는 보장하지 않는다.
-- 작업 변수·결과는 민감 데이터다. 서버의 본인 작업 저장소와 PC 메모리에서만 처리하고 확정/만료 뒤 전송용 payload를 삭제한다. 서버 재시작 뒤에도 만료 시각을 기준으로 정리한다. 일반 로그·실행 기록에는 식별 ID·허용 버전·모델·크기·시간·안전 오류만 남기며 payload·인증값을 기록하지 않는다. 문서·메일 본문은 기존 사용자별 업무 저장 규칙을 따른다.
+- 작업 변수·결과는 민감 데이터다. 서버의 본인 작업 저장소와 PC 메모리에서만 처리하고 확정/만료 뒤 요청 payload를 삭제한다. 완료와 업무 호출자가 다른 서버 프로세스일 수 있으므로 `20261112_worker_delivery`의 `result_enc`에 검증된 성공 envelope만 기존 토큰 암호화 키로 잠시 보관한다. 본인 호출자가 소비할 때 사용자·장치 활성 상태·attempt·원래 기한을 다시 확인하고 같은 트랜잭션에서 암호문을 삭제한다. 연결 해제/모드 변경과 원래 120초 기한에도 삭제하며, 재시작/주기 정리에서도 처리한다. 이 전달용 암호문은 업무 기록이나 조회 API에 반환하지 않는다. 일반 로그·실행 기록에는 식별 ID·허용 버전·모델·크기·시간·안전 오류만 남기며 payload·인증값을 기록하지 않는다. 문서·메일 본문은 기존 사용자별 업무 저장 규칙을 따른다.
 
 - 서버 구현은 `app/worker/protocol.py`(12개 설치 조합·해시·엄격 검증), `service.py`(DB 상태 전이), `router.py`(HTTPS/권한/CSRF/크기 제한)다. 기존 프롬프트·출력 스키마를 수정하지 않고 참조하며 성공 결과도 같은 스키마로 엄격히 재검증한다. 중첩 모델의 미정의 필드·숫자 대신 문자열을 요구하는 문서 wire 형식도 검사한다.
-- `enqueue(database, user_id, ..., model=...)`는 서버 내부 전용이며 작업 생성 HTTP API는 제공하지 않는다. 온라인인 승인 장치와 설치 조합/모델을 확인하고 서버가 UUID·120초 기한을 만든다. 사용자별 미완료 작업은 32개까지다. 3절은 기존 그래프/문서와 연결하지 않으며 재시도도 자동 배정하지 않는다. 논리 호출 결과 소비·안전한 재시도 예산 연결은 4절에서 구현한다.
+- `enqueue(database, user_id, ..., model=...)`는 서버 내부 전용이며 작업 생성 HTTP API는 제공하지 않는다. 온라인인 승인 장치와 설치 조합/모델을 확인하고 서버가 UUID·120초 기한을 만든다. 사용자별 미완료 작업은 32개까지다. `app/worker/adapter.py`가 트랜잭션 밖에서 결과를 기다리고 기존 network 2회·invalid_output 1회 예산만 관리한다. 재시도는 같은 job ID·원래 생성/만료 시각을 유지하고 새 attempt ID로 조건부 갱신한다. PC는 시도당 한 번만 OpenAI를 호출한다. 임대가 끊긴 시도·429·키 오류는 자동 재시도하지 않으며 전체 기한은 연장하지 않는다.
 - 장치 Bearer API는 `POST /api/worker/devices/{device_id}/claim`(`wait_seconds`: 0~25, 기본 0), `/jobs/{job_id}/heartbeat`(`attempt_id`), `/jobs/{job_id}/complete`(성공/실패 envelope)다. 모두 `device_id`에 속한 토큰을 요구한다. claim은 `job` 또는 `null`을 반환하며 장치당 실행 중 시도는 하나다. `POST /api/ai-execution/jobs/{job_id}/cancel`은 본인 세션+CSRF만 허용한다.
 - 사용자 행 잠금(Postgres와 SQLite의 UPDATE 잠금)과 조건부 UPDATE가 claim/complete/교체/취소를 직렬화한다. 임대 만료는 같은 시도를 재배포하지 않고 `expired`로 끝낸다. 재시작과 서버의 5초 주기 정리에서 만료를 확정하며, 요청은 정리 주기 전에도 기한을 검사한다. 대기 중 DB 세션은 닫혀 있다. 외부 OpenAI 호출·메일 발송의 exactly-once를 보장하지 않는다.
-- 완료 응답은 `status`, `duplicate`만 반환한다. 전송 payload와 성공 결과 원문은 확정 뒤 보존하지 않고 결과 SHA-256만 남겨 동일 완료의 중복 확인에 쓴다. 다른 시도/소유자/장치·변조 결과·취소/만료/폐기 후 결과를 적용하지 않는다. 오류는 `unauthorized`(401), `owner_mismatch`/CSRF(403), `not_found`/`pairing_invalid`(404), 버전/연결 충돌(409), `expired`(410), 크기(413), 출력 스키마(422), `rate_limit`(429) 등 고정 코드이며 입력값·예외 원문을 반환하지 않는다.
+- 완료 응답은 `status`, `duplicate`만 반환한다. 요청 payload와 성공 결과 평문은 확정 뒤 보존하지 않는다. 위 전달용 암호문은 소비/해제/기한에 삭제하고 결과 SHA-256만 남겨 동일 완료의 중복 확인에 쓴다. 다른 시도/소유자/장치·변조 결과·취소/만료/폐기 후 결과를 적용하지 않는다. 오류는 `unauthorized`(401), `owner_mismatch`/CSRF(403), `not_found`/`pairing_invalid`(404), 버전/연결 충돌(409), `expired`(410), 크기(413), 출력 스키마(422), `rate_limit`(429) 등 고정 코드이며 입력값·예외 원문을 반환하지 않는다.
 
 ## 7. DB 표 (Render Postgres, `app/db/models.py`)
 - `DATABASE_URL`로 연결하고, 테스트는 SQLite(메모리)로 같은 표를 만든다. 시각은 UTC로 저장한다. JSON 열은 Postgres `JSONB`, SQLite `JSON`. 모든 조회는 `user_id`로 거른다(본인 데이터만). [Request · Claude proposal]
@@ -468,7 +471,7 @@ class AgentError(TypedDict):
 | `user_openai_keys` | 사용자별 AI 키 | `user_id` PK/FK · `api_key_enc`(Fernet 암호문) · `updated_at` | 사용자별 키 |
 | `worker_pairings` | 10분 단일 사용 연결 | UUID PK · secret/code SHA-256 · 장치 이름·지원 정의 · 승인 사용자/시각 · 최종 조회/소비/만료 시각 | local-openai-execution 3 |
 | `worker_devices` | 사용자별 개인 장치 | UUID PK · `user_id` · 이름 · token SHA-256 · 권한/지원 정의 · 생성/최근 응답/30일 만료/폐기 시각 · 사용자별 미폐기 행 유일 | local-openai-execution 3 |
-| `worker_jobs` | 구조화 AI 시도 | 작업 UUID PK · 고유 `attempt_id` · `user_id`/`device_id`/`run_id` · 상태 · schema ID/버전 · 전송 payload · 결과 해시/안전 오류 · 생성/기한/임대/heartbeat/종료 시각 | local-openai-execution 3 |
+| `worker_jobs` | 구조화 AI 시도 | 작업 UUID PK · 고유 `attempt_id` · `user_id`/`device_id`/`run_id` · 상태 · schema ID/버전 · 전송 payload · 소비 전 전달용 `result_enc`(암호문, 6.4절) · 결과 해시/안전 오류 · 생성/기한/임대/heartbeat/종료 시각 | local-openai-execution 3·4 |
 | `worker_rate_limits` | 여러 프로세스의 횟수 제한 | 해시 식별자+시간 창 PK · 횟수·정리 시각. 원문 IP/인증값 없음 | local-openai-execution 3 |
 | `google_tokens` | 암호화한 Google 토큰 | `user_id` PK·FK · `refresh_token_enc` · `access_token_enc` · `expires_at` · `scopes` · `updated_at` | 6, 7, 9 |
 | `gmail_watches` | 감시 등록 | `user_id` PK·FK · `topic` · `history_id`(마지막 처리 historyId) · `expiration` · `last_renewed_at` · `status`(`active`/`stopped`/`error`) · `last_error` | 6, 7 |

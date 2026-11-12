@@ -7,9 +7,11 @@ from app.db.models import ReplyCandidate as ReplyCandidateRow
 from app.graph.state import AgentState
 from app.runlog.logger import current_database
 from app.services.memory import save_run_memory
+from app.llm.client import require_completed_ai
 
 
 def save_pending(state: AgentState) -> dict:
+    require_completed_ai()
     quote = state["quote_draft"]
     trade = state["trade_doc_draft"]
     end_reason = "followup_question" if state["reply_mode"] == "followup" else "awaiting_approval"
