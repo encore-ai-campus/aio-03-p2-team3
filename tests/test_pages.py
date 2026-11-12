@@ -14,9 +14,9 @@ from app.web.routes.pages import APP_NAME
     ]),
     ("/terms", "서비스 약관", ["수업 과제", "테스트용 Gmail", "실제 업무", "실제 개인정보", "보증 없이", "중단될 수"]),
 ])
-def test_public_pages_open_without_login(path, heading, required_text):
+def test_public_pages_open_without_login(database_url, path, heading, required_text):
     # OAuth·LLM 키나 로그인 쿠키가 없어도 리디렉션 없이 읽을 수 있어야 한다.
-    with TestClient(create_app(Settings(database_url="sqlite://"))) as client:
+    with TestClient(create_app(Settings(database_url=database_url))) as client:
         page = client.get(path, follow_redirects=False)
         assert page.status_code == 200
         assert page.headers["content-type"].startswith("text/html")
@@ -30,8 +30,8 @@ def test_public_pages_open_without_login(path, heading, required_text):
     ("/about", ["/privacy", "/terms", "/login"]),
     ("/login", ["/about", "/privacy", "/terms"]),
 ])
-def test_public_links_in_page_content(path, links):
-    with TestClient(create_app(Settings(database_url="sqlite://"))) as client:
+def test_public_links_in_page_content(database_url, path, links):
+    with TestClient(create_app(Settings(database_url=database_url))) as client:
         page = client.get(path, follow_redirects=False)
         assert page.status_code == 200
         # 공통 푸터 링크만으로 통과하지 않게 각 화면의 본문을 확인한다.

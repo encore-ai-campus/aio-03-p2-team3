@@ -1,4 +1,8 @@
-"""기존 DB와 기존 서비스 경로에서 재현된 갱신·가격·발송 회귀를 확인한다."""
+"""기존 DB와 기존 서비스 경로에서 재현된 갱신·가격·발송 회귀를 확인한다.
+
+첫 검사는 역사적 SQLite 이관 경로 확인이다(3절: 한시적으로 별도 분류, PostgreSQL 대응은
+tests/test_trade_postgres.py). 나머지는 conftest의 PostgreSQL fixture로 돈다.
+"""
 from unittest.mock import patch
 
 import pytest

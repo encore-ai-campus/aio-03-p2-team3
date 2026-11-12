@@ -52,6 +52,19 @@ jobs:
     name: tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # 테스트 DB는 전부 PostgreSQL이다(3절). service 컨테이너를 띄워 TEST_DATABASE_URL로 쓴다.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -63,3 +76,5 @@ jobs:
 
       - name: 테스트
         run: uv run pytest
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres

@@ -119,12 +119,13 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-11 · OpenAI 전환 회귀·SDK 모의 HTTP 검증·PDF 이미지 재사용
+마지막 갱신: 2026-11-12 · 테스트 DB PostgreSQL 전환(3절)
 
 - 전체 OpenAI 전환 검증(2026-11-11): `uv run pytest -q`는 **639 passed·1 skipped**(pgserver 미설치로 선택 PostgreSQL 모듈 제외), `python3 .work/check.py`는 경고 0개로 통과했다. 실제 LangChain·OpenAI SDK와 `httpx.MockTransport`로 운영 출력 스키마 12개(메일 분석·답장·재질문·거래 추출·무역 추출·요약·성찰·독립 4종 문서), `/v1/responses` 요청, 429/401 무재시도·503 최대 3회, 잘못된 JSON/스키마 재시도·복구, 실제 평가 호출 경로의 공통 어댑터 사용을 검증했다. 최신 main의 PDF 이미지 재사용 변경을 합친 뒤 Google 로그인·승인·PDF·사용자 격리 회귀도 통과했다. 실제 OpenAI/Gmail·Render·운영 DB는 호출하지 않았다.
 
 - PI 독립 API 검증(2026-11-11): 전체 573 passed·1 skipped, 별도 실제 임시 PostgreSQL 2 passed. 세션/CSRF·소유자 격리·검토/승인/취소/수정·불변 파일·동시 승인·재접속 복구를 확인했다. 실제 Gemini/Gmail·운영 DB는 호출하지 않았다.
-- `tests/test_trade_upgrade.py`가 기존 국내 견적 SQLite 스키마에서 데이터 보존 갱신·반복 실행·부분 유니크 제약, 통화/상품 수정 후 가격 재검증, 오래된 버전·서버 필드 수정 거부, PDF 준비 뒤 버전 변경·발송 중 수정 차단을 확인한다. `tests/test_trade_postgres.py`는 임시 PostgreSQL 서버로 같은 갱신의 실제 동작을 확인한다(`uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py`, 운영 DB/실제 API 사용 없음).
+- `tests/test_trade_upgrade.py`가 기존 국내 견적 SQLite 스키마에서 데이터 보존 갱신·반복 실행·부분 유니크 제약, 통화/상품 수정 후 가격 재검증, 오래된 버전·서버 필드 수정 거부, PDF 준비 뒤 버전 변경·발송 중 수정 차단을 확인한다(첫 검사는 역사적 SQLite 이관 경로 확인으로 한시적으로 남김). `tests/test_trade_postgres.py`는 같은 갱신의 PostgreSQL 실제 동작을 확인한다.
+- 테스트 DB PostgreSQL 전환(3절, 2026-11-12): `pgserver==0.1.4`를 개발 의존성에 추가해 `uv run pytest`만으로 전체 회귀가 실제 PostgreSQL에서 돈다(**642 passed·0 skipped**, 로컬 `.env`에 실제 OpenAI 키가 있어도 통과). `tests/conftest.py`가 세션마다 임베디드 PostgreSQL 하나를 띄우고 테스트별로 DB를 만들어 지우며(`TEST_DATABASE_URL`이 있으면 그 접속 사용), 산재한 `sqlite://` fixture·인라인 설정을 이 접속으로 바꿨다. 실제 LLM 키는 세션 시작에 환경에서 비워 스며들지 않게 하고, `test_blank_nodes_do_not_claim_success`는 명시적 가짜 실패 응답으로 환경과 무관하게 검증한다. 사용자 격리·UTC·JSONB·유일 제약·조건부 갱신 검사 의미는 그대로다. CI `tests` 작업은 `postgres:16` service 컨테이너를 쓴다.
 - `tests/test_pi_domain.py`는 메모리 저장소로 PI의 독립 작성·수량 0·직접/가짜 AI의 동일 계산·기준 버전·회사 스냅숏을 확인하고, SQL 구현의 사용자/종류 격리와 실제 LangChain 호출 진입점의 가짜 모델·근거 검증을 확인한다.
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
@@ -193,7 +194,7 @@
 - 설계 결정·오류 사례·수정 이유·버전·재실행 결과는 Issue, PR('오류·재실행 기록' 칸), 팀 노션에도 남긴다.
 
 ## 9. 레포 세팅·작업 방식
-마지막 갱신: 2026-11-10
+마지막 갱신: 2026-11-12 · CI tests 작업 PostgreSQL service 컨테이너(3절)
 
 - 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜 둠). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
 - [공통] 파일은 두 레포에서 같게 둔다(읽음 확인 코드 줄만 다름). 이 레포의 고유 값(레포 주소 등)은 [공통] 파일에 쓰지 않고 `.work/TASK.md`에서 가리킨다(RULES 2절 4번의 Issue 주소가 그 예).
@@ -206,4 +207,4 @@
 - 담당(2026-11-10): 공통 기반(공통 계약, 서버·DB·배포, Google 로그인·Gmail 알림 수신)과 검토 기능은 김민성, 캘린더 연결 기능은 정원철, 이미지→견적서 기능은 임석원. 김진혁은 Assignees가 비어 있는 Issue에서 배정받는다. 담당은 Issue Assignees로 보고, 프로젝트를 마친 뒤 PR 내역으로 README에 정리한다(`.work/TASK.md`). [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다. 자세한 것은 README '실행 방법'.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
-- CI: `.github/workflows/rules-check.yml`. PR과 `main` 변경마다 `rules-check`(규칙 검사, 파일 지도에 없는 파일도 오류)와 `tests`(`uv sync --locked` 뒤 `uv run pytest`)가 따로 돈다. `uv.lock`이 `pyproject.toml`과 어긋나면 `tests`가 실패한다. PR에서는(본문을 고쳐도) `pr-check`도 돌아 PR 본문 '읽은 파일' 칸의 읽음 확인 코드(RULES.md·TASK.md·이 문서)와 '최신 흐름 갱신' 칸(이 문서를 안 고쳤으면 `해당 없음 — 이유`)을 본다.
+- CI: `.github/workflows/rules-check.yml`. PR과 `main` 변경마다 `rules-check`(규칙 검사, 파일 지도에 없는 파일도 오류)와 `tests`(`uv sync --locked` 뒤 `uv run pytest`, `postgres:16` service 컨테이너를 `TEST_DATABASE_URL`로 사용)가 따로 돈다. `uv.lock`이 `pyproject.toml`과 어긋나면 `tests`가 실패한다. PR에서는(본문을 고쳐도) `pr-check`도 돌아 PR 본문 '읽은 파일' 칸의 읽음 확인 코드(RULES.md·TASK.md·이 문서)와 '최신 흐름 갱신' 칸(이 문서를 안 고쳤으면 `해당 없음 — 이유`)을 본다.

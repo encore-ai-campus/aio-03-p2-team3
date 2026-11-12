@@ -6,7 +6,7 @@ from app.config import Settings
 from app.main import create_app
 
 
-def test_health_home_and_local_assets(monkeypatch):
+def test_health_home_and_local_assets(monkeypatch, database_url):
     from app import main
     from app.db.engine import get_database
 
@@ -16,7 +16,7 @@ def test_health_home_and_local_assets(monkeypatch):
         graph_builds.append(True)
         return original()
     monkeypatch.setattr(main, "get_graph", count_graph_build)
-    app = create_app(Settings(database_url="sqlite://"))
+    app = create_app(Settings(database_url=database_url))
     with TestClient(app) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
         home = client.get("/")
@@ -27,7 +27,7 @@ def test_health_home_and_local_assets(monkeypatch):
             assert client.get(f"/static/{path}").status_code == 200
         assert 'https://' not in home.text
         assert graph_builds == [True]
-        assert get_database(Settings(database_url="sqlite://")) is app.state.database
+        assert get_database(Settings(database_url=database_url)) is app.state.database
         assert app.state.llm is None
 
 
@@ -39,10 +39,10 @@ def test_every_template_compiles():
         templates.get_template(name)
 
 
-def test_app_initializes_llm_from_openai_settings(monkeypatch):
+def test_app_initializes_llm_from_openai_settings(monkeypatch, database_url):
     from app import main
 
-    settings = Settings(database_url="sqlite://", openai_api_key="fake-openai-key", openai_model="gpt-fake")
+    settings = Settings(database_url=database_url, openai_api_key="fake-openai-key", openai_model="gpt-fake")
     received = []
     sentinel = object()
 

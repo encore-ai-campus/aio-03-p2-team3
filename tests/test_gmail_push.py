@@ -37,9 +37,9 @@ def no_real_llm(monkeypatch):
 
 
 @pytest.fixture
-def settings():
+def settings(database_url):
     return Settings(
-        database_url="sqlite://", token_encryption_key=Fernet.generate_key().decode(),
+        database_url=database_url, token_encryption_key=Fernet.generate_key().decode(),
         session_secret="fake-session-secret", gmail_pubsub_topic="projects/fake/topics/fake",
         pubsub_push_token="fake-push-token",
     )
@@ -136,9 +136,9 @@ def test_repeated_notification_and_same_message_in_later_history_run_once(access
     assert watch(access).history_id == "1002"
 
 
-def test_overlapping_notifications_are_serialized(access, graph, tmp_path):
-    # 파일 DB는 서로 다른 작업 스레드에서도 독립 연결을 사용한다.
-    database = Database(f"sqlite:///{tmp_path}/push.sqlite3")
+def test_overlapping_notifications_are_serialized(access, graph, database_url):
+    # 서로 다른 엔진·연결에서도 DB 잠금으로 중복 처리가 직렬화된다.
+    database = Database(database_url)
     database.create_tables()
     access = replace(access, database=database, google=FakeGmailGoogle())
     setup_user(access)

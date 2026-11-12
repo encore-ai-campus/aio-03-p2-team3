@@ -185,7 +185,9 @@ def test_llm_error_kind_controls_graph_exit(database, email, monkeypatch, failur
 
 
 def test_blank_nodes_do_not_claim_success(database, email):
-    assert run(database, email)["end_reason"] == "failed"
+    # 실제 키가 있어도 외부 호출 없이 실패가 전파되는지만 본다(환경과 무관한 검증).
+    with client.use_backend(FakeLLM([openai_error(400)])):
+        assert run(database, email)["end_reason"] == "failed"
 
 
 def test_unknown_user_is_rejected_without_run(database, email):

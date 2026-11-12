@@ -29,9 +29,9 @@ TOPIC = "projects/fake-project/topics/fake-topic"
 
 
 @pytest.fixture
-def settings():
+def settings(database_url):
     return Settings(
-        database_url="sqlite://",
+        database_url=database_url,
         google_oauth_client_id="fake-client.apps.example.invalid",
         google_oauth_client_secret="fake-secret",
         google_oauth_redirect_uri="http://testserver/auth/google/callback",
@@ -344,8 +344,8 @@ def test_unreadable_token_is_treated_as_expired(client):
     assert watch_of(client).last_error == "token_expired"
 
 
-def test_login_disabled_until_settings_exist(fake):
-    with TestClient(create_app(Settings(database_url="sqlite://", token_encryption_key="bad"), google=fake)) as client:
+def test_login_disabled_until_settings_exist(fake, database_url):
+    with TestClient(create_app(Settings(database_url=database_url, token_encryption_key="bad"), google=fake)) as client:
         page = client.get("/login")
         assert "GOOGLE_OAUTH_CLIENT_ID" in page.text and "TOKEN_ENCRYPTION_KEY(형식 오류)" in page.text
         assert "disabled" in page.text

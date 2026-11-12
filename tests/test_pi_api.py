@@ -41,8 +41,8 @@ def configured_client(database_url):
 
 
 @pytest.fixture
-def pi_client(tmp_path):
-    with configured_client(f"sqlite:///{tmp_path / 'api.sqlite3'}") as client:
+def pi_client(database_url):
+    with configured_client(database_url) as client:
         yield client
 
 
@@ -261,8 +261,8 @@ def test_unsupported_images_and_missing_csrf_are_rejected(pi_client):
         "image": ("large.png", b"x" * (2 * 1024 * 1024 + 1), "image/png")}).status_code == 413
 
 
-def test_react_cors_and_cookie_configuration(tmp_path):
-    settings = Settings(database_url=f"sqlite:///{tmp_path / 'cors.sqlite3'}", session_secret="fake-session",
+def test_react_cors_and_cookie_configuration(database_url):
+    settings = Settings(database_url=database_url, session_secret="fake-session",
                         frontend_origins="https://frontend.example", app_base_url="https://api.example",
                         session_same_site="none")
     app = create_app(settings)

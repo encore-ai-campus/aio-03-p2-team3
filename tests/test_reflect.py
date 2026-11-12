@@ -226,8 +226,8 @@ def test_switch_priority_option_then_user_then_env(database, email, monkeypatch)
         assert session.get(User, 2).reflection_enabled is True
 
 
-def test_settings_toggle_updates_user_switch(tmp_path):
-    app = create_app(Settings(database_url=f"sqlite:///{tmp_path}/reflect.sqlite3", session_secret="fake-session"))
+def test_settings_toggle_updates_user_switch(database_url):
+    app = create_app(Settings(database_url=database_url, session_secret="fake-session"))
     app.dependency_overrides[current_user_id] = lambda: 1
     with TestClient(app) as web:
         db = app.state.database
