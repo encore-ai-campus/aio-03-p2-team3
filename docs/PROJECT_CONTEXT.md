@@ -83,7 +83,9 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-12 · 개인 PC 실행기·기존 구조화 호출 큐 어댑터
+마지막 갱신: 2026-11-12 · Windows 네이티브 실행·개인 장치 자격증명
+
+- #156 후속 Windows 수정: `app/worker/credentials.py`가 Windows 현재 사용자의 DPAPI와 사용자 전용 보호 DACL로 장치 자격증명을 저장/검증한다. WSL 없이 PowerShell에서 같은 pair/run 명령을 사용한다. 읽을 때 소유자·DACL·일반 파일을 같은 핸들로 검사하고 평문/손상·reparse point·다른 사용자 접근을 거부한다. macOS/Linux의 소유자·600 권한 검증은 유지한다. 본인 Google sub·서비스·만료 확인, 개인 .env 키만 사용, 서버 키 대체 금지·Gmail 설정·큐 API·DB 스키마는 유지한다.
 
 - `app/worker/`는 서버의 설치 정의 12개·해시·모델 일치, 256 KiB 요청/결과, 엄격한 출력 스키마, 소유자/장치/시도 검증을 담당한다. `worker_pairings`·`worker_devices`·`worker_jobs`·`worker_rate_limits`와 `users.ai_execution_mode`를 데이터 보존 마이그레이션으로 추가했다. 작업은 내부 `enqueue()`만 생성하고 외부 장치는 claim/heartbeat/complete만 할 수 있다. 사용자 행 잠금과 조건부 UPDATE로 단일 임대/완료를 확정하고 만료 임대는 자동 재배포하지 않는다. 확정/취소/만료 뒤 payload를 지우고 재시작/5초 주기 정리를 한다. 장치 토큰에는 Gmail/세션/파일 권한이 없다. 4절에서 `pc.py`의 개인 실행기와 `adapter.py`의 서버 큐 연결을 구현했다. PC는 명시한 HTTPS 원점·본인 Google sub·동일 설치 정의/모델만 허용하고 .env 키·출력 토큰·호출 빈도·동시 1개를 강제한다. 서버가 120초 전체 기한과 기존 재시도 예산을 관리한다. 완료 결과는 기존 토큰 암호화 키로 임시 전달한 뒤 소비/해제/기한에 지우며, 여러 DB 연결·서버 프로세스 사이에서도 전달한다.
 
@@ -136,7 +138,9 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-12 · 개인 PC 종단 간 실행·오류·브라우저 검증
+마지막 갱신: 2026-11-12 · Windows DPAPI/DACL·HTTPS 실행 검증
+
+- Windows 후속 수정의 로컬 전체 회귀는 `uv run pytest` **828 passed·4 skipped**(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개)이며 규칙 검사 경고 0개다. 자격증명은 실제 OS 저장소의 별도 프로세스 읽기·소유자/서비스·만료·덮어쓰기/링크·크기 제한을 시험한다. Windows 전용 DPAPI 평문/변조 거부·다른 사용자 읽기 ACE 거부와 전체 개인 실행기/HTTPS 프로세스 시험은 GitHub `windows-worker` 작업에서 실행한다(결과는 해당 PR 검사 기준). 시험 인증서는 기존 cryptography로 만들어 외부 OpenSSL 설치에 의존하지 않는다. 실제 API·운영 DB·Render·공용 Gmail 설정은 변경하지 않았다.
 
 - #156 최종 검사: `uv run pytest` **820 passed·2 skipped**(선택 PostgreSQL 모듈), 별도 `uv run --with pgserver==0.1.4 pytest tests/test_worker_postgres.py tests/test_trade_postgres.py -q` **8 passed**, 규칙 검사 경고 0개다. `test_worker_execution.py` 29개는 PC 모델/토큰/빈도/소유자 제한, 키/인증값 출력 차단, 안전한 오류, 서버 단독 재시도 예산, 같은 논리 ID/기한·새 attempt, 암호화 소비/해제/기한 정리, PC 종료·임대/전체 만료 뒤 후보 미저장·지연 결과 거부를 검증한다. `test_worker_process.py` 5개는 실제 HTTPS 서버·별도 PC 프로세스 2개·모의 OpenAI HTTP로 서로 다른 .env 키, 동시 사용자, 서버 저장 키 대체 금지, 무세션 Gmail→요약·성찰·후보→명시적 승인 발송, 거래 추출·네 문서 /extract·수동 검토/파일 발급, 키 교체/삭제·401/429/503을 확인한다. Chromium 390px/1280px에서 연결·대기·키 실패·해제, 화면 넘침/브라우저 오류·키/토큰 비노출을 확인했다. 실제 키·개인 메일·운영 설정은 사용하지 않았다.
 
@@ -181,7 +185,10 @@
 - PDF 공통 렌더러(PI·PO·CI·PL): 한 문서 렌더링 안에서 같은 PNG와 crop 조건의 RGB 변환·압축 결과를 재사용하고, 여러 페이지에서 같은 이미지 PDF 객체를 공유한다. 페이지별 콘텐츠 스트림과 이미지 배치 명령은 유지한다. `tests/test_trade_pdf_pagination.py`는 이미지 종류 수만큼만 변환·압축하며 PDF 이미지 객체가 중복되지 않고 각 페이지가 같은 객체를 참조하는지 확인한다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-12 · 개인 실행기 명령·암호화 결과 전달 갱신
+마지막 갱신: 2026-11-12 · Windows PowerShell·운영 확인 역할 안내
+
+- Windows 후속 수정은 WSL 없이 PowerShell에서 개인 실행기를 지원한다. README에 개인 `.env.worker` 준비·설치·pair/run·중지와 DPAPI 파일 재연결 방법을 안내했고 이 개인 파일을 커밋에서 제외했다. 코드 브랜치와 운영 DB 백업은 별개이며, 실제 운영 데이터·암호화 키를 공개 GitHub에 올리지 않는다. 이번 Windows 수정에는 DB 마이그레이션이나 Render/Google 설정 변경이 없다.
+- 실제 서비스 전체 연결은 계획 5절(#157)에서 미확인이다. AI는 사전 점검·자동/모의 시험·실행 절차와 결과 정리를 맡을 수 있다. 이 Codex 환경에서 실제 키/API 시험은 하지 않으며 키 입력·Google 동의/장치 승인·본인 PC 실행·과금 프로젝트 확인은 사람이 한다. README에 이 범위를 분명히 한 AI 준비 작업 요청문을 뒀다.
 
 - #155의 `20261112_worker_queue`는 기존 사용자를 `stored_key`로 유지하고 장치/큐/횟수 제한 표만 추가한다. 배포 전 DB 백업과 기존 토큰 암호화 키·Google OAuth·Pub/Sub 설정을 유지한다. 이 PR은 실제 Render/운영 DB/키를 변경하지 않았다. 장치 API는 HTTPS 서버 전용이며 `local_worker` AI 연결을 4절에서 구현했다. `20261112_worker_delivery`는 기존 데이터를 보존하고 전달용 결과 암호문 열만 추가한다. 개인 PC 명령은 `uv run python -m app.worker.pc pair|run --service https://<서비스>`이며, .env의 본인 식별자·키와 개인 전용 장치 자격증명을 요구한다. 자세한 설치·중지·문제 해결·서버가 보는 데이터는 README와 명령 도움말에 있다.
 

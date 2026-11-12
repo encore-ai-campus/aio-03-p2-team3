@@ -5,10 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import json
-import os
-from pathlib import Path
 import signal
-import stat
 from threading import Event
 from time import monotonic
 from urllib.parse import urlsplit
@@ -21,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from app.config import LIMITS
 from app.llm.client import DEFAULT_MODEL, _http_code, classify_error, structured_output
 from app.worker.protocol import MAX_JSON_BYTES, WorkerError, find_definition, json_bytes, manifest, validate_request, validate_result
+from app.worker.credentials import read_private, write_private
 
 
 def service_url(value):
@@ -69,27 +67,16 @@ def _backend(policy):
 
 def save_credentials(path, policy, value):
     """토큰을 출력하지 않고 사용자 전용 파일에 저장한다. 기존 파일/심볼릭 링크를 덮지 않는다."""
-    if os.name != "posix":
-        raise WorkerError("private_file_permissions_required")
     if value.get("google_sub") != policy.owner:
         raise WorkerError("owner_mismatch")
     UUID(value["device_id"])
     data = {k: value[k] for k in ("device_id", "device_token", "google_sub", "expires_at")}
     data["service"] = policy.service
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as target:
-        json.dump(data, target)
+    write_private(path, json_bytes(data))
 
 
 def read_credentials(path, policy):
-    if os.name != "posix":
-        raise WorkerError("private_file_permissions_required")
-    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    with os.fdopen(fd) as source:
-        mode = os.fstat(source.fileno())
-        if not stat.S_ISREG(mode.st_mode) or mode.st_mode & 0o077 or mode.st_uid != os.getuid():
-            raise WorkerError("unauthorized")
-        value = json.loads(source.read(MAX_JSON_BYTES + 1))
+    value = json.loads(read_private(path, MAX_JSON_BYTES))
     if value["service"] != policy.service or value["google_sub"] != policy.owner:
         raise WorkerError("owner_mismatch")
     if datetime.fromisoformat(value["expires_at"]) <= datetime.now(UTC):
@@ -215,7 +202,7 @@ class PCWorker:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="macOS/Linux/WSL에서 개인 .env의 본인 키만 사용하는 AI 실행기. 서버 URL과 Google 식별자를 직접 지정하세요.",
+    parser = argparse.ArgumentParser(description="Windows/macOS/Linux에서 개인 .env의 본인 키만 사용하는 AI 실행기. Windows PowerShell에서 WSL 없이 실행할 수 있습니다. 서버 URL과 Google 식별자를 직접 지정하세요.",
         epilog="설치: uv sync. pair 후 서버 /settings에서 승인하고 run. PC를 켜 두어야 AI가 동작합니다. 중지: Ctrl+C. 해제: 서버 설정. 키 교체/삭제: .env 수정 후 재시작. HTTPS 인증서 검증을 유지하며 서버는 여전히 메일·프롬프트 변수·AI 결과를 봅니다. 전체 로컬 앱: uv run python -m app.local. 문제 해결은 README 개인 PC AI 실행 절을 확인하세요.")
     parser.add_argument("command", choices=["pair", "run"])
     parser.add_argument("--service", required=True, help="본인이 허용하는 HTTPS 서비스 원점")
