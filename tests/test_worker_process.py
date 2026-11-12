@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 import json
+from ipaddress import ip_address
 import os
 from pathlib import Path
 import re
@@ -14,6 +15,10 @@ import sys
 from time import monotonic, sleep
 
 from cryptography.fernet import Fernet
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 import httpx
 from itsdangerous import TimestampSigner
 import pytest
@@ -72,9 +77,19 @@ def process(command, env):
 @pytest.fixture
 def system(tmp_path):
     cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
-    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                    "-keyout", str(key), "-out", str(cert), "-subj", "/CN=localhost",
-                    "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"], check=True, capture_output=True)
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    certificate = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+        .public_key(private.public_key()).serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.now(UTC) - timedelta(minutes=1))
+        .not_valid_after(datetime.now(UTC) + timedelta(days=1))
+        .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ip_address("127.0.0.1")),
+                                                  x509.DNSName("localhost")]), critical=False)
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(private, hashes.SHA256()))
+    key.write_bytes(private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                          serialization.NoEncryption()))
+    cert.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
     ports = free_port(), free_port()
     service, mock = (f"https://127.0.0.1:{port}" for port in ports)
     config = Settings(database_url=f"sqlite:///{tmp_path / 'server.sqlite3'}", session_secret="fake-session",
@@ -229,7 +244,12 @@ def test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_resul
     for value, tag in (("fake-pc-one", "one"), ("fake-pc-rotated", "rotated"), ("", None)):
         envfile.write_text(f"LOCAL_OWNER_GOOGLE_SUB=fake-sub-1\nOPENAI_API_KEY={value}\n")
         with process(command(system, envfile, credentials), system["env"]) as runner:
-            response = http.post("/api/trade/pi/extract", json={"text": "가상 문서"})
+            try:
+                response = http.post("/api/trade/pi/extract", json={"text": "가상 문서"})
+            except httpx.TimeoutException:
+                with system["database"].session() as session:
+                    states = [(job.status, job.error_kind) for job in session.scalars(select(WorkerJob))]
+                pytest.fail(f"PC restart {tag or 'deleted'}: exit={runner.poll()}, job states={states}")
             if tag:
                 assert response.status_code == 201, response.text
                 assert system["openai"].get("/test/state").json()[-1]["key_tag"] == tag

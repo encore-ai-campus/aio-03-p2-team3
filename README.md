@@ -83,10 +83,30 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 Google 로그인 후 `/settings`에서 `stored_key`(기존 본인 DB 키) 또는 `local_worker`(개인 PC 키)를 선택한다. `local_worker`는 서버 저장 키나 공용 환경 키로 자동 전환하지 않는다. 메일 분석·답장·거래 추출·요약·성찰과 PI/PO/CI/PL AI 추출을 PC에서 실행한다. 수동 문서 작성·검토·파일 발급과 메일의 사용자 승인 후 발송은 유지한다.
 
-1. 본인 PC의 macOS/Linux/WSL에 Python 3.12·uv와 같은 버전의 저장소를 준비하고 `uv sync`한다. 장치 토큰 파일의 소유자/600 권한을 검증하므로 네이티브 Windows는 `private_file_permissions_required`로 중단하며 WSL 내부 개인 경로를 사용한다. 개인 `.env`에 `OPENAI_API_KEY`, `LOCAL_OWNER_GOOGLE_SUB`(본인 로그인으로 검증된 서버 `/settings` 식별자), 선택 모델 `OPENAI_MODEL`을 지정한다. 키를 Render·채팅·Issue에 넣지 않는다. 실행기는 지정한 `.env` 파일만 읽으며 파일을 올리지 않는다.
+1. 본인 PC의 Windows/macOS/Linux에 Python 3.12·uv와 같은 버전의 저장소를 준비하고 `uv sync --locked`한다. **Windows는 WSL 없이 PowerShell에서 실행한다.** 본인 사용자 프로필의 로컬 폴더를 사용한다. 개인 `.env` 또는 `.env.worker`에 `OPENAI_API_KEY`, `LOCAL_OWNER_GOOGLE_SUB`(본인 로그인으로 검증된 서버 `/settings` 식별자), 선택 모델 `OPENAI_MODEL`을 지정한다. 키를 Render·채팅·Issue에 넣지 않는다. 실행기는 지정한 파일만 읽으며 파일을 올리지 않는다.
 2. 본인 서버 설정에서 `local_worker`를 선택한다. PC에서 `uv run python -m app.worker.pc pair --service https://<본인-서비스> --name "내 PC"`를 실행하고, 표시된 서비스 주소·장치 이름·일회용 코드를 본인 Google 계정의 서버 화면과 대조해 승인한다. 연결 계정의 검증 식별자가 로컬 설정과 다르면 중단한다.
-3. `uv run python -m app.worker.pc run --service https://<본인-서비스> --max-output-tokens 2048 --requests-per-minute 10 --max-concurrency 1`로 시작한다. `--env`와 `--credentials`로 개인 파일 위치를 지정할 수 있다. 기본 `.worker-device.json`은 커밋 제외·사용자 전용(600)이며 토큰을 출력하지 않는다. 기존 파일을 덮지 않으므로 재연결 때 본인이 기존 파일을 삭제하거나 새 파일 경로를 선택한다.
+3. `uv run python -m app.worker.pc run --service https://<본인-서비스> --max-output-tokens 2048 --requests-per-minute 10 --max-concurrency 1`로 시작한다. `--env`와 `--credentials`로 개인 파일 위치를 지정할 수 있다. 기본 `.worker-device.json`은 커밋 제외이며 토큰을 출력하지 않는다. Windows는 본인 Windows 계정의 DPAPI로 암호화하고 파일 소유자·사용자 전용 DACL을 검사한다. macOS/Linux는 소유자·600 권한을 검사한다. 기존 파일을 덮지 않으므로 재연결 때 본인이 기존 파일을 삭제하거나 새 파일 경로를 선택한다.
 4. **PC와 프로그램을 켜 두어야 AI가 동작한다.** 브라우저를 닫아도 실행기는 계속된다. 중지는 `Ctrl+C`, 연결 해제는 서버 `/settings`에서 한다. 이미 OpenAI에 전송한 요청의 취소는 보장하지 않지만 해제 후 결과는 거부한다. 키 교체·삭제는 개인 `.env` 수정 후 실행기를 중지하고 재시작한다. 모드 변경·장치 교체는 미완료 작업을 취소하고 재승인을 요구한다.
+
+Windows PowerShell 빠른 시작(본인 사용자 폴더의 저장소 루트에서 실행, [uv 설치 안내](https://docs.astral.sh/uv/getting-started/installation/) 참조):
+
+```powershell
+uv python install 3.12
+uv sync --locked
+if (-not (Test-Path .env.worker)) { Copy-Item .env.example .env.worker }
+notepad .env.worker
+```
+
+메모장에서 개인 키·본인 식별자·모델을 채운다. 서버 `/settings`에서 `local_worker`를 선택한 뒤, 본인이 사용할 서비스 주소를 확인하고 실행한다:
+
+```powershell
+$serviceUrl = "https://aio3-gmail-quote.onrender.com"
+uv run python -m app.worker.pc pair --service $serviceUrl --env .env.worker --name "내 Windows PC"
+# 본인 서버 화면에서 PC의 이름·코드를 대조해 승인한 후:
+uv run python -m app.worker.pc run --service $serviceUrl --env .env.worker --max-output-tokens 2048 --requests-per-minute 10
+```
+
+Windows 장치 파일은 다른 Windows 사용자·PC로 복사해서 재사용하지 않는다. `credentials_unavailable`이면 현재 사용자/로컬 파일 접근 권한·파일 손상을 확인하고, 본인이 기존 파일을 삭제하거나 새 `--credentials` 경로로 다시 연결·승인한다. macOS/Linux에서 만든 평문 장치 파일을 Windows에서 자동으로 받아들이지 않는다.
 
 모델은 PC `OPENAI_MODEL`과 서버 모델이 같아야 하며 임의 모델로 대체하지 않는다. 출력 토큰(기본 2048, 최대 32768), 호출 빈도(기본 분당 10회, 최대 60회), 동시 작업 1개는 PC가 강제한다. 서버는 이 상한·OpenAI URL·헤더를 작업으로 지정하지 못한다. 인증서 검증과 환경의 프록시·CA 신뢰를 유지하며, 인증서 검사 해제나 리다이렉트는 제공하지 않는다. 서버는 여전히 Gmail 메일·스레드·프롬프트 변수·AI 결과·문서를 본다. 이 방식은 OpenAI 키만 PC에 두며 메일을 서버로부터 숨기는 방식은 아니다.
 
@@ -97,6 +117,13 @@ Google 로그인 후 `/settings`에서 `stored_key`(기존 본인 DB 키) 또는
 PC는 outbound HTTPS로 본인 작업을 claim/heartbeat/complete하며 수신 포트나 터널이 필요 없다. 큐는 설치된 구조화 AI 요청만 받으며 장치 토큰에는 메일 승인·발송·파일 권한이 없다. OpenAI 키 입력 필드는 장치 API와 DB에 추가하지 않는다. 임대 만료만으로 이미 전송됐을 수 있는 요청을 자동 재배포하지 않으며 외부 API의 exactly-once를 보장하지 않는다. 세부 경로·한도·오류는 `docs/CONTRACT.md` 6절이다.
 
 DB 마이그레이션은 기존 사용자·키·메일·승인을 보존한다. 운영 DB 백업 뒤 배포하며 Google OAuth·토큰 암호화 키·공용 Pub/Sub 설정은 유지한다. 전송 변수는 완료 때 삭제하며 검증 결과는 호출자에게 전달할 때까지만 암호화해 보관한다(소비·해제·원래 120초 기한에 삭제). 검증은 `uv run pytest tests/test_worker_execution.py tests/test_worker_process.py tests/test_worker_queue.py`와 임시 PostgreSQL의 `uv run --with pgserver==0.1.4 pytest tests/test_worker_postgres.py`로 한다. 실제 키·Gmail·Render 확인은 사람이 계획 5절에서 수행한다. 전용 로컬 앱 방식은 위의 `uv run python -m app.local` 설치·시작·중지 안내를 따른다.
+
+### 코드 병합 뒤 실제 이용 전 확인
+
+- GitHub 브랜치는 코드와 DB 변경 스크립트를 보관한다. 운영 DB의 사용자·메일·문서·승인 데이터는 브랜치에 들어 있지 않으므로 DB 백업을 대신하지 못한다. 운영 데이터는 이용 가능한 Render 백업/스냅샷 또는 `pg_dump` 등으로 별도 보관하고, 복구에 필요한 기존 `TOKEN_ENCRYPTION_KEY`도 안전하게 유지한다. DB 백업·암호화 키를 공개 GitHub에 올리지 않는다.
+- 자동/가짜 API 시험 통과와 실제 서비스 연결 확인은 구분한다. 1~4절의 코드가 병합돼도 Render 배포·DB 갱신 결과, 개인 PC 설치·키/모델 설정, 본인 로그인·장치 승인, 가상 메일과 네 문서 추출을 실제 환경에서 확인해야 한다. 이 확인 전에는 서비스 전체가 정상이라고 단정하지 않는다. 계획 5절(#157)이 그 확인 단계이며, 실패가 나오면 해당 구현을 수정한다.
+- AI는 코드/배포 설정 검토, 자동·모의 시험, 실제 확인 절차와 비밀값 없는 결과 정리를 도울 수 있다. 현재 Codex 환경에는 실제 API 키를 넣지 않으므로 개인 키 입력·Google 동의/장치 승인·본인 PC 실행·실제 API 과금 프로젝트 확인은 사람이 한다. 권한 있는 환경에서 수행 가능한 DB 백업/배포 지원도 별도 명시적 요청과 실제 접근 권한이 있어야 하며, 이 작업에서 실행하지 않았다.
+- AI에 맡길 준비 작업 요청문: `Issue: #157. local-openai-execution.md 5절의 사전 점검과 실행 절차·결과 기록 초안을 준비해 주세요. 코드·마이그레이션·기존 자동 검사 근거를 확인하고, 실제 키 입력·운영 변경·개인 메일 시험은 하지 말아 주세요. 사람이 할 PC/계정/API 확인을 구분하고 미확인 결과를 완료로 표시하지 마세요.`
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|

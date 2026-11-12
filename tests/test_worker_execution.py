@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 import json
+import os
 from threading import Event
 from time import monotonic, sleep
 from uuid import uuid4
@@ -132,7 +133,8 @@ def test_credentials_private_owner_service_expiry_and_no_overwrite(tmp_path):
                  expires_at=(datetime.now(UTC) + timedelta(days=1)).isoformat())
     path = tmp_path / "credentials"
     pc.save_credentials(path, policy, value)
-    assert path.stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o600
     assert pc.read_credentials(path, policy)["device_token"] == "x" * 43
     with pytest.raises(FileExistsError):
         pc.save_credentials(path, policy, value)
@@ -140,9 +142,10 @@ def test_credentials_private_owner_service_expiry_and_no_overwrite(tmp_path):
         pc.read_credentials(path, replace(policy, owner="other"))
     with pytest.raises(WorkerError):
         pc.read_credentials(path, replace(policy, service="https://different.invalid"))
-    path.chmod(0o644)
-    with pytest.raises(WorkerError):
-        pc.read_credentials(path, policy)
+    if os.name == "posix":
+        path.chmod(0o644)
+        with pytest.raises(WorkerError):
+            pc.read_credentials(path, policy)
 
 
 def test_queue_result_is_encrypted_consumed_once_and_rechecked_after_disconnect(web):
