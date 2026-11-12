@@ -412,8 +412,10 @@ class AgentError(TypedDict):
 
 ### 7.1. Supabase 전환 DB 목표 (2026-11-12, 계획 1절 확정)
 
-- 아래는 전환 뒤 [목표 계약]이다. 위 표·규칙(빈 `DATABASE_URL` → SQLite 파일)이 [현재 구현]이다. 구현은 `docs/plans/react-supabase/PLAN.md` 3·4·5·8·9·10절 순서로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
-- DB는 Supabase PostgreSQL 하나다. `DATABASE_URL`은 PostgreSQL 주소만 받고 빈 값·비PostgreSQL 주소를 거부한다. SQLite 자동 fallback과 `app/db/local.sqlite3` 생성 경로는 없애고(계획 4절), 테스트도 임시 PostgreSQL로 돌린다(계획 3절). UTC 저장·JSONB·모든 조회의 `user_id` 필터는 그대로다.
+- 아래는 전환 계약이다. 3절(테스트 PostgreSQL)·4절(PostgreSQL 전용 설정·이전 도구)을 적용했고(2026-11-12), 5·8·9·10절은 [목표]로 남는다. 구현은 `docs/plans/react-supabase/PLAN.md` 순서대로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
+- DB는 Supabase PostgreSQL 하나다. `DATABASE_URL`은 PostgreSQL 주소만 받고 빈 값·비PostgreSQL 주소를 거부한다. SQLite 자동 fallback과 `app/db/local.sqlite3` 생성 경로는 없앴다(계획 4절 적용, 2026-11-12: `app/config.py`의 `resolved_database_url`이 거부). 테스트도 임시 PostgreSQL로 돈다(계획 3절). UTC 저장·JSONB·모든 조회의 `user_id` 필터는 그대로다.
+- 연결·migration(계획 4절 적용, 2026-11-12): 연결은 Supabase Session pooler 주소(포트 5432)를 기본으로 하고 `?sslmode=require`를 붙인다(트랜잭션 pooler 6543은 쓰지 않는다). 엔진 풀 상한은 프로세스당 `pool_size=5`·`max_overflow=10`·`pool_timeout=30초`·`pool_recycle=1800초`(`app/db/engine.py`). 서버 시작 migration(`app/db/migrations/`)은 대상 스키마를 `public`으로 고정(`SET LOCAL search_path`, `alembic_version`도 `public`)해 Supabase의 `auth`·`storage` 스키마를 건드리지 않는다.
+- 기존 데이터 복사·대조(계획 4절 적용, 2026-11-12): `uv run python -m app.db.copy_data --source <SQLite 파일|DB URL> [--target <PostgreSQL>] [--dry-run] [--yes]`가 일회성 이전을 담당한다. 원본 SQLite 파일은 임시 사본을 갱신해 읽고(원본 불변), 대상 확인(`--yes`)·반복 실행(이미 같으면 대조만 통과, 다른 데이터가 있으면 합침 없이 실패)·중단 지점(복사·시퀀스 정렬을 대상 한 트랜잭션으로 커밋)을 제공한다. 대조는 표별 행 수·모든 열 값(소유자·외래 키·timestamp·JSON·금액)·PK/시퀀스를 비교한다.
 - `users` 표 이행: 기존 정수 `id` PK와 소유자 외래 키를 그대로 두고(Supabase `auth.users.id` UUID로 바꾸지 않는다) 유일한 nullable `supabase_uid`(UUID) 열을 더한다. Google 메일 연결 없이 가입한 사용자를 위해 `google_sub`는 nullable로 바꾼다(기존 행은 보존, 계획 5절 migration). 같은 이메일만으로 기존 행에 자동 연결하지 않는다(연결 증명은 9절).
 - 새 표 `file_assets`(계획 8절): `id` PK · `user_id` FK · `original_filename` · `content_type`(서버가 파일 시그니처로 확인한 실제 형식) · `size_bytes` · `sha256` · `object_key` · `created_at`. 파일 bytes는 DB에 두지 않는다.
 - 새 표 `trade_document_sources`(계획 8절): `id` PK · `user_id` FK · `trade_document_id` FK · `doc_kind` · `revision`(연결할 때 확인한 문서 revision) · `file_id` FK(`file_assets`) · `origin`(`upload`/`email` — `email`은 Gmail 첨부 가져오기(보류 범위) 구현 뒤 쓴다) · `created_at`.
@@ -524,7 +526,7 @@ class AgentError(TypedDict):
 | `PUBSUB_PUSH_AUDIENCE` | 푸시 OIDC 토큰의 대상(추천 방식) | 7 |
 | `PUBSUB_PUSH_SERVICE_ACCOUNT` | 푸시 OIDC 토큰의 서비스 계정 이메일(추천 방식) | 7 |
 | `PUBSUB_PUSH_TOKEN` | 대체 방식의 비밀 토큰(대체 방식을 쓸 때만) | 7 |
-| `DATABASE_URL` | Postgres 접속 주소(로컬은 비우면 SQLite 파일) | 2, 4 |
+| `DATABASE_URL` | 앱 DB PostgreSQL 접속 주소. 빈 값·비PostgreSQL 스킴은 시작을 거부한다(SQLite 자동 fallback은 4절에서 제거, 2026-11-12). Supabase는 Session pooler 주소(포트 5432)에 `?sslmode=require`를 붙인다 | 2, 4 |
 | `TOKEN_ENCRYPTION_KEY` | Google 토큰 암호화 키 | 6 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 | 6 |
 | `APP_BASE_URL` | 서비스 주소(링크·리디렉션 확인용) | 6, 7 |
@@ -538,7 +540,7 @@ class AgentError(TypedDict):
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
 - 2026-11-11 전환: `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다. OpenAI 키를 로컬·Render에 먼저 등록하고 병합·자동 배포 뒤 실제 연결을 확인한 다음 예전 변수를 제거한다. Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. OpenAI API 결제·모델 권한은 사용자 계정에서 확인하고 Codex에는 키를 넣지 않는다.
-- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. 지금 코드는 아직 읽지 않는다(계획 5·6·8절 구현부터 적용). 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. 전환 뒤 `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만드는 현재 동작은 계획 4절에서 없앤다). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
+- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. 지금 코드는 아직 읽지 않는다(계획 5·6·8절 구현부터 적용). 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)

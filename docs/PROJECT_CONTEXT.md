@@ -119,13 +119,14 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-12 · 테스트 DB PostgreSQL 전환(3절)
+마지막 갱신: 2026-11-12 · 앱 DB PostgreSQL 전용 전환 검증(4절)
 
 - 전체 OpenAI 전환 검증(2026-11-11): `uv run pytest -q`는 **639 passed·1 skipped**(pgserver 미설치로 선택 PostgreSQL 모듈 제외), `python3 .work/check.py`는 경고 0개로 통과했다. 실제 LangChain·OpenAI SDK와 `httpx.MockTransport`로 운영 출력 스키마 12개(메일 분석·답장·재질문·거래 추출·무역 추출·요약·성찰·독립 4종 문서), `/v1/responses` 요청, 429/401 무재시도·503 최대 3회, 잘못된 JSON/스키마 재시도·복구, 실제 평가 호출 경로의 공통 어댑터 사용을 검증했다. 최신 main의 PDF 이미지 재사용 변경을 합친 뒤 Google 로그인·승인·PDF·사용자 격리 회귀도 통과했다. 실제 OpenAI/Gmail·Render·운영 DB는 호출하지 않았다.
 
 - PI 독립 API 검증(2026-11-11): 전체 573 passed·1 skipped, 별도 실제 임시 PostgreSQL 2 passed. 세션/CSRF·소유자 격리·검토/승인/취소/수정·불변 파일·동시 승인·재접속 복구를 확인했다. 실제 Gemini/Gmail·운영 DB는 호출하지 않았다.
 - `tests/test_trade_upgrade.py`가 기존 국내 견적 SQLite 스키마에서 데이터 보존 갱신·반복 실행·부분 유니크 제약, 통화/상품 수정 후 가격 재검증, 오래된 버전·서버 필드 수정 거부, PDF 준비 뒤 버전 변경·발송 중 수정 차단을 확인한다(첫 검사는 역사적 SQLite 이관 경로 확인으로 한시적으로 남김). `tests/test_trade_postgres.py`는 같은 갱신의 PostgreSQL 실제 동작을 확인한다.
 - 테스트 DB PostgreSQL 전환(3절, 2026-11-12): `pgserver==0.1.4`를 개발 의존성에 추가해 `uv run pytest`만으로 전체 회귀가 실제 PostgreSQL에서 돈다(**642 passed·0 skipped**, 로컬 `.env`에 실제 OpenAI 키가 있어도 통과). `tests/conftest.py`가 세션마다 임베디드 PostgreSQL 하나를 띄우고 테스트별로 DB를 만들어 지우며(`TEST_DATABASE_URL`이 있으면 그 접속 사용), 산재한 `sqlite://` fixture·인라인 설정을 이 접속으로 바꿨다. 실제 LLM 키는 세션 시작에 환경에서 비워 스며들지 않게 하고, `test_blank_nodes_do_not_claim_success`는 명시적 가짜 실패 응답으로 환경과 무관하게 검증한다. 사용자 격리·UTC·JSONB·유일 제약·조건부 갱신 검사 의미는 그대로다. CI `tests` 작업은 `postgres:16` service 컨테이너를 쓴다.
+- 앱 DB PostgreSQL 전용 전환 검증(4절, 2026-11-12): 전체 **658 passed·0 skipped**(3절 상태에서 16개 증가). `tests/test_postgres_only.py`가 빈 `DATABASE_URL`·비PostgreSQL 스킴 거부(`local.sqlite3` 미생성), PostgreSQL 엔진 풀 상한(pool_size 5·max_overflow 10), migration이 `auth`·`storage` 스키마를 만지지 않고 앱 표·`alembic_version`을 `public`에만 만드는 것(재실행 포함)을 확인한다. `tests/test_db_copy.py`가 일회성 복사 명령 `app.db.copy_data`의 대상 확인(`--yes` 없으면 쓰지 않음)·dry-run 무쓰기·복사 후 행 수·열 값(timestamp·JSON·금액·바이너리)·PK/시퀀스 보존·재실행 대조 통과·복사 중 실패 롤백 후 재실행 성공·대상 데이터 충돌 시 합침 거부·옛 스키마 SQLite 원본의 임시 사본 갱신(원본 불변)을 확인한다. 실제 `app/db/local.sqlite3`(311행)로 pgserver 임시 DB에 dry-run → 복사 → 재실행 no-op까지 CLI로 직접 확인했다. 기존 DB 데이터 보존 갱신 회귀는 기존 `tests/test_trade_upgrade.py`가 담당한다.
 - `tests/test_pi_domain.py`는 메모리 저장소로 PI의 독립 작성·수량 0·직접/가짜 AI의 동일 계산·기준 버전·회사 스냅숏을 확인하고, SQL 구현의 사용자/종류 격리와 실제 LangChain 호출 진입점의 가짜 모델·근거 검증을 확인한다.
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
@@ -157,18 +158,18 @@
 
 - React API 설정: `FRONTEND_ORIGINS`(허용 출처), `SESSION_SAME_SITE`(기본 lax, none은 HTTPS만). 변경 API는 세션과 CSRF 토큰을 함께 요구한다. 검토 제안에 문서·회사·계좌·이미지를 고정하고 승인 파일을 DB에 보관한다(계약 16절).
 
-- DB 갱신 준비: 서버 시작 시 `app/db/migrations/`의 Alembic 리비전을 적용한다. 기존 데이터와 승인 이력을 유지하며 부분 유니크 제약도 변경한다(계약 15.9절). 운영 반영 전 DB 백업을 보관한다. 이번 작업에서는 Render·운영 DB·실제 메일을 변경하지 않았다.
+- DB 갱신 준비: 서버 시작 시 `app/db/migrations/`의 Alembic 리비전을 적용한다. 기존 데이터와 승인 이력을 유지하며 부분 유니크 제약도 변경한다(계약 15.9절). PostgreSQL에서는 갱신 대상 스키마를 `public`으로 고정(`SET LOCAL search_path`, `alembic_version`도 `public`)해 Supabase의 `auth`·`storage` 스키마를 건드리지 않는다(react-supabase 계획 4절, 2026-11-12). 운영 반영 전 DB 백업을 보관한다. 이번 작업에서는 Render·운영 DB·실제 메일을 변경하지 않았다.
 
 - Render 배포 당시 설정(2026-11-10, 계획 4절): 웹 서비스 `https://aio3-gmail-quote.onrender.com`(무료, Singapore, `main` 병합 시 자동 배포), `/healthz` 응답 확인(요청자). 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 넣은 환경변수: `DATABASE_URL`(Internal 주소)·`GEMINI_API_KEY`·`SESSION_SECRET`·`REFLECTION_ENABLED_DEFAULT`·`APP_BASE_URL`. `TOKEN_ENCRYPTION_KEY`와 Google 값(`GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`)도 넣음(2026-11-10, 계획 5절, 설정 결과는 `.work/design/api-choice.md` '콘솔 설정 결과').
 - Render Postgres: 무료, Singapore(웹 서비스와 같은 지역), 2026-11-10 만듦 → 30일 뒤 2026-12-10경 만료, 14일 유예 뒤 2026-12-24경 삭제(11/19 제출까지는 충분).
 - 실제 API 확인 주의점(2026-11-10, #62 1번 일반 문의 흐름, 결과 `docs/test-records/20261110_live_general_result.md`): ① 감시 등록이 HTTP 403이면 Pub/Sub 토픽 `gmail-notify`의 권한에 `gmail-api-push@system.gserviceaccount.com`(Pub/Sub 게시자)가 있는지 먼저 본다(이번에 빠져 있었음). 등록 전에 온 메일은 처리하지 않으므로 등록 뒤 다시 보낸다. ② 무료 Gemini 모델이 503을 반복하면(실행 기록에는 `network`로만 남음) Render에서 `GEMINI_MODEL`을 응답하는 모델로 바꾼다. ③ 서버가 깨어 있을 때 상대방 발송 → 푸시 수신 약 16초, 실행(성찰 켬) 약 25초(대부분 Gemini 호출 2번), 발송 → 후보 준비 약 43초. 잠든 서버의 첫 푸시는 아직 확인하지 않았다. 이 응답 시간은 당시 Gemini 결과이며 OpenAI 응답 시간은 다시 측정해야 한다.
 - 주의: 15분 동안 요청이 없으면 잠들고 깨는 데 최대 약 1분 걸린다. 재배포·재시작·잠들 때 로컬 파일이 사라지므로 저장은 Postgres에만 한다. 시연 전에 화면을 미리 열어 깨운다.
-- 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 키 없이 기본 화면을 열 수 있고, `DATABASE_URL`이 비면 커밋 제외된 `app/db/local.sqlite3`를 쓴다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render 연결 시험은 후속 작업이다.
+- 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 앱 DB는 PostgreSQL 전용이다(2026-11-12, react-supabase 계획 4절): `DATABASE_URL`이 비었거나 비PostgreSQL 주소면 시작이 거부되고 `local.sqlite3` 자동 생성 경로는 없다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render·Supabase 연결 시험은 후속 작업이다.
 - 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
 - LLM·OAuth: `OPENAI_API_KEY`, `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`), `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다.
 - 전체 LLM 전환 적용(2026-11-11): 먼저 로컬·Render에 OpenAI 키와 필요한 모델 설정을 넣고 API 결제·권한을 확인한다. 병합 시 자동 배포 후 가상 메일(분석→후보·요약·성찰)과 PI·PO·CI·PL 추출을 확인한 뒤 예전 Gemini 변수·백엔드 선택 변수를 제거한다. 이 작업에서는 실제 키·Render 설정을 변경하거나 실제 API를 호출하지 않았다(설정·연동 확인 미완료). OpenAI API 이용료는 ChatGPT 구독과 별개다.
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
-- 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
+- 앱 설정: `DATABASE_URL`(PostgreSQL 접속 주소만 받음, 빈 값·비PostgreSQL 거부 — Supabase는 Session pooler 주소+`?sslmode=require`, 엔진 풀 상한 pool_size 5·max_overflow 10), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값). 기존 SQLite→PostgreSQL 데이터 이전은 일회성 명령 `uv run python -m app.db.copy_data`(README 실행 방법 참고)로 한다.
 - 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
 - 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
@@ -185,7 +186,7 @@
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
-| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 구현·콘솔 설정·실제 이전은 미착수 |
+| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 3절 테스트 PostgreSQL·4절 앱 DB PostgreSQL 전용(설정 거부·풀 상한·migration 스키마 경계·`app.db.copy_data` 이전 명령) 적용(2026-11-12). 콘솔 설정(2절)·실제 이전(22절)은 미착수 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |

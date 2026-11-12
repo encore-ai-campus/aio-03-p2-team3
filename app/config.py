@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass, field
 from functools import lru_cache
-from pathlib import Path
 import os
 
 from dotenv import load_dotenv
+
+# psycopg로 연결하는 PostgreSQL 주소 스킴(engine.py가 +psycopg 드라이버로 정규화한다).
+POSTGRES_URL_SCHEMES = ("postgres", "postgresql", "postgresql+psycopg")
 
 GOOGLE_SCOPES = (
     "openid", "email",
@@ -57,10 +59,21 @@ class Settings:
 
     @property
     def resolved_database_url(self) -> str:
-        if self.database_url:
-            return self.database_url
-        path = Path(__file__).parent / "db" / "local.sqlite3"
-        return f"sqlite:///{path}"
+        """앱 DB는 PostgreSQL만 받는다(계획 4절). SQLite 자동 fallback은 없다."""
+        url = self.database_url.strip()
+        if not url:
+            raise ValueError(
+                "DATABASE_URL이 비었습니다. 앱 DB는 PostgreSQL만 사용하므로 접속 주소를 설정하세요"
+                "(Supabase는 Session pooler 주소, 예: postgresql://…pooler.supabase.com:5432/postgres?sslmode=require)."
+            )
+        scheme = url.split(":", 1)[0].lower()
+        if scheme not in POSTGRES_URL_SCHEMES:
+            raise ValueError(
+                f"DATABASE_URL은 PostgreSQL 접속 주소여야 합니다(입력된 스킴: {scheme})."
+                " SQLite 등 다른 주소는 받지 않습니다. 기존 SQLite 데이터는"
+                " uv run python -m app.db.copy_data 로 옮긴다."
+            )
+        return url
 
 
 @lru_cache(maxsize=1)

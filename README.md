@@ -36,7 +36,8 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - Render 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
 - 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 실제 Google 로그인에는 Google Cloud 설정(계획 5절)이 필요하고, 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py`로 실행한다.
-- `DATABASE_URL`을 비우면 `app/db/local.sqlite3`에 로컬 DB를 만든다(커밋 제외). Postgres는 `postgres://`·`postgresql://` 주소도 `psycopg` 드라이버로 연결한다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신한다. SQLite의 기존 단가표 제약 변경은 테이블 복사 방식이고 Postgres는 트랜잭션 안에서 변경한다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 실제 PostgreSQL에서 갱신을 확인하고, 역사적 SQLite 이관 검사만 `tests/test_trade_upgrade.py` 첫 검사로 한시적으로 남긴다.
+- 앱 DB는 PostgreSQL 전용이다(react-supabase 계획 4절). `DATABASE_URL`이 비었거나 비PostgreSQL 주소면 서버가 시작을 거부한다(과거의 `app/db/local.sqlite3` 자동 생성 경로는 제거). `postgres://`·`postgresql://` 주소는 `psycopg` 드라이버로 연결하며, Supabase는 Session pooler 주소(포트 5432)에 `?sslmode=require`를 붙인다(트랜잭션 pooler 6543은 안 쓴다). 엔진 풀 상한은 프로세스당 pool_size 5·max_overflow 10·timeout 30초·recycle 1800초다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신하되, 대상 스키마를 `public`으로 고정해 Supabase의 `auth`·`storage` 스키마는 건드리지 않는다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 실제 PostgreSQL에서 갱신을 확인하고, 역사적 SQLite 이관 검사만 `tests/test_trade_upgrade.py` 첫 검사로 한시적으로 남긴다.
+- 기존 SQLite → PostgreSQL 데이터 이전(일회성): `uv run python -m app.db.copy_data --source <SQLite 파일 경로|DB URL> [--target <PostgreSQL 주소>] [--dry-run] [--yes]`. 원본 SQLite 파일은 임시 사본을 갱신해 읽어 원본을 고치지 않고, 쓰기는 `--yes`를 줄 때만 한다. 대상에 원본과 다른 데이터가 있으면 합치지 않고 실패하고, 이미 같으면 다시 쓰지 않고 대조만 통과한다. 복사·시퀀스 정렬은 대상 한 트랜잭션으로 커밋해 중간 실패 시 전부 롤백된다. 대조는 표별 행 수·모든 열 값·PK/시퀀스를 비교한다.
 - 테스트 DB 준비(별도 설치 불필요): 로컬 macOS·Linux는 개발 의존성 `pgserver`가 세션마다 임베디드 PostgreSQL을 띄우고(`uv run pytest`만 실행) 테스트별로 DB를 만들어 지운다. CI(GitHub Actions `tests` 작업)는 `postgres:16` service 컨테이너를 띄워 `TEST_DATABASE_URL`로 가리킨다. 로컬에서도 준비된 PostgreSQL에 `TEST_DATABASE_URL=postgres://… uv run pytest`로 연결할 수 있다. 단위 테스트는 `.env`의 실제 LLM 키가 스며들지 않게 키 환경을 비우고, LLM 응답은 각 테스트가 명시적으로 주입한 가짜만 쓴다.
 - DB 엔진·세션 팩터리, 컴파일한 그래프, 설정한 LLM 클라이언트를 재사용한다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
 - HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
@@ -69,7 +70,7 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 | 환경변수 | 설명 |
 |---|---|
-| `DATABASE_URL` | Postgres 접속 주소. 로컬에서 비우면 SQLite 파일 사용([목표] Supabase 전환 뒤 PostgreSQL 주소만 받는다) |
+| `DATABASE_URL` | 앱 DB PostgreSQL 접속 주소(빈 값·비PostgreSQL 주소는 거부). Supabase는 Session pooler 주소에 `?sslmode=require` |
 | `TOKEN_ENCRYPTION_KEY` | Google 토큰 암호화 키 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 |
 | `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |

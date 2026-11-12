@@ -229,7 +229,7 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 
 <a id="4"></a>
 
-## 4. 앱 PostgreSQL 전용 설정과 데이터 이전 도구
+## 4. 앱 PostgreSQL 전용 설정과 데이터 이전 도구 (완료)
 
 - 할 일: `Settings.resolved_database_url`의 SQLite 자동 fallback을 없애고 누락/비PostgreSQL 설정을 명확히 거부한다. SQLAlchemy·psycopg·Alembic은 유지한다. 연결 풀 상한·SSL·직접/Session pooler 연결을 정한다. 서버 시작 migration이 Supabase의 `auth`/`storage` schema를 건드리지 않게 한다. 실제 데이터 복사/대조용 일회성 명령을 만든다.
 - 완료 기준: 새 개발 DB에서 기존 표와 migration이 만들어지고, 가상 기존 DB에서 사용자·후보·기억·문서 버전·승인 관계와 시퀀스가 보존된다. 환경 누락 때 `local.sqlite3`를 생성하지 않는다. 복사 명령은 dry-run/대상 확인/반복 실행 정책·중단 지점을 제공한다.
