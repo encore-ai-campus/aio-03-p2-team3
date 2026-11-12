@@ -41,7 +41,7 @@
 - `.github/workflows/rules-check.yml` — CI. PR과 main 변경마다 규칙 검사(`check.py`)와 테스트(`uv sync --locked`·`uv run pytest`)·Windows 개인 실행기 검증을 따로 돌리고, PR(본문 고침 포함)에서는 `pr-check`(`check.py --pr`)도 돌린다 [공통]
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
-- `docs/plans/` — 큰 작업의 계획 파일 `<작업명>.md`(RULES 7절) [과제별]
+- `docs/plans/` — 큰 작업의 계획 파일 `<작업명>.md`(RULES 7절), 첨부 흐름도 기반 HTML 설계 초안 `langgraph-master-draft.html` [과제별]
 - `docs/plans/kekorea-port.md` — 완료한 KE KOREA 무역서류(PI/PO/CI/PL) 이식 계획 이력 [과제별]
 - `reference/kekorea/` — 완료한 이식의 원본 사본(참고 이력, 읽기 전용). 담은 것·바꾼 것·원본 테스트 실행법은 그 폴더의 `README.md` [과제별]
 - `docs/CONTRACT.md` — gmail-quote-mvp 공통 계약(폴더 구조, 그래프 상태·노드·전이·한도, 도구 입출력, 필수 항목 출처, LLM 호출, DB 표, 실행 기록, 화면, Google, 환경변수). 하위 작업은 13절에서 자기가 읽을 절만 연다 [과제별]
