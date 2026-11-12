@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage"
 import LoginPage from "./pages/LoginPage"
 import PlaceholderPage from "./pages/PlaceholderPage"
 import SettingsPage from "./pages/SettingsPage"
+import PIPage from "./pages/PIPage"
 
 // 인증 경계: /app 아래는 /api/me까지 확인된 로그인만 지난다.
 function RequireAuth() {
@@ -40,6 +41,8 @@ export default function App() {
               <Route path="documents" element={<PlaceholderPage sub="문서 작성과 발급 상태를 관리하세요." title="문서함" />} />
               <Route path="activity" element={<PlaceholderPage sub="처리 단계와 오류를 확인하는 작업 이력입니다." title="실행 기록" />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="trade/pi" element={<PIPage />} />
+              <Route path="trade/pi/:documentId" element={<PIPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom"
 import { useAuth } from "../useAuth"
 
-// 대시보드 뼈대: 시안 문서작성 화면의 제목 갈래를 살리고, 본문 자리는 아직 연결 전임을 보여 준다.
+// 연결한 문서만 작성 링크를 제공한다. 뒤 문서는 각 계획 절에서 순서대로 연결한다.
 // 시안의 작업현황 수치·최근 문서·성공 표시는 실제 집계 API가 연결될 때까지 두지 않는다(계획 17절).
 export default function DashboardPage() {
   const { state } = useAuth()
@@ -12,7 +12,7 @@ export default function DashboardPage() {
       <div className="page-head">
         <div>
           <h1 className="page-title">문서작성</h1>
-          <p className="page-sub">대화로 조건을 전달하고 문서 요약과 검토 결과를 함께 확인하세요.</p>
+          <p className="page-sub">문서 종류를 선택하고 거래 내용을 입력해 검토·발급하세요.</p>
         </div>
         <Link className="btn" to="/documents">문서함으로</Link>
       </div>
@@ -33,11 +33,12 @@ export default function DashboardPage() {
         <div className="card">
           <div className="panel-head">
             <div>
-              <h2 className="section-title">문서작성 화면 준비 중</h2>
-              <div className="section-note">PI·PO·CI·PL 작성 화면은 순서대로 연결됩니다.</div>
+              <h2 className="section-title">새 문서 만들기</h2>
+              <div className="section-note">PI 작성 화면을 이용할 수 있습니다.</div>
             </div>
           </div>
-          <p className="section-note">이 자리에 문서작성 대화 화면이 연결됩니다. 아직 실제 데이터를 보여 주지 않습니다.</p>
+          <Link className="btn blue" to="/trade/pi">PI 작성하기</Link>
+          <p className="section-note">PO·CI·PL은 후속 단계에서 연결합니다.</p>
         </div>
       </div>
     </>

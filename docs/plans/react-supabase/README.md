@@ -1,6 +1,6 @@
 # 프론트엔드·Supabase 전환 문서 모음
 
-요청한 React + JavaScript + Vite 화면과 Supabase Auth·PostgreSQL·비공개 Storage 전환 자료를 이 폴더에 모은다. 현재 브랜치에는 1·3~11절 구현이 있으며, 실제 운영 DB/파일 이전은 미착수다. 단계별 구현·검증 범위는 PROGRESS.md에서 구분한다.
+요청한 React + JavaScript + Vite 화면과 Supabase Auth·PostgreSQL·비공개 Storage 전환 자료를 이 폴더에 모은다. 현재 브랜치에는 1·3~12절 구현이 있으며, 실제 운영 DB/파일 이전은 미착수다. 단계별 구현·검증 범위는 PROGRESS.md에서 구분한다.
 
 | 문서 | 담긴 내용 |
 |---|---|

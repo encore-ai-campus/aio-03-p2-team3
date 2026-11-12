@@ -60,7 +60,7 @@ export default function Layout() {
       </aside>
       <main className="shell-main">
         <header className="top">
-          <div className="crumb">워크스페이스 / {PAGE_LABELS[pathname] ?? ""}</div>
+          <div className="crumb">워크스페이스 / {PAGE_LABELS[pathname] ?? (pathname.startsWith("/trade/pi") ? "PI 작성" : "")}</div>
           <div className="top-actions">
             <button className="link-button" type="button" onClick={signOut}>로그아웃</button>
           </div>

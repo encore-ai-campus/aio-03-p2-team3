@@ -29,7 +29,10 @@ export async function apiFetch(path, { method = "GET", token, body, signal, resp
     throw new ApiError(0, "network", "서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.")
   }
   if (response.ok && responseType === "blob") return response.blob()
-  const data = await response.json().catch(() => null)
+  const data = await response.json().catch((error) => {
+    if (error.name === "AbortError") throw error
+    return null
+  })
   if (!response.ok) {
     throw new ApiError(
       response.status,
@@ -40,6 +43,18 @@ export async function apiFetch(path, { method = "GET", token, body, signal, resp
     )
   }
   return data
+}
+
+export async function downloadFile(file, token, signal) {
+  if (!file.download_url.startsWith("/api/")) throw new ApiError(0, "invalid_file", "파일 주소를 확인할 수 없습니다.")
+  const blob = await apiFetch(file.download_url.slice(4), { token, signal, responseType: "blob" })
+  if (signal?.aborted) return
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = file.filename
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 // GET /api/me — 인증 상태·내부 user_id·프로필·Gmail 연결 상태(로그인·새로고침 복구의 시작점).

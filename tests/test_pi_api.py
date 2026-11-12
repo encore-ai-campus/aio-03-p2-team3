@@ -242,7 +242,7 @@ def test_reload_after_new_database_connection_keeps_approved_files(pi_client):
     from app.db.engine import Database
     approved = decide(pi_client, propose(pi_client, create_pi(pi_client)), "approve").json()
     old_database = pi_client.app.state.database
-    new_database = Database(str(old_database.engine.url))
+    new_database = Database(old_database.engine.url.render_as_string(hide_password=False))
     new_database.create_tables()
     pi_client.app.state.database = new_database
     try:

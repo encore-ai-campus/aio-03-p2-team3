@@ -48,6 +48,7 @@ app/trade/
 | `GET /api/trade/{kind}/{id}/versions/{revision}` | 보관한 버전 조회 |
 | `POST /api/trade/{kind}/{id}/reviews` | `{revision, formats:["pdf","xlsx"]}`로 최종 검토 제안 |
 | `GET /api/trade/{kind}/{id}/reviews/{proposal_id}` | 보관한 제안과 선택 결과 조회 |
+| `GET /api/trade/{kind}/{id}/reviews/{proposal_id}/branding/{logo|seal}` | 본인·문서 종류·문서 ID·제안에 고정된 이미지 조회. 해시 검증 PNG, private/no-store. 파일 발급·내용 변경 없음 |
 | `POST /api/trade/{kind}/{id}/reviews/{proposal_id}/decisions` | 승인·취소·수정 선택 |
 | `PUT /api/trade/{kind}/{id}/sources` | `{revision, file_ids}`로 문서 출처 연결(첨부). 성공하면 새 revision·대기 검토 무효화, 과거 revision 연결은 보존(계획 8절, Bearer) |
 | `GET /api/trade/files/{file_id}` | 본인이 승인한 파일 다운로드 |
@@ -65,6 +66,8 @@ app/trade/
 첨부 파일은 Bearer 전용 `/api/files`(한 파일씩 multipart 업로드·메타데이터·다운로드·삭제)로 올려 위 `sources` 경로로 문서에 연결한다. bytes는 비공개 Storage 버킷에만 두고 DB에는 메타데이터(`file_assets`)만 남는다(계약 16.3절). 회사 설정이나 검토 제안이 참조 중인 이미지 파일은 삭제가 409로 거부된다(계획 9절). 9절 이전 회사 이미지 바이너리 행은 `uv run python -m app.trade.settings.backfill --yes`로, 10절 이전 발급 파일 바이너리 행은 `uv run python -m app.trade.review.backfill --yes`로 옮긴다(둘 다 반복 실행 안전, 뒤의 명령은 재실행이 저장 객체 해시 대조 검증이다).
 
 ## 문서별 차이
+
+React PI 화면은 `/app/trade/pi`(새 작성)·`/app/trade/pi/{id}`(재개)다(계획 12절). 문장 추출/직접 입력→서버 계산→누락 보완→최종 검토→승인/취소/수정→PDF/XLSX 다운로드를 연결한다. 검토에 고정된 문서·회사·계좌·이미지·revision·해시를 표시하며 브라우저에서 금액을 계산하지 않는다. 오래된 탭의 409는 입력을 보존하고 최신본 재조회·재검토를 안내한다. 상품/통화/거래처/단위 변경은 단가 확인을 해제해 기존 동의를 재사용하지 않는다. 개인 키는 화면의 접힌 등록 영역에서 Bearer 전용 `PUT /api/openai-key`(form `api_key`)·`DELETE /api/openai-key`로 관리한다. 기존 암호화/본인 범위/로컬 환경 전용 규칙을 재사용하며 키 원문을 응답하지 않는다.
 
 **PO**: 발행사는 buyer, 공급처는 seller다. 매입 단가를 사용하며 PI의 판매 단가·계좌를 복사하지 않는다. **PI**: 발행사는 seller이며 판매 단가와 통화별 계좌를 적용한다. 사용자 지정 샘플 행은 독립된 수량·0원 단가를 허용한다. AI의 샘플 표시는 원문 근거가 있어야 한다. 통화·상품 변경 시 이전 단가 확인을 재사용하지 않는다.
 

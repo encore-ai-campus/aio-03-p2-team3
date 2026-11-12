@@ -266,10 +266,12 @@ def test_link_refuses_conflicts_instead_of_merging(database_url):
         assert [row.id for row in users(client) if row.id == shell_id] == [shell_id]
 
         # ② 공급자 subject를 확인할 수 없으면(이메일 로그인 등) 기존 행 연결 근거가 없어 거부한다.
-        email_only = jwks.token()
-        fake.logins.append(fake_login(sub="G-sub", email="g@example.invalid"))
-        assert complete(client, start_connect(client, email_only)).headers["location"] == \
-            "/app/settings?gmail=account_conflict"
+        email_sub = uuid4()
+        email_only = jwks.token(sub=email_sub)
+        jwks.admin_users[str(email_sub)] = {"identities": []}
+        denied = client.post("/api/gmail/connect", headers=bearer(email_only))
+        assert denied.status_code == 409
+        assert denied.json()["error"]["code"] == "google_identity_required"
 
         # ③ 기존 행이 이미 다른 Supabase 로그인에 연결돼 있어도 거부한다.
         newcomer, holder = uuid4(), uuid4()

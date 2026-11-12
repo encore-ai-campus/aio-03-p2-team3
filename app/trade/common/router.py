@@ -1,5 +1,8 @@
 """네 문서가 실제 공유하는 HTTP 흐름. 업무 규칙과 AI 진입점은 도메인에서 주입한다."""
-from fastapi import APIRouter, Depends, Request
+from hashlib import sha256
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import Field, create_model, model_validator
 
 from app.trade.common.api import require_write
@@ -91,6 +94,20 @@ def document_router(kind, input_model, operations, repository_factory, extractor
     def get_review(document_id: int, proposal_id: str, request: Request, user_id: int = Depends(current_user_id)):
         _, reviews = repositories(request, user_id)
         return review.get_proposal(proposal_id, document_id, repository=reviews)
+
+    @router.get("/{document_id}/reviews/{proposal_id}/branding/{image}")
+    def review_image(document_id: int, proposal_id: str, image: Literal["logo", "seal"],
+                     request: Request, user_id: int = Depends(current_user_id)):
+        _, reviews = repositories(request, user_id)
+        proposal = review.get_proposal(proposal_id, document_id, repository=reviews)
+        branding = reviews.proposal_branding(proposal)
+        content = branding.logo if image == "logo" else branding.seal
+        if content is None:
+            raise DocumentError("IMAGE_NOT_FOUND", "검토 제안에 등록된 이미지가 없습니다", 404)
+        return Response(content=content, media_type="image/png", headers={
+            "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{sha256(content).hexdigest()}"',
+        })
 
     @router.post("/{document_id}/reviews/{proposal_id}/decisions", response_model=ReviewView | DocumentResult)
     def decide(document_id: int, proposal_id: str, command: Choice, request: Request, user_id: int = Depends(require_write)):

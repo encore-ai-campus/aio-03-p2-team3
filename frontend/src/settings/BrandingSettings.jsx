@@ -1,40 +1,13 @@
-import { useEffect, useState } from "react"
-import { apiFetch } from "../api"
+import { useState } from "react"
+import PrivateImage from "../components/PrivateImage"
 import SettingsForm, { Field } from "./SettingsForm"
-
-function ImagePreview({ fileId, token, label }) {
-  const [preview, setPreview] = useState(null)
-  const [retry, setRetry] = useState(0)
-  useEffect(() => {
-    if (!fileId) return undefined
-    const controller = new AbortController()
-    let objectUrl
-    apiFetch(`/files/${fileId}/download`, { token, signal: controller.signal, responseType: "blob" })
-      .then((blob) => {
-        if (controller.signal.aborted) return
-        objectUrl = URL.createObjectURL(blob)
-        setPreview({ fileId, url: objectUrl })
-      }).catch((error) => {
-        if (!controller.signal.aborted) setPreview({ fileId, error: error.message })
-      })
-    return () => {
-      controller.abort()
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [fileId, token, retry])
-
-  if (!fileId) return <div className="image-preview"><span>등록한 {label}이 없습니다.</span></div>
-  if (preview?.fileId !== fileId) return <div className="image-preview" role="status">이미지를 불러오는 중…</div>
-  if (preview.error) return <div className="image-preview"><p role="alert">{preview.error}</p><button type="button" className="btn" onClick={() => setRetry((value) => value + 1)}>다시 읽기</button></div>
-  return <div className="image-preview"><img src={preview.url} alt={`저장된 회사 ${label}`} /></div>
-}
 
 function BrandingCard({ kind, label, fileId, token, save, saving, error, notice, activeKind, setActiveKind, clearStatus }) {
   const [fileError, setFileError] = useState("")
   return (
     <section className="branding-card" aria-label={`${label} 설정`}>
       <h3 className="section-title">{label}</h3>
-      <ImagePreview fileId={fileId} token={token} label={label} />
+      <PrivateImage path={fileId ? `/files/${fileId}/download` : null} token={token} label={label} />
       <SettingsForm saving={saving} error={fileError || (activeKind === kind ? error : "")}
         notice={activeKind === kind ? notice : ""} onSubmit={({ image }) => {
           setActiveKind(kind)
