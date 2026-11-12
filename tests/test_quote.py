@@ -119,8 +119,8 @@ def test_tool_persists_id_number_and_user_isolation(database):
 
 
 @pytest.fixture
-def web(tmp_path):
-    app = create_app(Settings(database_url=f"sqlite:///{tmp_path}/quote.sqlite3", session_secret="fake-session"))
+def web(database_url):
+    app = create_app(Settings(database_url=database_url, session_secret="fake-session"))
     app.dependency_overrides[current_user_id] = lambda: 1
     with TestClient(app) as client:
         db = app.state.database

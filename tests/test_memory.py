@@ -1,9 +1,8 @@
-"""13절 완료 기준·오류 경로. 실제 Gmail·Gemini 없이 기억이 모델 입력에 이어지는지 검사한다."""
+"""13절 완료 기준·오류 경로. 실제 Gmail·OpenAI 없이 기억이 모델 입력에 이어지는지 검사한다."""
 
 from datetime import UTC, datetime, timedelta
 import json
 
-from google.genai.errors import ClientError
 import pytest
 from sqlalchemy import func, select
 
@@ -16,7 +15,7 @@ from app.graph.run import start_run
 from app.llm import client
 from app.prompts.format import thread_context_text
 from app.services.memory import context_for_model, load_memories, save_sent_memory
-from tests.fakes.llm import FakeLLM
+from tests.fakes.llm import FakeLLM, openai_error
 
 BASE_TIME = datetime(2026, 11, 9, tzinfo=UTC)
 GENERAL = {"intent": "general", "reason": "가상 일반 문의"}
@@ -268,7 +267,7 @@ def test_equal_timestamp_messages_are_not_lost_at_summary_boundary(database, ema
 
 
 @pytest.mark.parametrize("error,responses,end_reason,retries", [
-    ("rate_limit", [ClientError(429, {"error": {"status": "RESOURCE_EXHAUSTED"}})], "awaiting_approval", 0),
+    ("rate_limit", [openai_error(429)], "awaiting_approval", 0),
     ("network", [TimeoutError("가상 비밀 본문")] * 3, "failed", 2),
     ("invalid_output", [{"deal_conditions": "형식 오류"}] * 2, "failed", 1),
 ])

@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from app.config import Settings
-from app.llm.client import use_backend
+from app.llm.client import OpenAIKeyError, use_backend, use_user_key
 from app.prompts import Prompt
 from app.trade.ci.models import CIExtraction
 from app.trade.common import extraction
@@ -69,7 +69,7 @@ def _schema_violations(node):
 
 @pytest.mark.parametrize("schema", DOMAIN_SCHEMAS)
 def test_wire_json_schema_has_no_numbers_or_http_constraints(schema):
-    """숫자는 문자열로 받고(JSON number 정밀도·Gemini 거부 제약 방지) HTTP 입력 제약은 떼어냈다."""
+    """숫자는 문자열로 받고(JSON number 정밀도 보존·HTTP 제약 분리) HTTP 입력 제약은 떼어냈다."""
     assert _schema_violations(wire_schema(schema).model_json_schema()) == set()
 
 
@@ -98,27 +98,40 @@ def test_extract_facts_turns_wire_strings_into_validated_decimals():
 
 
 def test_trade_backend_defaults_to_openai_responses():
-    backend = trade_backend(Settings(openai_api_key="가짜 키"))
+    with use_user_key(lambda: "fake-user-key"):
+        backend = trade_backend(Settings(openai_api_key="unused-server-key"))
     assert isinstance(backend, ChatOpenAI)
     assert backend.model_name == "gpt-6-luna"
     assert backend.use_responses_api
 
 
 def test_trade_backend_model_follows_settings():
-    backend = trade_backend(Settings(openai_api_key="가짜 키", openai_model=" gpt-fake "))
+    with use_user_key(lambda: "fake-user-key"):
+        backend = trade_backend(Settings(openai_model=" gpt-fake "))
     assert backend.model_name == "gpt-fake"
 
 
-def test_trade_backend_gemini_choice(monkeypatch):
-    monkeypatch.setattr(extraction, "get_backend", lambda settings=None: "가짜 gemini 백엔드")
-    assert trade_backend(Settings(trade_extract_backend=" Gemini ")) == "가짜 gemini 백엔드"
+def test_trade_backend_uses_the_shared_openai_backend(monkeypatch):
+    settings = Settings(openai_api_key="가짜 키", openai_model="gpt-fake")
+    received = []
+    sentinel = object()
+
+    def shared(config=None):
+        received.append(config)
+        return sentinel
+
+    monkeypatch.setattr(extraction, "get_backend", shared)
+    assert trade_backend(settings) is sentinel and received == [settings]
 
 
-def test_trade_backend_rejects_unknown_choice():
-    with pytest.raises(ValueError, match="TRADE_EXTRACT_BACKEND"):
-        trade_backend(Settings(trade_extract_backend="claude"))
+def test_old_gemini_env_does_not_enable_trade_fallback(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "unused-fake-key")
+    monkeypatch.setenv("GEMINI_MODEL", "unused-fake-model")
+    monkeypatch.setenv("TRADE_EXTRACT_BACKEND", "gemini")
+    with pytest.raises(OpenAIKeyError):
+        trade_backend(Settings())
 
 
 def test_trade_backend_needs_openai_key_by_default():
-    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+    with pytest.raises(OpenAIKeyError):
         trade_backend(Settings())

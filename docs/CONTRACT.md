@@ -7,9 +7,9 @@
 - 관련 요구사항: R-01·R-02·R-05·R-11·R-14(`docs/REQUIREMENTS.md`).
 
 ## 1. 구조와 폴더
-- 서버 하나(FastAPI) 안에 화면(Jinja2 템플릿 + HTMX), LangGraph 그래프, 도구, DB를 둔다. 도구는 같은 서버 안의 LangGraph 도구 함수이고, 그 안에서 실제 외부 API(Gemini·Gmail)를 부른다. 별도 서버로 떼지 않는다(왕복 지연이 늘어 속도 요구와 부딪침). [Request]
+- 서버 하나(FastAPI) 안에 화면(Jinja2 템플릿 + HTMX), LangGraph 그래프, 도구, DB를 둔다. 도구는 같은 서버 안의 LangGraph 도구 함수이고, 그 안에서 실제 외부 API(OpenAI·Gmail)를 부른다. 별도 서버로 떼지 않는다(왕복 지연이 늘어 속도 요구와 부딪침). [Request]
 - 알림 수신 경로는 Pub/Sub 요청을 확인하고 바로 응답한 뒤, 같은 프로세스의 백그라운드 작업(FastAPI `BackgroundTasks`)에서 그래프를 돌린다. 결과는 DB에 저장하고 화면은 저장된 결과만 읽는다. [Request · Claude proposal]
-- DB 연결, LLM 클라이언트, Gmail 클라이언트 생성 준비물, 컴파일한 그래프는 서버가 뜰 때 한 번 만들어 재사용한다(속도). [Request]
+- DB 연결, Gmail 클라이언트 생성 준비물, 컴파일한 그래프는 서버가 뜰 때 한 번 만들어 재사용한다. LLM 클라이언트는 사용자 키로 호출 시 구성한다. [Request]
 - 파이썬 패키지 이름은 `app`이다. 테스트는 `tests/`에 둔다. [Claude proposal]
 
 ```text
@@ -121,8 +121,8 @@ tests/
 | `reflection_retries` | 성찰 재실행 횟수 합 | `int` | `0` | `reflect` | `reflect` |
 | `reflection_retries_by_type` | 오류 유형별 성찰 재실행 횟수 | `dict[str,int]` | `{}` | `reflect` | `reflect` |
 | `errors` | 오류 기록(쌓기) | `list[AgentError]` | `[]` | `finish_failed`, `save_pending`, 실행 기록기 | 모든 노드 |
-| `needs_review` | '확인 필요' 표시(대체 경로로 끝남) | `bool` | `False` | `save_pending`, 화면 | 한도 오류 노드, `reflect` |
-| `notice` | 화면 안내 종류 | `Literal["rate_limit","reflection_limit"] \| None` | `None` | `save_pending`, 화면 | 한도 오류 노드, `reflect` |
+| `needs_review` | '확인 필요' 표시(대체 경로로 끝남) | `bool` | `False` | `save_pending`, 화면 | 한도 오류 노드, `reflect`, `start_run` |
+| `notice` | 화면 안내 종류 | `Literal["rate_limit","reflection_limit","openai_key_required", "worker_unavailable", "worker_timeout", "worker_version_mismatch", "worker_key_required", "worker_owner_mismatch", "worker_rate_limit", "worker_network", "worker_invalid_output", "worker_invalid_input", "worker_failed"] \| None` | `None` | `save_pending`, 화면 | 한도 오류 노드, `reflect`, `start_run` |
 | `end_reason` | 종료 이유(3.3절) | `Literal["awaiting_approval","followup_question","ignored","failed"] \| None` | `None` | `start_run`, 실행 기록 | `analyze_email`(ignored), `save_pending`, `finish_failed` |
 
 - '후보 노드'는 `draft_replies`·`draft_followup`이다. 위 자료 형식(`EmailMessage` 등)은 4.3절에 정의한다. [Claude proposal]
@@ -210,7 +210,7 @@ finish_failed → END
 | `value` | 도구마다 다름(4.4절) \| `None` | 결과 값. 실패면 `None` |
 | `error_kind` | `None \| "rate_limit" \| "network" \| "invalid_output" \| "invalid_input" \| "auth" \| "not_found" \| "internal"` | 오류 종류 |
 | `error_message` | `str \| None` | 사람이 읽을 오류 설명(비밀값·본문 넣지 않음) |
-| `source` | `str` | 출처. 예: `gemini:gemini-3.6-flash`(`model_source()`), `gmail`, `db:price_list_items`, `code`, `rag:data/quote-rules/<파일>` |
+| `source` | `str` | 출처. 예: `openai:gpt-6-luna`(`model_source()`), `gmail`, `db:price_list_items`, `code`, `rag:data/quote-rules/<파일>` |
 | `fetched_at` | `str`(ISO 8601, UTC) | 조회·계산 시점(기억에 저장된 외부 데이터를 최신처럼 쓰지 않으려고) |
 | `attempts` | `int` | 실제 시도 횟수(재시도 포함) |
 | `duration_ms` | `int` | 걸린 시간 |
@@ -371,14 +371,95 @@ class AgentError(TypedDict):
 - 새 키가 생기면 `DealTerms`와 `FIELD_LABELS`(같은 파일)에 함께 더한다(공통 부분 변경). [Claude proposal]
 
 ## 6. LLM 호출 (`app/llm/client.py`)
-- 모델: Google Gemini `gemini-3.6-flash`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `GEMINI_MODEL`로 덮어씀. 2026-11-10 #62에서 무료 등급 `gemini-3.8-flash`의 503 반복으로 바꿈), 패키지 `langchain-google-genai`, 키 `GEMINI_API_KEY`. 실제 개인정보를 넣지 않는다(무료 등급 입력은 Google 제품 개선에 쓰임). [Request]
-- 호출은 모두 `call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) -> LLMResult` 하나로 한다. 구조화 출력(`with_structured_output(schema)`)만 쓴다. [Request · Claude proposal]
+- 사용자별 키(2026-11-12): `user_openai_keys`는 `user_id` PK/FK, `api_key_enc` Text, `updated_at` UTC를 저장한다. `TOKEN_ENCRYPTION_KEY`의 Fernet으로 암호화하며 평문을 화면/세션/상태/로그에 넣지 않는다. `GET /settings`는 등록 여부·CSRF 토큰만 전달한다. `POST /settings/openai-key`(api_key, csrf_token)와 `/settings/openai-key/delete`(csrf_token)는 로그인 사용자 행만 변경하며 요청의 user_id를 받지 않는다. 저장 시 실제 API를 호출하지 않는다.
+- 실행 격리: `start_run()`과 문서 `/extract`가 사용자 ID·DB·설정을 `ContextVar`로 묶는다. `get_backend()`는 매 논리 호출마다 아래 6.1절의 키 소스를 확인하고 클라이언트를 만든다. 사용자 범위 밖, 키 누락, 암호화 설정 누락, 복호화 실패는 API 전송 없이 차단하며 공용 클라이언트/키 캐시를 두지 않는다. 메일 자동 처리도 로그인 세션 없이 메일함 소유자 범위를 사용한다. 테스트의 명시적 가짜 백엔드 주입은 유지한다.
+- 키 오류: 문서 추출은 `OPENAI_KEY_REQUIRED`/`OPENAI_KEY_UNAVAILABLE`와 HTTP 409를 반환한다. 메일 실행은 `end_reason=failed`, `notice=openai_key_required`로 끝나고 `processed_messages`에 오류 상태를 남긴다. 기존 notice 값에 `openai_key_required`를 추가하며 그래프 노드/전이는 유지한다. 키 등록 전 실패한 메일은 자동 재처리하지 않는다. 교체·삭제는 다음 논리 호출부터 적용되며 이미 시작한 호출·재시도는 취소하지 않는다.
+- 모델: OpenAI Responses API `gpt-6-luna`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `OPENAI_MODEL`로 덮어씀), 패키지 `langchain-openai`, 키는 사용자별 설정 등록값이며 서버 `OPENAI_API_KEY`로 대체하지 않는다. 2026-11-11 요청에 따라 메일·요약·성찰·독립 무역 문서 추출까지 모두 전환했다. 기본 모델은 앞서 채택한 무역 추출 모델을 유지한다. 실제 개인정보를 넣지 않는다. [Request]
+- 호출은 모두 `call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) -> LLMResult` 하나로 한다. 실제 백엔드는 `ChatOpenAI(use_responses_api=True, max_retries=0, timeout=20)`이고, `structured_output()`이 `with_structured_output(schema, method="function_calling", strict=False)`를 적용한다. 기존 스키마의 기본값·자유 키 dict를 유지하면서 반환값은 Pydantic으로 검증한다. 대역은 기존 `with_structured_output(schema)` 인터페이스를 유지한다. [Request · Claude proposal]
 - `LLMResult`: `ok`, `value`(schema 객체), `error_kind`(`rate_limit`/`network`/`invalid_output`/`invalid_input`/`internal`), `attempts`, `prompt_version`, `duration_ms`. 노드는 이것을 `ToolResult`로 옮긴다. [Claude proposal]
-- 오류 구분: HTTP 429·`RESOURCE_EXHAUSTED`는 `rate_limit`(재시도 안 함) · 제한 시간 초과·연결 오류·HTTP 500/503(`UNAVAILABLE`)은 `network`(`LLM_MAX_RETRIES`까지 재시도) · 스키마 검증 실패는 `invalid_output`(`LLM_INVALID_OUTPUT_RETRIES`까지) · HTTP 400은 `invalid_input`(재시도 안 함). 정확한 예외 클래스는 2가 패키지 문서로 확인해 코드에 적는다. [Request · Claude proposal]
+- 오류 구분: OpenAI SDK HTTP 429는 `rate_limit`(재시도 안 함) · 제한 시간 초과·연결 오류·HTTP 5xx는 `network`(`LLM_MAX_RETRIES`까지, 최초 포함 최대 3회·1초→2초 대기) · 스키마 검증 실패는 `invalid_output`(`LLM_INVALID_OUTPUT_RETRIES`까지 별도 1회) · 그 밖의 HTTP 4xx는 `invalid_input`(재시도 안 함). SDK 자동 재시도는 끄며 오류 원문·응답·키 대신 HTTP 코드나 예외 종류만 기록한다. [Request · Claude proposal]
 - 재시도한 횟수(`attempts - 1`)는 노드가 `call_retries`에 더한다. [Claude proposal]
 - 프롬프트: `app/prompts/<이름>.py`에 `NAME`, `VERSION`(`v1`, `v2` …), `TEMPLATE`을 둔다. 버전 이름은 `<이름>.<VERSION>`(예: `draft_replies.v1`)이고 호출마다 실행 기록에 남긴다. 고치면 `VERSION`을 올리고 `app/prompts/VERSIONS.md`에 날짜·버전·변경 이유를 한 줄 적는다(12, R-10). [Request · Claude proposal]
 - 프롬프트 이름: `analyze_email`, `draft_replies`, `extract_deal_terms`, `draft_followup_replies`, `summarize_thread`, `reflect_fix`. [Claude proposal]
 - 테스트는 `app.llm.client.use_backend(fake)`로 `tests/fakes/llm.py`의 `FakeLLM`을 끼운다. 실제 API를 부르지 않는다(Codex 환경에 키 없음). [Request · Claude proposal]
+
+### 6.1 실행 위치와 키 소스 (local-openai-execution 1절, 구현됨)
+
+| 설정 | 허용한 실행 | 키 소스·차단 |
+|---|---|---|
+| `AI_RUNTIME=server`(기본, 빈 값 포함) | 기존 앱 실행·Render | 현재 사용자의 `user_openai_keys`만 조회. 어떤 사용자 키 오류에도 환경 키 대체 금지 |
+| `AI_RUNTIME=local` | `uv run python -m app.local [--port 8000]` | `.env`의 `OPENAI_API_KEY`만 사용. DB 사용자 키 조회·저장·교체·삭제 금지 |
+
+- 로더는 `local`일 때만 `OPENAI_API_KEY`를 Settings에 읽는다. 키·소유자 식별자는 Settings의 repr에서 제외한다. `.env` 변경은 재시작 후 적용한다. `local`과 서버 등록 키 사이의 자동 전환은 없다.
+- 로컬 실행기는 `127.0.0.1`에 실제 소켓을 열고 검증한 소켓 자체를 Uvicorn에 전달한다. 공개 바인딩·리로드·다중 워커 옵션은 제공하지 않는다. 앱 생성과 키 조회 시 현재 실행 범위의 살아 있는 루프백 리스너를 확인한다. 일반 `uvicorn app.main:app` 실행에서는 `local` 설정을 거부한다. `RENDER`·`RENDER_SERVICE_ID`·`RENDER_EXTERNAL_URL`·`PORT` 중 값이 있는 공용 환경에서도 시작을 거부한다. Host·`APP_BASE_URL`은 실행 허가의 근거가 아니며, 허가 후에도 로컬 Host만 허용한다.
+- `LOCAL_OWNER_GOOGLE_SUB`는 본인이 명시한다. 기존 Google OAuth의 서명·발급자·대상 검증을 통과해 저장된 `User.google_sub`와 `last_login_at`을 사용하며, 로그인 사용자 또는 백그라운드 실행의 사용자 행이 지정 식별자와 일치해야 한다. 이메일·요청 user_id·최초 방문자를 소유자 판정에 사용하지 않는다.
+- 최초 설정: 소유자/키가 비어 있어도 전용 로컬 앱과 로그인 화면은 열 수 있다. Google 로그인 후 본인 `/settings`에 표시된 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 로컬 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 `OPENAI_API_KEY`를 채운 뒤 재시작한다. 식별자는 인증된 본인 설정 화면에만 표시하며 응답은 `private, no-store`다. 서버에서도 개인 PC 연결 대상 확인을 위해 본인 설정에서만 제공한다(6.2절). 실제 계정·키를 채팅·레포에 옮기지 않는다.
+- 로컬 설정 화면은 `.env` 키 사용 가능/불가와 안전한 차단 이유만 표시하며 키 원문·해시·앞뒤 문자열·DB 키 등록 폼은 제공하지 않는다. 등록/삭제 POST를 직접 호출해도 `LOCAL_KEY_ENV_ONLY`(409)로 거부한다. 저장된 DB 사용자 키가 있어도 읽지 않는다.
+- 로컬 오류: `LOCAL_OWNER_REQUIRED`(409), `LOCAL_OWNER_MISMATCH`(403, 검증 로그인 없음/다른 사용자/없는 사용자 포함), `LOCAL_KEY_REQUIRED`(409), `LOCAL_RUNTIME_REQUIRED`(409). 문서 API는 해당 코드를 반환한다. 메일은 기존 `openai_key_required` 안내로 실패 종료한다. 키는 AgentState·세션·실행 기록에 넣지 않으며 노드·엣지는 유지한다.
+- 개인 PC Gmail 연결·수집은 계획 2절에서 구현했다(7·9·10절). 서버 장치 연결·작업 큐는 3절에서 구현했다. 개인 실행 프로그램과 기존 AI 호출의 큐 연결도 4절에서 구현했다. 공용 Gmail 감시·Pub/Sub 설정은 유지한다.
+
+### 6.2 서버의 사용자별 실행 방식 (3·4절 구현)
+
+- 서버 사용자 설정의 필드 이름은 `users.ai_execution_mode: stored_key | local_worker`, 기본값은 `stored_key`다. `20261112_worker_queue` 마이그레이션은 기존 사용자·키·메일·승인 데이터를 보존하고 이 열과 장치/작업 표를 추가한다. HTTPS 서버 `/settings`에서 선택·연결 상태 확인·해제를 제공한다. `user_openai()` 범위가 `local_worker` 사용자에게만 큐 어댑터를 연결하고, `call_structured()`는 백엔드를 만들기 전에 그 어댑터로 보낸다. 메일 분석·답장·거래/무역 추출·요약·성찰과 네 문서 `/extract`가 동일 경로를 쓴다. 테스트의 명시적 가짜 백엔드 주입은 유지한다.
+- `stored_key`: 사용자 DB 암호문만 선택한다. `local_worker`: 해당 사용자에게 연결·승인된 활성 장치에 구조화 AI 호출만 위임한다. 장치가 없거나 오프라인·만료·인증 오류면 차단하며 DB 키나 서버 환경 키로 대체하지 않는다. 로컬 서비스 전체 실행(`AI_RUNTIME=local`)과 서버 사용자의 `local_worker` 선택은 별개다.
+- 장치 프로그램은 본인 PC의 `.env`에서만 OpenAI 키를 읽고, 연결 계정의 검증된 Google sub가 `LOCAL_OWNER_GOOGLE_SUB`와 일치할 때만 실행한다. 키·Google OAuth 토큰은 서버에 전송하거나 장치 연결 응답에 포함하지 않는다. 서버의 Gmail·문서 저장·승인·발송은 기존 사용자 격리를 그대로 유지한다.
+- `uv run python -m app.worker.pc pair|run --service https://<서비스>`는 명시한 HTTPS 원점만 사용한다. 본인 로그인 `/settings`에서 확인한 검증 식별자를 개인 `.env`에 직접 지정한다(이 화면은 private/no-store). 장치 자격증명은 기본 `.worker-device.json`에 보관하고 기존 파일/심볼릭 링크를 덮지 않는다. Windows는 WSL 없이 실행하며 현재 Windows 사용자의 DPAPI로 암호화한 뒤 사용자 전용 보호 DACL을 가진 파일에 저장한다(LOCAL_MACHINE 범위·UI 프롬프트 없음). 읽을 때 같은 핸들로 소유자·DACL·일반 파일을 확인하고 reparse point/다른 사용자의 접근 권한·평문/손상 파일을 거부한다. 다른 Windows 계정/PC로 파일을 옮겨 재사용하지 않는다. macOS/Linux는 기존 소유자·600 권한을 검사한다. 두 방식 모두 run 때 본인 Google 식별자·서비스 원점·만료도 검사한다. `.env` 키 교체/삭제는 재시작으로 적용하며, PC/프로그램을 켜 두어야 AI가 동작한다. Ctrl+C로 중지하고 서버 화면에서 해제한다.
+- PC가 모델(로컬 `OPENAI_MODEL`), 출력 토큰(기본 2048, 1~32768), 요청 빈도(기본 분당 10, 1~60), 동시 작업(1개)을 강제한다. 서버가 보낸 토큰/URL/헤더 필드는 허용하지 않는다. OpenAI 목적지는 설치 코드의 `https://api.openai.com/v1`이고 SDK 자동 재시도는 0이다. HTTPS 인증서 검증·환경 프록시/CA 신뢰를 유지하며 리다이렉트는 따르지 않는다. 키·장치 토큰이 출력에 포함되면 결과를 버린다.
+- 문서 API 오류 코드는 `WORKER_UNAVAILABLE`(409, 오프라인/해제), `WORKER_TIMEOUT`(504, 종료/임대/전체 기한 초과), `WORKER_VERSION_MISMATCH`(409), `WORKER_KEY_REQUIRED`(409, 키 누락/401/403), `WORKER_OWNER_MISMATCH`(403), `WORKER_RATE_LIMIT`(429), `WORKER_NETWORK`(503), `WORKER_INVALID_OUTPUT`(503), `WORKER_INVALID_INPUT`(409), `WORKER_FAILED`(503)다. 메일은 같은 코드의 소문자를 `notice`에 남겨 화면에서 안내한다. 미완료/거부 결과는 문서로 저장하지 않으며 `save_pending`도 PC 호출 실패를 검사해 후보 저장을 막는다. 수동 문서·파일 발급·승인 후 발송은 유지한다.
+
+### 6.3 장치 연결 인증 (3·4절 구현)
+
+- HTTPS 서버를 사용한다. 장치가 연결 요청을 만들면 서버가 32바이트 이상 난수인 `device_secret`과 별도 일회용 `pairing_code`를 발급한다. 연결 유효기간은 10분, 연결 조회는 5초 이상 간격이다. 서버는 비밀값의 해시만 보관하며 코드·토큰 원문을 로그에 남기지 않는다.
+- 본인이 Google 로그인한 서버 화면에서 CSRF 검증 후 pairing code와 장치 이름을 확인하고 승인해야 연결된다. 최초 연결·방문 자동 승인은 없다. 장치는 연결 전에는 작업을 받을 수 없고, 승인 뒤 전달받은 검증 계정 sub와 로컬 소유자 설정을 대조한다.
+- 승인된 장치에는 32바이트 이상 난수의 장치 Bearer 토큰을 한 번만 전달한다. 서버는 토큰 해시·`device_id`·소유자 `user_id`·권한(`ai:claim`, `ai:complete`)·만료·폐기 시각을 보관한다. 토큰은 30일 만료이며 사용자 세션·Gmail·파일 다운로드·다른 장치 권한으로 사용할 수 없다. PC 파일은 사용자만 읽게 보관하고 출력하지 않는다.
+- 모든 작업 claim/heartbeat/complete는 토큰 소유자와 `device_id`를 서버에서 찾고 작업의 사용자/장치/시도 ID와 대조한다. 요청이 주장한 user_id는 신뢰하지 않는다. 사용자의 연결 해제·모드 변경·토큰 만료는 다음 요청부터 차단하고 미완료 임대를 무효화한다. 재연결은 새 명시적 승인을 요구한다.
+
+| API | 인증·입출력 |
+|---|---|
+| `GET /api/worker/protocol` | 공개 설치 정의: `protocol_version`, `definitions`(ID·버전·`prompt_sha256`·`schema_sha256`), `models` |
+| `POST /api/worker/pairings` | `device_name`, `capabilities`(위 정의 중 지원하는 조합과 서버 모델). `pairing_id`, `device_secret`, `pairing_code`, 만료·조회 간격을 최초 응답에만 전달 |
+| `POST /api/worker/pairings/{pairing_id}/poll` | body의 `device_secret`으로만 조회. `pending` 또는 승인 후 `device_id`·일회성 `device_token`·검증된 `google_sub`·권한·만료. 세션/코드만으로 토큰 조회 불가 |
+| `GET /api/ai-execution` | Google 세션 사용자만 본인 모드·장치 이름/온라인/만료·최근 작업 상태·CSRF를 조회. 코드/토큰/키/payload는 반환하지 않음 |
+| `POST /api/ai-execution/mode` | Google 세션+CSRF, `ai_execution_mode`. 실제 변경 시 장치·승인 대기 연결·미완료 작업 취소 |
+| `POST /api/ai-execution/pairings/approve` | 검증 Google 로그인+CSRF, `pairing_code`, PC와 대조한 `device_name`. `local_worker` 사용자만 승인, 재사용 거부 |
+| `POST /api/ai-execution/devices/{device_id}/disconnect` | 본인 세션+CSRF. 이후 요청 차단, 새 승인 없이 재연결 불가 |
+
+- 장치 API는 실제 HTTPS 요청과 HTTPS 서버 설정, `AI_RUNTIME=server`를 모두 요구한다. OpenAI 키 입력 필드가 없고 알 수 없는 필드는 안전한 코드만으로 거부한다. 응답은 `private, no-store`다. 프록시의 전달 헤더만으로 앱이 HTTPS를 판정하지 않는다(배포의 신뢰한 프록시 설정은 유지).
+- 연결 코드는 18바이트 난수, secret/장치 토큰은 각각 32바이트 난수다. DB에는 각각 SHA-256만 저장하며 토큰의 재조회/복구 API가 없다. 교체는 새 코드·본인 승인·새 토큰 전달로만 하며, 새 토큰 발급 트랜잭션에서 기존 장치·미완료 작업을 취소한다. 사용자별 활성 장치 1대는 DB 부분 유니크 인덱스로도 제한한다.
+- 횟수 제한은 DB 고정 시간 창으로 공유한다. 클라이언트 IP별 연결 요청 10분당 6회, 연결 조회 분당 120회(개별 연결은 5초 간격), 프로토콜 조회 분당 60회다. 사용자별 승인 시도 10분당 10회, 모드/해제 분당 20회, 상태 조회 분당 60회, 작업 취소 분당 30회다. 장치 claim/heartbeat/complete는 각각 IP당 분당 120회다. 실패 요청도 별도 트랜잭션에 횟수를 남기며 429를 반환한다. IP 원문은 저장하지 않는다.
+
+### 6.4 구조화 AI 작업 프로토콜 v1 (3·4절 구현)
+
+- 작업 종류는 `structured_ai_call` 하나다. 서버·PC 모두 설치된 코드의 동일한 허용 목록을 사용한다. 프롬프트 원문/출력 JSON Schema/실행 코드/셸 명령/임의 URL/임의 HTTP 헤더/도구 실행 명세를 작업으로 받지 않는다. OpenAI 목적지와 인증 헤더는 PC의 공통 SDK 어댑터가 정한다. 모델 출력은 데이터로만 검증하며 도구·승인·발송을 실행하지 않는다.
+- 요청 필드: `protocol_version: 1`, `kind: structured_ai_call`, `job_id`(논리 호출 UUID), `attempt_id`(시도마다 새 UUID), `device_id`, `run_id`(메일 실행 UUID 또는 독립 추출 추적 UUID), `prompt_id`, `prompt_version`, `schema_id`, `schema_version`, `variables`, `requested_model`, `created_at`, `expires_at`(UTC RFC3339). 알 수 없는 필드·버전·ID 조합·중첩 명령은 거부한다. 서버가 생성한 소유자 정보와 작업/시도/장치 ID를 수정할 수 없다.
+- 버전은 현재 프롬프트의 `VERSION`(예: `v3`)과 독립 스키마 버전 `v1`을 사용한다. 같은 ID/버전의 템플릿·스키마를 바꾸지 않고 버전을 올린다. 연결 시 `protocol_version`·허용 `(prompt_id, prompt_version, schema_id, schema_version)` 조합과 각 정의의 SHA-256을 교환하고 양쪽이 같은 조합만 배정한다. 키의 해시는 교환하지 않는다. 기존 로컬 `call_structured()`의 테스트 주입과 반환형은 유지한다.
+
+| prompt_id / 버전 | 허용 schema_id / 버전 | variables의 정확한 키 |
+|---|---|---|
+| `analyze_email` / `v1` | `EmailAnalysis` / `v1` | `thread_context`, `email` |
+| `draft_replies` / `v3` | `DraftOutput` / `v1` | `candidate_min`, `candidate_max`, `reply_mode_guide`, `trade_doc`, `preferences`, `feedback`, `thread_context`, `email` |
+| `extract_deal_terms` / `v1` | `ExtractedDealTerms` / `v1` | `email`, `thread`, `received_date`, `feedback` |
+| `extract_trade_terms` / `v1` | `ExtractedTradeDoc` 또는 `ExtractedTradeCIDoc` / `v1` | `document_type`, `ci_rules`, `thread`, `email`, `feedback` |
+| `draft_followup_replies` / `v1` | `FollowupDraft` / `v1` | `missing_labels`, `known_terms`, `preferences`, `thread`, `email`, `feedback` |
+| `summarize_thread` / `v1` | `ThreadSummary` / `v1` | `previous_summary`, `confirmed_terms`, `last_result`, `messages` |
+| `reflect_fix` / `v1` | `ReflectAnalysis` / `v1` | `reply_mode`, `strategy`, `retry_target`, `issues`, `deal_summary` |
+| `pi_extract` / `v1` | `PIExtractionWire` / `v1` | `text` |
+| `po_extract` / `v1` | `POExtractionWire` / `v1` | `text` |
+| `ci_extract` / `v1` | `CIExtractionWire` / `v1` | `text` |
+| `pl_extract` / `v1` | `PLExtractionWire` / `v1` | `text` |
+
+- `variables`는 표의 문자열 값만 허용하고 `candidate_min=2`, `candidate_max=3`만 정수로 허용한다. 문서 `text`는 기존 HTTP와 같이 최대 20,000자, 변수별 UTF-8 최대 128 KiB, 전체 요청·응답 JSON은 각각 최대 256 KiB다. `document_type`은 PI/PO/CI/PL, CI만 `ExtractedTradeCIDoc`를 사용하며 `ci_rules`는 설치된 상수와 일치해야 한다. `requested_model`은 서버의 `model_name()` 결과여야 하고 장치에서 동의한 모델 목록과 일치해야 한다. 임의 모델로 자동 대체하지 않는다.
+- 성공 응답: `protocol_version`, `job_id`, `attempt_id`, `device_id`, `schema_id`, `schema_version`, `ok: true`, `value`(허용 스키마 JSON), `duration_ms`(0~30,000). 오류 응답은 같은 식별 필드와 `ok: false`, `error_kind`만 보낸다. `value`와 오류를 함께 받지 않는다. 오류는 `rate_limit`, `network`, `invalid_output`, `invalid_input`, `internal`, `key_required`, `owner_mismatch`, `unsupported_version`, `worker_unavailable`, `expired`만 허용하고 예외 원문·응답·키 조각은 받지 않는다.
+- PC는 wire 스키마로 검증한 결과만 보내고 서버가 같은 스키마로 다시 검증한다. 독립 문서는 이후 기존 원본 PI/PO/CI/PL 스키마·근거·업무 검증도 거친다. 키/소유자 오류는 기존 `OpenAIKeyError` 계열 안내로, 버전/입력 오류는 `invalid_input`, 오프라인/만료는 `network`로 기존 `LLMResult`에 연결한다. 결과가 저장·승인·발송 권한을 만들지 않는다.
+- 요청의 전체 수명은 생성부터 120초이며 재시도를 포함한 논리 호출 기한이다. claim 대기는 최대 25초, 임대는 30초, heartbeat는 10초 간격이며 원래 `expires_at` 안에서만 연장한다. 장치 무응답 45초면 오프라인이다. SDK 1회 호출 제한은 기존 20초·자동 재시도 0이며 PC는 시도당 한 번만 호출한다. 서버가 기존 network 2회·invalid_output 1회 재시도 예산을 관리하고 새 `attempt_id`를 배정한다(429·키 오류 재시도 없음). 기한이 남지 않으면 재시도하지 않는다.
+- 상태는 `queued → leased → succeeded|failed|expired|cancelled`다. 임대된 장치·현재 attempt만 결과를 확정하는 조건부 갱신을 통과할 수 있다. 중복 완료는 같은 확정 결과만 반환하고, 이전 attempt·다른 사용자/장치·만료/폐기 뒤 늦은 응답은 적용하지 않는다. 임대 만료 때 같은 attempt를 재실행하지 않고 서버 예산 안에서만 새 attempt를 만든다. OpenAI에 이미 전송된 요청 자체의 취소는 보장하지 않는다.
+- 작업 변수·결과는 민감 데이터다. 서버의 본인 작업 저장소와 PC 메모리에서만 처리하고 확정/만료 뒤 요청 payload를 삭제한다. 완료와 업무 호출자가 다른 서버 프로세스일 수 있으므로 `20261112_worker_delivery`의 `result_enc`에 검증된 성공 envelope만 기존 토큰 암호화 키로 잠시 보관한다. 본인 호출자가 소비할 때 사용자·장치 활성 상태·attempt·원래 기한을 다시 확인하고 같은 트랜잭션에서 암호문을 삭제한다. 연결 해제/모드 변경과 원래 120초 기한에도 삭제하며, 재시작/주기 정리에서도 처리한다. 이 전달용 암호문은 업무 기록이나 조회 API에 반환하지 않는다. 일반 로그·실행 기록에는 식별 ID·허용 버전·모델·크기·시간·안전 오류만 남기며 payload·인증값을 기록하지 않는다. 문서·메일 본문은 기존 사용자별 업무 저장 규칙을 따른다.
+
+- 서버 구현은 `app/worker/protocol.py`(12개 설치 조합·해시·엄격 검증), `service.py`(DB 상태 전이), `router.py`(HTTPS/권한/CSRF/크기 제한)다. 기존 프롬프트·출력 스키마를 수정하지 않고 참조하며 성공 결과도 같은 스키마로 엄격히 재검증한다. 중첩 모델의 미정의 필드·숫자 대신 문자열을 요구하는 문서 wire 형식도 검사한다.
+- `enqueue(database, user_id, ..., model=...)`는 서버 내부 전용이며 작업 생성 HTTP API는 제공하지 않는다. 온라인인 승인 장치와 설치 조합/모델을 확인하고 서버가 UUID·120초 기한을 만든다. 사용자별 미완료 작업은 32개까지다. `app/worker/adapter.py`가 트랜잭션 밖에서 결과를 기다리고 기존 network 2회·invalid_output 1회 예산만 관리한다. 재시도는 같은 job ID·원래 생성/만료 시각을 유지하고 새 attempt ID로 조건부 갱신한다. PC는 시도당 한 번만 OpenAI를 호출한다. 임대가 끊긴 시도·429·키 오류는 자동 재시도하지 않으며 전체 기한은 연장하지 않는다.
+- 장치 Bearer API는 `POST /api/worker/devices/{device_id}/claim`(`wait_seconds`: 0~25, 기본 0), `/jobs/{job_id}/heartbeat`(`attempt_id`), `/jobs/{job_id}/complete`(성공/실패 envelope)다. 모두 `device_id`에 속한 토큰을 요구한다. claim은 `job` 또는 `null`을 반환하며 장치당 실행 중 시도는 하나다. `POST /api/ai-execution/jobs/{job_id}/cancel`은 본인 세션+CSRF만 허용한다.
+- 사용자 행 잠금(Postgres와 SQLite의 UPDATE 잠금)과 조건부 UPDATE가 claim/complete/교체/취소를 직렬화한다. 임대 만료는 같은 시도를 재배포하지 않고 `expired`로 끝낸다. 재시작과 서버의 5초 주기 정리에서 만료를 확정하며, 요청은 정리 주기 전에도 기한을 검사한다. 대기 중 DB 세션은 닫혀 있다. 외부 OpenAI 호출·메일 발송의 exactly-once를 보장하지 않는다.
+- 완료 응답은 `status`, `duplicate`만 반환한다. 요청 payload와 성공 결과 평문은 확정 뒤 보존하지 않는다. 위 전달용 암호문은 소비/해제/기한에 삭제하고 결과 SHA-256만 남겨 동일 완료의 중복 확인에 쓴다. 다른 시도/소유자/장치·변조 결과·취소/만료/폐기 후 결과를 적용하지 않는다. 오류는 `unauthorized`(401), `owner_mismatch`/CSRF(403), `not_found`/`pairing_invalid`(404), 버전/연결 충돌(409), `expired`(410), 크기(413), 출력 스키마(422), `rate_limit`(429) 등 고정 코드이며 입력값·예외 원문을 반환하지 않는다.
 
 ## 7. DB 표 (Render Postgres, `app/db/models.py`)
 - `DATABASE_URL`로 연결하고, 테스트는 SQLite(메모리)로 같은 표를 만든다. 시각은 UTC로 저장한다. JSON 열은 Postgres `JSONB`, SQLite `JSON`. 모든 조회는 `user_id`로 거른다(본인 데이터만). [Request · Claude proposal]
@@ -386,7 +467,12 @@ class AgentError(TypedDict):
 
 | 표 | 뜻 | 주요 열 | 쓰는 하위 작업 |
 |---|---|---|---|
-| `users` | 사용자 | `id` PK · `google_sub` 유일 · `email` · `display_name` · `reflection_enabled`(bool, 기본은 환경변수) · `created_at` · `last_login_at` | 6, 11, 12 |
+| `users` | 사용자 | `id` PK · `google_sub` 유일 · `email` · `display_name` · `reflection_enabled`(bool, 기본은 환경변수) · `ai_execution_mode`(`stored_key` 기본/`local_worker`) · `created_at` · `last_login_at` | 6, 11, 12, local-openai-execution 3 |
+| `user_openai_keys` | 사용자별 AI 키 | `user_id` PK/FK · `api_key_enc`(Fernet 암호문) · `updated_at` | 사용자별 키 |
+| `worker_pairings` | 10분 단일 사용 연결 | UUID PK · secret/code SHA-256 · 장치 이름·지원 정의 · 승인 사용자/시각 · 최종 조회/소비/만료 시각 | local-openai-execution 3 |
+| `worker_devices` | 사용자별 개인 장치 | UUID PK · `user_id` · 이름 · token SHA-256 · 권한/지원 정의 · 생성/최근 응답/30일 만료/폐기 시각 · 사용자별 미폐기 행 유일 | local-openai-execution 3 |
+| `worker_jobs` | 구조화 AI 시도 | 작업 UUID PK · 고유 `attempt_id` · `user_id`/`device_id`/`run_id` · 상태 · schema ID/버전 · 전송 payload · 소비 전 전달용 `result_enc`(암호문, 6.4절) · 결과 해시/안전 오류 · 생성/기한/임대/heartbeat/종료 시각 | local-openai-execution 3·4 |
+| `worker_rate_limits` | 여러 프로세스의 횟수 제한 | 해시 식별자+시간 창 PK · 횟수·정리 시각. 원문 IP/인증값 없음 | local-openai-execution 3 |
 | `google_tokens` | 암호화한 Google 토큰 | `user_id` PK·FK · `refresh_token_enc` · `access_token_enc` · `expires_at` · `scopes` · `updated_at` | 6, 7, 9 |
 | `gmail_watches` | 감시 등록 | `user_id` PK·FK · `topic` · `history_id`(마지막 처리 historyId) · `expiration` · `last_renewed_at` · `status`(`active`/`stopped`/`error`) · `last_error` | 6, 7 |
 | `processed_messages` | 처리한 메일 | `id` PK · `user_id` · `gmail_message_id` · (`user_id`,`gmail_message_id`) 유일 · `thread_id` · `history_id` · `status`(`processing`/`awaiting_approval`/`sent`/`ignored`/`error`) · `skip_reason` · `notice` · `run_id` · `received_at` · `created_at` | 7, 9 |
@@ -408,7 +494,21 @@ class AgentError(TypedDict):
 - Google 토큰은 `TOKEN_ENCRYPTION_KEY`로 암호화해 저장한다(방식은 6이 정하고 이 절에 적는다). [Request]
   - 방식(6): `cryptography`의 Fernet(AES-128-CBC + HMAC-SHA256). `TOKEN_ENCRYPTION_KEY`는 Fernet 키(만드는 명령은 `.env.example`)이고, 키를 바꾸면 저장된 토큰을 못 읽어 사용자가 다시 로그인해야 한다. 암호화·복호화는 `app/services/auth.py`의 `TokenCipher`, 토큰 꺼내기·갱신은 `get_access_token()`만 쓴다. [Claude proposal]
 - `gmail_watches`(6): `status`가 `error`일 때 `last_error`는 `token_expired`(갱신 토큰 만료·취소·읽기 실패: 저장한 토큰을 지우고 다시 로그인을 안내) 또는 `watch_failed: <HTTP 상태 등>`(감시 등록 실패: 다음 갱신 때 다시 시도). `history_id`는 처음 등록하거나 `stopped`에서 다시 등록할 때만 watch 응답 값으로 정하고, 켜져 있는 감시를 갱신할 때는 그대로 둔다(7이 이어 읽음). `stopped`(로그아웃) 사용자의 알림은 처리하지 않는다. [Claude proposal]
+- 로컬 수집(계획 local-openai-execution 2절): 같은 `gmail_watches` 표를 개인 DB에서 사용하며 `topic="local:history"`는 로컬 표시자이지 Pub/Sub 토픽이 아니다. 명시적 로그인 때 `users.getProfile`의 현재 historyId로 시작하고 `expiration=NULL`, `last_renewed_at`은 연결 시각(세대)을 기록한다. `active`는 수집 가능, `stopped`는 로그아웃/동의 취소, `error`는 `token_expired`·`history_expired`(재로그인 전 중단) 또는 `local_connect: <안전 코드>`·`local_poll: <안전 코드>`(다음 주기 재시도)다. 모든 페이지/메일 조회 성공 뒤에만 커서를 갱신하고 중지·다른 연결 세대의 늦은 결과는 적용하지 않는다. 스키마는 추가하지 않는다.
 - 처리 상태와 화면 표시: `processing` 처리 중 · `awaiting_approval` 승인 대기 · `sent` 보냄 · `error` 오류(`notice=rate_limit`이면 '한도 초과' 표시) · `ignored`는 목록에 보이지 않는다. [Request · Claude proposal]
+
+### 7.1. Supabase 전환 DB 목표 (2026-11-12, 계획 1절 확정)
+
+- 아래는 전환 계약이다. 3절(테스트 PostgreSQL)·4절(PostgreSQL 전용 설정·이전 도구)·5절(Supabase 인증·사용자 매핑)·8절(Storage 첨부 API)·9절(회사 이미지 Storage 전환)을 적용했고(2026-11-12), 10절은 [목표]로 남는다. 구현은 `docs/plans/react-supabase/PLAN.md` 순서대로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
+- DB는 Supabase PostgreSQL 하나다. `DATABASE_URL`은 PostgreSQL 주소만 받고 빈 값·비PostgreSQL 주소를 거부한다. SQLite 자동 fallback과 `app/db/local.sqlite3` 생성 경로는 없앴다(계획 4절 적용, 2026-11-12: `app/config.py`의 `resolved_database_url`이 거부). 테스트도 임시 PostgreSQL로 돈다(계획 3절). UTC 저장·JSONB·모든 조회의 `user_id` 필터는 그대로다.
+- 연결·migration(계획 4절 적용, 2026-11-12): 연결은 Supabase Session pooler 주소(포트 5432)를 기본으로 하고 `?sslmode=require`를 붙인다(트랜잭션 pooler 6543은 쓰지 않는다). 엔진 풀 상한은 프로세스당 `pool_size=5`·`max_overflow=10`·`pool_timeout=30초`·`pool_recycle=1800초`(`app/db/engine.py`). 서버 시작 migration(`app/db/migrations/`)은 대상 스키마를 `public`으로 고정(`SET LOCAL search_path`, `alembic_version`도 `public`)해 Supabase의 `auth`·`storage` 스키마를 건드리지 않는다.
+- 기존 데이터 복사·대조(계획 4절 적용, 2026-11-12): `uv run python -m app.db.copy_data --source <SQLite 파일|DB URL> [--target <PostgreSQL>] [--dry-run] [--yes]`가 일회성 이전을 담당한다. 원본 SQLite 파일은 임시 사본을 갱신해 읽고(원본 불변), 대상 확인(`--yes`)·반복 실행(이미 같으면 대조만 통과, 다른 데이터가 있으면 합침 없이 실패)·중단 지점(복사·시퀀스 정렬을 대상 한 트랜잭션으로 커밋)을 제공한다. 대조는 표별 행 수·모든 열 값(소유자·외래 키·timestamp·JSON·금액)·PK/시퀀스를 비교한다.
+- `users` 표 이행(계획 5절 적용, 2026-11-12): 기존 정수 `id` PK와 소유자 외래 키를 그대로 두고(Supabase `auth.users.id` UUID로 바꾸지 않는다) 유일한 nullable `supabase_uid`(UUID) 열을 더했고(migration `20261112_supabase_users`, 유일 인덱스 `uq_users_supabase_uid`) Google 메일 연결 없이 가입한 사용자를 위해 `google_sub`는 nullable로 바꿨다(기존 행 보존). 같은 이메일만으로 기존 행에 자동 연결하지 않는다(연결 증명은 9절).
+- 새 표 `file_assets`(계획 8절 적용, 2026-11-12): `id` PK · `user_id` FK · `original_filename` · `content_type`(서버가 파일 시그니처로 확인한 실제 형식) · `size_bytes` · `sha256` · `object_key` · `created_at`. 파일 bytes는 DB에 두지 않는다.
+- 새 표 `trade_document_sources`(계획 8절 적용, 2026-11-12): `id` PK · `user_id` FK · `trade_document_id` FK · `doc_kind` · `revision`(연결할 때 확인한 문서 revision) · `file_id` FK(`file_assets`) · `origin`(`upload`/`email` — `email`은 Gmail 첨부 가져오기(보류 범위) 구현 뒤 쓴다) · `created_at`.
+- 기존 표 이행(계획 9절 적용, 2026-11-12): `company_branding`·`trade_proposals`에 nullable `logo_file_id`·`seal_file_id` FK(`file_assets`)를 더했다(migration `20261112_company_images`). 현재 설정은 파일 ID를, 새 검토 제안은 제안 시점 이미지 파일 ID 스냅샷을 가리키고 렌더 때 Storage에서 bytes를 읽는다. 기존 바이너리 행은 `uv run python -m app.trade.settings.backfill [--yes]`이 해시 대조하며 옮긴다(같은 사용자의 같은 bytes는 기존 `file_assets` 행을 재사용, 반복 실행 안전, 대조 값과 다른 행은 건너뛰고 보고). 바이너리 열 DROP·원본 삭제는 검증 뒤 별도 변경이다(계획 22절).
+- 기존 표 이행(계획 10절 적용, 2026-11-12): `trade_artifacts`에 nullable `object_key`·`size_bytes`를 더하고 `content`를 nullable로 바꿨다(migration `20261112_issued_artifacts`, 새 승인은 `content`를 채우지 않는다). 승인은 ①렌더 ②요청한 모든 형식의 Storage 저장 ③SQL 트랜잭션 확정 순서를 따른다(16.3절 발급 파일 절차). 기존 파일 ID·형식·해시·승인 관계는 유지하고, 옛 바이너리 행은 `uv run python -m app.trade.review.backfill [--yes]`이 승인과 같은 결정적 key로 옮긴다(해시 대조, 반복 실행은 저장 객체 해시 대조 검증). `content` 열 DROP·원본 삭제는 검증 뒤 별도 변경이다(계획 22절).
+- [미확정] 기존 SQLite·Render Postgres 데이터의 보존 대상·기간은 계획 2절에서 사람이 확인한다. 확인 전에 운영 데이터를 삭제·덮어쓰지 않는다.
 
 ## 8. 실행 기록
 ### 8.1 한 줄 형식 (`run_events`, R-12)
@@ -461,6 +561,7 @@ class AgentError(TypedDict):
 | 스레드·후보 고르기 | `thread.html` | `GET /threads/{thread_id}`, `POST /candidates/{candidate_id}/approve` | 9 |
 | 견적서 확인 | `quote.html` | `GET /quotes/{quote_id}`, `POST /quotes/{quote_id}/prices`, `GET /quotes/{quote_id}/preview.pdf`, `POST /quotes/{quote_id}/approve`(폼에 `candidate_id`) | 11 |
 | 설정 | `settings.html` | `GET /settings`, `POST /settings/company`, `POST /settings/prices`, `POST /settings/reflection` | 11, 12 |
+| 개인 장치·실행 방식 | `settings.html`의 `#local-worker` | `POST /settings/worker/mode`, `/settings/worker/approve`, `/settings/worker/devices/{device_id}/disconnect` (위 JSON API와 같은 검증·CSRF) | local-openai-execution 3 |
 | 실행 기록 | `runs.html`, `run_detail.html` | `GET /runs`, `GET /runs/{run_id}`, `GET /runs/{run_id}/export` | 14 |
 | 공개 페이지(로그인 없이) | `about.html`, `privacy.html`, `terms.html` | `GET /about`(앱 소개, Google 브랜딩 홈페이지), `GET /privacy`(개인정보처리방침), `GET /terms`(서비스 약관). 모든 페이지 아래쪽에 세 링크, 로그인 화면 본문 아래에도 세 링크 | #82 |
 | 상태 확인 | 없음 | `GET /healthz` → `{"status": "ok"}` | 2 |
@@ -470,7 +571,31 @@ class AgentError(TypedDict):
   - 11 구현: 스레드의 견적 후보에서 확인 화면으로 연결한다. `needs_price`는 빠진 단가 입력 폼만 열며 승인 요청도 거부한다. `/prices`는 `price_<행 번호>`로 빠진 단가 전부를 받고 기존 단가는 바꾸지 않는다. 미리보기·승인 첨부는 같은 PDF 함수를 사용한다. 승인 결과는 일반 후보와 같은 `ApprovalResult.outcome` 안내 키(`needs_price` 추가)로 303 이동해 표시한다.
   - 설정(11): `/settings/company`는 `company_name`·`business_no`·`ceo_name`·`contact`, `/settings/prices`는 `item_name`·`unit`·`unit_price`를 받고 본인 행만 저장한다. 같은 품목명 저장은 단가·단위 갱신이다. 성찰 설정은 12가 구현한다.
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
+- 로컬 모드 로그인은 `GMAIL_PUBSUB_TOPIC` 없이 허용하며 개인 PC에서 새 메일만 조회한다는 안내를 보인다. 연결 상태는 `로컬 새 메일 수집 켜짐`·`로컬 수집 확인 필요`·`로컬 수집 꺼짐`이며 본인 소유자 미지정/불일치면 `로컬 수집 대기`다. `history_expired`는 다시 로그인하면 현재 위치로 재설정되고 이전 메일을 자동 처리하지 않는다고 안내한다. 수집은 화면 요청과 독립적이며 받은 메일 목록의 기존 90초 갱신은 유지한다.
 - 본인 확인: 로그인(6)이 세션(`SESSION_SECRET`으로 서명한 쿠키 `gq_session`, 14일)에 `user_id`만 넣는다. 로그인이 필요한 경로는 둘 중 하나를 `Depends`로 받고, 로그인 안 했으면 둘 다 `/login`으로 보낸다(303). ① `app/web/deps.py`의 `current_user_id`: id만 필요할 때(14가 씀). ② `app/web/routes/auth.py`의 `require_user`(없으면 `/login`, HTMX면 `HX-Redirect`)·`current_user`(없으면 None): `User` 행이 필요하거나 화면 요청 때 감시 갱신까지 걸 때(응답 뒤, 받은 메일 화면이 씀). id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user_id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 라우터는 `request.app.state.templates`(`app.web`의 `templates`와 같은 객체)·`request.app.state.database`를 쓴다. [Claude proposal]
+
+### 9.1. React·Supabase 전환 인증 목표 (2026-11-12, 계획 1절 확정)
+
+- 위 `gq_session` 쿠키·CSRF 규칙은 [현재 구현]이자 전환 기간 규칙이다. React JSON API는 `Authorization: Bearer <Supabase access token>`만 쓰고, Bearer가 잘못됐을 때 기존 쿠키로 우회하지 않는다. [Request · Claude proposal]
+- 경로 구분(계획 5절부터 적용, 무역·설정 Bearer 연결 적용 2026-11-12):
+
+| 경로 | 인증 | 기간·역할 |
+|---|---|---|
+| HTML 화면(`/`·`/inbox`·`/threads/*`·`/quotes/*`·`/settings`·`/runs/*`), 로그인(`/login`·`/auth/google/start`), 기존 JSON `/api/session`·`/api/trade/*` | `gq_session` 쿠키 + `X-CSRF-Token`(변경 요청) | [현재 구현] 전환 기간 병행 유지(legacy). 계획 21절 같은 출처 배포 때 React 화면으로 대체를 시작하고 22절 운영 전환 확인 뒤 닫는다. `/api/session`의 의미(쿠키 세션·CSRF 발급)는 이 기간 그대로다 |
+| React JSON API: `GET /api/me`, `/api/gmail/*`(연결·해제·로그아웃), `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [적용 2026-11-12, 계획 5·7절] `/api/me`·`/api/gmail/*`·`/api/trade/*`(문서·설정)는 `Authorization` 헤더가 있으면 Bearer만 검증하고(쿠키 우회 금지, Bearer 변경 요청은 CSRF 토큰 불필요) 헤더가 없으면 legacy 쿠키+CSRF를 그대로 쓴다. CORS의 `Authorization` 헤더를 허용했다. `/api/files*`는 Bearer 전용으로 구현했다(계획 8절, 2026-11-12 — 쿠키 경로 없음). 메일·실행 기록 Bearer 연결은 계획 19·20절 |
+
+- Gmail 연결 API(적용 2026-11-12, 계획 7절, `app/auth/gmail.py`): 앱 로그인(legacy 로그인)과 흐름을 분리한 Bearer 전용 경로다. `POST /api/gmail/connect`가 state·PKCE 검증값·연결할 내부 사용자·기대 Google subject를 서명된 세션 쿠키(`gq_session`, 10분·일회용)에 담아 Google 동의 화면 주소를 JSON으로 돌려주면, `GET /auth/google/callback`이 대기 값의 내부 사용자가 있을 때만 이 흐름으로 완성해 React 앱(`/app/settings?gmail=<결과>`)으로 안내한다. 결과 키: `connected`·`cancelled`·`login_failed`·`scope_missing`·`config_missing`·`expired`·`different_account`·`account_conflict`. 대기 값에 내부 사용자가 없으면 기존 legacy 로그인 콜백 그대로다(같은 redirect URI를 공유한다). 연결은 기존 `store_login`(토큰 암호화 저장)·`register_watch`(감시 등록)·`get_access_token`(갱신)을 그대로 재사용하고, `POST /api/gmail/logout`은 앱 로그아웃 때 감시만 멈추며, `POST /api/gmail/disconnect`는 Google 토큰 폐기(`GoogleClient.revoke`)까지 하는 연결 해제다(해제 후에도 `google_sub`는 남겨 같은 계정만 다시 연결한다). `GET /api/me`의 `gmail` 객체가 연결 상태이며, 그 요청 뒤 감시 갱신(`renew_watch_if_due`)을 건다(legacy HTML 방문뿐 아니라 알림 수신·API 경로에서도 갱신).
+- 계정 연결 규칙(적용 2026-11-12, 계획 7절): 연결 시작 때 서버가 `SUPABASE_SECRET_KEY`로 Supabase Auth의 사용자 조회(admin)를 불러 공급자 identity의 Google subject를 구한다(사용자가 고칠 수 있는 `user_metadata`는 근거로 안 씀). 콜백의 Google subject가 이 값이나 이미 연결된 `google_sub`와 다르면 `different_account`, 같은 Google 계정의 기존 행이 이미 다른 Supabase 로그인에 연결됐거나 확인 근거가 없으면 `account_conflict`로 거부한다. 확인 근거가 있을 때만 기존 정수 ID(자료)를 보존해 연결한다(빈 껍데기 사용자 행 삭제, 양쪽에 자료가 있으면 외래 키가 삭제를 막아 `account_conflict`). 서버 비밀 키가 없으면 연결 시작이 503 `auth_not_configured`, 계정 조회 장애는 503 `auth_unavailable`, Google 로그인 설정 누락은 503 `config_missing`이다.
+
+- `GET /api/me`(Bearer 전용, 적용 2026-11-12): 인증 상태·내부 `user_id`·프로필(표시 이름·이메일)·Gmail 연결 상태(`gmail.connected`·`gmail.watch`)를 하나의 JSON으로 돌려준다. React 로그인·새로고침 복구가 이 경로부터 시작한다. 토큰이 없거나 검증에 실패하면 401.
+- React PI의 개인 키 입력은 Bearer 전용 `PUT /api/openai-key`(form `api_key`)·`DELETE /api/openai-key`를 쓴다(계획 12절). 기존 사용자별 키 서비스를 재사용해 암호화 저장/삭제하며 `registered` 여부만 private/no-store로 반환한다. 입력 키를 오류에 되돌리지 않고 로컬 모드의 환경 파일 전용 제한도 유지한다. 이 경로는 실행 방식 선택·PC 장치 연결을 변경하지 않는다.
+- 토큰 검증(적용 2026-11-12, `app/auth/supabase.py`의 `TokenVerifier`·검증 라이브러리 `pyjwt`): 신뢰한 Supabase 프로젝트의 비대칭 signing key(JWKS)로 서명·issuer(`{SUPABASE_URL}/auth/v1`)·audience(`authenticated`)·exp·알고리즘(RS256·ES256만)·subject(UUID)를 확인한다. JWKS 주소는 설정에서만 정하고 요청이 지정한 임의 JWKS URL(jku 헤더 등)은 부르지 않는다. kid 캐시(300초)를 두고 unknown kid는 JWKS를 다시 가져온다(키 회전 대응). 다른 프로젝트·변조 토큰은 401(`invalid_token`)로 거부하고, 인증 실패(401)와 인증 서버 일시 장애(503 `auth_unavailable`)·미설정(503 `auth_not_configured`)을 구분한다. 비밀값은 로그에 남기지 않는다.
+- 사용자 매핑(적용 2026-11-12, 7.1절 `supabase_uid`): 검증된 UUID로 기존 정수 `id`를 찾고, 없으면 한 번만 생성한다. 동시 첫 접속은 `supabase_uid` 유일 제약으로 한 행으로 끝난다. 요청 본문의 `user_id`·이메일·파일 경로는 권한 근거로 쓰지 않는다.
+- 기존 계정 연결 증명 [확정]: 같은 이메일이라는 이유로 자동 병합하지 않는다. 서버가 Supabase Auth가 확인한 공급자 identity와 기존 Google 계정 재인증 결과의 provider subject 일치를 확인한 뒤 기존 행에 `supabase_uid`를 연결한다(신규 자료 작성 전에 안내). 양쪽에 이미 자료가 있으면 자동 합병하지 않는다. 사용자가 고칠 수 있는 `user_metadata` 값은 근거로 믿지 않는다.
+- CSRF·OAuth: Bearer 전용 JSON 경로는 위 cookie/CSRF 의존성과 구분한다. Google OAuth 연결의 state·PKCE·일회성 상태 검사는 유지한다(10절). Gmail 연결 시작은 인증된 API에서 시작 의도를 만들고 짧게 유효한 state로 기존 Google 동의 화면으로 이동하며, callback은 state에 결합된 내부 사용자만 갱신한다(적용 2026-11-12, 계획 7절 — 위 Gmail 연결 API 문단).
+- Gmail 계정 [확정, 적용 2026-11-12 계획 7절]: 초기에는 앱 로그인과 같은 Google 계정만 연결한다. 다른 메일함 연결은 별도 요구다.
+- 로그아웃·watch [확정, 적용 2026-11-12 계획 7절]: 앱 로그아웃(`POST /api/gmail/logout`)은 연결된 Gmail watch 중지를 명시적으로 시도하고 Supabase 로그아웃·화면 상태를 초기화한다. Google 토큰까지 폐기하는 연결 해제는 별도 동작(`POST /api/gmail/disconnect`)이다.
+- 만료·실패: 401이면 화면은 로그인 복구를 안내한다. 유효한 access token의 남은 수명 동안 로그아웃 즉시 폐기가 보장되는 것은 아니다(안내 문구에 명시).
 
 ## 10. Google
 - OAuth 범위는 `app/config.py`의 `GOOGLE_SCOPES` 한 곳에서만 읽는다. 후보: `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.send`. 이 범위로 감시 등록·기록 조회·메일 읽기·발송이 되는지와 민감·제한 범위 구분은 5에서 공식 문서로 확인하고, 다르면 5의 결과대로 이 줄과 코드를 고친다. [Request]
@@ -482,12 +607,17 @@ class AgentError(TypedDict):
   - 어느 쪽이든 확인에 실패하면 403으로 응답하고 실행 기록 없이 서버 로그에만 남긴다. [Claude proposal]
 - 감시 등록 토픽은 `GMAIL_PUBSUB_TOPIC`(`projects/<프로젝트>/topics/<토픽>`). [Request]
 - Google 호출(6): 실제 호출은 `app/clients/gmail.py`의 `GoogleClient` 하나(로그인 주소·코드 교환(PKCE)·토큰 갱신·`gmail(접근 토큰)`·`watch`·`stop`)이고 서버가 뜰 때 `app.state.google`, 준비물 묶음은 `app.state.google_access`(`GoogleAccess`)에 둔다. 테스트는 `tests/fakes/google.py`의 `FakeGoogle`을 `create_app(settings, google=...)`로 넣는다. 감시 등록은 `labelIds: ["INBOX"]`로 받은편지함 변경만 알린다. 7은 알림을 받을 때 `renew_watch_if_due(access, user_id)`, Gmail을 읽을 때 `get_access_token()` → `google.gmail(토큰)`을 쓴다. `TokenExpired`·`GoogleUnavailable`·`WatchFailed`는 모두 `GoogleError`다. [Claude proposal]
+- 로컬 모드(계획 2절)는 본인 Google Cloud 프로젝트의 OAuth 웹 앱과 루프백 콜백을 사용한다(설정 절차 README). 운영 OAuth 비밀값을 공유하지 않는다. `GoogleAccess.settings`로 실행 모드를 구분하며 로컬의 등록/중지는 DB 수집 상태만 바꾸고 `users.watch`·`users.stop`을 호출하지 않는다. 공용 로그인·watch 갱신·stop·Pub/Sub 인증과 토픽/구독 주소는 유지한다. 로컬에서는 Pub/Sub 알림으로 처리를 시작하지 않는다.
+- `app/services/local_gmail.py`의 `LocalGmailCollector`는 전용 로컬 앱 수명 안에서 동작한다. 살아 있는 루프백 리스너와 `LOCAL_OWNER_GOOGLE_SUB`에 일치하는 검증된 사용자만 선택하고, 본인의 `get_access_token()`·`history.list`를 30초 간격으로 호출한다. `gmail_push.collect_history()`의 기존 모든 페이지 읽기·MIME/HTML 변환·필터·유일 제약·`start_run()`을 재사용한다. 키는 6.1절 제한을 그대로 적용하고 자동 발송은 하지 않는다.
+- 최초 연결/명시적 재로그인은 현재 historyId부터 시작한다. 프로그램만 재시작하면 개인 DB의 유효한 커서로 재개한다. 통신 실패는 커서를 보존해 다음 주기 재시도하며 history.list 404(`HistoryExpired`, `GoogleUnavailable` 하위형)는 `history_expired`로 중단한다. Google 401/403·갱신 토큰 만료/취소는 토큰을 지우고 `token_expired`로 중단하되, 403의 사용량 제한 원인(`rateLimitExceeded`·`userRateLimitExceeded`·`dailyLimitExceeded`·`quotaExceeded`)은 토큰을 보존하고 재시도한다. 로그아웃·재연결 취소·종료는 페이지/메일 사이에서 추가 처리를 막고, 앱 종료는 진행 중인 수집 스레드가 끝난 다음 DB를 닫는다. 이미 시작한 AI 호출은 6절의 기존 취소 한계를 따른다. 전체 메일함 자동 동기화·공개 터널은 없다.
 
 ## 11. 환경변수 이름 (값은 `.env`와 Render 환경변수에만 둔다)
 | 이름 | 뜻 | 쓰는 하위 작업 |
 |---|---|---|
-| `GEMINI_API_KEY` | Gemini API 키 | 2, 8, 10, 12, 13 |
-| `GEMINI_MODEL` | 쓸 Gemini 모델 이름(비우면 `gemini-3.6-flash`) | 16 |
+| `AI_RUNTIME` | `server`(기본) 또는 `local`(전용 루프백 명령에서만 허용) | local-openai-execution 1 |
+| `LOCAL_OWNER_GOOGLE_SUB` | 본인 로그인으로 확인 후 로컬 .env에 지정하는 Google sub | local-openai-execution 1 |
+| `OPENAI_API_KEY` | `local`에서 지정 소유자만 사용. 서버에서는 읽거나 대체 키로 사용하지 않음 | local-openai-execution 1 |
+| `OPENAI_MODEL` | 쓸 OpenAI 모델 이름(비우면 `gpt-6-luna`) | 모든 LLM 호출 |
 | `GOOGLE_OAUTH_CLIENT_ID` | OAuth 클라이언트 ID | 6 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 클라이언트 비밀번호 | 6 |
 | `GOOGLE_OAUTH_REDIRECT_URI` | OAuth 리디렉션 주소(로컬·Render 각각) | 6 |
@@ -495,14 +625,21 @@ class AgentError(TypedDict):
 | `PUBSUB_PUSH_AUDIENCE` | 푸시 OIDC 토큰의 대상(추천 방식) | 7 |
 | `PUBSUB_PUSH_SERVICE_ACCOUNT` | 푸시 OIDC 토큰의 서비스 계정 이메일(추천 방식) | 7 |
 | `PUBSUB_PUSH_TOKEN` | 대체 방식의 비밀 토큰(대체 방식을 쓸 때만) | 7 |
-| `DATABASE_URL` | Postgres 접속 주소(로컬은 비우면 SQLite 파일) | 2, 4 |
-| `TOKEN_ENCRYPTION_KEY` | Google 토큰 암호화 키 | 6 |
+| `DATABASE_URL` | 앱 DB PostgreSQL 접속 주소. 빈 값·비PostgreSQL 스킴은 시작을 거부한다(SQLite 자동 fallback은 4절에서 제거, 2026-11-12). Supabase는 Session pooler 주소(포트 5432)에 `?sslmode=require`를 붙인다 | 2, 4 |
+| `TOKEN_ENCRYPTION_KEY` | Google 토큰·사용자별 OpenAI 키 암호화 키 | 6, 사용자별 키 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 | 6 |
 | `APP_BASE_URL` | 서비스 주소(링크·리디렉션 확인용) | 6, 7 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값(`true`/`false`) | 12 |
+| `SUPABASE_URL` | Supabase 프로젝트 URL. 서버 JWT 검증·Storage 호출 공통. 5절 적용(2026-11-12): Bearer 토큰 검증의 JWKS 주소·issuer를 여기서 정한다(비면 Bearer 인증 503) | react-supabase 5·8절 |
+| `SUPABASE_SECRET_KEY` | Supabase 서버 비밀 키. 서버 전용이며 브라우저·프론트 빌드 산출물에 넣지 않는다. 7절 적용(2026-11-12): Gmail 연결 시작 때 Auth 서비스의 사용자 조회(admin)로 공급자 Google subject를 확인한다(비면 연결 시작 503 `auth_not_configured`) | react-supabase 5·7·8절 |
+| `SUPABASE_STORAGE_BUCKET` | 비공개 파일 버킷 이름. 비우면 기본 `trade-files` [적용 2026-11-12, 계획 8절 — `app/files/`가 읽는다] | react-supabase 8절 |
+| `VITE_SUPABASE_URL` | React 브라우저용 Supabase URL. `frontend/.env`에 두고 서버 환경과 분리 [적용 2026-11-12, 계획 6절 — `frontend/src/supabase.js`가 읽는다] | react-supabase 6절 |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 publishable 키(공개 가능 값. 서버 비밀 아님) [적용 2026-11-12, 계획 6절] | react-supabase 6절 |
 
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
+- 2026-11-12: 서버의 `OPENAI_API_KEY`는 사용하지 않으며 각 사용자가 로그인 후 키를 등록한다. 기존 `TOKEN_ENCRYPTION_KEY`·Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. 암호화 키를 바꾸면 Google 재로그인과 OpenAI 키 재등록이 필요하다. API 결제·모델 권한은 각 키의 프로젝트에서 확인한다. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`도 사용하지 않는다.
+- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. `SUPABASE_URL`은 계획 5절부터 서버 JWT 검증에 읽는다(2026-11-12 적용). `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`는 계획 6절의 React 앱이 읽는다(2026-11-12 적용). `SUPABASE_SECRET_KEY`는 계획 7절부터 Gmail 연결의 계정 일치 확인에 읽는다(2026-11-12 적용), `SUPABASE_STORAGE_BUCKET`은 계획 8절 Storage 첨부 API가 읽는다(2026-11-12 적용, 비우면 `trade-files`). 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)
@@ -652,7 +789,7 @@ TradeDocTerms(TypedDict, total=False):   # 원본 스키마 + 이식 판별 키
 | `agent/extractor.py`의 `verify_item_quotes` | `app/trade/common/verify_quotes.py` | `verify_item_quotes(draft, prompt, *, image_context=False) -> dict`(숫자·당사자·조건의 원문 근거 검증) |
 | `agent/renderers.py` | `app/trade/common/renderers.py` | `format_currency_amount`·`amount_in_english`·`document_lines`·`_pdf_bytes`·`_xlsx_bytes`·`render_files`를 **모두 옮긴다** — 원본 테스트의 출력 부분(`test_trade_documents.py` 등)이 이 함수들을 직접 시험해 4절 완료 기준에 필요하기 때문이다. 단 서비스 경로(발송 첨부·미리보기)가 쓰는 PDF는 `pi_pdf.render_trade_document`뿐이고 `common/renderers.py`의 `_xlsx_bytes`는 문서 API의 Excel 발급에도 사용하며 HTML·검토 PDF 보조는 테스트·사본 비교 검증용이다(15.8절). `document_lines`·`_xlsx_bytes` 안의 PL `reconcile_packing` 호출은 없애고 `doc["packing_totals"]`(15.5절)를 읽는다(pi_pdf와 같은 반전) |
 | `agent/pi_pdf.py` | `app/trade/common/pdf.py` | `render_trade_document(data, bank_details=None, *, logo=None, seal=None) -> bytes`. 입력을 파일 경로에서 PNG bytes로 바꾸고, PL 합계는 `data["packing_totals"]`을 읽는다(아래 import 관계). PL PDF의 `TOTAL QUANTITY` 줄은 원본 그대로 렌더러 안의 `_total_quantity_summary`(품목 직접 합산, 단위 정규화 안 함)로 만든다 — D를 부르지 않는 C 내부 계산이라 15.5절 '합계를 다시 계산하지 않는다' 규칙의 대상이 아니다. 원본 파일 뒤쪽의 중복 정의(덮어쓰는 죽은 코드: 프리미엄 PI 1페이지 레이아웃·회사 로고 crop 값)는 옮기지 않는다(실제 동작인 뒤쪽 `render_trade_document`만 옮긴다) |
-| `agent/branding.py`·`agent/seal_storage.py` | `app/trade/settings/repository.py` | `resolve_company_seal` → `resolve_company_seal(user_id, ...) -> tuple[bytes \| None, str \| None]`(직인 bytes, 오류 문구). `seal_storage.py`는 없애고 `company_branding` 표(15.7절)에서 읽는다. PNG 매직 검사와 SHA-256 대조를 유지한다: `company_branding.seal_sha256`은 **업로드할 때 seal bytes의 SHA-256을 저장한 값**이고 `resolve_company_seal`은 조회한 bytes의 해시와 이 저장값이 같은지 확인한다(업로드 뒤 변조·저장 오류 감지가 목적 — 원본의 고정 상수 비교를 사용자별 저장값 기준으로 일반화) |
+| `agent/branding.py`·`agent/seal_storage.py` | `app/trade/settings/repository.py` | `resolve_company_seal` → `resolve_company_seal(user_id, *, database=None, storage=None) -> tuple[bytes \| None, str \| None]`(직인 bytes, 오류 문구). `seal_storage.py`는 없애고 `company_branding` 표(15.7절)가 가리키는 `file_assets` 이미지를 Storage에서 읽는다(계획 9절 적용, 2026-11-12). PNG 매직 검사와 SHA-256 대조를 유지한다: `file_assets.sha256`은 **업로드할 때 이미지 bytes의 SHA-256을 저장한 값**이고 읽을 때 내려받은 bytes의 해시와 이 저장값이 같은지 확인한다(업로드 뒤 변조·저장 오류 감지가 목적 — 원본의 고정 상수 비교를 사용자별 저장값 기준으로 일반화). Storage 미설정·호출 실패·해시 불일치는 `StorageError`를 던져 성공으로 처리하지 않는다. 로고는 `resolve_company_logo(user_id, *, database=None, storage=None)`가 같은 규칙으로 담당한다 |
 
 - import 관계(원본 유지·변경): `renderers`·`pi_pdf`(C 묶음)는 `trade_documents`(B)의 `current_issue_date`를 쓴다(유지). `packing`·`packing_review`·`ci_import`(D 묶음)는 `trade_documents`(B)의 `normalize_quantity_unit` 등을 쓴다(유지). **C는 D의 PL 합계 함수를 부르지 않는다(변경)**: PL 렌더링에 필요한 합계는 `TradeDocDraft["packing_totals"]`(15.5절)로 받고, CI 렌더 입력은 D의 `ci_render_data` 결과를 받는다. 그래서 C(문서 출력)와 D(CI·PL)가 서로를 기다리지 않는다. [Claude proposal]
 - 모듈 간 런타임 의존과 일정 대응(원본 유지): 원본 `validate_and_calculate`는 품목 루프에서 `ci_import`·`promotions`을, PL 검사에서 `packing`을 함수 안(지연) import하고(B), 원본 `_extract_draft`의 추출 순서는 `counterparties`·`promotions`·`samples`·`pricing`·`ci_import`를 차례로 부른다(A). 이식본은 **가격 적용(`pricing`)을 추출 파이프라인에서 빼고 `create_trade_document`(15.5절)로 옮겼으므로** A의 추출 순서는 `counterparties`·`promotions`·`samples`·`ci_import`만 따르고, B의 지연 import는 그대로 둔다(모듈 top import로 올리지 않는다). 즉 2절(A)의 추출 순서는 3절(B 소관: `counterparties`·`promotions`·`samples`)과 5절(D 소관: `ci_import`) 모듈을, 3절(B)의 `trade_documents.py`는 `promotions.py`(3절)와 `ci_import.py`·`packing.py`(5절)를 실행 시점에 쓴다. 일정 대응(계획 순서 '2·3·4 동시, 5는 3 뒤'): 먼저 들어가는 2절(A)·3절(B) 이식 PR에는 아직 없는 의존 모듈(5절 소관 `ci_import.py`·`packing.py` 등)의 **원본 복사본(고침 없음)**을 함께 넣어 자기 완료 기준 테스트가 돌게 하고, 5절(D)은 그 복사본 위에서 CI·PL 흐름(`packing_review`·승인·렌더 연결)을 이식하고 사용자 일반화 수정을 적용한다. A의 완료 기준 '같은 입력에 사본·이식본 후처리 결과가 같다'는 **개별 후처리 함수 기준**이고, 전체 추출 순서 등가는 6절 대표 흐름 테스트로 확인한다. [Claude proposal]
@@ -725,7 +862,7 @@ TradeDocDraft(TypedDict, total=False):
 |---|---|---|---|
 | `trade_documents` | 무역서류 | `id` PK · `user_id` · `thread_id` · `run_id` · `deal_terms_id` FK 없을 수 있음 · `doc_kind` · `doc_no` (`user_id`,`doc_no`) 유일 · `draft` JSON(`TradeDocDraft`) · `status`(`needs_input`/`ready`/`sent`) · `created_at` · `sent_at` | kekorea-port 2~6 |
 | `company_bank_accounts` | 사용자별 계좌(PI 하단 6항목) | `id` PK · `user_id` · `currency` (`user_id`,`currency`) 유일 · `beneficiary` · `bank_name` · `branch` · `swift` · `account_number` · `bank_address` · `updated_at`. 무역 렌더러·초안 스냅샷(`TradeDocDraft.bank`·도구 입력 `bank`)의 dict 키는 원본 렌더러가 읽는 대문자 6키 `BENEFICIARY`·`BANK_NAME`·`BRANCH`·`SWIFT`·`ACCOUNT_NUMBER`·`BANK_ADDRESS`이고 `make_quote` 노드가 이 표의 소문자 열을 그 키로 바꿔 담는다 | kekorea-port 3·4 [임시: 협의 2, 시연은 가상 계좌] |
-| `company_branding` | 사용자별 직인·로고 | `user_id` PK · `logo`(BYTES, 없을 수 있음) · `seal`(BYTES, 없을 수 있음) · `seal_sha256`(업로드할 때 seal bytes의 SHA-256을 저장한 값 — 15.4절 branding 행의 대조 기준) · `updated_at` | kekorea-port 4 [임시: 협의 3·4] |
+| `company_branding` | 사용자별 직인·로고 | `user_id` PK · `logo_file_id`·`seal_file_id`(FK `file_assets`, 없을 수 있음 — 9절 적용: 현재 설정이 가리키는 이미지. bytes는 Storage에만 있다) · `logo`·`seal`(BYTES, 없을 수 있음 — 9절 이전 행 보존용, backfill 검증 뒤 22절에 삭제) · `seal_sha256`(9절 이전 대조 값, 보존용) · `updated_at` | kekorea-port 4 [임시: 협의 3·4] |
 | `counterparties` | 거래처(별칭·기본 정보) | `id` PK · `user_id` · `company_key` (`user_id`,`company_key`) 유일 · `legal_name` · `aliases` JSON · `address` · `contact` · `phone` · `email` · `registration_details` · `default_ship_to` 없을 수 있음 · `ship_to_phone` 없을 수 있음 · `updated_at` | kekorea-port 2·3 [임시: 협의 5·6] |
 
 - 기존 표 변경:
@@ -753,10 +890,10 @@ TradeDocDraft(TypedDict, total=False):
 
 ## 16. 독립 문서 API와 사용자 검토
 
-- JSON API는 기존 메일 그래프 밖의 `app/trade/` 도메인 업무를 호출한다. 문서별 경로는 `/api/trade/{pi|po|ci|pl}`이며 상세 입력·응답은 FastAPI OpenAPI(`/docs`)가 코드와 함께 제공한다. 모든 조회/다운로드는 세션 소유자 범위이며 변경 요청은 `/api/session`에서 발급한 CSRF 토큰을 요구한다.
+- JSON API는 기존 메일 그래프 밖의 `app/trade/` 도메인 업무를 호출한다. 문서별 경로는 `/api/trade/{pi|po|ci|pl}`이며 상세 입력·응답은 FastAPI OpenAPI(`/docs`)가 코드와 함께 제공한다. 모든 조회/다운로드는 세션 소유자 범위이며 변경 요청은 `/api/session`에서 발급한 CSRF 토큰을 요구한다. 이 문단의 세션·CSRF 규칙은 [현재 구현]이며 9.1절 전환표의 legacy 행이다(같은 경로의 React Bearer 전용 연결과 파일 저장 목표는 16.3절).
 - 입력에는 서버의 상태·계산 결과·가격 인증·승인 표시를 허용하지 않는다. 정확한 숫자는 Decimal 문자열이다. 직접 입력과 LangChain 추출은 같은 업무 계산을 거친다. AI는 거래 단가 변경을 승인할 수 없다.
 - `trade_document_versions`는 문서 revision별 불변 초안을 저장한다. 문서 수정은 기대 revision을 조건으로 갱신하며 대기 제안을 무효화한다. `trade_proposals`는 확인할 문서·버전·출력 형식·직인/로고 bytes 및 해시를 고정한다. 선택 요청의 문서 ID·제안 ID·revision·내용 해시가 모두 일치해야 한다.
-- `approve`: ready/current인 문서를 issued로 만들고 PDF/XLSX bytes를 `trade_artifacts`에 같은 트랜잭션으로 저장한다. 중복·동시 승인은 같은 파일을 반환한다. `cancel`: 제안을 cancelled로 종료하며 문서나 파일을 발급하지 않는다. `modify`: 기존 제안을 superseded/modify로 기록하고 문서를 새 revision으로 만든 뒤 새 검토를 요구한다. 미완성 수정은 needs_input으로 돌아온다.
+- `approve` [계획 10절 적용, 2026-11-12]: ready/current인 문서를 issued로 만든다. PDF/XLSX bytes는 먼저 모든 형식을 Storage에 저장한 뒤(16.3절 발급 파일 절차) SQL 트랜잭션에서 revision·제안·`trade_artifacts` 파일 참조(object key·크기)를 함께 확정한다. 중복·동시 승인은 같은 파일을 반환한다. `cancel`: 제안을 cancelled로 종료하며 문서나 파일을 발급하지 않는다. `modify`: 기존 제안을 superseded/modify로 기록하고 문서를 새 revision으로 만든 뒤 새 검토를 요구한다. 미완성 수정은 needs_input으로 돌아온다.
 - 계좌·회사·이미지 설정 변경은 이미 제안한 내용과 승인 파일을 바꾸지 않는다. 출력 실패 시 pending/ready를 보존해 명시적으로 재시도할 수 있다. 문서 확정 API는 Gmail을 호출하지 않는다. 기존 메일 발송 승인과 문서 발급은 서로 다른 동작이다.
 - 서버 기동의 Alembic 갱신은 기존 문서의 현재 버전을 버전 표에 채운다. `FRONTEND_ORIGINS`는 명시한 출처만 허용하고, `SESSION_SAME_SITE=none`은 HTTPS 설정에서만 허용한다.
 
@@ -773,3 +910,34 @@ TradeDocDraft(TypedDict, total=False):
 - 단가표·거래처·직인 조회는 `settings/repository.py`에 모은다. 회사/은행 필드 목록은 `settings/models.py`에 두며 공통 문서 저장소와 설정 저장소가 서로 import하지 않는다. 업무 함수는 계속 Protocol/Callable을 받아 구체 DB/HTTP와 분리한다.
 - 루트의 `ci_import.py`·`packing.py`·`packing_review.py`·`samples.py` 호환 파일은 삭제한다. 모든 앱/기존 메일/테스트 호출은 `ci/imports.py`, `pl/packing.py`, `pl/packing_review.py`, `pi/samples.py`를 직접 사용한다.
 - 이 변경은 경로 정리다. API 입출력·상태·도구 스키마·그래프 노드 전이·DB 스키마·기존 계산/검증 결과를 바꾸지 않는다. `make_quote` 노드와 무역 도구에서는 import 경로만 바뀐다.
+
+### 16.3. Supabase Storage 파일 계약 [목표] (2026-11-12, 계획 1절 확정)
+
+- 인증: 이 절의 파일 API는 9.1절 Bearer 전용 경로다. [적용 2026-11-12, 계획 8절] 사용자 첨부 API(`app/files/`의 `POST /api/files`·메타데이터·다운로드·삭제·문서 출처 연결)를 구현했다. [적용 2026-11-12, 계획 9절] 회사 로고·직인과 검토 제안 이미지도 Storage로 옮겼다: 설정 저장(`POST /api/trade/settings/branding/{kind}`, 기존 2MiB·PNG 검증 유지)은 `{user_id}/branding/…` 객체를 올리고 `file_assets` 행·파일 ID 연결을 확정하며, 새 제안은 이미지 파일 ID를 고정하고 렌더 때 Storage에서 bytes를 읽어 `file_assets.sha256`과 대조한다. 이미지 없음(옛 제안 등)은 503 `IMAGE_UNAVAILABLE`, bytes 불일치는 503 `IMAGE_CORRUPTED`, Storage 장애·미설정은 503 `STORAGE_UNAVAILABLE`로 실패시키고(성공으로 처리하지 않는다) 직인이 없으면 기존대로 409 `SEAL_REQUIRED`다. [적용 2026-11-12, 계획 10절] 발급 PDF/XLSX bytes도 Storage로 옮겼다: `trade_artifacts`는 `object_key`·`size_bytes`를 기록하고 새 승인은 `content`를 채우지 않는다.
+- 파일 나눔(표 정의는 7.1절):
+
+| 대상 | PostgreSQL에 남길 것 | Storage(비공개 버킷 `trade-files`)에 둘 것 |
+|---|---|---|
+| 사용자 첨부 | `file_assets` 메타데이터 | 원본 파일 bytes |
+| 문서 출처 연결 | `trade_document_sources`: 문서·종류·확인한 revision·파일 ID·출처 | 해당 원본 |
+| 회사 로고·직인 | `company_branding`이 가리키는 `file_assets` 파일 ID·해시 | 버전별 불변 PNG |
+| 검토 제안 | `trade_proposals`: 문서·회사·계좌·이미지 파일 ID/해시의 불변 스냅샷 | 제안 시점 이미지 객체 |
+| 발급 PDF/XLSX | `trade_artifacts`: 기존 파일 ID·제안 ID·형식·해시·크기 + `object_key` | 승인한 버전의 실제 출력 파일 |
+
+- 버킷·경로 [확정]: private 버킷 하나 `trade-files`를 쓴다(`SUPABASE_STORAGE_BUCKET`). object key는 서버가 `{internal_user_id}/{attachments|branding|issued}/...`로 생성하고 원래 파일명을 경로에 쓰지 않는다. `..`·임의 URL·다른 소유자 prefix를 입력받지 않는다. 브라우저가 Storage에 직접 쓰지 않는다. 서버 비밀 키는 Storage 정책을 우회하므로 모든 파일 작업에서 서버가 소유권·연결 대상을 확인하고, private 버킷의 사용자 직접 접근은 기본 거부다(계획 2절 콘솔 설정).
+- 첨부 한도 [확정, 적용 2026-11-12 계획 8절]: 파일당 5MiB, 문서당 5개, 형식 PDF·XLSX·TXT·PNG·JPEG. 로고·직인은 기존 2MiB PNG 검사를 유지한다. 확장자·클라이언트 Content-Type만 믿지 않고 서버가 파일 시그니처로 실제 형식을 확인하며, 확장자가 가리키는 형식과 시그니처 결과가 다르면 415로 거부한다(위장 형식). [미확정] 첨부 내용 자동 읽기(파서·OCR)와 파서별 페이지·셀·압축 해제 한도는 별도 정의다(보류 범위).
+- 첨부 API [확정](계획 8절):
+  - `POST /api/files` — 파일 한 개를 multipart로 받는다. 성공 200 `{file_id, filename, content_type, size_bytes, sha256}`. 오류: 401 인증 실패 · 413 크기 초과 · 415 허용하지 않는 형식·시그니처 불일치 · 422 빈 파일. 업로드와 `file_assets` 메타데이터 저장이 모두 성공한 뒤에만 파일 ID를 반환한다.
+  - `GET /api/files/{file_id}` — 메타데이터 JSON. 본인 파일이 아니면 404.
+  - `GET /api/files/{file_id}/download` — bytes. `Cache-Control: no-store`·안전한 파일명의 `Content-Disposition: attachment`로 제공하고 사용자 HTML·SVG 실행을 허용하지 않는다.
+  - `DELETE /api/files/{file_id}` — 문서 출처·검토 제안·회사 이미지가 참조하지 않은 파일만 삭제한다(204). 참조 중이면 409.
+- 문서 출처 연결 [확정]: `PUT /api/trade/{kind}/{document_id}/sources`에 본문 `{revision, file_ids}`를 보낸다. 서버는 소유자·문서 종류·개수(문서당 5개)·파일 존재·소유를 검사한다. 성공하면 새 revision을 만들고 대기 검토를 무효화하며 과거 버전의 연결 행은 보존한다. 오류: 404 본인 아님·없음 · 409 revision 불일치 · 422 개수·형식·소유 검사 실패.
+- 발급 파일 다운로드 [적용 2026-11-12, 계획 10절]: 기존 `GET /api/trade/files/{file_id}` 경로와 소유자·승인 상태 검사 의미를 유지하고 내부 저장을 Storage 읽기+해시 대조로 바꿨다. Storage 장애·미설정은 503 `STORAGE_UNAVAILABLE`, bytes 불일치는 503 `ARTIFACT_CORRUPTED`로 실패시키고 backfill 전 옛 행(`object_key` 없음)은 보존된 DB bytes로 내려받는다. 첨부 파일은 위 `/api/files/{id}/download`를 쓴다.
+- 업로드/SQL 실패 처리 [확정, 적용 2026-11-12 계획 8절]: 업로드 성공 뒤 SQL 실패는 미참조 객체를 남길 수 있다. 요청 실패 처리에서 승인된 파일·참조 중인 이미지를 무조건 지우지 않고, 미참조·충분히 오래된 객체를 목록화해 재확인 뒤 지우는 수동 관리 명령(`uv run python -m app.files.cleanup`, `--delete`에 `--yes` 필요)으로 정리한다(별도 크론·큐 없음). 삭제는 `file_assets` 기록을 먼저 지우고 객체를 지운다(반대로 하면 기록만 남아 다운로드가 깨진다). 객체 삭제 실패는 503 `storage_cleanup_failed`로 알리고 남은 bytes는 같은 명령으로 정리한다. [계획 10절 적용] 미참조 판단의 참조 집합은 `file_assets.object_key`와 `trade_artifacts.object_key` 둘 다다.
+- 발급 파일 절차 [적용 2026-11-12, 계획 10절](현재 DB 한 트랜잭션 원자성과 다른 경계다. 승인 실패는 503 `STORAGE_UNAVAILABLE`·`ARTIFACT_CORRUPTED`로 나가며 Storage 미설정은 503 `STORAGE_NOT_CONFIGURED`다):
+  1. 현재 검토 제안과 불변 이미지로 파일을 만든다. 문서 revision과 제안 해시는 기존 규칙대로 검사한다.
+  2. `{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key에 덮어쓰기 없이 저장한다. 이미 있으면 같은 bytes로 확인된 경우만 재사용한다.
+  3. 요청한 모든 형식의 저장이 끝난 뒤 SQL 트랜잭션에서 문서 revision과 pending 제안을 조건부 갱신하고 파일 참조·승인 상태를 함께 확정한다.
+  4. 업로드·렌더·SQL 확정 전 실패는 `ready`/`pending`을 유지하고, SQL에 기록되지 않은 객체는 발급 파일로 노출하지 않는다.
+  5. 동시 승인·응답 유실 재요청도 같은 제안의 기존 파일을 돌려준다. 같은 key에 서로 다른 bytes가 있으면 실패시킨다. 파일 저장 성공을 메일 발송 성공으로 처리하지 않는다.
+- 불변성·백업: 검토·승인 파일 경로는 덮어쓰지 않고 새 설정·수정본은 새 객체로 저장한다. 읽을 때 소유자·승인 상태·해시를 확인한다. DB 백업과 Storage 객체 백업은 별개로 보관한다.

@@ -4,7 +4,23 @@
 나중에 기능을 더하며 다른 LLM·API를 더하거나 바꾸면 요청자에게 묻고 이 파일을 고친다(`.work/TASK.md` 이 레포의 규칙). [Request]
 
 ## LLM
-확인일: 2026-11-05
+### 전용 로컬 .env 키 모드 (2026-11-12, Issue #153)
+- 요청: 개인 PC에서 본인 `.env` 키를 사용하고 공용 서버의 환경 키 사용 금지를 유지한다. `AI_RUNTIME` 기본은 `server`이며, 전용 `uv run python -m app.local`의 실제 루프백 리스너가 있는 `local` 실행에서만 환경 키를 선택한다. Render·공용 실행은 로컬 모드로 시작할 수 없다.
+- 본인 확인: Google 검증 로그인 후 로컬 `/settings`에서 본인 식별자를 확인해 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정한다. 일치하는 검증 사용자만 허용하고 소유자 미지정·다른 사용자·키 누락은 차단한다. 최초 방문 자동 등록은 없다. 로컬 모드에서는 DB 사용자 키 조회·저장·교체·삭제를 차단하고 `.env` 변경 뒤 재시작한다. 키·해시·부분 문자열을 노출하지 않는다.
+- 서버의 사용자별 암호화 DB 키 방식·명시적 가짜 백엔드 주입은 유지한다. 어느 서버 사용자 키가 없어도 환경 키로 대체하지 않는다. 모델·OpenAI API 선택은 기존과 같다. 개인 PC Gmail 수집·Render 장치 연결·큐·개인 실행 프로그램은 아직 없으며 후속 계약만 `docs/CONTRACT.md` 6절에 정했다. 실제 키·운영 설정 변경·실제 API 호출은 하지 않았다.
+
+### 사용자별 키 등록 (2026-11-12)
+- 요청: 공용 사이트에서도 각 사용자의 OpenAI 키만 사용한다. `/settings`에서 등록·교체·삭제하고 기존 `TOKEN_ENCRYPTION_KEY`로 암호화해 사용자별 DB 행에 보관한다. 메일 자동 처리·요약·성찰·4종 문서 AI 추출 모두 소유자 키를 선택한다.
+- 기본 `server` 실행에서는 `.env`의 `OPENAI_API_KEY`를 호출에 사용하지 않는다. 키가 없거나 복호화할 수 없으면 차단하며 공용 키 대체 경로는 없다. 전용 로컬 실행은 위 절의 별도 소유자 제한을 따른다. 모델 설정은 기존 `OPENAI_MODEL`을 유지한다. 저장 시 API 호출은 하지 않는다. 아래 11/11의 환경변수 키 등록 절차는 이전 기록이다.
+
+현재 선택: 2026-11-11 · 모든 LLM 호출을 OpenAI Responses API로 통일. 아래 후보·초기 선택·모델 변경은 당시 기록이다.
+
+### 전체 OpenAI 전환 (2026-11-11)
+- 바꾼 것: 메일 분석·답장 후보·거래 추출·스레드 요약·성찰과 PI·PO·CI·PL 독립 문서 추출을 모두 LangChain `ChatOpenAI(use_responses_api=True)`로 호출한다. 사용자가 Gemini에서 OpenAI로 전환하도록 요청했다. Gmail API·Google OAuth·Cloud Pub/Sub·Calendar 연결은 별도 API이므로 유지한다. [Request]
+- 모델·설정: 무역 문서 추출에 이미 채택한 기본 모델 `gpt-6-luna`를 유지하고 전체 호출에 사용한다. `OPENAI_API_KEY`와 선택값 `OPENAI_MODEL`만 읽으며, `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다. Gemini로 되돌아가는 경로와 `langchain-google-genai` 의존성을 제거한다.
+- 구조화 출력: `call_structured()`를 공유하고 실제 `ChatOpenAI`에는 `with_structured_output(schema, method="function_calling", strict=False)`를 쓴다. 기존 스키마의 기본값·선택 필드·자유 키 dict를 보존하면서 반환값을 Pydantic으로 검증한다. 독립 무역 추출의 wire 스키마와 십진수 문자열 검증은 유지한다. SDK 자동 재시도는 0, 제한 시간은 20초이며 429는 재시도하지 않는다. 시간 초과·연결 오류·5xx는 최대 3회 시도하고 형식 오류는 별도 1회 재시도한다.
+- 적용: 로컬 `.env`·Render에 `OPENAI_API_KEY`를 먼저 등록하고 프로젝트의 결제·사용 한도·모델 권한을 확인한다. PR 병합과 자동 배포 뒤 `/healthz`·가상 메일·독립 문서 추출을 확인하고 예전 Gemini 변수와 `TRADE_EXTRACT_BACKEND`를 제거한다. ChatGPT 구독과 OpenAI API 이용료는 별개다. 키는 채팅·레포·Codex 환경에 넣지 않는다.
+- 데이터·시험: OpenAI API로 메일과 필요한 기억·문서 입력이 전송된다. 테스트용 계정과 가상 자료만 사용한다. 데이터 보관·이용은 [OpenAI API 데이터 안내](https://platform.openai.com/docs/guides/your-data)와 계정 설정을 확인한다(이 환경에서는 해당 페이지가 HTTP 403으로 열리지 않아 최신 정책을 직접 확인하지 못함). Codex 검증은 대역만 사용하며 실제 API 성능과 성찰 비교 지표는 전환 뒤 다시 측정한다. 과거 Gemini 시험 기록·원본 사본은 당시 근거로 보존한다.
 
 ### 후보
 | 항목 | Google Gemini API | Groq |
@@ -27,17 +43,19 @@
 - 방식: 모델 이름은 `app/llm/client.py`의 `DEFAULT_MODEL`이고 환경변수 `GEMINI_MODEL`로 덮어쓴다. 시연 때 3.6도 막히면 Render 환경변수만 바꿔 다른 무료 모델로 옮긴다(재배포됨). 한 실행 안에서 모델을 섞는 대비책은 여전히 두지 않는다(응답 일관성). [Claude proposal]
 - 함께 한 일: 이전 키가 대화에 노출돼 같은 결제 없는 프로젝트에서 새 키를 만들어 Render `GEMINI_API_KEY`를 바꿨다(요청자, 2026-11-10). 키 값은 레포에 두지 않는다.
 
-### 무역 문서 추출용 OpenAI Responses 추가 (2026-11-11)
+### 무역 문서 추출용 OpenAI Responses 추가 (2026-11-11, 전체 전환 전 기록)
 - 바꾼 것: 무역 도메인 AI 추출(PI·PO·CI·PL의 `POST /api/trade/{kind}/extract`)은 LangChain `ChatOpenAI(use_responses_api=True)`로 OpenAI Responses API를 기본 백엔드로 쓴다. 메일 그래프·견적 도구는 계속 Gemini를 쓴다. [Request: 요청자가 방향을 정함]
 - 까닭: 이식 원본(`reference/kekorea/Quotation_KEKOREA/agent/extractor.py`)이 OpenAI Responses API로 문서를 추출했다. 실제 Gemini 키 확인(2026-11-11)에서 도메인 추출 스키마의 HTTP 입력 제약(`pattern`·`maxLength`·`maxItems`)을 Gemini 구조화 출력이 400 INVALID_ARGUMENT로 거부했다(메일 그래프 스키마는 제약이 없어 동작). 또 숫자를 JSON number로 받으면 십진수 정밀도가 깨지므로 원본처럼 전부 문자열로 받는다.
 - 방식: 백엔드 선택은 `app/trade/common/extraction.py`의 `trade_backend()`(환경변수 `TRADE_EXTRACT_BACKEND`, 기본 `openai_responses`, `gemini`로 복귀 가능). 모델은 원본 기본값 `gpt-6-luna`이고 `OPENAI_MODEL`로 덮어쓴다. LLM에는 제약을 떼고 숫자를 문자열로 바꾼 wire 스키마를 주고, 돌려받은 값은 원래 스키마로 다시 검증해 Decimal로 바꾼다. 재시도·오류 분류·기록은 그래프와 같은 `call_structured()`를 공유하며 OpenAI SDK 예외(429·400·연결 오류) 분류를 더했다.
 
 ### 설정 경로
-1. Google AI Studio의 API 키 화면(https://aistudio.google.com/app/apikey)에서 API 키를 만든다. 키는 비밀번호처럼 다루고 레포에 넣지 않는다.
-2. 환경변수는 `GEMINI_API_KEY` 하나만 쓴다. Google SDK는 `GEMINI_API_KEY`·`GOOGLE_API_KEY`를 모두 읽고 둘 다 있으면 `GOOGLE_API_KEY`가 앞서므로 하나만 둔다. [Claude proposal]
-3. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않고 가짜 응답으로 테스트한다(`.work/TASK.md` 환경 줄).
+1. OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys)에서 프로젝트 API 키를 만든다. 해당 프로젝트의 API 결제·사용 한도와 `OPENAI_MODEL`의 이용 권한을 확인한다. 키는 비밀번호처럼 다루고 레포에 넣지 않는다.
+2. 환경변수 `OPENAI_API_KEY`를 등록하고, 기본 `gpt-6-luna`를 바꿀 때만 `OPENAI_MODEL`을 지정한다. 메일과 무역 추출이 같은 모델을 사용한다.
+3. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않고 가짜 응답으로 테스트한다(`.work/TASK.md` 환경 줄). 등록 → PR 병합·자동 배포 → 가상 자료로 확인 → 예전 Gemini 환경변수 제거 순서다.
 
 ### 출처
+- OpenAI SDK 설정·Responses API·오류 구분: https://github.com/openai/openai-python (실제 구현은 설치한 SDK 및 `langchain-openai` 소스와 대조)
+- OpenAI 키·결제·데이터 안내: https://platform.openai.com/api-keys , https://platform.openai.com/settings/organization/billing/overview , https://platform.openai.com/docs/guides/your-data (계정·정책 확인 경로, 이 환경에서 콘솔·결제 설정이나 최신 정책 확인은 수행하지 않음)
 - Gemini 한도: https://ai.google.dev/gemini-api/docs/rate-limits (2026-11-05)
 - Gemini 무료 모델·데이터 사용: https://ai.google.dev/gemini-api/docs/pricing (도구로 못 열어 사용자가 붙여 줌, 2026-11-05)
 - Gemini 무료 등급 데이터 사용: https://ai.google.dev/gemini-api/terms 'Unpaid Services' (2026-11-05)
@@ -56,9 +74,9 @@
 | Cloud Pub/Sub | Gmail의 메일함 변경 알림을 서비스로 푸시 전달 | Gmail 감시 토픽, 푸시 구독과 수신 요청 인증 |
 | Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | 사용자별 Google OAuth 로그인. 일정 도구 구현 때 연결 |
 
-- LLM은 Gemini `gemini-3.8-flash`를 그대로 쓴다. Gmail API·Cloud Pub/Sub를 추가하고 Calendar를 유지하는 것은 요청자가 정한 변경이다. [Request]
+- 2026-11-09에는 LLM을 Gemini `gemini-3.8-flash`로 유지했다(이후 변경은 위 LLM 절). Gmail API·Cloud Pub/Sub를 추가하고 Calendar를 유지하는 것은 요청자가 정한 변경이다. [Request]
 - 한국천문연구원 특일 정보·기상청 단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 뺀다. 아래 '일정 도구 추천 후보'에 보관하고, 현재 키 발급·환경변수 설정 대상에서는 제외한다. [Request]
-- 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. Gemini 무료 등급에 실제 개인정보를 넣지 않으며, 일정 도구를 연결할 때도 LLM에는 일정 제목 없이 바쁜 시간대만 넘긴다.
+- 체험자는 테스트용 Google 계정과 가상 메일을 쓴다. LLM에 실제 개인정보를 넣지 않으며, 일정 도구를 연결할 때도 일정 제목 없이 바쁜 시간대만 넘긴다.
 - OAuth 게시·권한 설정과 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 처리한다. 이 문서 갱신으로 콘솔 설정이나 연동이 완료된 것은 아니다.
 
 ### 설정 경로
@@ -90,6 +108,32 @@
 5. 토픽 권한: Gmail 문서는 `gmail-api-push@system.gserviceaccount.com`에 publish 권한을 주라고 하며 역할 이름은 적지 않는다(Pub/Sub 게시자 역할로 줌). 감시 등록은 최소 7일마다(하루 1번 권장) 다시 해야 하고, 사용자당 알림은 초당 1개까지다. 출처: https://developers.google.com/workspace/gmail/api/guides/push
 6. 푸시 인증: 인증을 켜면 Pub/Sub가 서명한 JWT를 `Authorization` 헤더로 보내고, 받는 쪽은 대상과 서비스 계정 이메일(`email`, `email_verified`)을 확인한다. 서비스 계정은 구독과 같은 프로젝트에 있어야 한다. 출처: https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions , https://docs.cloud.google.com/pubsub/docs/create-push-subscription
 7. 잠든 Render와 푸시: 푸시 요청 제한 시간은 확인 기한과 같고(기본 10초, 최대 600초), 기한 안에 성공 응답이 없으면 재시도 정책대로 다시 보낸다(지수 백오프 기본 10~600초). 확인되지 않은 메시지는 기본 7일 보관된다. Render 무료 서버는 15분 동안 요청이 없으면 잠들고 깨는 데 약 1분 걸리므로 확인 기한을 120초로 했다. 실제로 첫 푸시가 기다렸다 성공하는지, 재전송으로 처리되는지는 계획 16(#62)에서 확인한다. 출처: https://docs.cloud.google.com/pubsub/docs/subscription-properties , https://docs.cloud.google.com/pubsub/docs/subscription-retry-policy , https://docs.cloud.google.com/go/docs/reference/cloud.google.com/go/pubsub/latest , https://render.com/docs/faq
+
+## 로그인·DB·파일 저장 — Supabase (2026-11-12)
+
+`docs/plans/react-supabase/PLAN.md` 전환(React·JavaScript·Vite 화면)의 기반 선택이다. 요청자가 2026-11-12에 정했다. [Request] 콘솔 설정(계획 2절)·데이터 이전(계획 22절)은 별도 작업이며 이 문서 갱신으로 완료된 것이 아니다.
+
+### 고른 것 (2026-11-12)
+| 서비스 | 쓰임 | 인증·설정 |
+|---|---|---|
+| Supabase Auth | React 로그인. 시안의 Google 로그인부터 연결 | Google OAuth 코드 경로. 브라우저는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`, 서버는 JWKS로 access token 검증(9.1절 계약) |
+| Supabase PostgreSQL | 업무 DB. 기존 FastAPI·SQLAlchemy·Alembic 재사용 | 서버 `DATABASE_URL`. 업무 Data API 노출은 끔 |
+| Supabase Storage | 사용자 첨부·회사 이미지·발급 파일 | 서버 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`(비공개 버킷 `trade-files`). 사용자 직접 정책은 기본 거부 |
+
+- 기존 FastAPI 백엔드·Gmail·Pub/Sub·OpenAI 설정은 유지한다. Supabase 프로젝트는 요청자가 만든 `AIO_TEST`를 재사용한다(2026-11-12 확정). 실제 공급자·redirect·키 설정은 계획 2절에서 사용자와 함께 확인한다.
+- 로그인 공급자는 Google OAuth 코드 경로만 먼저 연결한다. 이메일 가입·다른 공급자는 별도 요구 때 추가한다.
+- 인증 경계·사용자 매핑·파일 저장 계약은 `docs/CONTRACT.md` 7.1·9.1·16.3절, 환경변수 이름은 11절과 `.env.example`이다.
+- [미확정] 기존 SQLite·Render Postgres 데이터의 보존 대상·기간(계획 2절), 첨부 내용 자동 읽기 범위(보류). 사람이 확인한 뒤 이 파일을 고친다.
+
+### 설정 경로
+1. Supabase 콘솔 프로젝트 설정 → API에서 프로젝트 URL·publishable 키·secret 키를 확인한다.
+2. 브라우저용 설정(`frontend/.env`)에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 둔다.
+3. 서버 `.env`·Render 환경변수에는 `DATABASE_URL`(PostgreSQL 주소)·`SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`을 둔다. `SUPABASE_SECRET_KEY`는 브라우저·빌드 산출물에 넣지 않는다.
+4. Auth → Providers에서 Google 공급자를 켜고 개발·배포 redirect 주소를 등록한다. 기존 앱 Gmail OAuth(`GOOGLE_OAUTH_*`)의 callback과는 별개로 등록한다(계획 2절).
+
+### 출처
+- 선택 근거: `docs/plans/react-supabase/PLAN.md`(2026-11-12 요청), 계약: `docs/CONTRACT.md` 7.1·9.1·11·16.3절
+- Supabase 키 종류·JWKS 검증·private bucket·Data API 비활성화: 계획 '공식 확인 자료'의 Supabase 문서 링크(2026-11-12 확인 목록)
 
 ## 일정 도구 추천 후보
 MVP에서 제외한 보조 API다(2026-11-09). 일정(캘린더) 도구 작업 때 AI가 아래 후보를 요청자에게 추천하고, 채택 여부를 확인한 뒤 API·환경변수를 추가한다. 현재 연동이나 키 발급은 하지 않는다. [Request]

@@ -11,12 +11,14 @@ from app.db.models import Base, ProcessedMessage, RunEvent, User
 
 def test_contract_tables_and_postgres_jsonb(database):
     assert set(inspect(database.engine).get_table_names()) == {
-        "users", "google_tokens", "gmail_watches", "processed_messages", "thread_messages",
+        "users", "google_tokens", "user_openai_keys", "gmail_watches", "processed_messages", "thread_messages",
         "thread_memory", "reply_candidates", "approvals", "deal_terms", "quotes",
         "trade_documents", "user_preferences", "company_profiles", "company_branding",
         "company_bank_accounts",
         "price_list_items", "counterparties", "counterparty_history", "runs", "run_events", "alembic_version",
         "trade_document_versions", "trade_proposals", "trade_artifacts",
+        "file_assets", "trade_document_sources",
+        "worker_pairings", "worker_devices", "worker_jobs", "worker_rate_limits",
     }
     ddl = str(CreateTable(RunEvent.__table__).compile(dialect=postgresql.dialect()))
     assert "JSONB" in ddl

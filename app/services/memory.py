@@ -59,7 +59,7 @@ def _message(row):
 def load_memories(database, *, user_id: int, email: dict) -> dict:
     """현재 메일은 따로 전달하므로 중복하지 않는다. 미래 메시지도 읽지 않는다.
 
-    요약 실패는 트랜잭션을 되돌린다. 원문은 지우지 않고, 성공한 요약만 커서를 옮긴다.
+    원문은 지우지 않고 성공한 요약만 커서를 옮긴다. AI 대기 중 DB 쓰기 잠금을 잡지 않는다.
     """
     with database.session() as session:
         memory = _memory(session, user_id, email["thread_id"])
@@ -71,7 +71,8 @@ def load_memories(database, *, user_id: int, email: dict) -> dict:
         ).order_by(ThreadMessage.sent_at, ThreadMessage.id)))
         pending = [row for row in rows if memory.summarized_until is None
                    or row.sent_at > memory.summarized_until]
-        retries = 0
+        retries, summary_variables = 0, None
+        previous_summary, previous_cursor = memory.summary, memory.summarized_until
         if (len(pending) + 1 > LIMITS["SUMMARY_TRIGGER_MESSAGES"]
                 or sum(len(row.body_text) for row in pending) + len(email["body_text"])
                 > LIMITS["SUMMARY_TRIGGER_CHARS"]):
@@ -81,23 +82,34 @@ def load_memories(database, *, user_id: int, email: dict) -> dict:
             if recent:
                 older = [row for row in older if row.sent_at < recent[0].sent_at]
             if older:
-                result = call_structured(PROMPT, ThreadSummary, {
+                summary_variables = {
                     "previous_summary": memory.summary or "없음",
                     "confirmed_terms": json.dumps(memory.confirmed_terms, ensure_ascii=False),
                     "last_result": json.dumps(memory.last_result, ensure_ascii=False),
                     "messages": json.dumps([_message(row) for row in older], ensure_ascii=False),
-                })
-                if not result.ok:
-                    raise SummaryFailed(result)
-                retries = max(result.attempts - 1, 0)
-                memory.summary = result.value.model_dump_json()
-                memory.summarized_until = older[-1].sent_at
-                pending = [row for row in pending if row.sent_at > memory.summarized_until]
+                }
         context = {
             "summary": memory.summary, "recent_messages": [_message(row) for row in pending],
             "confirmed_terms": memory.confirmed_terms, "last_result": memory.last_result,
         }
         long_term = _long_term(session, user_id, memory.counterparty_email)
+    if summary_variables is not None:
+        # 큐 생성/claim/complete가 별도 연결에서 쓰기 때문에 호출 전에 트랜잭션을 끝낸다.
+        result = call_structured(PROMPT, ThreadSummary, summary_variables)
+        if not result.ok:
+            raise SummaryFailed(result)
+        retries = max(result.attempts - 1, 0)
+        with database.session() as session:
+            memory = session.scalar(select(ThreadMemory).where(
+                ThreadMemory.user_id == user_id, ThreadMemory.thread_id == email["thread_id"],
+            ).with_for_update())
+            # 대기 중 더 새 요약이 저장됐다면 덮지 않는다.
+            if (memory.summary, memory.summarized_until) == (previous_summary, previous_cursor):
+                memory.summary = result.value.model_dump_json()
+                memory.summarized_until = older[-1].sent_at
+            pending = [row for row in pending if memory.summarized_until is None or row.sent_at > memory.summarized_until]
+            context = {"summary": memory.summary, "recent_messages": [_message(row) for row in pending],
+                       "confirmed_terms": memory.confirmed_terms, "last_result": memory.last_result}
     return {"thread_context": context, "long_term": long_term, "call_retries": retries}
 
 

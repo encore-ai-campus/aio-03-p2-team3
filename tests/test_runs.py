@@ -4,7 +4,6 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
-from google.genai.errors import ClientError, ServerError
 import httpx
 
 from app.config import Settings
@@ -17,7 +16,7 @@ from app.runlog.export import export_jsonl
 from app.runlog.logger import current_event
 from app.runlog.mask import Masker
 from app.web.deps import current_user_id
-from tests.fakes.llm import FakeLLM
+from tests.fakes.llm import FakeLLM, openai_error
 
 # 지어낸 값이다(실제 개인정보 아님).
 PII = {
@@ -54,8 +53,8 @@ def fake_run(database, email, mode="test", user_id=1):
 
 
 @pytest.fixture
-def client(tmp_path):
-    app = create_app(Settings(database_url=f"sqlite:///{tmp_path / 'runs.sqlite3'}"))
+def client(database_url):
+    app = create_app(Settings(database_url=database_url))
     with TestClient(app) as test_client:
         with app.state.database.session() as session:
             session.add_all([
@@ -72,8 +71,8 @@ def client(tmp_path):
 def test_sdk_failure_codes_reach_run_page_and_export(client, email, monkeypatch, code, attempts, end_reason):
     private = "private-mail-body fake-api-key sender@example.invalid 가상비밀이름 010-1234-5678"
     error = {
-        "HTTP 503": ServerError(503, {"error": {"message": private}}),
-        "HTTP 429": ClientError(429, {"error": {"message": private}}),
+        "HTTP 503": openai_error(503, message=private),
+        "HTTP 429": openai_error(429, message=private),
         "ReadTimeout": httpx.ReadTimeout(private),
     }[code]
     monkeypatch.setattr(llm_client, "sleep", lambda _: None)

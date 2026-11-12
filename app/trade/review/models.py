@@ -43,8 +43,18 @@ class ReviewView(BaseModel):
 
 @dataclass(frozen=True)
 class Branding:
-    logo: bytes | None
+    """제안 시점 회사 이미지. bytes는 Storage에서 읽은 값이고 file ID가 제안에 고정된다(계획 9절)."""
     seal: bytes
+    logo: bytes | None = None
+    seal_file_id: int | None = None
+    logo_file_id: int | None = None
+
+
+@dataclass(frozen=True)
+class BrandingFiles:
+    """제안이 고정한 회사 이미지 파일 ID. 렌더 때 Storage에서 bytes를 읽는다."""
+    seal_file_id: int | None
+    logo_file_id: int | None
 
 
 @dataclass(frozen=True)
@@ -65,3 +75,4 @@ class ReviewRepository(Protocol):
     def cancel(self, proposal_id: str, revision: int, content_hash: str) -> dict: ...
     def approve(self, proposal_id: str, revision: int, content_hash: str,
                 files: list[RenderedFile]) -> dict: ...
+    def proposal_branding(self, proposal: dict) -> Branding: ...

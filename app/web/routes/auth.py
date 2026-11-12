@@ -10,6 +10,7 @@ import secrets
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from app.auth import gmail as gmail_connection
 from app.clients.gmail import GoogleError, missing_scopes
 from app.db.models import GmailWatch, User
 from app.services.auth import has_refresh_token, missing_login_settings, save_login, stored_scopes
@@ -28,8 +29,12 @@ LOGIN_NOTICES = {
 CONNECTION_NOTICES = {
     "token_expired": "Google 연결이 만료되었거나 취소되었습니다. 다시 로그인해 주세요.",
     "watch_failed": "새 메일 알림 등록에 실패했습니다. 화면을 다시 열면 다시 시도합니다.",
+    "history_expired": "Gmail 기록 조회 기간이 만료되어 로컬 수집을 멈췄습니다. 다시 로그인하면 현재 위치부터 수집합니다. 이전 메일은 자동 처리하지 않습니다.",
+    "local_connect": "로컬 Gmail 연결 위치를 읽지 못했습니다. 다음 수집 주기에 다시 시도합니다.",
+    "local_poll": "새 메일 조회에 실패했습니다. 다음 수집 주기에 마지막 처리 위치부터 다시 시도합니다.",
 }
 WATCH_LABELS = {"active": "새 메일 알림 켜짐", "error": "알림 확인 필요", "stopped": "알림 꺼짐"}
+LOCAL_LABELS = {"active": "로컬 새 메일 수집 켜짐", "error": "로컬 수집 확인 필요", "stopped": "로컬 수집 꺼짐"}
 
 
 def session_user(request: Request) -> User | None:
@@ -65,10 +70,14 @@ def connection_status(request: Request, user: User) -> dict:
         watch = session.get(GmailWatch, user.id)
         status = watch.status if watch else "stopped"
         code = (watch.last_error or "").split(":", 1)[0] if watch and status == "error" else ""
+    if request.app.state.google_access.local_mode:
+        owner = request.app.state.settings.local_owner_google_sub.strip()
+        if not owner or user.google_sub != owner or user.last_login_at is None:
+            return {"label": "로컬 수집 대기", "notice": "설정에서 본인 Google 식별자를 확인하고 .env의 소유자 설정으로 다시 시작해 주세요.", "relogin": False}
     return {
-        "label": WATCH_LABELS.get(status, status),
+        "label": (LOCAL_LABELS if request.app.state.google_access.local_mode else WATCH_LABELS).get(status, status),
         "notice": CONNECTION_NOTICES.get(code),
-        "relogin": code == "token_expired",
+        "relogin": code in {"token_expired", "history_expired"},
     }
 
 
@@ -83,6 +92,7 @@ def login_page(request: Request, notice: str | None = None, user: User | None = 
     return templates.TemplateResponse(request=request, name="pages/login.html", context={
         "notice": LOGIN_NOTICES.get(notice or ""),
         "missing": missing_login_settings(request.app.state.settings),
+        "local_mode": request.app.state.settings.ai_runtime == "local",
     })
 
 
@@ -104,9 +114,16 @@ def google_callback(
     request: Request, code: str | None = None, state: str | None = None, error: str | None = None,
 ):
     pending = request.session.pop("oauth", None)
+    if isinstance(pending, dict) and "user_id" in pending:
+        # 계획 7절: Bearer 연결 시작(/api/gmail/connect)이 만든 대기 값이다.
+        return gmail_connection.complete_callback(request, pending, state, code, error)
     if not pending or not state or not secrets.compare_digest(state, pending["state"]):
         return _to("/login?notice=login_failed")
     if error:
+        if request.app.state.google_access.local_mode:
+            user = session_user(request)
+            if user is not None:
+                stop_watch(request.app.state.google_access, user.id)
         return _to("/login?notice=cancelled" if error == "access_denied" else "/login?notice=login_failed")
     if not code:
         return _to("/login?notice=login_failed")

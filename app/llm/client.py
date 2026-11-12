@@ -1,25 +1,21 @@
 """구조화 호출 한 곳에서 SDK 재시도를 끄고 계약의 재시도만 수행한다.
 
-예외 기준: google-genai errors.APIError(code), google-api-core exceptions,
+예외 기준: OpenAI APIStatusError/ APIConnectionError,
 httpx TimeoutException/NetworkError, Pydantic ValidationError,
 LangChain OutputParserException. 설치된 SDK의 docstring·원본과 대조했다.
-https://googleapis.github.io/python-genai/#error-handling
-https://reference.langchain.com/python/integrations/langchain_google_genai/ChatGoogleGenerativeAI/
+https://github.com/openai/openai-python#handling-errors
 LangChain이 감싼 SDK 오류는 __cause__에서 원래 HTTP 코드를 읽는다.
 """
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import lru_cache
+from dataclasses import replace
 from time import perf_counter, sleep
 from typing import Literal
 
 import openai
-from google.api_core import exceptions as google_errors
-from google.genai.errors import APIError
 import httpx
 from langchain_core.exceptions import OutputParserException
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -28,10 +24,11 @@ from app.prompts import Prompt
 from app.runlog.logger import current_event
 
 _override = ContextVar("llm_backend", default=None)
-# 2026-11-10(#62): 무료 등급 gemini-3.8-flash가 503을 반복해 3.6으로 바꿨다. GEMINI_MODEL로 덮어쓴다.
-DEFAULT_MODEL = "gemini-3.6-flash"
-# 무역 문서 추출용 OpenAI Responses 기본 모델. 원본: reference/kekorea/Quotation_KEKOREA/agent/extractor.py
-RESPONSES_DEFAULT_MODEL = "gpt-6-luna"
+_user_key = ContextVar("llm_user_key", default=None)
+_worker_call = ContextVar("llm_worker_call", default=None)
+# 무역 추출에서 사용하던 기본 모델을 모든 LLM 호출에 사용한다. OPENAI_MODEL로 덮어쓴다.
+DEFAULT_MODEL = "gpt-6-luna"
+RESPONSES_DEFAULT_MODEL = DEFAULT_MODEL
 
 
 class LLMResult(BaseModel):
@@ -44,48 +41,76 @@ class LLMResult(BaseModel):
 
 
 def model_name(settings: Settings | None = None) -> str:
-    """쓸 Gemini 모델. 환경변수 `GEMINI_MODEL`이 있으면 그것, 없으면 `DEFAULT_MODEL`."""
-    return (settings or get_settings()).gemini_model.strip() or DEFAULT_MODEL
+    """모든 LLM 호출에 쓸 OpenAI 모델. `OPENAI_MODEL`이 비면 `DEFAULT_MODEL`."""
+    return (settings or get_settings()).openai_model.strip() or DEFAULT_MODEL
 
 
 def model_source() -> str:
-    """ToolResult.source 값(`gemini:<모델>`)."""
-    return f"gemini:{model_name()}"
+    """ToolResult.source 값(`openai:<모델>`)."""
+    return f"openai:{model_name()}"
 
 
 def responses_model_name(settings: Settings | None = None) -> str:
-    """무역 추출에 쓸 OpenAI 모델. 환경변수 `OPENAI_MODEL`이 있으면 그것, 없으면 원본 기본값."""
-    return (settings or get_settings()).openai_model.strip() or RESPONSES_DEFAULT_MODEL
+    """기존 무역 추출 호출자도 공통 모델 이름을 사용한다."""
+    return model_name(settings)
 
 
 def get_backend(settings: Settings | None = None):
-    return _backend_for_settings(settings or get_settings())
+    binding = _user_key.get()
+    if binding is None:
+        raise OpenAIKeyError()
+    provider, configured = binding
+    # 사용자 범위의 소스를 확인한다(DB 개인 키 또는 검증된 로컬 소유자의 .env).
+    key = provider()
+    return _backend_for_settings(replace(settings or configured or get_settings(), openai_api_key=key))
 
 
-@lru_cache(maxsize=1)
 def _backend_for_settings(settings: Settings):
-    if not settings.gemini_api_key:
-        raise ValueError("GEMINI_API_KEY 설정이 필요합니다")
-    return ChatGoogleGenerativeAI(
-        model=model_name(settings), google_api_key=settings.gemini_api_key,
+    if not settings.openai_api_key.strip():
+        raise ValueError("OPENAI_API_KEY 설정이 필요합니다")
+    return ChatOpenAI(
+        model=model_name(settings), api_key=settings.openai_api_key.strip(),
+        use_responses_api=True,
+        # LangChain의 자체 socket transport 대신 httpx의 환경 프록시/CA 설정을 따른다.
+        http_socket_options=(),
         max_retries=0, timeout=LIMITS["LLM_TIMEOUT_SECONDS"],
     )
+
+
+class OpenAIKeyError(ValueError):
+    """키 원문이나 SDK 오류를 담지 않는 사용자 키 오류."""
+
+    def __init__(self, code="OPENAI_KEY_REQUIRED", message="설정에서 본인의 OpenAI API 키를 등록해 주세요.",
+                 status_code=409):
+        super().__init__(message)
+        self.code, self.message, self.status_code = code, message, status_code
+
+
+@contextmanager
+def use_user_key(provider, settings: Settings | None = None):
+    """HTTP 요청·백그라운드 실행별 키 조회 함수만 보관한다. 키는 상태·로그에 넣지 않는다."""
+    token = _user_key.set((provider, settings))
+    try:
+        yield
+    finally:
+        _user_key.reset(token)
 
 
 def get_responses_backend(settings: Settings | None = None):
-    """무역 문서 추출용 OpenAI Responses 백엔드(계약 재시도만 쓰게 SDK 재시도는 끈다)."""
-    return _responses_backend_for_settings(settings or get_settings())
+    """기존 무역 추출 진입점. 메일과 같은 OpenAI Responses 백엔드를 공유한다."""
+    return get_backend(settings)
 
 
-@lru_cache(maxsize=1)
-def _responses_backend_for_settings(settings: Settings):
-    if not settings.openai_api_key:
-        raise ValueError("OPENAI_API_KEY 설정이 필요합니다")
-    return ChatOpenAI(
-        model=responses_model_name(settings), api_key=settings.openai_api_key,
-        use_responses_api=True,
-        max_retries=0, timeout=LIMITS["LLM_TIMEOUT_SECONDS"],
-    )
+def structured_output(backend, schema: type[BaseModel]):
+    """기존 기본값·dict 필드를 허용하고 반환값은 Pydantic으로 검증한다.
+
+    Responses의 strict JSON Schema는 자유 키 dict와 선택 기본값을 제한한다.
+    OpenAI는 non-strict 함수 스키마로 출력만 받으며 업무 도구는 실행하지 않는다.
+    대역은 기존 schema-only 인터페이스를 그대로 사용한다.
+    """
+    if isinstance(backend, ChatOpenAI):
+        return backend.with_structured_output(schema, method="function_calling", strict=False)
+    return backend.with_structured_output(schema)
 
 
 @contextmanager
@@ -97,13 +122,24 @@ def use_backend(fake):
         _override.reset(token)
 
 
+@contextmanager
+def use_worker_call(callback):
+    token = _worker_call.set(callback)
+    try:
+        yield
+    finally:
+        _worker_call.reset(token)
+
+
+def require_completed_ai():
+    """실패한 PC 호출이 성찰의 대체 경로를 통해 후보로 저장되지 않게 한다."""
+    if _worker_call.get() is not None and _override.get() is None:
+        _worker_call.get().guard()
+
+
 def _http_code(error: Exception):
-    if isinstance(error, APIError):
-        return error.code
     if isinstance(error, httpx.HTTPStatusError):
         return error.response.status_code
-    if isinstance(error, google_errors.GoogleAPICallError):
-        return error.code
     if isinstance(error, openai.APIStatusError):
         return error.status_code
     return None
@@ -130,13 +166,12 @@ def classify_error(error: Exception) -> str:
     while current is not None and id(current) not in seen:
         seen.add(id(current))
         code = _http_code(current)
-        if code == 429 or isinstance(current, (google_errors.ResourceExhausted, google_errors.TooManyRequests)):
+        if code == 429:
             return "rate_limit"
-        if code == 400 or isinstance(current, (google_errors.InvalidArgument, openai.BadRequestError)):
+        if isinstance(code, int) and 400 <= code <= 499:
             return "invalid_input"
         if (isinstance(code, int) and 500 <= code <= 599) or isinstance(current, (
             TimeoutError, ConnectionError, httpx.TimeoutException, httpx.NetworkError,
-            google_errors.DeadlineExceeded, google_errors.ServiceUnavailable,
             openai.APIConnectionError,  # APITimeoutError도 이 클래스를 상속한다
         )):
             return "network"
@@ -148,11 +183,13 @@ def classify_error(error: Exception) -> str:
 
 def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict,
                     backend=None, backend_factory=None) -> LLMResult:
-    """구조화 호출. 백엔드 우선순위: use_backend 오버라이드 > 명시 backend > backend_factory() > 기본 Gemini.
+    """구조화 호출. 백엔드 우선순위: use_backend 오버라이드 > 명시 backend > backend_factory() > 기본 OpenAI.
 
     `backend`는 백엔드 인스턴스, `backend_factory`는 인자 없는 팩토리. 팩토리는 앞선
     둘이 없을 때만 부른다(가짜 주입 테스트에서 키 없는 팩토리가 먼저 실패하는 일이
     없게 한다)."""
+    if _worker_call.get() is not None and _override.get() is None and backend is None:
+        return _worker_call.get()(prompt, schema, variables)
     started = perf_counter()
     attempts = 0
     counts = {"network": 0, "invalid_output": 0}
@@ -179,7 +216,10 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict,
             chosen = backend_factory()
         if chosen is None:
             chosen = get_backend()
-        structured = chosen.with_structured_output(schema)
+        structured = structured_output(chosen, schema)
+    except OpenAIKeyError as error:
+        current_event("error", detail={"kind": error.code.lower(), "message": error.message})
+        return finish(False, error_kind="invalid_input", error=error)
     except Exception as error:
         return finish(False, error_kind="internal", error=error)
     while True:

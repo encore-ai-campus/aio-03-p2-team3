@@ -1,13 +1,18 @@
 """네 문서가 실제 공유하는 HTTP 흐름. 업무 규칙과 AI 진입점은 도메인에서 주입한다."""
-from fastapi import APIRouter, Depends, Request
+from hashlib import sha256
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import Field, create_model, model_validator
 
 from app.trade.common.api import require_write
 from app.trade.common import operations as common
-from app.trade.common.models import DocumentResult, DocumentSummary, InputModel
+from app.trade.common.models import DocumentError, DocumentResult, DocumentSummary, InputModel
+from app.files.sources import SourcesLink, link_document_sources
 from app.trade.review import operations as review
 from app.trade.review.models import Decision, ReviewRequest, ReviewView
 from app.trade.review.repository import SQLReviews
+from app.services.openai_keys import user_openai
 from app.web.deps import current_user_id
 
 
@@ -31,7 +36,8 @@ def document_router(kind, input_model, operations, repository_factory, extractor
 
     def repositories(request, user_id):
         database = request.app.state.database
-        return repository_factory(database, user_id), SQLReviews(database, user_id, kind)
+        return repository_factory(database, user_id), SQLReviews(database, user_id, kind,
+                                                                 storage=request.app.state.storage)
 
     @router.get("", response_model=list[DocumentSummary])
     def list_documents(request: Request, user_id: int = Depends(current_user_id)):
@@ -48,7 +54,14 @@ def document_router(kind, input_model, operations, repository_factory, extractor
         repository, _ = repositories(request, user_id)
         values = command.model_dump()
         text = values.pop("text")
-        return operations.extract(text, repository=repository, extractor=extractor, **values)
+        with user_openai(request.app.state.database, user_id, settings=request.app.state.settings,
+                         cipher=request.app.state.google_access.cipher) as ai:
+            try:
+                return operations.extract(text, repository=repository, extractor=extractor, **values)
+            except DocumentError:
+                if ai.issue is not None:
+                    raise DocumentError(ai.issue.code, ai.issue.message, ai.issue.status_code) from None
+                raise
 
     @router.get("/{document_id}", response_model=DocumentResult)
     def get_document(document_id: int, request: Request, user_id: int = Depends(current_user_id)):
@@ -65,6 +78,13 @@ def document_router(kind, input_model, operations, repository_factory, extractor
         repository, _ = repositories(request, user_id)
         return operations.revise(document_id, command.revision, command.document, repository=repository)
 
+    @router.put("/{document_id}/sources")
+    def replace_sources(document_id: int, command: SourcesLink, request: Request,
+                        user_id: int = Depends(require_write)):
+        # 문서 출처 연결(CONTRACT 16.3절): 파일 ID 목록·기대 revision 검증 후 새 revision·대기 검토 무효화.
+        return link_document_sources(request.app.state.database, user_id, kind, document_id,
+                                     command.revision, command.file_ids)
+
     @router.post("/{document_id}/reviews", response_model=ReviewView, status_code=201)
     def propose(document_id: int, command: ReviewRequest, request: Request, user_id: int = Depends(require_write)):
         _, reviews = repositories(request, user_id)
@@ -74,6 +94,20 @@ def document_router(kind, input_model, operations, repository_factory, extractor
     def get_review(document_id: int, proposal_id: str, request: Request, user_id: int = Depends(current_user_id)):
         _, reviews = repositories(request, user_id)
         return review.get_proposal(proposal_id, document_id, repository=reviews)
+
+    @router.get("/{document_id}/reviews/{proposal_id}/branding/{image}")
+    def review_image(document_id: int, proposal_id: str, image: Literal["logo", "seal"],
+                     request: Request, user_id: int = Depends(current_user_id)):
+        _, reviews = repositories(request, user_id)
+        proposal = review.get_proposal(proposal_id, document_id, repository=reviews)
+        branding = reviews.proposal_branding(proposal)
+        content = branding.logo if image == "logo" else branding.seal
+        if content is None:
+            raise DocumentError("IMAGE_NOT_FOUND", "검토 제안에 등록된 이미지가 없습니다", 404)
+        return Response(content=content, media_type="image/png", headers={
+            "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{sha256(content).hexdigest()}"',
+        })
 
     @router.post("/{document_id}/reviews/{proposal_id}/decisions", response_model=ReviewView | DocumentResult)
     def decide(document_id: int, proposal_id: str, command: Choice, request: Request, user_id: int = Depends(require_write)):

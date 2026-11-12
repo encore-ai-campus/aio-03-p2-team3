@@ -13,13 +13,15 @@ from app.config import Settings
 from app.db.models import TradeArtifact, TradeDocument, TradeDocumentVersion, TradeProposal, User
 from app.main import create_app
 from app.web.deps import current_user_id
+from tests.fakes.storage import FakeStorage
 from tests.test_pi_domain import pi_input
 from tests.test_trade_flow import seal_png
 
 
 @contextmanager
 def configured_client(database_url):
-    app = create_app(Settings(database_url=database_url, session_secret="fake-test-session-key"))
+    app = create_app(Settings(database_url=database_url, session_secret="fake-test-session-key"),
+                     storage=FakeStorage())  # 회사 이미지는 Storage에서 읽는다(계획 9절)
     app.dependency_overrides[current_user_id] = lambda: 1
     with TestClient(app) as client:
         with app.state.database.session() as session:
@@ -41,8 +43,8 @@ def configured_client(database_url):
 
 
 @pytest.fixture
-def pi_client(tmp_path):
-    with configured_client(f"sqlite:///{tmp_path / 'api.sqlite3'}") as client:
+def pi_client(database_url):
+    with configured_client(database_url) as client:
         yield client
 
 
@@ -240,7 +242,7 @@ def test_reload_after_new_database_connection_keeps_approved_files(pi_client):
     from app.db.engine import Database
     approved = decide(pi_client, propose(pi_client, create_pi(pi_client)), "approve").json()
     old_database = pi_client.app.state.database
-    new_database = Database(str(old_database.engine.url))
+    new_database = Database(old_database.engine.url.render_as_string(hide_password=False))
     new_database.create_tables()
     pi_client.app.state.database = new_database
     try:
@@ -261,8 +263,8 @@ def test_unsupported_images_and_missing_csrf_are_rejected(pi_client):
         "image": ("large.png", b"x" * (2 * 1024 * 1024 + 1), "image/png")}).status_code == 413
 
 
-def test_react_cors_and_cookie_configuration(tmp_path):
-    settings = Settings(database_url=f"sqlite:///{tmp_path / 'cors.sqlite3'}", session_secret="fake-session",
+def test_react_cors_and_cookie_configuration(database_url):
+    settings = Settings(database_url=database_url, session_secret="fake-session",
                         frontend_origins="https://frontend.example", app_base_url="https://api.example",
                         session_same_site="none")
     app = create_app(settings)
@@ -270,10 +272,11 @@ def test_react_cors_and_cookie_configuration(tmp_path):
     with TestClient(app, base_url="https://api.example") as client:
         response = client.options("/api/trade/pi", headers={
             "Origin": "https://frontend.example", "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "Content-Type, X-CSRF-Token"})
+            "Access-Control-Request-Headers": "Content-Type, X-CSRF-Token, Authorization"})
         assert response.status_code == 200
         assert response.headers["access-control-allow-origin"] == "https://frontend.example"
         assert response.headers["access-control-allow-credentials"] == "true"
+        assert "Authorization" in response.headers["access-control-allow-headers"]
         rejected = client.options("/api/trade/pi", headers={
             "Origin": "https://untrusted.example", "Access-Control-Request-Method": "POST"})
         assert "access-control-allow-origin" not in rejected.headers

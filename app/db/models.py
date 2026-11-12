@@ -1,8 +1,9 @@
 """CONTRACT 7절. JSON은 Postgres JSONB / SQLite JSON으로 저장한다."""
 
 from datetime import UTC, datetime
+from uuid import UUID
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, LargeBinary, String, Text, UniqueConstraint, Uuid, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -49,13 +50,18 @@ class Updated:
 
 
 class User(Base, Created):
+    """google_sub는 Google 메일 연결 사용자만 쓰고 Supabase 로그인 사용자는 supabase_uid로
+    구분한다(CONTRACT 7.1절, 계획 5절). 두 값 모두 유일하고 아직 연결 전이면 NULL이다."""
     __tablename__ = "users"
+    __table_args__ = (Index("uq_users_supabase_uid", "supabase_uid", unique=True),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    google_sub: Mapped[str] = mapped_column(String, unique=True)
+    google_sub: Mapped[str | None] = mapped_column(String, unique=True)
+    supabase_uid: Mapped[UUID | None] = mapped_column(Uuid())
     email: Mapped[str] = mapped_column(String)
     display_name: Mapped[str | None] = mapped_column(String)
     reflection_enabled: Mapped[bool] = mapped_column(Boolean, default=lambda: _default_reflection())
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    ai_execution_mode: Mapped[str] = mapped_column(String, default="stored_key", server_default="stored_key")
 
 
 def _default_reflection():
@@ -70,6 +76,68 @@ class GoogleToken(Base, Updated):
     access_token_enc: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     scopes: Mapped[list] = mapped_column(JSON_VALUE, default=list)
+
+
+class UserOpenAIKey(Base, Updated):
+    __tablename__ = "user_openai_keys"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    api_key_enc: Mapped[str] = mapped_column(Text)
+
+
+class WorkerPairing(Base, Created):
+    __tablename__ = "worker_pairings"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    secret_hash: Mapped[str] = mapped_column(String)
+    code_hash: Mapped[str] = mapped_column(String, unique=True)
+    device_name: Mapped[str] = mapped_column(String(80))
+    capabilities: Mapped[dict] = mapped_column(JSON_VALUE)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    last_polled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class WorkerDevice(Base, Owned, Created):
+    __tablename__ = "worker_devices"
+    __table_args__ = (Index("uq_worker_active_user", "user_id", unique=True,
+                           sqlite_where=text("revoked_at IS NULL"),
+                           postgresql_where=text("revoked_at IS NULL")),)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    token_hash: Mapped[str] = mapped_column(String, unique=True)
+    scopes: Mapped[list] = mapped_column(JSON_VALUE, default=lambda: ["ai:claim", "ai:complete"])
+    capabilities: Mapped[dict] = mapped_column(JSON_VALUE)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class WorkerJob(Base, Owned, Created):
+    __tablename__ = "worker_jobs"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(String, unique=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("worker_devices.id"), index=True)
+    run_id: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="queued", index=True)
+    schema_id: Mapped[str] = mapped_column(String)
+    schema_version: Mapped[str] = mapped_column(String)
+    payload: Mapped[dict | None] = mapped_column(JSON_VALUE, nullable=True)
+    result_hash: Mapped[str | None] = mapped_column(String)
+    result_enc: Mapped[str | None] = mapped_column(Text)
+    error_kind: Mapped[str | None] = mapped_column(String)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    lease_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class WorkerRateLimit(Base):
+    __tablename__ = "worker_rate_limits"
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    window: Mapped[int] = mapped_column(Integer, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
 
 
 class GmailWatch(Base):
@@ -198,6 +266,9 @@ class TradeDocumentVersion(Base, Owned, Created):
 
 
 class TradeProposal(Base, Owned, Created):
+    """검토 제안. 회사 이미지는 제안 시점의 `logo_file_id`/`seal_file_id`로 고정하고(계획 9절)
+    렌더 때 Storage에서 bytes를 읽는다. `logo`/`seal` 바이너리 열은 9절 이전 행 보존용이며
+    backfill(app.trade.settings.backfill) 뒤 22절에서 삭제한다."""
     __tablename__ = "trade_proposals"
     __table_args__ = (ForeignKeyConstraint(
         ["document_id", "revision"],
@@ -212,9 +283,17 @@ class TradeProposal(Base, Owned, Created):
     decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     logo: Mapped[bytes | None] = mapped_column(LargeBinary)
     seal: Mapped[bytes | None] = mapped_column(LargeBinary)
+    logo_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
+    seal_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
 
 
 class TradeArtifact(Base, Owned, Created):
+    """CONTRACT 15.7·16.3절 trade_artifacts — 발급 파일 기록(계획 10절).
+
+    bytes는 비공개 Storage의 결정적 `object_key` 위치에만 두고 새 승인은 `content`를 채우지
+    않는다. `content` 바이너리 열은 10절 이전 행 보존용이며 backfill(app.trade.review.backfill)
+    뒤 22절에서 삭제한다. 기존 파일 ID·형식·해시·승인 관계는 그대로 유지한다.
+    """
     __tablename__ = "trade_artifacts"
     __table_args__ = (UniqueConstraint("proposal_id", "file_format"),)
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -223,7 +302,39 @@ class TradeArtifact(Base, Owned, Created):
     filename: Mapped[str] = mapped_column(String)
     media_type: Mapped[str] = mapped_column(String)
     content_hash: Mapped[str] = mapped_column(String(64))
-    content: Mapped[bytes] = mapped_column(LargeBinary)
+    content: Mapped[bytes | None] = mapped_column(LargeBinary)
+    object_key: Mapped[str | None] = mapped_column(String)
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+
+
+class FileAsset(Base, Owned, Created):
+    """CONTRACT 7.1·16.3절 file_assets — 첨부 파일 메타데이터(계획 8절).
+
+    파일 bytes는 DB에 두지 않고 비공개 Storage 버킷의 `object_key` 위치에만 둔다.
+    `content_type`은 확장자·클라이언트 값이 아니라 서버가 파일 시그니처로 확인한 실제 형식이다.
+    """
+    __tablename__ = "file_assets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    original_filename: Mapped[str] = mapped_column(String)
+    content_type: Mapped[str] = mapped_column(String)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    object_key: Mapped[str] = mapped_column(String)
+
+
+class TradeDocumentSource(Base, Owned, Created):
+    """CONTRACT 7.1·16.3절 trade_document_sources — 문서 버전과 첨부 파일의 출처 연결(계획 8절).
+
+    `revision`는 연결로 만들어진 문서 revision다. 출처를 바꾸면 새 revision 행이 쌓이고
+    과거 revision의 연결 행은 보존된다. `origin`이 `email`인 행은 Gmail 첨부 가져오기(보류 범위) 뒤 생긴다.
+    """
+    __tablename__ = "trade_document_sources"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trade_document_id: Mapped[int] = mapped_column(ForeignKey("trade_documents.id"), index=True)
+    doc_kind: Mapped[str] = mapped_column(String)
+    revision: Mapped[int] = mapped_column(Integer)
+    file_id: Mapped[int] = mapped_column(ForeignKey("file_assets.id"), index=True)
+    origin: Mapped[str] = mapped_column(String)
 
 
 class UserPreference(Base, Updated):
@@ -265,13 +376,16 @@ class CompanyBankAccount(Base, Owned, Updated):
 
 
 class CompanyBranding(Base, Updated):
-    """CONTRACT 15.7절 company_branding — 사용자별 직인·로고(kekorea-port 4). seal_sha256은
-    업로드할 때 seal bytes의 SHA-256을 저장한 값이고 app.trade.settings.repository.resolve_company_seal이 대조에 쓴다."""
+    """CONTRACT 15.7절 company_branding — 사용자별 직인·로고(kekorea-port 4). 현재 설정은
+    `logo_file_id`/`seal_file_id`가 file_assets의 이미지를 가리키고(계획 9절) bytes는 Storage에만
+    있다. `logo`/`seal`/`seal_sha256` 바이너리 열은 9절 이전 행 보존용이며 backfill 뒤 22절에서 삭제한다."""
     __tablename__ = "company_branding"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     logo: Mapped[bytes | None] = mapped_column(LargeBinary)
     seal: Mapped[bytes | None] = mapped_column(LargeBinary)
     seal_sha256: Mapped[str | None] = mapped_column(String)
+    logo_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
+    seal_file_id: Mapped[int | None] = mapped_column(ForeignKey("file_assets.id"))
 
 
 class PriceListItem(Base, Owned, Updated):

@@ -1,8 +1,13 @@
 # 비밀값: .env는 올리지 않는다(.env.example만 올린다)
 .env
+.env.worker
+.worker-device.json
 # uv 가상환경과 파이썬 캐시
 .venv/
 __pycache__/
 .pytest_cache/
 # ZCode video-agent-kit 플러그인이 만드는 작업 폴더(레포와 무관한 캐시)
 .video_agent/
+# React 프론트엔드(frontend/) 의존성·빌드 산출물(.env는 위 .env 규칙으로 이미 제외)
+frontend/node_modules/
+frontend/dist/

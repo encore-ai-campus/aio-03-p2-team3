@@ -6,11 +6,24 @@
 {% block content %}
 <div class="intro">{{ status_badge('받은 메일') }}<h1>메일에서 답장과 견적까지</h1><p class="muted">받은 메일을 확인하고, 보낼 답장을 골라 보세요.</p></div>
 {% if user %}
+{% if not openai_registered %}
+{% if local_mode %}
+{{ banner('로컬 AI를 사용할 수 없습니다. 본인 .env 키와 Google 소유자 설정을 확인해 주세요.') }}
+<p><a href="/settings#openai-key">로컬 .env 키 설정 확인</a></p>
+{% else %}
+{{ banner('본인의 OpenAI API 키가 없어 AI 자동 처리가 차단됩니다. 설정에서 키를 등록해 주세요.') }}
+<p><a href="/settings#openai-key">내 OpenAI API 키 등록하기</a></p>
+{% endif %}
+{% endif %}
 {% call card('연결된 Gmail') %}
 <p><strong>{{ user.email }}</strong> {{ status_badge(status.label) }}</p>
 {% if status.notice %}{{ banner(status.notice) }}{% endif %}
 {% if status.relogin %}<p>{{ link_button('다시 로그인', '/auth/google/start?consent=1') }}</p>{% endif %}
+{% if local_mode %}
+<p class="muted">이 PC에서 지정한 본인 계정의 새 메일을 30초마다 확인합니다. 로그아웃·연결 만료·프로그램 종료 시 수집을 멈춥니다. 화면 목록은 90초마다 갱신됩니다.</p>
+{% else %}
 <p class="muted">새 메일이 오면 답장 후보를 만들어 이 화면에 보여 줍니다.</p>
+{% endif %}
 <form method="post" action="/logout">{{ submit_button('로그아웃') }}</form>
 {% endcall %}
 {% call card('받은 메일') %}

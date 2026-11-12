@@ -43,9 +43,9 @@ def fake():
 
 
 @pytest.fixture
-def client(fake):
+def client(fake, database_url):
     settings = Settings(
-        database_url="sqlite://", token_encryption_key=Fernet.generate_key().decode(),
+        database_url=database_url, token_encryption_key=Fernet.generate_key().decode(),
         session_secret=SECRET, gmail_pubsub_topic="projects/fake/topics/fake",
     )
     with TestClient(create_app(settings, google=fake)) as client:

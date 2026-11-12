@@ -21,7 +21,8 @@ def test_python_version():
     "module",
     [
         "langgraph",
-        "langchain_google_genai",
+        "langchain_openai",
+        "openai",
         "googleapiclient",
         "google.auth",
         "google_auth_oauthlib",

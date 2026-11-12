@@ -1,7 +1,6 @@
 import json
 from typing import Literal
 
-from google.genai.errors import ClientError
 from pydantic import BaseModel
 import pytest
 from sqlalchemy import select
@@ -11,7 +10,7 @@ from app.graph.build import build_graph
 from app.graph.run import start_run
 from app.llm import client
 from app.prompts import Prompt
-from tests.fakes.llm import FakeLLM
+from tests.fakes.llm import FakeLLM, openai_error
 
 
 class Decision(BaseModel):
@@ -166,7 +165,7 @@ def test_node_exception_is_timed_and_message_is_not_logged(database, email):
 
 
 @pytest.mark.parametrize("failure, expected, attempts", [
-    (ClientError(429, {"error": {"status": "RESOURCE_EXHAUSTED"}}), "awaiting_approval", 1),
+    (openai_error(429), "awaiting_approval", 1),
     (TimeoutError("가상 통신 실패"), "failed", 3),
 ])
 def test_llm_error_kind_controls_graph_exit(database, email, monkeypatch, failure, expected, attempts):
@@ -186,7 +185,9 @@ def test_llm_error_kind_controls_graph_exit(database, email, monkeypatch, failur
 
 
 def test_blank_nodes_do_not_claim_success(database, email):
-    assert run(database, email)["end_reason"] == "failed"
+    # 실제 키가 있어도 외부 호출 없이 실패가 전파되는지만 본다(환경과 무관한 검증).
+    with client.use_backend(FakeLLM([openai_error(400)])):
+        assert run(database, email)["end_reason"] == "failed"
 
 
 def test_unknown_user_is_rejected_without_run(database, email):

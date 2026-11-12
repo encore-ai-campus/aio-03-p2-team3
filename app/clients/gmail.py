@@ -29,6 +29,7 @@ os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URI = "https://oauth2.googleapis.com/token"
+REVOKE_URI = "https://oauth2.googleapis.com/revoke"
 HTTP_TIMEOUT_SECONDS = 15
 SCOPE_ALIASES = {
     "email": "https://www.googleapis.com/auth/userinfo.email",
@@ -68,6 +69,10 @@ class WatchFailed(GoogleError):
     """Gmail 감시 등록(users.watch) 실패."""
 
     code = "watch_failed"
+
+
+class HistoryExpired(GoogleUnavailable):
+    """history.list의 404. 전체 메일함을 다시 읽지 않고 재연결을 요구한다."""
 
 
 @dataclass(frozen=True)
@@ -190,6 +195,22 @@ class GoogleClient:
             raise GoogleUnavailable(type(error).__name__) from error
         return AccessToken(credentials.token, _utc(credentials.expiry))
 
+    def revoke(self, token: str) -> None:
+        """토큰을 Google에서 폐기한다(연결 해제). 이미 폐기됐으면 TokenExpired로 알린다."""
+        import httpx
+
+        try:
+            response = httpx.post(REVOKE_URI, data={"token": token}, timeout=HTTP_TIMEOUT_SECONDS,
+                                  headers={"Content-Type": "application/x-www-form-urlencoded"})
+        except httpx.HTTPError as error:
+            raise GoogleUnavailable(type(error).__name__) from error
+        if response.status_code == 200:
+            return
+        if response.status_code == 400:
+            raise TokenExpired("invalid_grant")
+        # 응답 본문에는 계정·토큰이 섞일 수 있으므로 상태 코드만 오류로 쓴다.
+        raise GoogleUnavailable(f"HTTP {response.status_code}")
+
     def gmail(self, access_token: str):
         """접근 토큰 하나로 Gmail API 클라이언트를 만든다(7·9가 메일 읽기·보내기에 쓴다)."""
         import google_auth_httplib2
@@ -222,6 +243,19 @@ class GoogleClient:
         except Exception as error:
             raise GoogleUnavailable(_error_label(error)) from error
 
+    def get_history_id(self, access_token: str) -> str:
+        """감시를 변경하지 않고 현재 메일함 위치만 읽는다(로컬 최초 연결용)."""
+        try:
+            response = self.gmail(access_token).users().getProfile(userId="me").execute(
+                num_retries=LIMITS["GMAIL_MAX_RETRIES"],
+            )
+            history_id = str(response["historyId"])
+            if not history_id.isascii() or not history_id.isdecimal() or int(history_id) <= 0:
+                raise ValueError("invalid_history_id")
+            return history_id
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+
     def verify_push_token(self, token: str, audience: str, service_account: str) -> None:
         from google.oauth2 import id_token
 
@@ -236,6 +270,8 @@ class GoogleClient:
                 historyTypes=["messageAdded"], pageToken=page_token,
             ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])
         except Exception as error:
+            if getattr(getattr(error, "resp", None), "status", None) == 404:
+                raise HistoryExpired(_error_label(error)) from error
             raise GoogleUnavailable(_error_label(error)) from error
 
     def get_message(self, gmail, message_id: str) -> dict:
