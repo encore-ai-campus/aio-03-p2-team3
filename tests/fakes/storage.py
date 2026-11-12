@@ -27,6 +27,8 @@ class FakeStorage:
         self.calls.append(("upload", object_key))
         if self.upload_error is not None:
             raise self.upload_error
+        if object_key in self.objects:
+            raise StorageError("object_exists", "이미 저장된 객체", status_code=409)
         self.objects[object_key] = data
         self.content_types[object_key] = content_type
         self.created_at[object_key] = datetime.now(UTC)
@@ -36,7 +38,8 @@ class FakeStorage:
         if self.download_error is not None:
             raise self.download_error
         if object_key not in self.objects:
-            raise StorageError("storage_http_error", "파일 저장소 오류입니다(HTTP 404). 잠시 후 다시 시도해 주세요.")
+            raise StorageError("object_not_found", "파일 저장소 오류입니다(HTTP 404). 잠시 후 다시 시도해 주세요.",
+                               status_code=404)
         return self.objects[object_key]
 
     def delete(self, object_key):

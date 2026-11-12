@@ -5,12 +5,12 @@
     uv run python -m app.files.cleanup --older-than-hours 24            # 오래된 미참조 객체만
     uv run python -m app.files.cleanup --older-than-hours 24 --delete --yes  # 재확인 뒤 삭제
 
-- 미참조 = 버킷에 있지만 `file_assets.object_key`가 가리키지 않는 객체(업로드 성공 뒤 SQL 실패로
-  남은 것). 참조 중인 객체는 절대 지우지 않는다.
+- 미참조 = 버킷에 있지만 `file_assets.object_key`·`trade_artifacts.object_key`가 가리키지 않는
+  객체(업로드 성공 뒤 SQL 실패로 남은 것). 참조 중인 객체는 절대 지우지 않는다.
 - 나이를 알 수 없는 객체는 지우지 않는다(보수적으로 남긴다).
 - 크론·자동 큐 없이 사람이 목록을 확인하고 실행한다.
-- 회사 이미지(계획 9절)도 file_assets 행을 거쳐 객체를 가리키므로 참조 집합은 이 명령 그대로다.
-  발급 파일(10절)이 object_key 열을 직접 가리키기 시작하면 그때 참조 집합을 넓힌다.
+- 회사 이미지(계획 9절)는 file_assets 행을 거쳐 객체를 가리키고, 발급 파일(계획 10절)은
+  trade_artifacts가 object_key를 직접 가리킨다. 둘 다 이 참조 집합에 들어 있다.
 """
 from argparse import ArgumentParser
 from collections.abc import Sequence
@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db.engine import get_database
-from app.db.models import FileAsset
+from app.db.models import FileAsset, TradeArtifact
 from app.files.storage import StorageClient, StorageError
 
 DEFAULT_OLDER_THAN_HOURS = 24
@@ -43,6 +43,8 @@ def unreferenced_objects(database, storage) -> list[dict]:
     """버킷 객체 중 DB가 참조하지 않는 것을 `{key, size_bytes, age_hours}`로 돌려준다."""
     with database.session() as session:
         referenced = set(session.scalars(select(FileAsset.object_key)))
+        referenced.update(session.scalars(select(TradeArtifact.object_key).where(
+            TradeArtifact.object_key.is_not(None))))
     now = datetime.now(UTC)
     rows = []
     for entry in storage.list_objects():

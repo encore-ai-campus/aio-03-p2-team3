@@ -363,6 +363,26 @@ def test_storage_client_uses_official_endpoints_and_converts_errors(monkeypatch)
     assert "fake-secret" not in str(broken.value) and "fake-secret" not in str(unavailable.value)
 
 
+@pytest.mark.parametrize(("status", "body", "code"), [
+    (409, {"code": "ResourceAlreadyExists"}, "object_exists"),
+    (400, {"error": "Duplicate"}, "object_exists"),
+    (404, {"code": "NoSuchKey"}, "object_not_found"),
+    (400, {"error": "not_found"}, "object_not_found"),
+    (500, {"code": "private-unknown-value"}, "storage_http_error"),
+])
+def test_storage_errors_expose_only_safe_codes(monkeypatch, status, body, code):
+    import httpx
+    from app.files.storage import StorageClient
+
+    monkeypatch.setattr("app.files.storage.httpx.request", lambda *args, **kwargs:
+                        httpx.Response(status, json={**body, "message": "secret-response"}))
+    with pytest.raises(StorageError) as caught:
+        StorageClient("https://storage.example.invalid", "fake-secret", "trade-files").upload(
+            "1/issued/file", b"bytes", "application/pdf")
+    assert caught.value.code == code and caught.value.status_code == status
+    assert "secret-response" not in str(caught.value)
+
+
 def test_cleanup_command_keeps_referenced_and_unknown_age_objects(database_url):
     jwks, storage = FakeJwks(), FakeStorage()
     with make_client(database_url, jwks, storage) as client:

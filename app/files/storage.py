@@ -17,10 +17,11 @@ LIST_PAGE_SIZE = 100
 class StorageError(Exception):
     """Storage 호출 실패. `code`는 오류 종류, 비밀값·응답 원문은 message에 넣지 않는다."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, *, status_code: int | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.status_code = status_code
 
 
 class StorageClient:
@@ -46,8 +47,19 @@ class StorageClient:
                                "파일 저장소에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.") from error
         if response.status_code >= 400:
             log.warning("Storage 오류 응답: %s %s -> HTTP %s", method, path, response.status_code)
-            raise StorageError("storage_http_error",
-                               f"파일 저장소 오류입니다(HTTP {response.status_code}). 잠시 후 다시 시도해 주세요.")
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            reason = body.get("code", body.get("error")) if isinstance(body, dict) else None
+            code = "storage_http_error"
+            if reason in {"ResourceAlreadyExists", "KeyAlreadyExists", "Duplicate"}:
+                code = "object_exists"
+            elif reason in {"NoSuchKey", "not_found"} or response.status_code == 404:
+                code = "object_not_found"
+            raise StorageError(code,
+                               f"파일 저장소 오류입니다(HTTP {response.status_code}). 잠시 후 다시 시도해 주세요.",
+                               status_code=response.status_code)
         return response
 
     def upload(self, object_key: str, data: bytes, content_type: str) -> None:
@@ -63,7 +75,7 @@ class StorageClient:
         try:
             self._request("DELETE", f"/object/{self.bucket}/{object_key}")
         except StorageError as error:
-            if "HTTP 404" in error.message:
+            if error.code == "object_not_found":
                 return
             raise
 

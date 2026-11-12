@@ -419,7 +419,8 @@ class AgentError(TypedDict):
 - `users` 표 이행(계획 5절 적용, 2026-11-12): 기존 정수 `id` PK와 소유자 외래 키를 그대로 두고(Supabase `auth.users.id` UUID로 바꾸지 않는다) 유일한 nullable `supabase_uid`(UUID) 열을 더했고(migration `20261112_supabase_users`, 유일 인덱스 `uq_users_supabase_uid`) Google 메일 연결 없이 가입한 사용자를 위해 `google_sub`는 nullable로 바꿨다(기존 행 보존). 같은 이메일만으로 기존 행에 자동 연결하지 않는다(연결 증명은 9절).
 - 새 표 `file_assets`(계획 8절 적용, 2026-11-12): `id` PK · `user_id` FK · `original_filename` · `content_type`(서버가 파일 시그니처로 확인한 실제 형식) · `size_bytes` · `sha256` · `object_key` · `created_at`. 파일 bytes는 DB에 두지 않는다.
 - 새 표 `trade_document_sources`(계획 8절 적용, 2026-11-12): `id` PK · `user_id` FK · `trade_document_id` FK · `doc_kind` · `revision`(연결할 때 확인한 문서 revision) · `file_id` FK(`file_assets`) · `origin`(`upload`/`email` — `email`은 Gmail 첨부 가져오기(보류 범위) 구현 뒤 쓴다) · `created_at`.
-- 기존 표 이행(계획 9절 적용, 2026-11-12): `company_branding`·`trade_proposals`에 nullable `logo_file_id`·`seal_file_id` FK(`file_assets`)를 더했다(migration `20261112_company_images`). 현재 설정은 파일 ID를, 새 검토 제안은 제안 시점 이미지 파일 ID 스냅샷을 가리키고 렌더 때 Storage에서 bytes를 읽는다. 기존 바이너리 행은 `uv run python -m app.trade.settings.backfill [--yes]`이 해시 대조하며 옮긴다(같은 사용자의 같은 bytes는 기존 `file_assets` 행을 재사용, 반복 실행 안전, 대조 값과 다른 행은 건너뛰고 보고). `trade_artifacts`는 `object_key`·`size_bytes` 열을 더하고 `content` 바이너리는 Storage로 옮긴다(계획 10절 backfill). 기존 파일 ID·형식·해시·승인 관계는 유지한다. 바이너리 열 DROP·원본 삭제는 검증 뒤 별도 변경이다(계획 22절).
+- 기존 표 이행(계획 9절 적용, 2026-11-12): `company_branding`·`trade_proposals`에 nullable `logo_file_id`·`seal_file_id` FK(`file_assets`)를 더했다(migration `20261112_company_images`). 현재 설정은 파일 ID를, 새 검토 제안은 제안 시점 이미지 파일 ID 스냅샷을 가리키고 렌더 때 Storage에서 bytes를 읽는다. 기존 바이너리 행은 `uv run python -m app.trade.settings.backfill [--yes]`이 해시 대조하며 옮긴다(같은 사용자의 같은 bytes는 기존 `file_assets` 행을 재사용, 반복 실행 안전, 대조 값과 다른 행은 건너뛰고 보고). 바이너리 열 DROP·원본 삭제는 검증 뒤 별도 변경이다(계획 22절).
+- 기존 표 이행(계획 10절 적용, 2026-11-12): `trade_artifacts`에 nullable `object_key`·`size_bytes`를 더하고 `content`를 nullable로 바꿨다(migration `20261112_issued_artifacts`, 새 승인은 `content`를 채우지 않는다). 승인은 ①렌더 ②요청한 모든 형식의 Storage 저장 ③SQL 트랜잭션 확정 순서를 따른다(16.3절 발급 파일 절차). 기존 파일 ID·형식·해시·승인 관계는 유지하고, 옛 바이너리 행은 `uv run python -m app.trade.review.backfill [--yes]`이 승인과 같은 결정적 key로 옮긴다(해시 대조, 반복 실행은 저장 객체 해시 대조 검증). `content` 열 DROP·원본 삭제는 검증 뒤 별도 변경이다(계획 22절).
 - [미확정] 기존 SQLite·Render Postgres 데이터의 보존 대상·기간은 계획 2절에서 사람이 확인한다. 확인 전에 운영 데이터를 삭제·덮어쓰지 않는다.
 
 ## 8. 실행 기록
@@ -797,7 +798,7 @@ TradeDocDraft(TypedDict, total=False):
 - JSON API는 기존 메일 그래프 밖의 `app/trade/` 도메인 업무를 호출한다. 문서별 경로는 `/api/trade/{pi|po|ci|pl}`이며 상세 입력·응답은 FastAPI OpenAPI(`/docs`)가 코드와 함께 제공한다. 모든 조회/다운로드는 세션 소유자 범위이며 변경 요청은 `/api/session`에서 발급한 CSRF 토큰을 요구한다. 이 문단의 세션·CSRF 규칙은 [현재 구현]이며 9.1절 전환표의 legacy 행이다(같은 경로의 React Bearer 전용 연결과 파일 저장 목표는 16.3절).
 - 입력에는 서버의 상태·계산 결과·가격 인증·승인 표시를 허용하지 않는다. 정확한 숫자는 Decimal 문자열이다. 직접 입력과 LangChain 추출은 같은 업무 계산을 거친다. AI는 거래 단가 변경을 승인할 수 없다.
 - `trade_document_versions`는 문서 revision별 불변 초안을 저장한다. 문서 수정은 기대 revision을 조건으로 갱신하며 대기 제안을 무효화한다. `trade_proposals`는 확인할 문서·버전·출력 형식·직인/로고 bytes 및 해시를 고정한다. 선택 요청의 문서 ID·제안 ID·revision·내용 해시가 모두 일치해야 한다.
-- `approve`: ready/current인 문서를 issued로 만들고 PDF/XLSX bytes를 `trade_artifacts`에 같은 트랜잭션으로 저장한다. 중복·동시 승인은 같은 파일을 반환한다. `cancel`: 제안을 cancelled로 종료하며 문서나 파일을 발급하지 않는다. `modify`: 기존 제안을 superseded/modify로 기록하고 문서를 새 revision으로 만든 뒤 새 검토를 요구한다. 미완성 수정은 needs_input으로 돌아온다.
+- `approve` [계획 10절 적용, 2026-11-12]: ready/current인 문서를 issued로 만든다. PDF/XLSX bytes는 먼저 모든 형식을 Storage에 저장한 뒤(16.3절 발급 파일 절차) SQL 트랜잭션에서 revision·제안·`trade_artifacts` 파일 참조(object key·크기)를 함께 확정한다. 중복·동시 승인은 같은 파일을 반환한다. `cancel`: 제안을 cancelled로 종료하며 문서나 파일을 발급하지 않는다. `modify`: 기존 제안을 superseded/modify로 기록하고 문서를 새 revision으로 만든 뒤 새 검토를 요구한다. 미완성 수정은 needs_input으로 돌아온다.
 - 계좌·회사·이미지 설정 변경은 이미 제안한 내용과 승인 파일을 바꾸지 않는다. 출력 실패 시 pending/ready를 보존해 명시적으로 재시도할 수 있다. 문서 확정 API는 Gmail을 호출하지 않는다. 기존 메일 발송 승인과 문서 발급은 서로 다른 동작이다.
 - 서버 기동의 Alembic 갱신은 기존 문서의 현재 버전을 버전 표에 채운다. `FRONTEND_ORIGINS`는 명시한 출처만 허용하고, `SESSION_SAME_SITE=none`은 HTTPS 설정에서만 허용한다.
 
@@ -817,7 +818,7 @@ TradeDocDraft(TypedDict, total=False):
 
 ### 16.3. Supabase Storage 파일 계약 [목표] (2026-11-12, 계획 1절 확정)
 
-- 인증: 이 절의 파일 API는 9.1절 Bearer 전용 경로다. [적용 2026-11-12, 계획 8절] 사용자 첨부 API(`app/files/`의 `POST /api/files`·메타데이터·다운로드·삭제·문서 출처 연결)를 구현했다. [적용 2026-11-12, 계획 9절] 회사 로고·직인과 검토 제안 이미지도 Storage로 옮겼다: 설정 저장(`POST /api/trade/settings/branding/{kind}`, 기존 2MiB·PNG 검증 유지)은 `{user_id}/branding/…` 객체를 올리고 `file_assets` 행·파일 ID 연결을 확정하며, 새 제안은 이미지 파일 ID를 고정하고 렌더 때 Storage에서 bytes를 읽어 `file_assets.sha256`과 대조한다. 이미지 없음(옛 제안 등)은 503 `IMAGE_UNAVAILABLE`, bytes 불일치는 503 `IMAGE_CORRUPTED`, Storage 장애·미설정은 503 `STORAGE_UNAVAILABLE`로 실패시키고(성공으로 처리하지 않는다) 직인이 없으면 기존대로 409 `SEAL_REQUIRED`다. 발급 파일 bytes(`trade_artifacts.content`)만 DB에 남고 Storage 전환은 계획 10절이다.
+- 인증: 이 절의 파일 API는 9.1절 Bearer 전용 경로다. [적용 2026-11-12, 계획 8절] 사용자 첨부 API(`app/files/`의 `POST /api/files`·메타데이터·다운로드·삭제·문서 출처 연결)를 구현했다. [적용 2026-11-12, 계획 9절] 회사 로고·직인과 검토 제안 이미지도 Storage로 옮겼다: 설정 저장(`POST /api/trade/settings/branding/{kind}`, 기존 2MiB·PNG 검증 유지)은 `{user_id}/branding/…` 객체를 올리고 `file_assets` 행·파일 ID 연결을 확정하며, 새 제안은 이미지 파일 ID를 고정하고 렌더 때 Storage에서 bytes를 읽어 `file_assets.sha256`과 대조한다. 이미지 없음(옛 제안 등)은 503 `IMAGE_UNAVAILABLE`, bytes 불일치는 503 `IMAGE_CORRUPTED`, Storage 장애·미설정은 503 `STORAGE_UNAVAILABLE`로 실패시키고(성공으로 처리하지 않는다) 직인이 없으면 기존대로 409 `SEAL_REQUIRED`다. [적용 2026-11-12, 계획 10절] 발급 PDF/XLSX bytes도 Storage로 옮겼다: `trade_artifacts`는 `object_key`·`size_bytes`를 기록하고 새 승인은 `content`를 채우지 않는다.
 - 파일 나눔(표 정의는 7.1절):
 
 | 대상 | PostgreSQL에 남길 것 | Storage(비공개 버킷 `trade-files`)에 둘 것 |
@@ -836,9 +837,9 @@ TradeDocDraft(TypedDict, total=False):
   - `GET /api/files/{file_id}/download` — bytes. `Cache-Control: no-store`·안전한 파일명의 `Content-Disposition: attachment`로 제공하고 사용자 HTML·SVG 실행을 허용하지 않는다.
   - `DELETE /api/files/{file_id}` — 문서 출처·검토 제안·회사 이미지가 참조하지 않은 파일만 삭제한다(204). 참조 중이면 409.
 - 문서 출처 연결 [확정]: `PUT /api/trade/{kind}/{document_id}/sources`에 본문 `{revision, file_ids}`를 보낸다. 서버는 소유자·문서 종류·개수(문서당 5개)·파일 존재·소유를 검사한다. 성공하면 새 revision을 만들고 대기 검토를 무효화하며 과거 버전의 연결 행은 보존한다. 오류: 404 본인 아님·없음 · 409 revision 불일치 · 422 개수·형식·소유 검사 실패.
-- 발급 파일 다운로드 [확정]: 기존 `GET /api/trade/files/{file_id}` 경로와 소유자 검사 의미를 유지하고 내부 저장만 DB 바이너리에서 Storage 읽기로 바뀐다(계획 10절). 첨부 파일은 위 `/api/files/{id}/download`를 쓴다.
-- 업로드/SQL 실패 처리 [확정, 적용 2026-11-12 계획 8절]: 업로드 성공 뒤 SQL 실패는 미참조 객체를 남길 수 있다. 요청 실패 처리에서 승인된 파일·참조 중인 이미지를 무조건 지우지 않고, 미참조·충분히 오래된 객체를 목록화해 재확인 뒤 지우는 수동 관리 명령(`uv run python -m app.files.cleanup`, `--delete`에 `--yes` 필요)으로 정리한다(별도 크론·큐 없음). 삭제는 `file_assets` 기록을 먼저 지우고 객체를 지운다(반대로 하면 기록만 남아 다운로드가 깨진다). 객체 삭제 실패는 503 `storage_cleanup_failed`로 알리고 남은 bytes는 같은 명령으로 정리한다.
-- 발급 파일 절차 [확정](계획 10절. 현재 DB 한 트랜잭션 원자성과 다른 경계다):
+- 발급 파일 다운로드 [적용 2026-11-12, 계획 10절]: 기존 `GET /api/trade/files/{file_id}` 경로와 소유자·승인 상태 검사 의미를 유지하고 내부 저장을 Storage 읽기+해시 대조로 바꿨다. Storage 장애·미설정은 503 `STORAGE_UNAVAILABLE`, bytes 불일치는 503 `ARTIFACT_CORRUPTED`로 실패시키고 backfill 전 옛 행(`object_key` 없음)은 보존된 DB bytes로 내려받는다. 첨부 파일은 위 `/api/files/{id}/download`를 쓴다.
+- 업로드/SQL 실패 처리 [확정, 적용 2026-11-12 계획 8절]: 업로드 성공 뒤 SQL 실패는 미참조 객체를 남길 수 있다. 요청 실패 처리에서 승인된 파일·참조 중인 이미지를 무조건 지우지 않고, 미참조·충분히 오래된 객체를 목록화해 재확인 뒤 지우는 수동 관리 명령(`uv run python -m app.files.cleanup`, `--delete`에 `--yes` 필요)으로 정리한다(별도 크론·큐 없음). 삭제는 `file_assets` 기록을 먼저 지우고 객체를 지운다(반대로 하면 기록만 남아 다운로드가 깨진다). 객체 삭제 실패는 503 `storage_cleanup_failed`로 알리고 남은 bytes는 같은 명령으로 정리한다. [계획 10절 적용] 미참조 판단의 참조 집합은 `file_assets.object_key`와 `trade_artifacts.object_key` 둘 다다.
+- 발급 파일 절차 [적용 2026-11-12, 계획 10절](현재 DB 한 트랜잭션 원자성과 다른 경계다. 승인 실패는 503 `STORAGE_UNAVAILABLE`·`ARTIFACT_CORRUPTED`로 나가며 Storage 미설정은 503 `STORAGE_NOT_CONFIGURED`다):
   1. 현재 검토 제안과 불변 이미지로 파일을 만든다. 문서 revision과 제안 해시는 기존 규칙대로 검사한다.
   2. `{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key에 덮어쓰기 없이 저장한다. 이미 있으면 같은 bytes로 확인된 경우만 재사용한다.
   3. 요청한 모든 형식의 저장이 끝난 뒤 SQL 트랜잭션에서 문서 revision과 pending 제안을 조건부 갱신하고 파일 참조·승인 상태를 함께 확정한다.

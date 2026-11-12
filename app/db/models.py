@@ -225,6 +225,12 @@ class TradeProposal(Base, Owned, Created):
 
 
 class TradeArtifact(Base, Owned, Created):
+    """CONTRACT 15.7·16.3절 trade_artifacts — 발급 파일 기록(계획 10절).
+
+    bytes는 비공개 Storage의 결정적 `object_key` 위치에만 두고 새 승인은 `content`를 채우지
+    않는다. `content` 바이너리 열은 10절 이전 행 보존용이며 backfill(app.trade.review.backfill)
+    뒤 22절에서 삭제한다. 기존 파일 ID·형식·해시·승인 관계는 그대로 유지한다.
+    """
     __tablename__ = "trade_artifacts"
     __table_args__ = (UniqueConstraint("proposal_id", "file_format"),)
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -233,7 +239,9 @@ class TradeArtifact(Base, Owned, Created):
     filename: Mapped[str] = mapped_column(String)
     media_type: Mapped[str] = mapped_column(String)
     content_hash: Mapped[str] = mapped_column(String(64))
-    content: Mapped[bytes] = mapped_column(LargeBinary)
+    content: Mapped[bytes | None] = mapped_column(LargeBinary)
+    object_key: Mapped[str | None] = mapped_column(String)
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
 
 
 class FileAsset(Base, Owned, Created):

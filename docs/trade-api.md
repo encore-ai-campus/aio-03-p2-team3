@@ -51,13 +51,15 @@ app/trade/
 
 선택 요청은 `action`, `revision`, 반환받은 `content_hash`가 필요하다. 제안 ID는 URL에 둔다. `modify`에만 새 편집 입력 전체를 `document`로 보낸다. 제안 본문은 화면에 보여 주고 변경하지 않은 서버의 해시를 돌려보낸다.
 
-- `approve`: ready인 현재 버전을 issued로 확정하고 같은 트랜잭션에서 파일을 저장한다. 중복·동시 요청은 같은 파일을 반환한다.
+- `approve`: ready인 현재 버전을 issued로 확정한다. 파일 bytes는 요청한 모든 형식을 먼저 비공개 Storage에 저장한 뒤(`{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key, 같은 bytes만 재사용) SQL 트랜잭션에서 revision·제안·파일 참조를 함께 확정한다(계획 10절). 저장·확정 중 실패는 발급하지 않고 pending/ready를 유지한다. 중복·동시 요청은 같은 파일을 반환한다.
 - `cancel`: 제안만 cancelled로 종료한다. 문서 초안은 남고 파일은 발급하지 않는다.
 - `modify`: 이전 제안을 superseded/modify로 기록하고 문서를 새 버전으로 만든다. 준비됐으면 새 제안을 반환하고, 미완성이면 DocumentResult(`needs_input`)를 반환한다. 이전 동의는 새 내용에 적용하지 않는다.
 
 문서 수정은 기대 revision과 일치해야 한다. 대기 제안은 무효화하고 과거 승인 파일은 보존한다. 승인한 회사·계좌·이미지는 제안 시점의 파일 ID로 고정돼 설정 변경 후에도 Storage의 같은 이미지로 파일을 내려받는다(계획 9절). 렌더 때 이미지를 읽지 못하면(Storage 장애 503 `STORAGE_UNAVAILABLE`, bytes 불일치 503 `IMAGE_CORRUPTED`, 참조 없음 503 `IMAGE_UNAVAILABLE`) 발급하지 않고 pending/ready를 유지한다.
 
-첨부 파일은 Bearer 전용 `/api/files`(한 파일씩 multipart 업로드·메타데이터·다운로드·삭제)로 올려 위 `sources` 경로로 문서에 연결한다. bytes는 비공개 Storage 버킷에만 두고 DB에는 메타데이터(`file_assets`)만 남는다(계약 16.3절). 회사 설정이나 검토 제안이 참조 중인 이미지 파일은 삭제가 409로 거부된다(계획 9절). 9절 이전 바이너리 행은 `uv run python -m app.trade.settings.backfill --yes`로 옮긴다(반복 실행 안전).
+`GET /api/trade/files/{file_id}`는 승인된 발급 파일을 Storage에서 읽어 기록된 해시와 대조해 돌려준다(계획 10절). Storage 장애·미설정은 503 `STORAGE_UNAVAILABLE`/`STORAGE_NOT_CONFIGURED`, bytes 불일치는 503 `ARTIFACT_CORRUPTED`로 실패시키고 10절 이전 옛 행은 보존된 DB bytes로 내려받는다.
+
+첨부 파일은 Bearer 전용 `/api/files`(한 파일씩 multipart 업로드·메타데이터·다운로드·삭제)로 올려 위 `sources` 경로로 문서에 연결한다. bytes는 비공개 Storage 버킷에만 두고 DB에는 메타데이터(`file_assets`)만 남는다(계약 16.3절). 회사 설정이나 검토 제안이 참조 중인 이미지 파일은 삭제가 409로 거부된다(계획 9절). 9절 이전 회사 이미지 바이너리 행은 `uv run python -m app.trade.settings.backfill --yes`로, 10절 이전 발급 파일 바이너리 행은 `uv run python -m app.trade.review.backfill --yes`로 옮긴다(둘 다 반복 실행 안전, 뒤의 명령은 재실행이 저장 객체 해시 대조 검증이다).
 
 ## 문서별 차이
 
