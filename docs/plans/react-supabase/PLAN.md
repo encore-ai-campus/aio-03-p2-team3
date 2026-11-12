@@ -255,7 +255,7 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 
 <a id="6"></a>
 
-## 6. React 기본 화면과 Supabase 로그인
+## 6. React 기본 화면과 Supabase 로그인 (완료)
 
 - 할 일: 루트 `frontend/`에 JavaScript Vite 앱을 만들고 시안의 색·레이아웃·사이드바·모바일 탐색·로그인 화면을 옮긴다. React Router로 `/app` 아래 경로를 정한다. Supabase Auth 클라이언트 한 개, 인증 경계, `/api/me` 호출, 공통 fetch/오류 처리와 개발 프록시를 만든다.
 - 완료 기준: Google 로그인 시작·callback·새로고침 복구·만료·로그아웃·취소·설정 누락을 화면에서 구분한다. 비로그인 사용자가 업무 API를 호출해도 서버가 거부한다. 이전 앱의 쿠키 없이도 React 로그인이 동작한다. 빌드·lint 명령과 lockfile이 있다.

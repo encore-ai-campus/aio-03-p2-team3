@@ -36,6 +36,7 @@
 - `.env.example` — 환경변수 이름과 설명(값 없음) [과제별]
 - `.gitignore` — `.env`·`.venv` 등 올리지 않을 파일 [과제별]
 - `app/` — FastAPI 서버·설정, DB 표, 그래프·노드 틀, 도구 스키마·등록, LLM 도우미, 프롬프트 버전, 실행 기록기, 시험 시나리오·지표·시험 실행기(`app/evaluation/`), 웹 템플릿·디자인 토큰·로컬 HTMX와 라이선스, 무역서류 이식 모듈(`app/trade/`, kekorea-port), Supabase Bearer 인증·사용자 매핑·`/api/me`(`app/auth/`). 업무 본문은 후속 작업에서 구현 [과제별]
+- `frontend/` — React+JavaScript+Vite 앱(시안 이식 로그인·앱 뼈대, Supabase Auth 클라이언트·공통 API fetch, `/api` 개발 프록시). 실행·빌드는 README 실행 방법, 범위는 `docs/plans/react-supabase/PLAN.md` [과제별]
 - `tests/` — 실행 환경·서버·DB·그래프 흐름·노드 소요 시간·LLM 오류 구분·로그인·감시 등록·실행 기록 화면과 내보내기(개인정보 가리기)·시험 실행기와 4개 지표 테스트와 `fakes/`의 가짜 LLM·가짜 Google(실제 API 호출 없음) [과제별]
 - `.work/RULES.md` — 공통 규칙 [공통]
 - `.work/TASK.md` — 이 파일 [과제별]

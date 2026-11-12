@@ -41,6 +41,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - 테스트 DB 준비(별도 설치 불필요): 로컬 macOS·Linux는 개발 의존성 `pgserver`가 세션마다 임베디드 PostgreSQL을 띄우고(`uv run pytest`만 실행) 테스트별로 DB를 만들어 지운다. CI(GitHub Actions `tests` 작업)는 `postgres:16` service 컨테이너를 띄워 `TEST_DATABASE_URL`로 가리킨다. 로컬에서도 준비된 PostgreSQL에 `TEST_DATABASE_URL=postgres://… uv run pytest`로 연결할 수 있다. 단위 테스트는 `.env`의 실제 LLM 키가 스며들지 않게 키 환경을 비우고, LLM 응답은 각 테스트가 명시적으로 주입한 가짜만 쓴다.
 - DB 엔진·세션 팩터리, 컴파일한 그래프, 설정한 LLM 클라이언트를 재사용한다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
 - HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
+- React 화면(react-supabase 계획 6절, 2026-11-12): `cd frontend && npm ci && npm run dev`로 Vite 개발 서버를 띄우고 `http://localhost:5173/app/`(슬래시 포함)로 접속한다. `/api` 요청은 `frontend/vite.config.js` 프록시가 로컬 FastAPI(`127.0.0.1:8000`)로 보낸다. 로그인 연결에는 `frontend/.env`에 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`가 필요하고(틀: `frontend/.env.example`) 서버 `.env`의 `SUPABASE_URL`이 `GET /api/me`의 Bearer 검증에 쓰인다. 실제 Google 로그인은 계획 2절 콘솔 설정(비대칭 signing key·Google 공급자·redirect 허용)이 먼저다. 검사는 `frontend/`에서 `npm run lint`, `npm run build`. 지금은 시안 그대로의 로그인 화면·사이드바/하단탐색 뼈대·`/app` 라우팅·인증 경계·`/api/me` 연결만 있고 문서작성 등 나머지 화면은 자리만 있다(계획 11절 이후 연결).
 - 패키지 추가: `uv add <패키지>==<버전>`(개발용은 `uv add --dev …`). 버전은 `pip index versions <패키지>`로 확인하고, 바뀐 `pyproject.toml`·`uv.lock`을 함께 PR에 올린다.
 
 ## 산출물 위치
@@ -76,7 +77,7 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 | `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값. 설정할 때 `true` 또는 `false` 지정 |
 | `SUPABASE_URL` `SUPABASE_SECRET_KEY` `SUPABASE_STORAGE_BUCKET` | Supabase 전환용 서버 설정. `SUPABASE_URL`은 Bearer 토큰 검증(JWKS·issuer)에 읽는다(계획 5절 적용), 나머지는 Storage 전환(계획 8절)부터 적용 |
-| `VITE_SUPABASE_URL` `VITE_SUPABASE_PUBLISHABLE_KEY` | [목표] React 브라우저용 Supabase 설정. `frontend/.env`에만 두고 서버 비밀과 분리한다 |
+| `VITE_SUPABASE_URL` `VITE_SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 Supabase 설정(계획 6절 적용, 2026-11-12). `frontend/.env`에만 두고 서버 비밀과 분리한다 |
 
 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외했다. 일정(캘린더) 도구 작업 때 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천하고 채택 여부를 확인한다.
 
@@ -113,11 +114,11 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 [현재 구현] 회사·통화별 은행·단가는 `/api/trade/settings` 하위 API, 직인/로고 PNG는 `/branding/{seal|logo}`에 설정한다. 검토 제안에는 그 시점의 문서·계좌·이미지를 보관해 이후 설정 변경이 승인 파일을 바꾸지 않는다. 다른 주소의 React는 `FRONTEND_ORIGINS`에 허용 출처를 지정하고 `credentials: 'include'`를 사용한다. 서로 다른 사이트의 쿠키가 필요하면 HTTPS에서만 `SESSION_SAME_SITE=none`을 사용한다.
 
-### React·Supabase 전환 목표(2026-11-12 확정, 아직 구현 전)
+### React·Supabase 전환 목표(2026-11-12 확정, 6절까지 적용)
 
 화면을 React(JavaScript·Vite), 로그인을 Supabase Auth(Google), DB를 Supabase PostgreSQL, 파일을 비공개 Supabase Storage(버킷 `trade-files`)로 전환한다. 계획은 `docs/plans/react-supabase/PLAN.md`, 계약은 `docs/CONTRACT.md` 7.1·9.1·11·16.3절이다.
 
 - 로그인 뒤 `GET /api/me`(인증 상태·프로필·Gmail 연결 상태)에서 시작하고, React JSON API는 `Authorization: Bearer <Supabase access token>`만 쓴다. 위 쿠키+CSRF 안내는 전환 기간의 기존 경로용이다(계획 21·22절 전환 뒤 닫는다).
 - 서버는 검증한 Supabase UUID를 기존 정수 `user_id`(`users.supabase_uid` 매핑)에 연결한다. 파일은 서버가 `POST /api/files`로 한 파일씩 받아 Storage에 저장하고 메타데이터만 DB에 남긴다(첨부 파일당 5MiB·문서당 5개·PDF/XLSX/TXT/PNG/JPEG).
-- 개발은 `frontend/`의 Vite 개발 서버로 `/api`를 FastAPI로 프록시하고, 배포는 React 빌드 파일을 기존 Render FastAPI가 같은 출처에서 제공한다(별도 프론트 호스팅 없음).
+- 개발은 `frontend/`의 Vite 개발 서버로 `/api`를 FastAPI로 프록시하고(계획 6절 적용, 2026-11-12 — 시안 이식 로그인 화면·`/app` 라우팅·인증 경계·`/api/me` 연결 포함), 배포는 React 빌드 파일을 기존 Render FastAPI가 같은 출처에서 제공한다(별도 프론트 호스팅 없음, 계획 21절).
 - 서버 설정 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`·`DATABASE_URL`(PostgreSQL), 브라우저 설정 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`. 서버는 `SUPABASE_URL`로 Bearer 토큰을 검증한다(계획 5절 적용, 2026-11-12). Storage 설정은 계획 8절부터 읽는다.

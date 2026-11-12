@@ -119,7 +119,7 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-12 · Supabase 인증·사용자 매핑 검증(react-supabase 5절)
+마지막 갱신: 2026-11-12 · React 기본 화면 검증(react-supabase 6절)
 
 - 전체 OpenAI 전환 검증(2026-11-11): `uv run pytest -q`는 **639 passed·1 skipped**(pgserver 미설치로 선택 PostgreSQL 모듈 제외), `python3 .work/check.py`는 경고 0개로 통과했다. 실제 LangChain·OpenAI SDK와 `httpx.MockTransport`로 운영 출력 스키마 12개(메일 분석·답장·재질문·거래 추출·무역 추출·요약·성찰·독립 4종 문서), `/v1/responses` 요청, 429/401 무재시도·503 최대 3회, 잘못된 JSON/스키마 재시도·복구, 실제 평가 호출 경로의 공통 어댑터 사용을 검증했다. 최신 main의 PDF 이미지 재사용 변경을 합친 뒤 Google 로그인·승인·PDF·사용자 격리 회귀도 통과했다. 실제 OpenAI/Gmail·Render·운영 DB는 호출하지 않았다.
 
@@ -128,6 +128,7 @@
 - 테스트 DB PostgreSQL 전환(3절, 2026-11-12): `pgserver==0.1.4`를 개발 의존성에 추가해 `uv run pytest`만으로 전체 회귀가 실제 PostgreSQL에서 돈다(**642 passed·0 skipped**, 로컬 `.env`에 실제 OpenAI 키가 있어도 통과). `tests/conftest.py`가 세션마다 임베디드 PostgreSQL 하나를 띄우고 테스트별로 DB를 만들어 지우며(`TEST_DATABASE_URL`이 있으면 그 접속 사용), 산재한 `sqlite://` fixture·인라인 설정을 이 접속으로 바꿨다. 실제 LLM 키는 세션 시작에 환경에서 비워 스며들지 않게 하고, `test_blank_nodes_do_not_claim_success`는 명시적 가짜 실패 응답으로 환경과 무관하게 검증한다. 사용자 격리·UTC·JSONB·유일 제약·조건부 갱신 검사 의미는 그대로다. CI `tests` 작업은 `postgres:16` service 컨테이너를 쓴다.
 - 앱 DB PostgreSQL 전용 전환 검증(4절, 2026-11-12): 전체 **658 passed·0 skipped**(3절 상태에서 16개 증가). `tests/test_postgres_only.py`가 빈 `DATABASE_URL`·비PostgreSQL 스킴 거부(`local.sqlite3` 미생성), PostgreSQL 엔진 풀 상한(pool_size 5·max_overflow 10), migration이 `auth`·`storage` 스키마를 만지지 않고 앱 표·`alembic_version`을 `public`에만 만드는 것(재실행 포함)을 확인한다. `tests/test_db_copy.py`가 일회성 복사 명령 `app.db.copy_data`의 대상 확인(`--yes` 없으면 쓰지 않음)·dry-run 무쓰기·복사 후 행 수·열 값(timestamp·JSON·금액·바이너리)·PK/시퀀스 보존·재실행 대조 통과·복사 중 실패 롤백 후 재실행 성공·대상 데이터 충돌 시 합침 거부·옛 스키마 SQLite 원본의 임시 사본 갱신(원본 불변)을 확인한다. 실제 `app/db/local.sqlite3`(311행)로 pgserver 임시 DB에 dry-run → 복사 → 재실행 no-op까지 CLI로 직접 확인했다. 기존 DB 데이터 보존 갱신 회귀는 기존 `tests/test_trade_upgrade.py`가 담당한다.
 - Supabase 인증·사용자 매핑 검증(react-supabase 5절, 2026-11-12): 전체 **670 passed·0 skipped**(4절 상태에서 12개 증가). `tests/test_supabase_auth.py`가 가짜 JWKS(`TokenVerifier`에 `fetch_jwks` 주입)와 직접 서명한 RS256/ES256 테스트 토큰·실제 PostgreSQL로 정상 토큰의 사용자 한 번 생성·`GET /api/me`, 만료·위조 서명·다른 issuer/audience/알고리즘(HS256)·UUID가 아닌 subject·kid 없음·깨진 토큰의 401 거부, unknown kid의 JWKS 재조회(키 회전)와 토큰 `jku` 헤더 무시, JWKS 장애(503 `auth_unavailable`)·미설정(503 `auth_not_configured`)과 인증 실패(401) 구분, 같은 UUID 동시 첫 가입의 유일 제약 한 행, Bearer 실패 때 쿠키 세션 우회 금지, Gmail 미연결 사용자의 설정·문서 작성 API 사용(CSRF 없음), 타인 문서 404를 확인한다. 실제 Supabase Auth·외부 HTTP는 부르지 않는다(실제 프로젝트 확인은 계획 22절).
+- React 기본 화면 검증(react-supabase 6절, 2026-11-12): 서버 회귀는 **670 passed·0 skipped**로 그대로 유지(프론트엔드 테스트 프레임워크는 계획상 미도입, `python3 .work/check.py` 경고 0개). `frontend/`에서 `npm run lint`·`npm run build` 통과(버전 고정 lockfile 포함). 로컬 통합: pgserver 임베디드 PostgreSQL + 임시 mock Supabase Auth(JWKS·RS256 토큰 발급, /tmp 검증용)로 FastAPI를 띄워 Vite `/api` 프록시·`GET /api/me`의 정상(200·사용자 생성)·만료(401)·미설정(503)을 확인했다. 브라우저(Chromium)로 설정 누락(버튼 비활성+안내)·취소 반환 안내·Google 로그인 시작(승인 화면 이동, PKCE S256·redirectTo /app/login)·세션 복구→`/api/me`→대시보드 실제 데이터·새로고침 복구·자리 화면 이동·모바일(사이드바 숨김·하단탐색)·로그아웃·만료 401의 로컬 로그아웃+재로그인 안내를 확인했다. 시안 이식 로그인 화면·대시보드는 스크린샷으로 대조했다. 실제 Google 로그인·실제 Supabase 프로젝트는 계획 2절(콘솔)·22절에서 확인한다.
 - `tests/test_pi_domain.py`는 메모리 저장소로 PI의 독립 작성·수량 0·직접/가짜 AI의 동일 계산·기준 버전·회사 스냅숏을 확인하고, SQL 구현의 사용자/종류 격리와 실제 LangChain 호출 진입점의 가짜 모델·근거 검증을 확인한다.
 
 - 계획 2절: `tests/fakes/llm.py`로 가짜 LLM을 주입해 그래프 완주·일반/거래/추가 질문/무시/실패/성찰 재실행 전이·노드별 소요 시간·프롬프트 버전 기록을 확인한다. LLM 한도 오류와 통신 실패, 형식 오류의 재시도 예산을 구분하고 실제 SDK 예외·감싼 예외도 시험한다. 외부 API 호출은 없다.
@@ -155,8 +156,9 @@
 - PDF 공통 렌더러(PI·PO·CI·PL): 한 문서 렌더링 안에서 같은 PNG와 crop 조건의 RGB 변환·압축 결과를 재사용하고, 여러 페이지에서 같은 이미지 PDF 객체를 공유한다. 페이지별 콘텐츠 스트림과 이미지 배치 명령은 유지한다. `tests/test_trade_pdf_pagination.py`는 이미지 종류 수만큼만 변환·압축하며 PDF 이미지 객체가 중복되지 않고 각 페이지가 같은 객체를 참조하는지 확인한다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-12 · Supabase Bearer 인증 연결(react-supabase 5절)
+마지막 갱신: 2026-11-12 · React 기본 화면·Supabase 로그인(react-supabase 6절)
 
+- React 화면(react-supabase 6절, 2026-11-12): 루트 `frontend/`에 React+JavaScript+Vite 앱이 생겼다. 런타임 의존성은 `react`·`react-dom`·`react-router-dom`·`@supabase/supabase-js`만(버전 고정), 개발 의존성은 `vite`·`@vitejs/plugin-react`·ESLint 도구뿐이고 TypeScript·상태관리·UI키트는 없다. 시안 `trade-agent ui_시안.html`의 로그인 화면(그라데이션 아트 포함)·색 토큰·사이드바 레이아웃·모바일 하단탐색을 `frontend/src/styles.css`와 컴포넌트로 그대로 옮겼다. React Router가 `/app` 아래 경로(로그인·대시보드 뼈대, 작업현황·받은 메일·문서함·실행 기록·설정은 자리만)를 맡고, `src/supabase.js`의 클라이언트 1개가 Google OAuth(PKCE·`redirectTo` /app/login)를 시작하며, `src/api.js`가 Bearer 헤더·오류 정규화·401 처리를 담당한다. 저장·조회는 Auth 구독 이벤트에서 1회 요청하고(Effect 반복 조회 금지), 구독 cleanup을 둔다. 개발은 `cd frontend && npm ci && npm run dev`로 `http://localhost:5173/app/`에 띄우고 `/api` 프록시가 로컬 FastAPI(8000)로 보낸다. 실제 Google 로그인은 계획 2절 콘솔 설정이 먼저(미착수). CI에 Node 작업은 아직 없다(계획 21절).
 - React API 설정: `FRONTEND_ORIGINS`(허용 출처, `Authorization` 헤더 허용), `SESSION_SAME_SITE`(기본 lax, none은 HTTPS만). 무역·설정 JSON API는 이제 `Authorization: Bearer <Supabase access token>`으로도 쓴다(react-supabase 5절, 2026-11-12): 헤더가 있으면 `app/auth/supabase.py`의 `TokenVerifier`가 `SUPABASE_URL`의 JWKS로만 검증하고(잘못된 토큰이면 쿠키 세션으로 우회하지 않고, Bearer 변경 요청은 CSRF 토큰 불필요) 검증된 UUID를 `users.supabase_uid`로 기존 정수 id에 매핑한다. `GET /api/me`가 Bearer 전용 인증 상태·프로필·Gmail 연결 진입점이다. 헤더가 없으면 기존 세션 쿠키+CSRF(legacy)를 그대로 쓴다. 검토 제안에 문서·회사·계좌·이미지를 고정하고 승인 파일을 DB에 보관한다(계약 16절).
 
 - DB 갱신 준비: 서버 시작 시 `app/db/migrations/`의 Alembic 리비전을 적용한다. 기존 데이터와 승인 이력을 유지하며 부분 유니크 제약도 변경한다(계약 15.9절). PostgreSQL에서는 갱신 대상 스키마를 `public`으로 고정(`SET LOCAL search_path`, `alembic_version`도 `public`)해 Supabase의 `auth`·`storage` 스키마를 건드리지 않는다(react-supabase 계획 4절, 2026-11-12). 운영 반영 전 DB 백업을 보관한다. 이번 작업에서는 Render·운영 DB·실제 메일을 변경하지 않았다.
@@ -175,7 +177,7 @@
 - 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-12 · Supabase 인증 적용(react-supabase 5절)
+마지막 갱신: 2026-11-12 · React 기본 화면 적용(react-supabase 6절)
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -187,7 +189,7 @@
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
-| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 3절 테스트 PostgreSQL·4절 앱 DB PostgreSQL 전용(설정 거부·풀 상한·migration 스키마 경계·`app.db.copy_data` 이전 명령)·5절 Supabase 인증·사용자 매핑(pyjwt 검증·`supabase_uid` migration·`/api/me`·무역/설정 Bearer 연결) 적용(2026-11-12). 콘솔 설정(2절)·실제 이전(22절)은 미착수 |
+| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS)·`frontend/`(6절 앱) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 3절 테스트 PostgreSQL·4절 앱 DB PostgreSQL 전용(설정 거부·풀 상한·migration 스키마 경계·`app.db.copy_data` 이전 명령)·5절 Supabase 인증·사용자 매핑(pyjwt 검증·`supabase_uid` migration·`/api/me`·무역/설정 Bearer 연결)·6절 React 기본 화면·Supabase 로그인(frontend/ Vite 앱·시안 이식·/app 라우팅·인증 경계·개발 /api 프록시) 적용(2026-11-12). 콘솔 설정(2절)·실제 이전(22절)은 미착수 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |
