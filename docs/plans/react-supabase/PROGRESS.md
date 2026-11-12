@@ -31,7 +31,7 @@
 
 - `TEST_DATABASE_URL= OPENAI_API_KEY= LANGSMITH_TRACING=false uv run pytest -q tests/test_react_settings.py tests/test_trade_branding_storage.py::test_branding_upload_keeps_bytes_only_in_storage_and_metadata_in_db`: **4 passed, 12.03초**.
 - Chromium + 실제 FastAPI/임시 PostgreSQL/가짜 Storage: 회사 저장·실패 입력 보존·재접속, 통화별 계좌, 거래처, 판매/구매 단가 분리, 잘못된 PNG 거부·직인 저장·인증 미리보기, 모바일 너비·키보드·사용자 전환 확인.
-- `npm run lint`·`npm run build`와 `python3 .work/check.py`: 확인 후 PR에 최종 결과 기록.
+- `npm run lint`·`npm run build`: 통과. `python3 .work/check.py`: 경고 0개로 통과.
 - 실제 Supabase·Google·OpenAI는 호출하지 않았다. 실제 운영 연결 성공을 뜻하지 않는다.
 
 ## 남은 검증
