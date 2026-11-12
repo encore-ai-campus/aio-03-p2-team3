@@ -68,11 +68,13 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 | 환경변수 | 설명 |
 |---|---|
-| `DATABASE_URL` | Postgres 접속 주소. 로컬에서 비우면 SQLite 파일 사용 |
+| `DATABASE_URL` | Postgres 접속 주소. 로컬에서 비우면 SQLite 파일 사용([목표] Supabase 전환 뒤 PostgreSQL 주소만 받는다) |
 | `TOKEN_ENCRYPTION_KEY` | Google 토큰 암호화 키 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 |
 | `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값. 설정할 때 `true` 또는 `false` 지정 |
+| `SUPABASE_URL` `SUPABASE_SECRET_KEY` `SUPABASE_STORAGE_BUCKET` | [목표] Supabase 전환용 서버 설정(서버 토큰 검증·비공개 파일 Storage 버킷 `trade-files`). 현재 코드는 아직 읽지 않는다 |
+| `VITE_SUPABASE_URL` `VITE_SUPABASE_PUBLISHABLE_KEY` | [목표] React 브라우저용 Supabase 설정. `frontend/.env`에만 두고 서버 비밀과 분리한다 |
 
 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외했다. 일정(캘린더) 도구 작업 때 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천하고 채택 여부를 확인한다.
 
@@ -103,8 +105,17 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 상세 경로·도메인 차이·요청 예시·폴더 구조는 [React 무역 문서 API](docs/trade-api.md)를 참고한다. PI와 같은 작성/수정/검토/선택/다운로드 경로를 PO·CI·PL에도 제공한다. CI는 승인된 PI 버전을 선택하고, PL은 최종 검토 전에 `/packing-review`의 합계를 확인한다.
 
-React는 기존 Google 로그인 세션으로 `GET /api/session`에서 CSRF 토큰을 받고, 변경 요청에 `X-CSRF-Token`과 세션 쿠키를 함께 보낸다. PI는 `/api/trade/pi`에서 작성/목록, `/extract`에서 텍스트 추출, `/{id}`에서 조회/전체 수정, `/{id}/versions/{revision}`에서 이전 버전을 조회한다. 입력 수량·금액은 정확한 십진수 문자열이며 API 형식은 `/docs`에서 확인한다.
+[현재 구현] React는 기존 Google 로그인 세션으로 `GET /api/session`에서 CSRF 토큰을 받고, 변경 요청에 `X-CSRF-Token`과 세션 쿠키를 함께 보낸다. PI는 `/api/trade/pi`에서 작성/목록, `/extract`에서 텍스트 추출, `/{id}`에서 조회/전체 수정, `/{id}/versions/{revision}`에서 이전 버전을 조회한다. 입력 수량·금액은 정확한 십진수 문자열이며 API 형식은 `/docs`에서 확인한다.
 
 `POST /api/trade/pi/{id}/reviews`에 `revision`과 `formats`(`pdf`, `xlsx`)를 보내 검토 제안을 만든다. 반환된 제안의 ID·revision·content_hash를 그대로 `…/reviews/{proposal_id}/decisions`로 보내 `approve`, `cancel`, `modify` 중 하나를 선택한다. 수정 선택은 `document`에 새 입력 전체를 함께 보내며 새 버전·새 제안을 다시 확인한다. 부족한 수정 입력은 `needs_input`으로 돌아온다. 승인은 문서 확정과 파일 발급이며 메일 발송을 포함하지 않는다. 취소 시 파일을 발급하지 않고, 승인 재시도는 같은 파일을 반환한다. 파일은 로그인한 소유자만 `/api/trade/files/{file_id}`에서 내려받는다.
 
-회사·통화별 은행·단가는 `/api/trade/settings` 하위 API, 직인/로고 PNG는 `/branding/{seal|logo}`에 설정한다. 검토 제안에는 그 시점의 문서·계좌·이미지를 보관해 이후 설정 변경이 승인 파일을 바꾸지 않는다. 다른 주소의 React는 `FRONTEND_ORIGINS`에 허용 출처를 지정하고 `credentials: 'include'`를 사용한다. 서로 다른 사이트의 쿠키가 필요하면 HTTPS에서만 `SESSION_SAME_SITE=none`을 사용한다. 운영 배포·React 화면은 이번 백엔드 구현에 포함하지 않는다.
+[현재 구현] 회사·통화별 은행·단가는 `/api/trade/settings` 하위 API, 직인/로고 PNG는 `/branding/{seal|logo}`에 설정한다. 검토 제안에는 그 시점의 문서·계좌·이미지를 보관해 이후 설정 변경이 승인 파일을 바꾸지 않는다. 다른 주소의 React는 `FRONTEND_ORIGINS`에 허용 출처를 지정하고 `credentials: 'include'`를 사용한다. 서로 다른 사이트의 쿠키가 필요하면 HTTPS에서만 `SESSION_SAME_SITE=none`을 사용한다.
+
+### React·Supabase 전환 목표(2026-11-12 확정, 아직 구현 전)
+
+화면을 React(JavaScript·Vite), 로그인을 Supabase Auth(Google), DB를 Supabase PostgreSQL, 파일을 비공개 Supabase Storage(버킷 `trade-files`)로 전환한다. 계획은 `docs/plans/react-supabase/PLAN.md`, 계약은 `docs/CONTRACT.md` 7.1·9.1·11·16.3절이다.
+
+- 로그인 뒤 `GET /api/me`(인증 상태·프로필·Gmail 연결 상태)에서 시작하고, React JSON API는 `Authorization: Bearer <Supabase access token>`만 쓴다. 위 쿠키+CSRF 안내는 전환 기간의 기존 경로용이다(계획 21·22절 전환 뒤 닫는다).
+- 서버는 검증한 Supabase UUID를 기존 정수 `user_id`(`users.supabase_uid` 매핑)에 연결한다. 파일은 서버가 `POST /api/files`로 한 파일씩 받아 Storage에 저장하고 메타데이터만 DB에 남긴다(첨부 파일당 5MiB·문서당 5개·PDF/XLSX/TXT/PNG/JPEG).
+- 개발은 `frontend/`의 Vite 개발 서버로 `/api`를 FastAPI로 프록시하고, 배포는 React 빌드 파일을 기존 Render FastAPI가 같은 출처에서 제공한다(별도 프론트 호스팅 없음).
+- 서버 설정 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`·`DATABASE_URL`(PostgreSQL), 브라우저 설정 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`. 현재 코드는 아직 읽지 않는다(구현은 계획 5절부터).

@@ -100,6 +100,32 @@
 6. 푸시 인증: 인증을 켜면 Pub/Sub가 서명한 JWT를 `Authorization` 헤더로 보내고, 받는 쪽은 대상과 서비스 계정 이메일(`email`, `email_verified`)을 확인한다. 서비스 계정은 구독과 같은 프로젝트에 있어야 한다. 출처: https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions , https://docs.cloud.google.com/pubsub/docs/create-push-subscription
 7. 잠든 Render와 푸시: 푸시 요청 제한 시간은 확인 기한과 같고(기본 10초, 최대 600초), 기한 안에 성공 응답이 없으면 재시도 정책대로 다시 보낸다(지수 백오프 기본 10~600초). 확인되지 않은 메시지는 기본 7일 보관된다. Render 무료 서버는 15분 동안 요청이 없으면 잠들고 깨는 데 약 1분 걸리므로 확인 기한을 120초로 했다. 실제로 첫 푸시가 기다렸다 성공하는지, 재전송으로 처리되는지는 계획 16(#62)에서 확인한다. 출처: https://docs.cloud.google.com/pubsub/docs/subscription-properties , https://docs.cloud.google.com/pubsub/docs/subscription-retry-policy , https://docs.cloud.google.com/go/docs/reference/cloud.google.com/go/pubsub/latest , https://render.com/docs/faq
 
+## 로그인·DB·파일 저장 — Supabase (2026-11-12)
+
+`docs/plans/react-supabase/PLAN.md` 전환(React·JavaScript·Vite 화면)의 기반 선택이다. 요청자가 2026-11-12에 정했다. [Request] 콘솔 설정(계획 2절)·데이터 이전(계획 22절)은 별도 작업이며 이 문서 갱신으로 완료된 것이 아니다.
+
+### 고른 것 (2026-11-12)
+| 서비스 | 쓰임 | 인증·설정 |
+|---|---|---|
+| Supabase Auth | React 로그인. 시안의 Google 로그인부터 연결 | Google OAuth 코드 경로. 브라우저는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`, 서버는 JWKS로 access token 검증(9.1절 계약) |
+| Supabase PostgreSQL | 업무 DB. 기존 FastAPI·SQLAlchemy·Alembic 재사용 | 서버 `DATABASE_URL`. 업무 Data API 노출은 끔 |
+| Supabase Storage | 사용자 첨부·회사 이미지·발급 파일 | 서버 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`(비공개 버킷 `trade-files`). 사용자 직접 정책은 기본 거부 |
+
+- 기존 FastAPI 백엔드·Gmail·Pub/Sub·OpenAI 설정은 유지한다. Supabase 프로젝트는 요청자가 만든 `AIO_TEST`를 재사용한다(2026-11-12 확정). 실제 공급자·redirect·키 설정은 계획 2절에서 사용자와 함께 확인한다.
+- 로그인 공급자는 Google OAuth 코드 경로만 먼저 연결한다. 이메일 가입·다른 공급자는 별도 요구 때 추가한다.
+- 인증 경계·사용자 매핑·파일 저장 계약은 `docs/CONTRACT.md` 7.1·9.1·16.3절, 환경변수 이름은 11절과 `.env.example`이다.
+- [미확정] 기존 SQLite·Render Postgres 데이터의 보존 대상·기간(계획 2절), 첨부 내용 자동 읽기 범위(보류). 사람이 확인한 뒤 이 파일을 고친다.
+
+### 설정 경로
+1. Supabase 콘솔 프로젝트 설정 → API에서 프로젝트 URL·publishable 키·secret 키를 확인한다.
+2. 브라우저용 설정(`frontend/.env`)에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 둔다.
+3. 서버 `.env`·Render 환경변수에는 `DATABASE_URL`(PostgreSQL 주소)·`SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`을 둔다. `SUPABASE_SECRET_KEY`는 브라우저·빌드 산출물에 넣지 않는다.
+4. Auth → Providers에서 Google 공급자를 켜고 개발·배포 redirect 주소를 등록한다. 기존 앱 Gmail OAuth(`GOOGLE_OAUTH_*`)의 callback과는 별개로 등록한다(계획 2절).
+
+### 출처
+- 선택 근거: `docs/plans/react-supabase/PLAN.md`(2026-11-12 요청), 계약: `docs/CONTRACT.md` 7.1·9.1·11·16.3절
+- Supabase 키 종류·JWKS 검증·private bucket·Data API 비활성화: 계획 '공식 확인 자료'의 Supabase 문서 링크(2026-11-12 확인 목록)
+
 ## 일정 도구 추천 후보
 MVP에서 제외한 보조 API다(2026-11-09). 일정(캘린더) 도구 작업 때 AI가 아래 후보를 요청자에게 추천하고, 채택 여부를 확인한 뒤 API·환경변수를 추가한다. 현재 연동이나 키 발급은 하지 않는다. [Request]
 
