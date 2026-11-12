@@ -22,7 +22,7 @@ export default function LoginPage() {
 
   // 상태별 안내: 설정 누락 → 취소 반환 → 만료/오류(state.notice) 순서로 보여 준다.
   const notice = !supabase
-    ? "Supabase 설정이 없습니다. frontend/.env에 VITE_SUPABASE_URL·VITE_SUPABASE_PUBLISHABLE_KEY를 설정해 주세요."
+    ? "Supabase 설정이 없습니다. 프로젝트 루트 .env에 SUPABASE_URL·SUPABASE_PUBLISHABLE_KEY를 입력해 주세요."
     : returnedWithoutLogin
       ? "Google 로그인이 완료되지 않았습니다. 다시 시도해 주세요."
       : state.notice
