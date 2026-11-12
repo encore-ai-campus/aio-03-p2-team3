@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="원격 main의 실제 구현과 첨부 흐름도를 비교한 마스터 LangGraph 설계·기술 검증·시험 시나리오 초안">
+  <title>마스터 LangGraph 설계 초안 · Team 3</title>
+  <style>
+    :root{color-scheme:light;--ink:#172b37;--muted:#516471;--paper:#f5f6f2;--line:#d9e1dd;--teal:#12685d;--blue:#235da2;--amber:#825013}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.75 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif}
+    a{color:var(--blue);text-underline-offset:3px}a:hover{text-decoration-thickness:2px}a:focus-visible,summary:focus-visible{outline:3px solid var(--teal);outline-offset:4px}
+    .wrap{max-width:1180px;margin:auto;padding:0 36px}.mast{border-bottom:1px solid var(--line);padding:23px 0;font-size:13px;letter-spacing:.08em}.mast .wrap{display:flex;justify-content:space-between;gap:16px}
+    header{padding:64px 0 35px}.eyebrow{color:var(--teal);font-size:13px;font-weight:750;letter-spacing:.12em}h1{font-size:clamp(32px,5vw,56px);letter-spacing:-.045em;line-height:1.22;margin:16px 0 20px}h2{font-size:27px;letter-spacing:-.035em;line-height:1.4;margin:0 0 18px}h3{font-size:19px;line-height:1.5;margin:25px 0 10px}p{margin:10px 0}.lead{font-size:19px;max-width:850px}.muted,small{color:var(--muted)}small{font-size:13px}.meta{display:flex;flex-wrap:wrap;gap:9px 24px;font-size:13px;margin-top:23px}
+    nav{display:flex;flex-wrap:wrap;gap:9px;margin:22px 0 36px}nav a{padding:7px 13px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);text-decoration:none;font-size:14px}
+    section{padding:35px 0;border-top:1px solid var(--line)}.num{display:block;color:var(--teal);font-size:12px;font-weight:750;letter-spacing:.1em;margin-bottom:8px}.callout{padding:19px 23px;background:#e8f2ed;border-left:4px solid var(--teal);border-radius:0 7px 7px 0;margin:22px 0}.callout.warn{background:#fff2dc;border-color:#b9781e}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin:23px 0}.card{padding:22px;background:#fff;border:1px solid var(--line);border-radius:9px}.card h3{margin:7px 0}.card p{font-size:14px}.metric{font-size:29px;line-height:1.3;font-weight:750;letter-spacing:-.03em;display:block}.tag{display:inline-block;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:700;white-space:nowrap;background:#e6eee9;color:var(--teal)}.tag.draft{background:#e9eefb;color:#34569a}.tag.check{background:#fff0d5;color:var(--amber)}
+    .table{overflow:auto;margin:15px 0 22px;border:1px solid var(--line);border-radius:8px;background:#fff}table{width:100%;border-collapse:collapse;font-size:14px;text-align:left}caption{text-align:left;padding:12px 15px;font-weight:700;background:#eef1ec}th,td{padding:13px 15px;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{background:#edf1ec;font-size:13px}tr:last-child td{border-bottom:0}td:first-child{font-weight:650}code{font: .86em/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf1ee;padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}pre{padding:20px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#edf1ee;font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace}pre code{padding:0;background:none}
+    ul,ol{padding-left:24px}li{margin:7px 0}.flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:20px 0}.step{background:#fff;border:1px solid var(--line);border-top:3px solid var(--teal);padding:18px;border-radius:7px}.step b{display:block;margin-bottom:7px}.step p{font-size:14px;margin:0}.route{padding:15px 20px;background:#e8eef5;border-radius:7px;font-size:14px}.refs{font-size:13px}.refs li{margin:13px 0}details{border:1px solid var(--line);background:#fff;border-radius:7px;padding:16px 20px;margin:14px 0}summary{cursor:pointer;font-weight:700}.nowrap{white-space:nowrap}footer{padding:28px 0 45px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+    @media(max-width:760px){.wrap{padding:0 18px}.mast .wrap{flex-direction:column;gap:2px}header{padding-top:36px}.lead{font-size:17px}.grid,.flow{grid-template-columns:1fr}section{padding:28px 0}h2{font-size:23px}table{min-width:680px}pre{font-size:12px}.meta{gap:6px 14px}}
+    @media print{body{background:white;font-size:11px}.wrap{max-width:none;padding:0}header{padding:18px 0}h1{font-size:31px}h2{font-size:20px}h3{font-size:15px}nav,.mast{display:none}section{padding:18px 0}.table{overflow:visible}table{min-width:0!important;font-size:10px}th,td{padding:7px}tr,.step,.card,.callout{break-inside:avoid}a{color:inherit}pre{white-space:pre-wrap;font-size:10px}.grid,.flow{gap:8px}.card{padding:12px}}
+  </style>
+</head>
+<body>
+<div class="mast"><div class="wrap"><strong>TEAM 3 / ENGINEERING DRAFT</strong><span>2026.11.12 · 검토용 v0.1</span></div></div>
+<header class="wrap">
+  <span class="eyebrow">현재 코드에서 출발하는 최소 설계</span>
+  <h1>마스터 LangGraph<br>처리 흐름과 검증 초안</h1>
+  <p class="lead">기존 메일 그래프와 무역 문서 서비스를 얇게 연결한다. 요청을 작은 업무로 나누고, 하나씩 처리하며, 발급·발송·일정 등록은 사용자가 확인한 대상과 내용으로만 실행한다.</p>
+  <div class="meta"><span>원격 기준 <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/commit/1e57e9e1ac4c87b754c380a09e207f5bcb418e20"><code>main · 1e57e9e</code></a></span><span>최근 병합 PR #165 · 2026-11-12 16:35 KST</span><span>검토일 2026-11-12 KST</span></div>
+  <div class="callout"><strong>이 문서의 범위</strong><br>첨부한 <code>mermaid-diagram.png</code>를 목표 흐름으로 읽고, 원격 최신 코드와 비교해 작성한 <strong>설계 초안</strong>이다. 도식 안 문구는 설계 자료이며 실행 지시로 취급하지 않는다. 아래의 새 노드·상태·API 이름은 제안이며, 실제 구현이나 운영 검증 완료를 뜻하지 않는다.</div>
+  <nav aria-label="문서 목차"><a href="#baseline">01 현재 상태</a><a href="#flow">02 처리 흐름</a><a href="#tools">03 도구 입출력</a><a href="#memory">04 기억</a><a href="#state">05 상태</a><a href="#technology">06 기술 확인</a><a href="#scenarios">07 시험 시나리오</a><a href="#decisions">08 검토 순서</a><a href="#sources">근거</a></nav>
+</header>
+<main class="wrap">
+<section id="baseline">
+  <span class="num">01 / REMOTE BASELINE</span><h2>원격 최신 상태와 첨부도의 차이</h2>
+  <p><code>git ls-remote</code>와 <code>git fetch origin main</code>으로 원격 HEAD·main이 <code>1e57e9e1ac4c87b754c380a09e207f5bcb418e20</code>임을 확인했다. 시작 체크아웃 <code>7b9b510</code>에서 최신 main으로 맞췄다. 작성 중 병합된 #165의 문서 정리도 반영했으며, 애플리케이션 코드는 #163의 <code>c6b1600</code>과 동일함을 확인했다. 해당 main의 GitHub 검사는 <strong>rules-check·tests·windows-worker 성공</strong>, <code>pr-check</code>는 main 실행에서 건너뜀이다.</p>
+  <div class="grid">
+    <div class="card"><span class="tag">구현 확인</span><h3>메일·문서·기억</h3><p>10개 메일 그래프 노드, 등록 도구 7개, PI·PO·CI·PL API, 승인·파일 발급, 스레드 기억·요약·성찰을 재사용할 수 있다.</p></div>
+    <div class="card"><span class="tag draft">새 설계</span><h3>마스터와 대화 재개</h3><p>React 대화 화면, 여러 업무의 계획·의존성, 질문 후 interrupt 재개, 업무별 결과 종합은 추가 설계가 필요하다.</p></div>
+    <div class="card"><span class="tag check">확인 필요</span><h3>일정·실제 연결</h3><p>Calendar 도구는 아직 없다. OpenAI·Gmail·개인 PC·운영 배포의 최신 종단 간 확인도 별도 시험이 필요하다.</p></div>
+  </div>
+  <div class="table"><table><caption>구현 여부는 코드 기준, 운영 확인은 별도 기준</caption><thead><tr><th scope="col">영역</th><th scope="col">최신 main에서 확인한 사실</th><th scope="col">첨부도에 맞추려면</th></tr></thead><tbody>
+    <tr><td>실제 그래프</td><td><code>load_memory → analyze_email → 업무 노드 → reflect → save_pending</code>. 실패는 <code>finish_failed</code>. 승인·발송은 그래프 밖이다. <a href="#e1">[E1]</a></td><td>기존 메일 그래프를 그대로 두고, 상위에서 업무를 선택하는 작은 마스터를 추가한다.</td></tr>
+    <tr><td>화면·인증</td><td>FastAPI·Jinja·HTMX, Google 세션과 CSRF가 현재 구현이다. React 소스·마스터 챗 API는 없다. <a href="#e6">[E6]</a></td><td>초기 초안은 기존 인증 경계를 사용한다. 열린 <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/129">#129</a>~<a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/150">#150</a>의 React·Supabase 전환은 별도 계획으로 구분한다.</td></tr>
+    <tr><td>무역 문서</td><td>직접/AI 작성·수정·버전·검토·승인·취소·PDF/XLSX 발급 API가 있다. 문서 발급 승인은 Gmail을 보내지 않는다. <a href="#e5">[E5]</a></td><td>PI/PO/CI/PL 업무 함수와 검토 서비스를 연결한다. 마스터에서 계산·가격·발급 코드를 다시 만들지 않는다.</td></tr>
+    <tr><td>질문·승인 대기</td><td>현재 메일 그래프는 후보를 저장하고 종료한다. <code>compile()</code>에 checkpointer가 없고 <code>interrupt()</code> 사용도 없다. <a href="#e1">[E1]</a></td><td>영속 체크포인트와 재개 API를 검증한다. 기존 <code>followup_question</code> 종료와 새 대화 interrupt를 혼동하지 않는다.</td></tr>
+    <tr><td>AI 실행</td><td>공통 OpenAI 구조화 호출, 사용자 저장 키 또는 개인 PC 실행기. Windows 자격증명·종료된 연결의 임대 차단까지 #163에 병합됐다. <a href="#e8">[E8]</a></td><td>새 구조화 계획 호출은 PC의 허용 스키마·설치 해시도 함께 바꿔야 한다. 현재 허용 호출 12개에 자동으로 추가되지 않는다.</td></tr>
+    <tr><td>시험 근거</td><td>기존 문서에 전체 <strong>829 passed·4 skipped</strong>가 기록돼 있고, 최신 main CI도 성공했다. <a href="#e9">[E9]</a></td><td>이 수치는 기존 구현의 회귀 근거다. 아래 마스터 시나리오의 시험 결과로 사용하지 않는다.</td></tr>
+  </tbody></table></div>
+  <p class="muted">원격 열린 Issue에는 코드상 구현된 과거 이식 작업도 남아 있다. Issue가 열려 있다는 이유만으로 미구현이라고 단정하지 않았다. 배포 서버·운영 DB·실제 API는 이번 점검에서 조회하거나 변경하지 않았다.</p>
+  <p><strong>이번 문서 작업의 확인 결과:</strong> <code>uv sync --locked</code> 후 <code>uv run pytest</code>는 <strong>829 passed·4 skipped</strong>(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개), <code>python3 .work/check.py</code>는 경고 0개로 통과했다. Chromium 390px·1280px에서 가로 넘침·깨진 내부 링크·브라우저 오류가 없고 목차와 접기/펼치기가 동작함을 확인했다. 새 마스터 기능은 구현·실행하지 않았다.</p>
+</section>
+
+<section id="flow">
+  <span class="num">02 / CONTROL FLOW · R-01, R-02, R-03, R-09~R-11</span><h2>첨부도의 여섯 단계로 처리한다</h2>
+  <p><strong>진입:</strong> 인증·소유권 확인 → 관련 맥락 불러오기 → ① 요청 해석·계획 → 지원 범위·필수 정보 확인. 지원 범위 밖이면 가능한 업무를 안내하고 종료한다. 정보가 모자라면 사용자에게 질문하고 기다린다.</p>
+  <div class="flow" aria-label="마스터 처리 단계">
+    <div class="step"><b>① plan · 요청과 계획</b><p>LangChain 구조화 출력으로 업무 종류·조건·선행 업무를 받는다. 허용 목록·참조·순환 여부는 코드로 검증한다.</p></div>
+    <div class="step"><b>② select_task · 한 업무 선택</b><p>선행 결과가 확정된 업무 하나를 고른다. 조회, 메일, 문서, 일정 후보 준비 중 허용된 업무만 호출한다.</p></div>
+    <div class="step"><b>③ validate · 결과와 근거</b><p>스키마·누락·소유자·버전·금액·출처를 검사한다. 수정 가능하면 제한 내 재실행하고, 부족하면 질문한다.</p></div>
+    <div class="step"><b>④ await_user · 확인 대기</b><p>외부 실행이 필요하면 대상·내용·버전을 고정해 제시한다. 승인·수정·취소를 받고, 승인 전에는 실행하지 않는다.</p></div>
+    <div class="step"><b>⑤ execute · 기존 서비스</b><p>서버가 승인을 재검사한 뒤 기존 발급·발송 서비스를 호출한다. 결과가 불명확하면 자동 재실행하지 않는다.</p></div>
+    <div class="step"><b>⑥ advance · 다음 업무와 종료</b><p>결과를 기록하고 남은 업무로 돌아간다. 모두 끝나면 완료·취소·미완료를 실제 결과에 따라 종합한다.</p></div>
+  </div>
+  <div class="route"><strong>기본 경로</strong>　① → 필수 정보 검사 → ② → 업무 준비 → ③ → 조회·초안만: ⑥ / 외부 실행: ④ → ⑤ → ⑥<br><strong>반복 경로</strong>　③ 수정 → 해당 업무 준비 · ③ 정보 부족 → 질문/재개 → ① · ④ 수정 → ① · ④ 취소 → 해당 업무 취소 → ⑥ · ⑥ 남음 → ②</div>
+  <div class="table"><table><caption>분기와 종료의 의미</caption><thead><tr><th scope="col">조건</th><th scope="col">처리·상태 변화 초안</th><th scope="col">반드시 지킬 조건</th></tr></thead><tbody>
+    <tr><td>정보 부족</td><td><code>waiting_input</code>과 필요한 필드만 질문으로 저장. 동일 요청의 답을 받아 계획·조건을 다시 검증한다.</td><td>현재 사용자가 답해야 할 질문과 거래 상대방에게 보낼 재질문 메일 후보를 구분한다. 후자는 발송 승인이 필요하다.</td></tr>
+    <tr><td>선행 작업 미완료</td><td>독립 업무는 계속 진행할 수 있다. 취소·실패한 결과에 의존하는 업무는 <code>blocked</code>로 남긴다.</td><td>파일 초안이나 승인 대기 상태를 ‘발급 성공’으로 사용하지 않는다. 의존 업무를 조용히 생략해 전체 완료로 표시하지 않는다.</td></tr>
+    <tr><td>검증 실패·수정 가능</td><td>기존 메일 하위 그래프의 성찰 한도를 재사용한다. 새 계획·문서 연결부의 자동 보정은 업무당 1회로 제안한다.</td><td>한도 소진이면 <code>needs_review</code>. 업무 함수를 통째로 다시 불러 중복 문서·발송을 만들지 않는다.</td></tr>
+    <tr><td>승인</td><td>서버가 사용자·대상 ID·최신 revision·내용 해시·대기 상태를 재조회하고 실행한다.</td><td>LLM 출력의 ‘승인됨’이나 단순 채팅 문구를 실행 권한으로 쓰지 않는다.</td></tr>
+    <tr><td>수정 / 취소</td><td>수정은 이전 승인을 무효화하고 새 버전을 검토한다. 취소는 해당 업무만 종료하고 독립 업무는 이어 간다.</td><td>기존 문서 API의 <code>cancel</code>은 검토 제안 취소이며 문서 초안 삭제가 아니다. 이미 발송한 메일을 되돌린다고 안내하지 않는다.</td></tr>
+    <tr><td>실패·결과 불명</td><td>확실한 미실행 실패는 원인과 복구 방법을 안내. 발송 5xx·시간 초과는 <code>needs_review</code>로 멈춘다.</td><td>보낸편지함 확인과 명시적 재승인 전에는 재발송하지 않는다. 성공·실패를 추측하지 않는다.</td></tr>
+    <tr><td>남은 업무 없음</td><td>전부 완료: <code>completed</code> / 전부 취소: <code>cancelled</code> / 일부 완료·취소·차단: <code>partial</code> / 실행 실패만: <code>failed</code>.</td><td>대기 중이면 종료 결과 대신 필요한 사용자 행동을 표시한다. 초안 작성 요청은 초안 생성으로 완료할 수 있지만 발송 요청은 실제 발송 결과가 필요하다.</td></tr>
+  </tbody></table></div>
+  <h3>한 가지 대표 요청으로 연결 확인</h3>
+  <p><em>“선택한 주문으로 PI를 만들고, 승인된 파일을 답장에 첨부해 보내줘.”</em> → PI 초안 준비 → 문서 검증·사용자 파일 발급 승인 → <code>issued</code> 파일 ID 확보 → 답장 후보 준비 → 수신자·본문·첨부를 보여 주고 <strong>별도 발송 승인</strong> → 실제 Gmail 결과 확인 → 완료. 발급만 요청했다면 발송 단계는 계획에 넣지 않는다.</p>
+  <p class="muted">첨부도의 ‘발급·발송·일정 등록’은 외부 실행으로 해석했다. 내부 초안 저장에는 최종 승인을 요구하지 않고, 확정 파일 발급·메일 발송·일정 등록의 각 행위에 맞춰 승인한다. 이 승인 단위는 구현 전에 확인할 제품 결정이다.</p>
+</section>
+
+<section id="tools">
+  <span class="num">03 / TOOL CONTRACT · R-02, R-04, R-05</span><h2>도구는 기존 계약을 우선 사용한다</h2>
+  <p>마스터는 허용된 업무 이름만 고른다. 같은 서버의 Python 업무 함수를 직접 재사용하고, 서버가 자기 HTTP API를 다시 호출하는 구조는 만들지 않는다. React는 기존 HTTP API를 사용한다. 새 마스터 연결부만 기존 결과를 공통 <code>ToolResult</code>로 얇게 감싼다.</p>
+  <pre><code>// 현재 app/tools/base.py의 계약. 새 결과 형식을 또 만들지 않는다.
+{
+  "ok": true,
+  "value": { "document_id": 7, "revision": 2, "status": "ready" },
+  "error_kind": null,
+  "error_message": null,
+  "source": "code",
+  "fetched_at": "2026-11-12T07:00:00+00:00",
+  "attempts": 1,
+  "duration_ms": 24
+}
+// value는 설명용 축약 예시다. 실제 DocumentResult에는 document·input 등도 있다.
+// error_kind: rate_limit | network | invalid_output | invalid_input | auth | not_found | internal</code></pre>
+  <div class="table"><table><caption>현재 등록된 도구 7개 · 입력은 핵심 필드만 표시 <a href="#e2">[E2]</a></caption><thead><tr><th scope="col">도구</th><th scope="col">입력</th><th scope="col">출력·효과</th></tr></thead><tbody>
+    <tr><td><code>draft_replies</code></td><td><code>email, reply_mode, thread_context?, quote_draft?, trade_doc_draft?, preferences, feedback?</code></td><td>답장 후보 2~3개. 제목·서명은 코드가 적용한다. 발송하지 않는다.</td></tr>
+    <tr><td><code>extract_deal_terms</code></td><td><code>email, thread_context?, feedback?, user_id, counterparties, company?</code></td><td><code>DealTerms | TradeDocTerms</code>. 문서 종류와 근거를 추출한다. 본문 기반이며 첨부 OCR은 아니다.</td></tr>
+    <tr><td><code>check_required_fields</code></td><td><code>deal_terms, required_fields</code></td><td><code>missing_fields</code>. 코드로 필수값을 검사한다. 국내 견적 단가는 상대에게 묻는 필수 항목에서 제외한다.</td></tr>
+    <tr><td><code>draft_followup_replies</code></td><td><code>email, deal_terms, missing_fields, field_labels, thread_context?, preferences, feedback?</code></td><td>누락 항목을 묻는 후보 2~3개. 사용자 추가 질문 interrupt와 다른 기능이다.</td></tr>
+    <tr><td><code>create_quote</code></td><td><code>user_id, thread_id, deal_terms, company?, price_list</code></td><td><code>QuoteDraft</code>·DB 초안. <code>needs_price | ready | sent</code>. 내부 저장 효과가 있어 재개 때 중복 생성에 주의한다.</td></tr>
+    <tr><td><code>create_trade_document</code></td><td><code>user_id, thread_id, deal_terms, company?, bank?, price_list, run_id, deal_terms_id?</code></td><td><code>TradeDocDraft</code>·DB 초안. 기존 메일 경로용이며 독립 문서 API의 발급 승인과 별도다.</td></tr>
+    <tr><td><code>send_email</code></td><td><code>user_id, thread_id, to_addrs, subject, body, in_reply_to?, references, attachments</code></td><td>Gmail 발송 결과. 마스터의 자유 호출 목록에서 제외하고 <code>send_approved_*</code> 서비스 안에서만 호출한다.</td></tr>
+  </tbody></table></div>
+  <div class="table"><table><caption>첨부도의 네 업무 연결부 · 이름은 초안, 현재 TOOLS 등록 항목이 아님</caption><thead><tr><th scope="col">업무</th><th scope="col">입력 초안</th><th scope="col">출력 초안</th><th scope="col">재사용·추가 범위</th></tr></thead><tbody>
+    <tr><td>업무 조회</td><td>본인 범위의 문서 종류·ID·기간·조회 항목</td><td>상태·버전·발급 파일 ID·근거 시점. 설정은 허용된 요약값만.</td><td>문서 목록·상세·버전 API와 설정 조회 재사용. 발송 이력·실행 기록의 챗 조회 연결은 추가. 키·토큰 조회 금지.</td></tr>
+    <tr><td>메일 준비</td><td>본인 메일·스레드 ID, 현재 조건, 첨부할 승인 파일 ID</td><td>후보 ID·제목·본문·수신자·첨부 참조·검토 필요 여부</td><td>기존 <code>start_run()</code> 및 후보 서비스. 같은 메일의 완료된 실행/후보를 먼저 재사용한다. 채팅에서 재실행하는 경로의 중복 방지는 새로 검증한다.</td></tr>
+    <tr><td>문서 준비</td><td><code>kind, document</code> 또는 <code>text</code>. 수정은 <code>revision</code>. CI는 사용자가 선택한 <code>source_pi_id, source_revision</code>.</td><td><code>DocumentResult</code>: ID·종류·버전·상태·입력·누락·문제·제안·파일</td><td>PI/PO/CI/PL 업무 함수 재사용. <code>needs_input → ready → issued</code>는 독립 문서 흐름이다. 기존 메일의 <code>ready → sent</code>와 구분한다.</td></tr>
+    <tr><td>일정 후보 준비</td><td>시간 구간·기간·길이·참석 대상·IANA 시간대. 모호한 상대 날짜는 절대 시각으로 확인.</td><td>바쁜 구간·가능 후보·검증 시점. 등록 후에만 event ID.</td><td><span class="tag check">미구현</span> Google Calendar 연결·조회·등록 계약을 별도로 확정한다. 현재 초안에서는 등록 가능 기능으로 안내하지 않는다.</td></tr>
+  </tbody></table></div>
+  <h3>승인·실행에서 쓰는 실제 계약</h3>
+  <ul>
+    <li><strong>문서:</strong> <code>POST /api/trade/{kind}/{id}/reviews</code>에 <code>{revision, formats}</code> → <code>ReviewView</code>. 선택은 <code>…/reviews/{proposal_id}/decisions</code>에 <code>{action, revision, content_hash}</code>. <code>modify</code>에만 새 <code>document</code>가 필요하다. <a href="#e5">[E5]</a></li>
+    <li><strong>PL:</strong> <code>packing-review</code>의 합계 승인 후 새 revision으로 최종 파일 발급을 검토한다. 합계 승인·발급 승인·메일 발송 승인은 서로 다른 행위다.</li>
+    <li><strong>메일:</strong> 현재 HTML 경로 <code>POST /candidates/{id}/approve</code>, <code>POST /quotes/{id}/approve</code>와 <code>send_approved_candidate / send_approved_quote / send_approved_trade_document</code>를 재사용한다. React/마스터용 JSON 연결과 독립 발급 파일 첨부 연결은 아직 없다. <a href="#e7">[E7]</a></li>
+    <li><strong>오류:</strong> 실제 문서 API는 401·403·404·409·422·503 및 <code>error</code> 또는 <code>detail</code> 형식을 사용한다. 마스터 내부 연결부에서만 기존 오류를 정규화하며 현재 HTTP 계약을 바꾸지 않는다.</li>
+  </ul>
+  <div class="callout warn"><strong>승인 고정 범위에 차이가 있다.</strong> 독립 문서 API에는 revision·content_hash 기반 불변 제안이 있다. 현재 메일 승인은 후보 ID·조건부 상태 갱신 중심이다. 메일 수신자·본문·첨부까지 같은 수준으로 고정하는 연결부는 새 검증 대상이며, 기존 기능이 모두 보장한다고 가정하면 안 된다.</div>
+</section>
+
+<section id="memory">
+  <span class="num">04 / MEMORY · R-06, R-07, R-08</span><h2>기억·업무 원장·재개 상태를 구분한다</h2>
+  <div class="table"><table><caption>기존 관계형 DB를 재사용하고, 별도 벡터 저장소는 추가하지 않는다 <a href="#e3">[E3]</a></caption><thead><tr><th scope="col">구분</th><th scope="col">현재 구현</th><th scope="col">마스터 초안</th></tr></thead><tbody>
+    <tr><td>단기 기억</td><td><code>thread_messages, thread_memory</code>. 사용자+Gmail 스레드의 요약·미요약 원문·확인 조건·직전 결과.</td><td>채팅 <code>conversation_id</code>와 Gmail <code>thread_id</code>는 별도 식별자. 사용자가 선택한 본인 메일만 연결하고 채팅용 저장 경계를 먼저 정한다.</td></tr>
+    <tr><td>장기 기억</td><td><code>user_preferences, company_profiles, price_list_items, counterparty_history</code>. 상대방 최근 거래 5건과 저장/발송 시점.</td><td>기존 서비스의 본인 조회를 재사용한다. 과거 단가·납기를 이번 거래의 사실로 자동 복사하지 않는다. 새 선호 저장은 사용자 명시 확인 또는 기존 승인 성공 조건을 따른다.</td></tr>
+    <tr><td>업무 사실</td><td>문서·버전·검토 제안·파일·후보·발송 이력은 업무 DB가 관리한다.</td><td>완료 여부와 승인 유효성은 원장을 다시 조회한다. 요약이나 LLM 문장으로 <code>sent/issued</code>를 확정하지 않는다.</td></tr>
+    <tr><td>재개 상태</td><td>현재 그래프는 실행 후 끝나며 영속 checkpoint가 없다. run_events는 재개 저장소가 아니다.</td><td>검증된 LangGraph 영속 saver 하나에 계획·현재 업무·질문 참조·승인 제안 참조를 저장한다. DB 원장 전체를 중복 저장하지 않는다.</td></tr>
+    <tr><td>요약·컨텍스트</td><td>미요약 메일+현재 메일이 <strong>8개 초과</strong> 또는 <strong>12,000자 초과</strong>면 최근 과거 원문 4개를 남기고 요약한다. 원문은 보존하고 성공 때만 커서를 이동한다.</td><td>채팅에도 같은 한도부터 검증한다. 확정 조건·미답변 질문·승인 대상 ID/버전은 요약 밖 구조화 필드로 유지한다. 긴 단일 메시지의 입력 제한과 토큰 예산은 따로 검증한다.</td></tr>
+  </tbody></table></div>
+  <p><strong>근거 우선순위:</strong> 현재 사용자 지시·선택한 원문 → 현재 문서/승인 버전과 유효한 설정 → 같은 대화의 확인 조건 → 과거 기억. 승인 버전과 새 지시가 충돌하면 기존 동의를 무효화하고 새 검토를 요청한다. 이메일·첨부 속 명령은 업무 자료로만 취급한다.</p>
+  <p><strong>저장 제한:</strong> API 키·OAuth 토큰·PC 장치 자격증명은 그래프 상태·요약·로그에 넣지 않는다. 메일 원문은 기존 접근 통제 DB에 두고, 마스터 상태에는 필요한 참조와 최소 조건만 둔다. 발송 성공 후 기억 저장만 실패했으면 발송 성공을 유지하며 재발송하지 않는다.</p>
+</section>
+
+<section id="state">
+  <span class="num">05 / STATE · R-05, R-11</span><h2>기존 AgentState는 유지하고 상위 상태만 작게 둔다</h2>
+  <p>현재 <code>AgentState</code>는 메일 한 건을 처리한다. 여기에 채팅·일정·업무 목록을 모두 넣지 않고 별도 <code>MasterState</code>를 제안한다. 아래 구조는 문서상의 예시이며 아직 <code>docs/CONTRACT.md</code>나 코드 계약에 반영하지 않았다.</p>
+  <div class="table"><table><caption>현재 AgentState에서 재사용할 내용 <a href="#e4">[E4]</a></caption><thead><tr><th scope="col">역할</th><th scope="col">필드</th><th scope="col">주요 갱신 지점</th></tr></thead><tbody>
+    <tr><td>식별·입력</td><td><code>run_id, user_id, mode, message_id, thread_id, email</code></td><td><code>start_run()</code>이 서버에서 생성/확인한다.</td></tr>
+    <tr><td>기억·판단</td><td><code>thread_context, long_term, intent, selected_tool, tool_reason, step_status</code></td><td><code>load_memory, analyze_email</code>과 각 도구 노드.</td></tr>
+    <tr><td>거래·결과</td><td><code>deal_terms, required_fields, missing_fields, reply_mode, candidates, quote_draft, trade_doc_draft</code></td><td>추출·필수 검사·초안·후보 노드. 문서 및 후보 ID로 연결한다.</td></tr>
+    <tr><td>검증·기록</td><td><code>reflection*, tools_called, errors, call_retries, needs_review, notice, end_reason</code></td><td><code>reflect, save_pending, finish_failed</code>. 통신 재시도와 성찰 재실행을 분리한다.</td></tr>
+  </tbody></table></div>
+  <pre><code>// 제안: 내부 상태의 최소 형태. 사용자·LLM이 user_id/status/승인을 직접 쓰지 않는다.
+MasterState = {
+  request_id, user_id, conversation_id, request_text,
+  context_refs: [{kind, id, revision?}],
+  tasks: [{
+    id, kind, depends_on: [task_id], status,
+    input_refs: [], output_refs: [], repair_count: 0
+  }],
+  active_task_id,
+  pending: null | {
+    id, kind: "question" | "approval",
+    task_id, question?, missing_fields?,
+    target_ref?, revision?, content_hash?
+  },
+  errors: [{task_id, kind, safe_message}],
+  status: "running" | "waiting_input" | "waiting_approval" | "needs_review"
+        | "completed" | "partial" | "cancelled" | "failed"
+}
+// Task.status: pending | running | waiting_input | waiting_approval
+//            | completed | cancelled | blocked | failed | needs_review
+// kind: lookup | mail | document | schedule (schedule은 구현 전 실행 거부)
+// output_refs는 run_id/candidate_id/document_id/revision/file_id/event_id 등을 참조.</code></pre>
+  <div class="table"><table><caption>노드가 바꿀 수 있는 상위 상태</caption><thead><tr><th scope="col">노드 초안</th><th scope="col">읽기 → 쓰기</th><th scope="col">판정 기준</th></tr></thead><tbody>
+    <tr><td>① plan</td><td>현재 요청·본인 맥락 → <code>tasks, pending</code></td><td>허용 kind·필수 참조·선행 연결 검증. 최초 업무 수는 최대 5개로 제안하며 초과 시 사용자에게 범위 축소를 요청한다.</td></tr>
+    <tr><td>② select_task</td><td>업무 목록·확정 선행 결과 → <code>active_task_id, tasks[].status</code></td><td>완료된 업무를 다시 고르지 않는다. 실행 가능한 업무가 없으면 대기/차단 이유로 종료한다.</td></tr>
+    <tr><td>업무 준비·③ validate</td><td>조건·선행 출력 → <code>output_refs, errors, repair_count, pending</code></td><td>결과 ID를 checkpoint에 반영하고 동일 준비 작업을 재개 때 중복 생성하지 않는다. 금액·필수값은 기존 업무 규칙으로 검사한다.</td></tr>
+    <tr><td>④ await_user</td><td>고정된 질문/제안 → 사용자 답에 따른 갱신</td><td>본인 요청·동일 pending.id·동일 제안·최신 버전만 재개. 중복 resume는 조건부 갱신으로 한 번만 처리한다.</td></tr>
+    <tr><td>⑤ execute</td><td>검증된 사용자 결정·업무 원장 → 실제 결과 참조·업무 상태</td><td>기존 서비스 응답/DB를 확인한다. LLM은 실행 성공이나 승인 상태를 생성하지 않는다.</td></tr>
+    <tr><td>⑥ advance</td><td>업무별 상태 → 다음 업무 또는 최종 <code>status</code></td><td>완료·취소·차단·실패·불명확 결과를 구분한다. 대기 상태는 완료 수에 포함하지 않는다.</td></tr>
+  </tbody></table></div>
+  <h3>재개와 부수 효과의 경계</h3>
+  <p><code>interrupt()</code>가 있는 노드는 재개 시 처음부터 다시 실행될 수 있다. 따라서 <strong>질문/승인 대기 노드에는 문서 생성·메일 발송을 넣지 않는다.</strong> 준비는 별도 노드에서 수행하고 결과 ID를 먼저 저장한다. checkpoint 저장 전에 프로세스가 죽는 경우도 있으므로 준비 요청에는 서버 발급 작업 키로 기존 결과를 찾는 최소 중복 방지가 필요하다. 기존 API에 이 보장이 없는 경로는 POC에서 확인하고 필요한 부분만 보완한다.</p>
+  <p>실행 시에는 checkpoint의 ‘승인’ 값만 믿지 않고 기존 검토/승인 원장을 재조회한다. checkpoint의 <code>thread_id</code>는 서버가 소유권을 확인한 마스터 실행 키이며 Gmail thread ID와 다르다. 기술용 checkpoint와 업무 원장은 목적이 다르므로 동일 완료 상태를 두 곳에서 독립적으로 결정하지 않는다.</p>
+  <p><strong>요청·재개 입출력 초안:</strong> 시작 입력은 <code>{request_text, conversation_id, context_refs}</code>, 재개 입력은 <code>{request_id, pending_id, answer}</code> 또는 <code>{request_id, pending_id, decision, target_ref, revision, content_hash}</code>로 제한한다. 사용자 ID는 인증에서 가져오고 서버 저장 대기 정보와 대조한다. 응답은 <code>{request_id, status, tasks, pending, result_refs}</code>이며, 승인 결정은 LLM에 위임하지 않는다. 새 URL은 P0 확인 후 정한다.</p>
+</section>
+
+<section id="technology">
+  <span class="num">06 / TECHNICAL CHECKS</span><h2>구현 전에 확인할 기술과 통과 기준</h2>
+  <p>새 프레임워크를 비교하는 작업보다 기존 코드에 실제 연결해 보는 작은 POC를 우선한다. <strong>P0 세 가지가 통과하기 전에는 마스터 전체를 확장하지 않는다.</strong> 다음 항목은 확인 과제이며 이번 문서 작업의 시험 완료 목록이 아니다.</p>
+  <div class="table"><table><thead><tr><th scope="col">우선순위·기술</th><th scope="col">확인할 질문</th><th scope="col">가장 작은 확인·통과 기준</th></tr></thead><tbody>
+    <tr><td>P0 · LangGraph interrupt·영속 saver</td><td><code>langgraph==1.2.20</code>에서 실제 질문·승인 재개, 서버 재시작, 동시 resume를 어떻게 처리하는가?</td><td>잠긴 버전의 API·호환 saver를 확인 → 질문 1개를 저장 → 프로세스 재시작 → 본인만 한 번 재개. 현재 compile에는 saver가 없다. 운영 영속 saver 패키지는 호환 확인 후 필요한 하나만 추가한다.</td></tr>
+    <tr><td>P0 · 승인과 멱등성</td><td>문서 revision/hash와 메일 후보·첨부 고정이 재개·동시 클릭에도 유지되는가?</td><td>같은 승인 2회, 승인 중 수정, checkpoint 직전 종료를 시험한다. 파일 1세트·메일 1회만 생성하고 오래된 동의는 거부한다. 메일 다중 프로세스 보장은 현재 프로세스 잠금만으로 단정하지 않는다.</td></tr>
+    <tr><td>P0 · 기존 업무 직접 연결</td><td>마스터가 현재 인증·사용자 AI 범위·추출·문서·발송 함수를 그대로 부를 수 있는가?</td><td>가상 PI 한 건 작성→검토→파일 발급→별도 발송 승인의 종단 간 연결. 독립 발급 파일을 메일에 붙이는 경계와 누락/실패를 확인한다.</td></tr>
+    <tr><td>P1 · 계획 구조화·PC 호환</td><td>새 계획 스키마가 기존 <code>call_structured()</code>와 PC 허용 정의에서 동일하게 검증되는가?</td><td>허용 kind, 존재하지 않는 ID·선행 순환·5개 초과·잘못된 JSON을 거부한다. 저장 키·PC 두 모드에서 검증하고 PC 정의/해시 미일치는 안전하게 안내한다.</td></tr>
+    <tr><td>P1 · React·인증 경계</td><td>현재 세션·CSRF와 향후 앱 인증 전환 사이에서 권한 주체가 일관되는가?</td><td>기존 <code>GET /api/session</code>·쿠키·CSRF로 우선 모의 연결. 타인 ID·위조 resume·허용되지 않은 출처를 거부한다. React·Supabase 전환 #129~#150은 별도 작업의 실제 완료를 확인한 뒤 반영한다.</td></tr>
+    <tr><td>P1 · 기억·토큰 예산</td><td>메일 8개/12,000자 기준이 채팅과 긴 문서에도 충분한가?</td><td>요약 전후 조건·미답변·문서 ID/버전이 보존되고, 요약 실패 때 커서가 유지된다. 긴 단일 입력은 상한으로 안내하며 핵심 값을 조용히 자르지 않는다.</td></tr>
+    <tr><td>P1 · OpenAI·개인 PC·실제 Gmail</td><td>현재 모델 권한·응답 시간·PC 중지·키 오류에서도 안전한가?</td><td>AI는 모의 시험을 준비한다. 사람은 테스트 계정·가상 메일로 실제 호출과 승인 발송을 확인한다. <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/157">#157</a>·<a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/62">#62</a>는 열린 상태이며 운영 완료는 미확인이다.</td></tr>
+    <tr><td>P2 · Google Calendar</td><td>권한 범위·토큰 보관·시간대·빈 시간 조회·중복 등록·등록 직전 충돌 확인은?</td><td>사람의 <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/73">#73</a> 준비 후 가상 일정 조회→후보→승인→등록. 같은 승인 반복 시 event 1개, 시간대 변환·충돌을 확인한다. 추가 API 선택은 별도 확정한다.</td></tr>
+    <tr><td>P2 · 이미지/OCR·첨부 해석</td><td>입력 경로와 해석 가능한 파일·이미지 모델이 정해졌는가?</td><td><a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/74">#74</a>의 준비 범위. 본문 추출과 분리하고, 미지원 파일은 안내한다. 일정과 마찬가지로 첫 마스터 연결의 선행 조건으로 두지 않는다.</td></tr>
+  </tbody></table></div>
+  <div class="callout"><strong>Ponytail 적용 범위:</strong> 순차 실행, 허용 업무 목록, 기존 SQLAlchemy·업무 서비스·ToolResult·기억·기록기 재사용. 이번 초안에 벡터 DB, 에이전트별 별도 서버, 범용 플러그인 프레임워크, 새 작업 큐, 자동 병렬 실행은 넣지 않는다. 현재 개인 PC 큐는 기존 방식대로 재사용한다.</div>
+</section>
+
+<section id="scenarios">
+  <span class="num">07 / TEST SCENARIOS · R-12, R-13, D-02</span><h2>정상·오류·재개를 같은 기준으로 시험한다</h2>
+  <p><span class="tag">기존 회귀</span>는 관련 시험 파일이 있는 영역, <span class="tag draft">신규 시나리오</span>는 마스터 연결 후 실행할 항목이다. <strong>아래 T01~T22는 이번 작업에서 실행하지 않은 시험 초안</strong>이며, 기존 회귀 성공과 새 마스터 성공을 구분해 기록한다.</p>
+  <div class="table"><table><caption>가상 데이터·모의 API로 먼저 실행하고 실제 API는 별도 확인</caption><thead><tr><th scope="col">ID·범위</th><th scope="col">입력·조작</th><th scope="col">기대 흐름·관찰값</th><th scope="col">통과 기준</th></tr></thead><tbody>
+    <tr><td>T01 · 조회<br>신규</td><td>“내 PI 7번 현재 상태와 발급 파일을 보여줘.”</td><td>①→② 조회→③ 검증→⑥ 완료. 현재 DB 상태·버전·조회 시점.</td><td>본인 자료만 반환, 승인·LLM 호출·파일 재발급·발송 없음.</td></tr>
+    <tr><td>T02 · 메일 후보<br>기존+연결</td><td>선택한 일반 문의에 답장 후보 요청.</td><td>기존 메일 그래프→후보 2~3개→초안 요청 완료.</td><td>후보 ID를 재사용, 승인 전 Gmail 발송 0회. <code>test_mail_analysis.py</code>.</td></tr>
+    <tr><td>T03 · 정보 부족<br>신규</td><td>문서 종류만 지정하고 거래처·품목 누락. 답변 후 재개.</td><td><code>running→waiting_input→running</code>, 누락 필드만 질문.</td><td>답변을 구조화 검증하고 같은 업무를 이어 간다. 누락값 추측·문서 중복 생성 없음.</td></tr>
+    <tr><td>T04 · 지원 밖<br>신규</td><td>결제·송금 또는 구현 전 일정 등록 요청.</td><td>지원 범위 검사→가능한 업무 안내→종료.</td><td>임의 도구 호출·완료 주장·무한 재계획 없음.</td></tr>
+    <tr><td>T05 · PI→발송<br>신규</td><td>PI 발급 후 선택 후보로 첨부 발송. 발급·발송을 각각 승인.</td><td>문서 ready→검토→issued→파일 참조→발송 대기→sent.</td><td>발급만 승인했을 때 메일 0회. 발송 승인 후 해당 파일로 1회. 전체 완료는 실제 sent 후.</td></tr>
+    <tr><td>T06 · 수정 후 승인<br>기존+연결</td><td>검토 후 수량을 바꾸고 이전 제안을 승인.</td><td>기존 제안 무효화→새 revision→새 검토.</td><td>오래된 hash/revision은 409, 과거 승인 파일 보존. <code>test_trade_domain_api.py</code>.</td></tr>
+    <tr><td>T07 · 부분 취소<br>신규</td><td>PI 업무 취소, 독립 조회는 계속. 메일은 해당 PI 파일에 의존.</td><td>PI cancelled·메일 blocked·조회 completed→partial.</td><td>취소한 PI로 발급/발송하지 않고 각 결과를 따로 표시.</td></tr>
+    <tr><td>T08 · 중복·동시 승인<br>기존+연결</td><td>두 브라우저가 같은 제안을 동시에 승인.</td><td>조건부 갱신 하나만 실행, 나머지는 기존 결과 또는 처리됨 반환.</td><td>파일 1세트·메일 1회. 별도 DB 연결/서버 프로세스로도 확인. <code>test_trade_postgres.py</code> 등.</td></tr>
+    <tr><td>T09 · 질문 후 재시작<br>신규 P0</td><td>질문 대기에서 서버를 종료·재시작하고 답변.</td><td>영속 checkpoint→원래 업무로 복귀.</td><td>계획·확인 조건 보존, 준비/발송 중복 0회, 이전 checkpoint를 임의로 재개하지 못함.</td></tr>
+    <tr><td>T10 · 승인 후 장애 경계<br>신규 P0</td><td>실행 성공 후 checkpoint 저장 직전에 강제 종료.</td><td>재개 시 원장의 issued/sent 결과를 조회.</td><td>이미 성공한 실행을 다시 하지 않는다. 원장상 sending/결과 불명은 확인 필요로 대기.</td></tr>
+    <tr><td>T11 · 잘못된 계획<br>신규</td><td>없는 도구·순환 의존·없는 task ID·업무 6개·잘못된 JSON 주입.</td><td>계획 검증→1회 보정 또는 범위 확인.</td><td>허용하지 않은 도구 실행 0회, 한도 후 needs_review/질문, 재귀 무한 반복 없음.</td></tr>
+    <tr><td>T12 · 원문에 없는 값<br>기존+연결</td><td>후보에 없는 금액·수량·날짜 삽입.</td><td>감지→수정→재검증. 한도 초과→확인 필요.</td><td>detect/strategy/verify 기록과 정확한 카운트. <code>test_reflect.py</code>. 기존 규칙이 모든 언어·숫자 표현을 잡는다고 가정하지 않음.</td></tr>
+    <tr><td>T13 · OpenAI 실패<br>기존+연결</td><td>429·401·503·형식 오류 응답 주입.</td><td>현재 계약: 429/401 자동 재시도 없음, network 최대 3회, 형식 오류 별도 1회 재시도.</td><td>오류별 안내·call_retries, 키 비노출. PC/저장 키 경로 동일 검증. <code>test_llm.py</code>.</td></tr>
+    <tr><td>T14 · Gmail 결과 불명<br>기존+연결</td><td>승인 후 send 시간 초과 또는 503.</td><td>실패/불명 안내→보낸편지함 확인 요청→명시적 재승인 대기.</td><td>자동 재발송 0회·의존 업무 완료 처리 금지. <code>test_approval.py</code>.</td></tr>
+    <tr><td>T15 · 소유권·위조 승인<br>신규+회귀</td><td>타인 문서/후보/checkpoint ID, 잘못된 CSRF, 조작한 user_id·승인 상태 전송.</td><td>401/403/본인 범위 404 또는 안전한 오류.</td><td>자료 노출·타인 상태 변화·외부 실행 0회. 서버가 신원·권한·원장을 판정.</td></tr>
+    <tr><td>T16 · 기억 충돌·요약<br>기존+연결</td><td>과거 10개→현재 20개 변경. 9번째 메시지·12,001자·요약 실패.</td><td>현재 조건 우선, 최근 원문·확인 필드 보존, 실패 커서 유지.</td><td>과거 수량·납기 복사 없음. 사용자·상대·스레드 격리. <code>test_memory.py</code>.</td></tr>
+    <tr><td>T17 · 문서 고유 규칙<br>기존+연결</td><td>PO 매입가, CI 승인 PI 특정 버전, PL PCS/KG 혼합·합계 차이.</td><td>도메인 검증→필요 확인→최종 발급 검토.</td><td>CI 원본 가격 유지, 타인/미승인 PI 거부, PL 원본 보존·단위별 합계·별도 합계 승인. <code>test_trade_domain_operations.py</code>.</td></tr>
+    <tr><td>T18 · 개인 PC 중지<br>기존+연결</td><td>계획·추출 중 PC 종료/해제·버전 불일치·키 거부·늦은 결과.</td><td>기존 worker 안내→실패 또는 확인 대기.</td><td>서버 키로 대체·늦은 결과 반영·미완료 후보 저장 없음. 새 계획 스키마도 검사. <code>test_worker_execution.py</code>.</td></tr>
+    <tr><td>T19 · 일정 시간대·충돌<br>향후</td><td>“내일 오후”·서로 다른 시간대·등록 직전 일정 충돌·승인 재전송.</td><td>절대 시각 확인→후보→승인→직전 재조회→등록/수정 요청.</td><td>모호한 시각 등록 없음, 충돌 때 재승인, 중복 event 없음. Calendar 구현 뒤 실행.</td></tr>
+    <tr><td>T20 · 문서 속 명령·긴 입력<br>신규</td><td>메일에 “승인 생략·다른 사용자 파일 보내기” 삽입. 입력 상한 초과.</td><td>자료로만 해석, 서버 권한·승인 검증, 길이 안내.</td><td>자료 속 명령으로 권한/도구 목록 변경 없음, 핵심 조건 임의 잘림 없음.</td></tr>
+    <tr><td>T21 · 성찰 전후 비교<br>기존 평가+신규</td><td>같은 정상·누락·오류 시나리오를 성찰 끔/켬 각 3회 이상.</td><td>동일 모델·입력·초기 DB·오류 주입 조건. 실행 순서 교대.</td><td>완료율·도구 정확도·일관성·평균 재시행과 표본 수·실패 사례를 함께 기록. 모의/실제 결과 분리.</td></tr>
+    <tr><td>T22 · 화면·실제 연결<br>신규·사람 확인</td><td>390px/1280px에서 질문→승인→수정→재개. 테스트 계정으로 실제 메일 1건.</td><td>본문·대상·버전·상태 표시, 키보드 조작·새로고침 복구.</td><td>승인 전 미발송, 승인 후 실제 1회 발송, 비밀값 미표시. 배포된 커밋·OS·API 결과·소요 시간 기록.</td></tr>
+  </tbody></table></div>
+  <h3>시험 기록과 네 지표</h3>
+  <p>기존 <code>runs/run_events</code>·개인정보 가림·JSONL 내보내기·<code>app/evaluation</code>를 재사용한다. 마스터 task ID와 하위 run ID의 연결만 추가한다. 실행별로 기준 SHA·시나리오·성찰 여부·예상 도구·실제 도구·전이·승인/실행 결과·재시도·지연 시간을 남기고 원문/키는 제외한다.</p>
+  <div class="table"><table><thead><tr><th scope="col">지표</th><th scope="col">초안 판정</th><th scope="col">비교 시 주의</th></tr></thead><tbody>
+    <tr><td>태스크 완료율</td><td>요청한 완료 조건을 만족한 시나리오 수 / 실행한 시나리오 수.</td><td>질문 요청·거부가 정답인 오류 시험은 별도 안전 동작 성공률도 표시한다. 안전 종료를 실제 발송 완료와 섞지 않는다.</td></tr>
+    <tr><td>도구 선택 정확도</td><td>실제 도구 집합이 사전 정답과 일치한 비율. 불필요·누락 호출 별도 집계.</td><td>복합 업무는 선행 순서 위반도 따로 센다. 성찰 보정 도구는 기존 평가 규칙을 맞춰 적용한다.</td></tr>
+    <tr><td>응답 일관성</td><td>반복 실행 쌍의 사실·사용자 조건·응답 구조 일치율 평균.</td><td>새 문서 번호·시각 같은 동적 값은 정규화하고 허용 가능한 문장 차이는 오답으로 세지 않는다.</td></tr>
+    <tr><td>평균 재시행 횟수</td><td>기존 <code>call_retries + reflection_retries + 재승인</code> 평균과 새 계획 보정 횟수를 별도 표시.</td><td>같은 사용자 승인 동작을 중복 집계하지 않는다. 새 보정 비용은 기존 지표에 조용히 합치지 않는다.</td></tr>
+  </tbody></table></div>
+  <p class="muted">모의 오류 주입 결과는 분기·복구 확인 근거다. 실제 모델의 성찰 효과를 증명하려면 <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/64">#64</a>의 실제 API 시험과 <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/65">#65</a>의 결과 보고가 필요하다. 기존 평가의 수치를 새 마스터 개선 효과로 제시하지 않는다.</p>
+</section>
+
+<section id="decisions">
+  <span class="num">08 / REVIEW ORDER</span><h2>확정할 것과 가장 작은 다음 확인</h2>
+  <div class="table"><table><thead><tr><th scope="col">검토 항목</th><th scope="col">이 초안의 제안</th><th scope="col">확정이 필요한 이유</th></tr></thead><tbody>
+    <tr><td>첫 연결 범위</td><td>조회·메일·문서부터, 한 번에 한 업무, 요청당 업무 최대 5개.</td><td>일정·OCR·자동 병렬 처리를 동시에 붙이면 승인·복구 경계 검증이 커진다. 최대 5개는 제안값이다.</td></tr>
+    <tr><td>승인 단위</td><td>확정 파일 발급과 메일 발송을 별도 승인. 수정은 기존 동의 무효화.</td><td>사용자가 파일 발급만 허용했는데 메일까지 나가는 일을 막는다. 일정 등록 승인도 향후 별도다.</td></tr>
+    <tr><td>채팅·재개 저장</td><td>채팅과 Gmail ID 분리, 검증된 영속 saver 하나 사용.</td><td>소유권·재시작·동시 재개를 보장해야 한다. saver 선택과 최소 소유자 매핑은 POC 후 확정한다.</td></tr>
+    <tr><td>최종 표시</td><td>완료·취소·차단·실패·결과 불명·사용자 대기를 구분.</td><td>일부 업무만 끝난 요청을 전체 완료로 안내하지 않도록 한다.</td></tr>
+  </tbody></table></div>
+  <ol>
+    <li><strong>Codex · 이 초안 검토 뒤:</strong> P0의 interrupt/영속 저장·본인 재개·중복 방지 실험 하나부터 수행한다. 실제 그래프·상태 계약을 바꾸기 전 관련 팀원 조율이 필요하다. 새 마스터 Issue는 아직 생성하지 않았다.</li>
+    <li><strong>사람 · 독립 진행 가능:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/157">#157</a> 실제 OpenAI·PC 실행기와 <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/62">#62</a> Gmail·배포 연결을 확인한다. 현재 완료 여부는 미확인이다.</li>
+    <li><strong>사람 · 일정 기능 착수 전:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/issues/73">#73</a> Calendar 권한·계정 준비와 승인 범위를 확정한다. 이 준비는 조회·메일·문서 마스터 검증의 선행 조건이 아니다.</li>
+  </ol>
+  <details><summary>검토 후 새 작업에 사용할 요청문 초안</summary><p>최신 main에서 <code>docs/plans/langgraph-master-draft.html</code>의 06절 P0 중 질문 interrupt·영속 재개만 검증해 주세요. 관련 상태/노드: 제안 MasterState의 request_id·user_id·pending·status, plan/await_user. 수정 범위: 독립 POC와 작은 시험·검증 기록, 운영 메일 그래프와 기존 도구는 변경하지 않음. 확인 조건: 질문 후 프로세스 재시작 복구, 본인만 재개, 동시 답변 1회 반영, 준비·외부 실행 중복 없음, 잠긴 LangGraph 버전과 saver 호환성 확인. 공통 계약을 바꿔야 하면 구현 전에 영향과 조율 대상을 제시해 주세요. Issue: 신규 등록 필요(현재 없음).</p></details>
+</section>
+
+<section id="sources">
+  <span class="num">EVIDENCE / PINNED SOURCES</span><h2>조사 근거</h2>
+  <p class="muted">코드 링크는 조사 기준 커밋으로 고정했다. Issue 상태와 GitHub 검사 결과는 2026-11-12 조회 시점의 정보이며 이후 바뀔 수 있다. 첨부 이미지의 로컬 Windows 경로는 이 실행 환경에서 열 수 없었고, 대화에 표시된 이미지 자체를 기준으로 읽었다.</p>
+  <ol class="refs">
+    <li id="e1"><strong>E1 · 실제 그래프:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/graph/build.py">build.py</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/graph/routing.py">routing.py</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/graph/run.py">run.py</a>.</li>
+    <li id="e2"><strong>E2 · 도구 계약:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/tools/base.py">ToolResult</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/tools/registry.py">등록 도구</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/tree/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/tools">각 도구 Input</a>.</li>
+    <li id="e3"><strong>E3 · 기억:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/services/memory.py">memory.py</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/config.py">요약·재시도 한도</a>.</li>
+    <li id="e4"><strong>E4 · 상태:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/graph/state.py">AgentState</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/db/models.py">업무 저장 표</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/graph/nodes/reflect.py">성찰 검사와 전략</a>.</li>
+    <li id="e5"><strong>E5 · 문서·검토:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/docs/trade-api.md">문서 API 안내</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/trade/common/router.py">실제 router</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/trade/review/models.py">ReviewView·Decision</a>.</li>
+    <li id="e6"><strong>E6 · 현재 인증:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/web/deps.py">세션 사용자</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/trade/common/api.py">세션·CSRF·파일 API</a>.</li>
+    <li id="e7"><strong>E7 · 승인·발송:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/services/approval.py">approval.py</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/tools/send_email.py">send_email.py</a>.</li>
+    <li id="e8"><strong>E8 · 실행 환경:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/pyproject.toml">고정 의존성</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/tree/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/app/worker">개인 PC 실행기</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/pull/163">Windows 구현 병합 #163</a>.</li>
+    <li id="e9"><strong>E9 · 현재 상태·시험:</strong> <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/docs/PROJECT_CONTEXT.md">PROJECT_CONTEXT 2~8절</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/blob/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/docs/REQUIREMENTS.md">요구사항 R-ID</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/tree/1e57e9e1ac4c87b754c380a09e207f5bcb418e20/tests">기존 시험</a>, <a href="https://github.com/encore-ai-campus/aio-03-p2-team3/actions/runs/43176420087">기준 main CI</a>.</li>
+  </ol>
+</section>
+</main>
+<footer><div class="wrap">Team 3 · 마스터 LangGraph 설계 초안 · 외부 라이브러리·폰트·스크립트 없이 열리는 단일 HTML. 브라우저 인쇄로 PDF 저장 가능.</div></footer>
+</body>
+</html>
