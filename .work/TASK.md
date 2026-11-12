@@ -36,7 +36,7 @@
 - `.env.example` — 환경변수 이름과 설명(값 없음) [과제별]
 - `.gitignore` — `.env`·`.venv` 등 올리지 않을 파일 [과제별]
 - `app/` — FastAPI 서버·설정, DB 표, 그래프·노드 틀, 도구 스키마·등록, LLM 도우미, 프롬프트 버전, 실행 기록기, 시험 시나리오·지표·시험 실행기(`app/evaluation/`), 로컬 Gmail history 수집기(`app/services/local_gmail.py`), 개인 장치 인증·사용자별 AI 큐·개인 PC 실행기·Windows DPAPI/DACL 자격증명과 결과 어댑터(`app/worker/`), 웹 템플릿·디자인 토큰·로컬 HTMX와 라이선스, 무역서류 이식 모듈(`app/trade/`, kekorea-port). Supabase Bearer 인증·사용자 매핑·Gmail 연결·비공개 Storage API(app/auth/·app/files/)도 포함. 업무 본문은 후속 작업에서 구현 [과제별]
-- `frontend/` — React+JavaScript+Vite 앱(시안 이식 로그인·앱 뼈대, Supabase Auth 클라이언트·공통 API fetch, `/api` 개발 프록시). 실행·빌드는 README 실행 방법, 범위는 `docs/plans/react-supabase/PLAN.md` [과제별]
+- `frontend/` — React+JavaScript+Vite 앱(시안 이식 로그인·앱 뼈대·회사/거래처/판매·구매 단가/계좌/이미지 설정, Supabase Auth 클라이언트·공통 API fetch, `/api` 개발 프록시). 실행·빌드는 README 실행 방법, 범위는 `docs/plans/react-supabase/PLAN.md` [과제별]
 - `tests/` — 실행 환경·서버·DB·그래프 흐름·노드 소요 시간·LLM 오류 구분·로그인·감시 등록·로컬 Gmail 수집과 실제 루프백 실행·실행 기록 화면과 내보내기(개인정보 가리기)·시험 실행기와 4개 지표 테스트와 `fakes/`의 가짜 LLM·가짜 Google·로컬/개인 PC·모의 OpenAI HTTPS 시험 서버(실제 API 호출 없음) [과제별]
 - `.work/RULES.md` — 공통 규칙 [공통]
 - `.work/TASK.md` — 이 파일 [과제별]

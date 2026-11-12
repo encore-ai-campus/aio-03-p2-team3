@@ -29,6 +29,7 @@ app/trade/
    - React(Supabase): 변경 없는 요청의 `Authorization: Bearer <Supabase access token>` 헤더만 쓴다. 쿠키·CSRF 토큰은 필요 없고 잘못된 토큰이면 쿠키 세션으로 우회하지 않는다. 서버는 `SUPABASE_URL`의 JWKS로 서명·issuer·audience·만료·UUID subject를 검증해 기존 정수 `user_id`에 매핑한다. 사용자 상태·프로필은 `GET /api/me`(Bearer 전용)로 시작한다.
    - 기존 HTML 화면(전환 기간 legacy): Google 로그인 세션 쿠키를 만들고 `GET /api/session`의 `csrf_token`을 변경 요청의 `X-CSRF-Token`에 담는다. React 요청은 `credentials: 'include'`를 사용한다.
 2. `/api/trade/settings` 하위에서 회사·단가·계좌·PNG 직인을 설정한다. 원본 회사의 실제 값은 코드에 들어 있지 않다. 직인·로고 업로드(`POST /api/trade/settings/branding/{kind}`)는 기존 2MiB·PNG 검증을 유지하고 bytes를 비공개 Storage에 저장해 `file_assets` 파일 ID로 가리킨다(계획 9절). Storage가 설정되지 않았거나 오류면 503 `STORAGE_NOT_CONFIGURED`/`STORAGE_UNAVAILABLE`이다.
+   - React 설정 화면은 `/app/settings`다(계획 11절). `GET /api/trade/settings`는 회사·단가·계좌·거래처와 branding 파일 ID를 private/no-store로 돌려준다. `PUT /counterparties`(settings 하위)는 legal_name·aliases·주소/연락처·기본 배송지를 받고 기존 회사명 정규화 키로 본인 행을 갱신한다. user_id·company_key 같은 서버 필드는 입력으로 받지 않는다. 이미지는 `/api/files/{file_id}/download`를 Bearer로 읽는다.
 3. 다른 출처의 React는 `FRONTEND_ORIGINS`에 정확한 출처를 쉼표로 구분해 지정한다(Authorization 헤더 허용). 사이트가 달라 `SameSite=None`이 필요하면 HTTPS에서 `SESSION_SAME_SITE=none`을 설정한다. 기본값은 lax다.
 
 정확한 필드와 예시는 `/docs`의 OpenAPI를 기준으로 한다. 금액/수량은 `"10"`, `"8.25"`와 같은 십진수 문자열이다. 부동소수점·음수·무한대·허용 범위를 넘는 값은 거부한다. 서버 계산 결과·가격 인증·승인 상태는 입력으로 받지 않는다.

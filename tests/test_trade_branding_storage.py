@@ -75,7 +75,8 @@ def test_branding_upload_keeps_bytes_only_in_storage_and_metadata_in_db(branding
     assert asset.object_key.startswith("1/branding/") and asset.content_type == "image/png"
     assert storage.objects[asset.object_key] == seal_png()  # bytes는 Storage에만 있다
     branding_view = client.get("/api/trade/settings", headers=headers).json()["branding"]
-    assert branding_view == {"has_logo": False, "has_seal": True}
+    assert branding_view == {"has_logo": False, "has_seal": True,
+                             "logo_file_id": None, "seal_file_id": asset.id}
     # 브랜딩 객체는 file_assets 행이 가리키므로 미참조 정리 대상이 아니다.
     assert cleanup.unreferenced_objects(client.app.state.database, storage) == []
 

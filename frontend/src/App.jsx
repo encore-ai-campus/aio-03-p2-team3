@@ -5,6 +5,7 @@ import Layout from "./components/Layout"
 import DashboardPage from "./pages/DashboardPage"
 import LoginPage from "./pages/LoginPage"
 import PlaceholderPage from "./pages/PlaceholderPage"
+import SettingsPage from "./pages/SettingsPage"
 
 // 인증 경계: /app 아래는 /api/me까지 확인된 로그인만 지난다.
 function RequireAuth() {
@@ -38,7 +39,7 @@ export default function App() {
               <Route path="inbox" element={<PlaceholderPage sub="답장 내용을 확인하고 보낼 후보를 선택하세요." title="받은 메일" />} />
               <Route path="documents" element={<PlaceholderPage sub="문서 작성과 발급 상태를 관리하세요." title="문서함" />} />
               <Route path="activity" element={<PlaceholderPage sub="처리 단계와 오류를 확인하는 작업 이력입니다." title="실행 기록" />} />
-              <Route path="settings" element={<PlaceholderPage sub="회사와 거래에 필요한 기준 정보를 관리합니다." title="설정" />} />
+              <Route path="settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

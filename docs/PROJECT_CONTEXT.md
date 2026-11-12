@@ -138,7 +138,9 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-12 · 발급 Storage·최신 개인 실행기와 PostgreSQL 통합
+마지막 갱신: 2026-11-12 · React 설정 화면 검증(11절)
+
+- React 설정(11절): `tests/test_react_settings.py`와 기존 Storage 메타데이터 검사 1개를 묶어 **4 passed (12.03초)**. Bearer 사용자 격리·역할/통화/거래처 단가 범위·거래처 upsert/서버 필드 거부·새 문서 반영·기존 발급 파일 해시 보존을 확인했다. 실제 FastAPI·임시 PostgreSQL·가짜 Storage와 Chromium으로 회사 저장/실패 입력 보존/재접속, USD/EUR 계좌, 판매·구매 단가, 거래처, PNG 거부/직인 업로드/인증 미리보기, 390px/1280px·키보드·사용자 전환을 확인했다. 요청에 따라 전체 pytest는 재실행하지 않았다. 기존 개인 PC 통합 실행 시간 초과는 별도 미해결로 남긴다. lint/build·규칙 검사 결과는 PROGRESS.md에 모은다.
 
 - Windows 후속 수정의 로컬 전체 회귀는 `uv run pytest` **829 passed·4 skipped**(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개)이며 규칙 검사 경고 0개다. 자격증명은 실제 OS 저장소의 별도 프로세스 읽기·소유자/서비스·만료·덮어쓰기/링크·크기 제한을 시험한다. Windows 전용 DPAPI 평문/변조 거부·다른 사용자 읽기 ACE 거부와 전체 개인 실행기/HTTPS 프로세스 시험은 GitHub `windows-worker` 작업에서 실행한다(결과는 해당 PR 검사 기준). 시험 인증서는 기존 cryptography로 만들어 외부 OpenSSL 설치에 의존하지 않는다. 실제 Windows의 첫 실행에서 DPAPI/DACL과 메일/문서 시험은 통과했지만 강제 종료 후 키 교체 재시작에서 시간 초과가 발생했다. 종료된 long poll의 연결 상태를 claim 전에 검사하도록 고치고, 끊어진 요청이 새 작업을 임대하지 못하는 회귀를 추가했다. 수정 후 Linux 전체 회귀는 통과했으며 Windows 재검증 결과는 PR 검사 기준이다. 실제 API·운영 DB·Render·공용 Gmail 설정은 변경하지 않았다.
 
@@ -195,7 +197,7 @@
 - PDF 공통 렌더러(PI·PO·CI·PL): 한 문서 렌더링 안에서 같은 PNG와 crop 조건의 RGB 변환·압축 결과를 재사용하고, 여러 페이지에서 같은 이미지 PDF 객체를 공유한다. 페이지별 콘텐츠 스트림과 이미지 배치 명령은 유지한다. `tests/test_trade_pdf_pagination.py`는 이미지 종류 수만큼만 변환·압축하며 PDF 이미지 객체가 중복되지 않고 각 페이지가 같은 객체를 참조하는지 확인한다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-12 · 발급 Storage·최신 main 통합
+마지막 갱신: 2026-11-12 · React 회사·거래 기준 설정(11절)
 
 - Windows 후속 수정은 WSL 없이 PowerShell에서 개인 실행기를 지원한다. README에 개인 `.env.worker` 준비·설치·pair/run·중지와 DPAPI 파일 재연결 방법을 안내했고 이 개인 파일을 커밋에서 제외했다. 코드 브랜치와 운영 DB 백업은 별개이며, 실제 운영 데이터·암호화 키를 공개 GitHub에 올리지 않는다. 이번 Windows 수정에는 DB 마이그레이션이나 Render/Google 설정 변경이 없다.
 - 실제 서비스 전체 연결은 계획 5절(#157)에서 미확인이다. AI는 사전 점검·자동/모의 시험·실행 절차와 결과 정리를 맡을 수 있다. 이 Codex 환경에서 실제 키/API 시험은 하지 않으며 키 입력·Google 동의/장치 승인·본인 PC 실행·과금 프로젝트 확인은 사람이 한다. README에 이 범위를 분명히 한 AI 준비 작업 요청문을 뒀다.
@@ -206,7 +208,8 @@
 
 - 사용자별 키 전환: 기존 DB 백업 후 배포한다. `20261112_user_openai_keys` 마이그레이션은 기존 데이터와 승인 이력을 유지한다. 기존 `TOKEN_ENCRYPTION_KEY`는 유지하고 서버 `OPENAI_API_KEY`는 제거한다. 사용자는 배포 후 `/settings`에 개인 키를 등록한다. 등록 전 실패 메일은 자동 재처리하지 않으며 이미 시작한 작업은 키 삭제로 취소되지 않는다. Render 설정 변경·실제 사용자 키 등록은 이 작업에서 하지 않았다.
 
-- React 화면(react-supabase 6절, 2026-11-12): 루트 `frontend/`에 React+JavaScript+Vite 앱이 생겼다. 런타임 의존성은 `react`·`react-dom`·`react-router-dom`·`@supabase/supabase-js`만(버전 고정), 개발 의존성은 `vite`·`@vitejs/plugin-react`·ESLint 도구뿐이고 TypeScript·상태관리·UI키트는 없다. 시안 `trade-agent ui_시안.html`의 로그인 화면(그라데이션 아트 포함)·색 토큰·사이드바 레이아웃·모바일 하단탐색을 `frontend/src/styles.css`와 컴포넌트로 그대로 옮겼다. React Router가 `/app` 아래 경로(로그인·대시보드 뼈대, 작업현황·받은 메일·문서함·실행 기록·설정은 자리만)를 맡고, `src/supabase.js`의 클라이언트 1개가 Google OAuth(PKCE·`redirectTo` /app/login)를 시작하며, `src/api.js`가 Bearer 헤더·오류 정규화·401 처리를 담당한다. 저장·조회는 Auth 구독 이벤트에서 1회 요청하고(Effect 반복 조회 금지), 구독 cleanup을 둔다. 개발은 `cd frontend && npm ci && npm run dev`로 `http://localhost:5173/app/`에 띄우고 `/api` 프록시가 로컬 FastAPI(8000)로 보낸다. 실제 Google 로그인은 계획 2절 콘솔 설정이 먼저(미착수). CI에 Node 작업은 아직 없다(계획 21절).
+- React 화면(react-supabase 6절, 2026-11-12): 루트 `frontend/`에 React+JavaScript+Vite 앱이 생겼다. 런타임 의존성은 `react`·`react-dom`·`react-router-dom`·`@supabase/supabase-js`만(버전 고정), 개발 의존성은 `vite`·`@vitejs/plugin-react`·ESLint 도구뿐이고 TypeScript·상태관리·UI키트는 없다. 시안 `trade-agent ui_시안.html`의 로그인 화면(그라데이션 아트 포함)·색 토큰·사이드바 레이아웃·모바일 하단탐색을 `frontend/src/styles.css`와 컴포넌트로 그대로 옮겼다. React Router가 `/app` 아래 경로(로그인·대시보드 뼈대, 설정은 11절에서 연결, 작업현황·받은 메일·문서함·실행 기록은 자리만)를 맡고, `src/supabase.js`의 클라이언트 1개가 Google OAuth(PKCE·`redirectTo` /app/login)를 시작하며, `src/api.js`가 Bearer 헤더·오류 정규화·401 처리를 담당한다. 저장·조회는 Auth 구독 이벤트에서 1회 요청하고(Effect 반복 조회 금지), 구독 cleanup을 둔다. 개발은 `cd frontend && npm ci && npm run dev`로 `http://localhost:5173/app/`에 띄우고 `/api` 프록시가 로컬 FastAPI(8000)로 보낸다. 실제 Google 로그인은 계획 2절 콘솔 설정이 먼저(미착수). CI에 Node 작업은 아직 없다(계획 21절).
+- React 설정 화면(react-supabase 11절, 2026-11-12): `/app/settings`에서 회사 정보·거래처·판매/구매 단가·통화별 계좌·로고/직인을 관리한다. `frontend/src/settings/`가 화면별 폼을, SettingsPage가 조회·저장·취소·실패 상태를 맡는다. 기존 settings API를 재사용하고 `PUT /api/trade/settings/counterparties`만 추가했다(기존 counterparties 표, 소유자 범위·정규화 회사 키로 갱신). 이미지는 설정 응답의 파일 ID로 인증 다운로드해 미리 보여 주고 객체 URL을 정리한다. 설정 변경은 기존 문서/제안/발급 파일을 수정하지 않는다. 서버 키·실제 외부 API는 사용하지 않았다.
 - React API 설정: `FRONTEND_ORIGINS`(허용 출처, `Authorization` 헤더 허용), `SESSION_SAME_SITE`(기본 lax, none은 HTTPS만). 무역·설정 JSON API는 이제 `Authorization: Bearer <Supabase access token>`으로도 쓴다(react-supabase 5절, 2026-11-12): 헤더가 있으면 `app/auth/supabase.py`의 `TokenVerifier`가 `SUPABASE_URL`의 JWKS로만 검증하고(잘못된 토큰이면 쿠키 세션으로 우회하지 않고, Bearer 변경 요청은 CSRF 토큰 불필요) 검증된 UUID를 `users.supabase_uid`로 기존 정수 id에 매핑한다. `GET /api/me`가 Bearer 전용 인증 상태·프로필·Gmail 연결 진입점이고 요청 뒤 감시 갱신을 건다. 헤더가 없으면 기존 세션 쿠키+CSRF(legacy)를 그대로 쓴다. 검토 제안에 문서·회사·계좌·이미지를 고정하고 승인 파일은 비공개 Storage, 참조·해시는 DB에 보관한다(계약 16절).
 - Gmail 연결 분리(react-supabase 7절, 2026-11-12): Gmail 연결 시작/해제가 앱 로그인(legacy)과 분리됐다. `POST /api/gmail/connect`(Bearer)가 state·PKCE·내부 사용자·기대 Google subject를 서명된 세션 쿠키(10분·일회용)에 담아 동의 화면 주소를 돌려주고, `GET /auth/google/callback`은 대기 값의 내부 사용자가 있을 때만 이 흐름으로 완성해 `/app/settings?gmail=<결과>`로 안내한다(legacy 로그인 콜백과 같은 redirect URI 공유). 연결은 기존 토큰 암호화 저장·watch 등록·갱신을 재사용한다. 계정 일치 확인은 `SUPABASE_SECRET_KEY`로 Auth admin 사용자 조회에서 공급자 Google subject를 읽어 하고(비면 503), 다르면 `different_account`, 기존 행 충돌·양쪽 자료면 `account_conflict`로 거부하며 확인됐을 때만 기존 정수 ID를 보존해 연결한다. `POST /api/gmail/logout`은 앱 로그아웃 때 감시만 중지, `POST /api/gmail/disconnect`는 Google 토큰 폐기(`GoogleClient.revoke`)까지 한다. React 연결 화면은 계획 19절이 연결한다.
 - 비공개 Storage 첨부 API(react-supabase 8절, 2026-11-12): `app/files/`가 생겼다. `POST /api/files`(Bearer, multipart 한 파일씩)가 크기(5MiB)·확장자·파일 시그니처를 검증해 비공개 버킷(`SUPABASE_STORAGE_BUCKET`, 비우면 trade-files)에 `{internal_user_id}/attachments/…` key로 올리고 DB에는 `file_assets` 메타데이터만 남긴다(확장자가 가리키는 형식과 시그니처가 다르면 415로 거부). `GET /api/files/{id}`(메타)·`GET /api/files/{id}/download`(no-store·안전한 파일명·해시 대조)·`DELETE`(문서 출처로 참조 중이면 409, 기록을 먼저 지우고 객체 삭제 실패는 503)가 있고, `PUT /api/trade/{kind}/{id}/sources`가 파일 ID 목록·기대 revision 검증 뒤 새 revision·대기 검토 무효화로 출처를 연결한다(`trade_document_sources`, 과거 revision 연결 보존). 업로드 성공 뒤 SQL 실패로 남은 미참조 객체는 `uv run python -m app.files.cleanup --delete --yes`(사람 확인)으로만 정리한다(크론·큐 없음). 회사 이미지·발급 파일의 Storage 전환은 계획 9·10절.
@@ -231,7 +234,7 @@
 - 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-12 · 발급 Storage·최신 main 통합
+마지막 갱신: 2026-11-12 · React 회사·거래 기준 설정(11절)
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -244,7 +247,7 @@
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
-| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS)·`frontend/`(6절 앱) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 3절 테스트 PostgreSQL·4절 앱 DB PostgreSQL 전용(설정 거부·풀 상한·migration 스키마 경계·`app.db.copy_data` 이전 명령)·5절 Supabase 인증·사용자 매핑(pyjwt 검증·`supabase_uid` migration·`/api/me`·무역/설정 Bearer 연결)·6절 React 기본 화면·Supabase 로그인(frontend/ Vite 앱·시안 이식·/app 라우팅·인증 경계·개발 /api 프록시)·7절 Gmail 연결 분리(`app/auth/gmail.py` 연결/해제/로그아웃 Bearer API·callback 분기·계정 일치 확인·기존 정수 ID 보존 연결)·8절 비공개 Storage 첨부 API(`app/files/` Storage 호출·첨부 업로드/다운로드/삭제·문서 출처 연결·미참조 객체 정리 명령)·9절 회사 이미지·10절 발급 PDF/XLSX Storage 전환과 backfill 적용(2026-11-12). 11~21절 화면/배포 연결은 남음. 2절 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인, 환경변수 미설정. 실제 이전(22절)은 미착수 |
+| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS)·`frontend/`(6절 앱) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 3절 테스트 PostgreSQL·4절 앱 DB PostgreSQL 전용(설정 거부·풀 상한·migration 스키마 경계·`app.db.copy_data` 이전 명령)·5절 Supabase 인증·사용자 매핑(pyjwt 검증·`supabase_uid` migration·`/api/me`·무역/설정 Bearer 연결)·6절 React 기본 화면·Supabase 로그인(frontend/ Vite 앱·시안 이식·/app 라우팅·인증 경계·개발 /api 프록시)·7절 Gmail 연결 분리(`app/auth/gmail.py` 연결/해제/로그아웃 Bearer API·callback 분기·계정 일치 확인·기존 정수 ID 보존 연결)·8절 비공개 Storage 첨부 API(`app/files/` Storage 호출·첨부 업로드/다운로드/삭제·문서 출처 연결·미참조 객체 정리 명령)·9절 회사 이미지·10절 발급 PDF/XLSX Storage 전환과 backfill 적용(2026-11-12). 11절 회사·거래처·단가·계좌·이미지 설정 연결. 12~21절 화면/배포 연결은 남음. 2절 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인, 환경변수 미설정. 실제 이전(22절)은 미착수 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |

@@ -1,10 +1,11 @@
 # 프론트엔드·Supabase 전환 문서 모음
 
-요청한 React + JavaScript + Vite 화면과 Supabase Auth·PostgreSQL·비공개 Storage 전환 자료를 이 폴더에 모은다. 현재는 계획 단계이며 앱 구현·실제 DB/파일 이전은 미착수다.
+요청한 React + JavaScript + Vite 화면과 Supabase Auth·PostgreSQL·비공개 Storage 전환 자료를 이 폴더에 모은다. 현재 브랜치에는 1·3~11절 구현이 있으며, 실제 운영 DB/파일 이전은 미착수다. 단계별 구현·검증 범위는 PROGRESS.md에서 구분한다.
 
 | 문서 | 담긴 내용 |
 |---|---|
 | [PLAN.md](PLAN.md) | 현 코드 검토, 목표 구조, 폴더·패키지 최소안, 인증/파일 계약 초안, 화면 범위, 보류 사항, 22개 작업의 선행 조건·범위·완료 기준·Issue |
+| [PROGRESS.md](PROGRESS.md) | 현재 코드의 구현 범위·확인 결과·환경 설정·남은 단계 |
 | [REQUESTS.md](REQUESTS.md) | 각 단계의 새 작업에 붙여넣을 요청문. 한 작업에서 한 단계만 맡긴다 |
 
 ### 계획의 핵심
@@ -20,7 +21,7 @@
 
 - 이 계획 PR 병합 뒤 1절부터 시작한다. 관련 담당 조율과 선행 작업 병합은 각 Issue·PLAN의 조건을 따른다.
 - 1절은 공동 계약을 확정한다. 그 뒤 2절(사람의 콘솔 준비)과 3절(PostgreSQL 테스트 환경)은 독립적으로 시작할 수 있다.
-- 실제 계정 설정/키/데이터 보존 대상은 아직 미확인이다. 계획상의 기본안과 콘솔 설정 완료를 구분한다.
+- Supabase 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인을 받았으며 환경변수는 미설정이다. 실제 연결·데이터 보존 대상·운영 이전 완료를 구분한다.
 - 기존 규칙은 상위 `AGENTS.md`·`.work/RULES.md`·`.work/TASK.md`를 따른다. 이 폴더는 그 규칙을 복제하지 않는다.
 
 ### 범위를 작게 유지하는 기준
@@ -33,8 +34,8 @@
 ### 스킬과 이번 검토 기록
 
 - 요청한 React 스킬의 파생 상태·Effect 정리·구독 해제·조기 최적화 방지 원칙과 Ponytail의 기존 코드 재사용·최소 의존성 원칙을 계획에 적용했다. React 스킬 중 Server Components/Server Actions 전용 항목은 Vite SPA에 적용하지 않는다.
-- `mattpocock/skills`는 사용자 환경에 38개 설치했다. 기존 `tdd`와 충돌하는 것은 `mattpocock-tdd`로 별도 설치했고, 원본의 잘못된 YAML을 가진 `software-factory`는 설치 도구가 제외했다. 레포의 npm 의존성은 아직 추가하지 않았다.
-- React 스킬의 버전 탐지는 루트에 `package.json`이 없어 사용법 오류로 종료했다. React 앱이 생긴 뒤 `frontend/`에서 다시 확인한다.
+- `mattpocock/skills`는 사용자 환경에 38개 설치했다. 기존 `tdd`와 충돌하는 것은 `mattpocock-tdd`로 별도 설치했고, 원본의 잘못된 YAML을 가진 `software-factory`는 설치 도구가 제외했다. 현재 frontend/의 React·Vite 의존성은 버전 고정과 lockfile로 관리한다.
+- React 스킬의 버전 탐지는 루트에 `package.json`이 없어 사용법 오류로 종료했다. 이후 frontend/ 탐지에서 React 19.3.1과 스킬 대상 버전 일치를 확인했다.
 - 문서 폴더 구성은 사용자의 추가 요청을 반영했다. 레포의 기존 공통 계약·현재 흐름·파일 지도는 원래 위치에 두고 이 폴더를 연결한다.
 
 ### 검증과 제한

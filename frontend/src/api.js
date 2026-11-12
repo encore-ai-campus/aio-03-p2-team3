@@ -11,28 +11,32 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch(path, { method = "GET", token, body, signal } = {}) {
+export async function apiFetch(path, { method = "GET", token, body, signal, responseType = "json" } = {}) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
-  if (body !== undefined) headers["Content-Type"] = "application/json"
+  const isForm = body instanceof FormData
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json"
   let response
   try {
     response = await fetch(`/api${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       signal,
     })
   } catch (error) {
     if (error.name === "AbortError") throw error
     throw new ApiError(0, "network", "서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.")
   }
+  if (response.ok && responseType === "blob") return response.blob()
   const data = await response.json().catch(() => null)
   if (!response.ok) {
     throw new ApiError(
       response.status,
       data?.error?.code ?? String(response.status),
-      data?.error?.message ?? `요청이 실패했습니다(${response.status}).`,
+      data?.error?.message ?? (Array.isArray(data?.detail)
+        ? data.detail.map((issue) => issue.msg.replace(/^Value error, /, "")).join(" / ")
+        : typeof data?.detail === "string" ? data.detail : `요청이 실패했습니다(${response.status}).`),
     )
   }
   return data

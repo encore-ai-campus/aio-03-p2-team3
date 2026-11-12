@@ -39,8 +39,11 @@ class SQLSettings:
                     "prices": [{"id": price.id, "unit_price": price.unit_price_text,
                                 **{key: getattr(price, key) for key in ("item_name", "role", "currency", "party_key",
                                    "unit", "price_basis", "product_code", "capacity")}} for price in prices],
+                    "counterparties": counterparty_profiles(session, self.user_id),
                     "branding": {"has_logo": bool(branding and branding.logo_file_id),
-                                 "has_seal": bool(branding and branding.seal_file_id)}}
+                                 "has_seal": bool(branding and branding.seal_file_id),
+                                 "logo_file_id": branding.logo_file_id if branding else None,
+                                 "seal_file_id": branding.seal_file_id if branding else None}}
 
     def save_company(self, values):
         with user_lock(self.database, self.user_id), self.database.session() as session:
@@ -73,6 +76,18 @@ class SQLSettings:
                 *[getattr(PriceListItem, key) == values[key] for key in ("item_name", "role", "currency", "party_key")]))
             if row is None:
                 row = PriceListItem(user_id=self.user_id, item_name=values["item_name"])
+                session.add(row)
+            for key, value in values.items():
+                setattr(row, key, value)
+        return self.read()
+
+    def save_counterparty(self, values):
+        with user_lock(self.database, self.user_id), self.database.session() as session:
+            self._user(session)
+            row = session.scalar(select(Counterparty).where(
+                Counterparty.user_id == self.user_id, Counterparty.company_key == values["company_key"]))
+            if row is None:
+                row = Counterparty(user_id=self.user_id, company_key=values["company_key"])
                 session.add(row)
             for key, value in values.items():
                 setattr(row, key, value)

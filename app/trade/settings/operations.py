@@ -5,7 +5,7 @@ import zlib
 from app.trade.common.models import DocumentError
 from app.trade.common.counterparties import name_key
 from app.trade.common.pdf import _read_png_rgb
-from app.trade.settings.models import BankInput, CompanyInput, PriceInput, SettingsRepository
+from app.trade.settings.models import BankInput, CompanyInput, CounterpartyInput, PriceInput, SettingsRepository
 
 MAX_BRANDING_BYTES = 2 * 1024 * 1024
 
@@ -29,6 +29,15 @@ def save_price(command: PriceInput, *, repository: SettingsRepository) -> dict:
     values["party_key"] = name_key(command.party_key)
     values["unit_price_text"] = values.pop("unit_price")
     return repository.save_price(values)
+
+
+def save_counterparty(command: CounterpartyInput, *, repository: SettingsRepository) -> dict:
+    values = command.model_dump()
+    values["company_key"] = name_key(command.legal_name)
+    if not values["company_key"]:
+        raise DocumentError("COMPANY_NAME_REQUIRED", "거래처를 구분할 수 있는 회사명을 입력하세요", 422)
+    values["aliases"] = list(dict.fromkeys(command.aliases))
+    return repository.save_counterparty(values)
 
 
 def save_branding(kind: str, content: bytes, *, repository: SettingsRepository, storage) -> dict:
