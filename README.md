@@ -37,7 +37,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
 - 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 실제 Google 로그인에는 Google Cloud 설정(계획 5절)이 필요하고, 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py`로 실행한다.
 - `DATABASE_URL`을 비우면 `app/db/local.sqlite3`에 로컬 DB를 만든다(커밋 제외). Postgres는 `postgres://`·`postgresql://` 주소도 `psycopg` 드라이버로 연결한다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신한다. SQLite의 기존 단가표 제약 변경은 테이블 복사 방식이고 Postgres는 트랜잭션 안에서 변경한다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 메모리 SQLite와 이전 스키마에서의 갱신을 확인한다.
-- DB 엔진·세션 팩터리, 컴파일한 그래프, 설정한 LLM 클라이언트를 재사용한다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
+- DB 엔진·세션 팩터리와 컴파일한 그래프를 재사용한다. LLM은 호출 시 해당 사용자의 현재 키로 구성하며 공용 클라이언트를 캐시하지 않는다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
 - HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
 - 패키지 추가: `uv add <패키지>==<버전>`(개발용은 `uv add --dev …`). 버전은 `pip index versions <패키지>`로 확인하고, 바뀐 `pyproject.toml`·`uv.lock`을 함께 PR에 올린다.
 
@@ -55,11 +55,11 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 ## LLM·외부 API와 키 발급
 
-2026-11-11 요청에 따라 모든 LLM 호출을 OpenAI Responses API로 통일했다. 근거와 자세한 경로는 `.work/design/api-choice.md`. 환경변수 이름의 기준은 `docs/CONTRACT.md` 11절, 이름과 설명만 담은 설정 틀은 `.env.example`이다. 키는 로컬 `.env`와 Render 환경변수에 둔다. Codex 환경에는 키를 넣지 않는다(테스트는 가짜 응답, `docs/CHATGPT_GUIDE.md`). 콘솔 설정과 실제 연동은 별도 작업에서 진행한다.
+모든 LLM 호출은 OpenAI Responses API를 사용한다. 2026-11-12부터 OpenAI 키는 각 사용자가 Google 로그인 후 `/settings`의 **내 OpenAI API 키**에서 등록·교체·삭제한다. Gmail 자동 처리(분석·답장·요약·성찰)와 PI·PO·CI·PL AI 추출은 해당 사용자의 키만 쓰며, 키가 없거나 암호문을 읽지 못하면 API 호출 전에 차단한다. 로컬도 같은 방식이며 `.env`·Render의 `OPENAI_API_KEY`는 사용하지 않는다. 근거는 `.work/design/api-choice.md`, 환경변수 기준은 `docs/CONTRACT.md` 11절·`.env.example`이다. Codex 검증은 가짜 응답만 사용한다.
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|
-| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | `OPENAI_API_KEY` · `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`) |
+| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 사용자별 `/settings` 등록. 모델만 `OPENAI_MODEL`로 설정(비우면 `gpt-6-luna`) |
 | Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
 | Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
 | Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | Calendar API와 사용자별 Google OAuth를 사용. 일정 도구 작업 때 연결 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
@@ -69,7 +69,7 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 | 환경변수 | 설명 |
 |---|---|
 | `DATABASE_URL` | Postgres 접속 주소. 로컬에서 비우면 SQLite 파일 사용 |
-| `TOKEN_ENCRYPTION_KEY` | Google 토큰 암호화 키 |
+| `TOKEN_ENCRYPTION_KEY` | Google 토큰·사용자 OpenAI 키 암호화 키. 기존 값을 유지한다 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 |
 | `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값. 설정할 때 `true` 또는 `false` 지정 |
@@ -85,8 +85,8 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 전환 적용 순서:
 
-1. 로컬 `.env`와 Render에 `OPENAI_API_KEY`를 먼저 등록한다. 다른 모델을 쓸 때만 `OPENAI_MODEL`을 지정한다. 기존 Google OAuth·Gmail·Pub/Sub 값은 그대로 둔다.
-2. PR 병합 후 Render 자동 배포(`uv sync --locked`)가 끝나면 `/healthz`, 테스트용 Gmail의 분석·답장, 무역 문서 추출을 확인한다. 실제 API 시험은 로컬·Render에서 가상 메일로 한다.
+1. 공용 `.env`·Render의 `OPENAI_API_KEY`를 제거한다. 다른 모델을 쓸 때만 `OPENAI_MODEL`을 지정한다. 기존 `TOKEN_ENCRYPTION_KEY`·Google OAuth·Gmail·Pub/Sub 값은 유지한다.
+2. DB 백업 후 PR 병합·Render 자동 배포(`uv sync --locked`)가 끝나면 각 사용자가 로그인해 `/settings`에 본인 키를 등록한다. 저장은 API를 호출하지 않으며 유효성은 실제 AI 요청 시 확인한다. 가상 메일·무역 문서로 본인 프로젝트의 사용량을 확인한다. 미등록 상태에서 실패한 메일은 자동 재처리하지 않는다. 키 교체·삭제는 다음 AI 호출부터 적용되며 이미 시작된 작업은 취소되지 않는다.
 3. 전환 확인 후 기존 `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`를 로컬·Render에서 제거한다. 앱은 이 값을 더 이상 읽지 않는다. 이전 Gemini 실행 기록과 응답 시간은 과거 결과이며 OpenAI 성능은 다시 측정한다.
 
 ## 팀원

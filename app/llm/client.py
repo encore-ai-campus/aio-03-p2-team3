@@ -9,7 +9,7 @@ LangChain이 감싼 SDK 오류는 __cause__에서 원래 HTTP 코드를 읽는�
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import lru_cache
+from dataclasses import replace
 from time import perf_counter, sleep
 from typing import Literal
 
@@ -24,6 +24,7 @@ from app.prompts import Prompt
 from app.runlog.logger import current_event
 
 _override = ContextVar("llm_backend", default=None)
+_user_key = ContextVar("llm_user_key", default=None)
 # 무역 추출에서 사용하던 기본 모델을 모든 LLM 호출에 사용한다. OPENAI_MODEL로 덮어쓴다.
 DEFAULT_MODEL = "gpt-6-luna"
 RESPONSES_DEFAULT_MODEL = DEFAULT_MODEL
@@ -54,10 +55,15 @@ def responses_model_name(settings: Settings | None = None) -> str:
 
 
 def get_backend(settings: Settings | None = None):
-    return _backend_for_settings(settings or get_settings())
+    binding = _user_key.get()
+    if binding is None:
+        raise OpenAIKeyError()
+    provider, configured = binding
+    # 매 호출마다 현재 사용자의 저장값을 다시 읽는다. 서버의 키와 전역 클라이언트는 사용하지 않는다.
+    key = provider()
+    return _backend_for_settings(replace(settings or configured or get_settings(), openai_api_key=key))
 
 
-@lru_cache(maxsize=1)
 def _backend_for_settings(settings: Settings):
     if not settings.openai_api_key.strip():
         raise ValueError("OPENAI_API_KEY 설정이 필요합니다")
@@ -68,6 +74,25 @@ def _backend_for_settings(settings: Settings):
         http_socket_options=(),
         max_retries=0, timeout=LIMITS["LLM_TIMEOUT_SECONDS"],
     )
+
+
+class OpenAIKeyError(ValueError):
+    """키 원문이나 SDK 오류를 담지 않는 사용자 키 오류."""
+
+    def __init__(self, code="OPENAI_KEY_REQUIRED", message="설정에서 본인의 OpenAI API 키를 등록해 주세요.",
+                 status_code=409):
+        super().__init__(message)
+        self.code, self.message, self.status_code = code, message, status_code
+
+
+@contextmanager
+def use_user_key(provider, settings: Settings | None = None):
+    """HTTP 요청·백그라운드 실행별 키 조회 함수만 보관한다. 키는 상태·로그에 넣지 않는다."""
+    token = _user_key.set((provider, settings))
+    try:
+        yield
+    finally:
+        _user_key.reset(token)
 
 
 def get_responses_backend(settings: Settings | None = None):
@@ -174,6 +199,9 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict,
         if chosen is None:
             chosen = get_backend()
         structured = structured_output(chosen, schema)
+    except OpenAIKeyError as error:
+        current_event("error", detail={"kind": error.code.lower(), "message": error.message})
+        return finish(False, error_kind="invalid_input", error=error)
     except Exception as error:
         return finish(False, error_kind="internal", error=error)
     while True:

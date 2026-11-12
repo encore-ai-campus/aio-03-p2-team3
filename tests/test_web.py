@@ -39,19 +39,14 @@ def test_every_template_compiles():
         templates.get_template(name)
 
 
-def test_app_initializes_llm_from_openai_settings(monkeypatch):
-    from app import main
-
+def test_app_does_not_initialize_a_shared_llm_even_with_server_key(monkeypatch):
+    from app.llm import client as llm
     settings = Settings(database_url="sqlite://", openai_api_key="fake-openai-key", openai_model="gpt-fake")
-    received = []
-    sentinel = object()
+    def backend(*args, **kwargs):
+        raise AssertionError("서버 공용 키를 사용하면 안 됩니다")
 
-    def backend(config):
-        received.append(config)
-        return sentinel
-
-    monkeypatch.setattr(main, "get_backend", backend)
+    monkeypatch.setattr(llm, "_backend_for_settings", backend)
     app = create_app(settings)
     with TestClient(app) as client:
         assert client.get("/healthz").status_code == 200
-        assert app.state.llm is sentinel and received == [settings]
+        assert app.state.llm is None

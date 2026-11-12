@@ -1,5 +1,7 @@
 # React 무역 문서 API
 
+AI 추출은 Google 로그인 후 `/settings`에 등록한 본인의 OpenAI 키만 사용한다. 서버 환경변수 키로 대체하지 않는다. 키가 없거나 읽을 수 없으면 `/extract`는 HTTP 409와 `OPENAI_KEY_REQUIRED` 또는 `OPENAI_KEY_UNAVAILABLE`를 반환한다. 수동 작성·검토·파일 발급은 AI 키 없이 사용할 수 있다.
+
 React 화면·마스터 챗봇을 포함하지 않는 FastAPI 백엔드다. 작성/수정은 일반 업무 함수, 문장 추출은 문서별 LangChain 구조화 호출, 승인·파일 저장은 공통 검토 업무가 처리한다. 승인 API가 메일을 발송하지 않는다.
 
 ## 폴더와 책임

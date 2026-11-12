@@ -72,6 +72,12 @@ class GoogleToken(Base, Updated):
     scopes: Mapped[list] = mapped_column(JSON_VALUE, default=list)
 
 
+class UserOpenAIKey(Base, Updated):
+    __tablename__ = "user_openai_keys"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    api_key_enc: Mapped[str] = mapped_column(Text)
+
+
 class GmailWatch(Base):
     __tablename__ = "gmail_watches"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)

@@ -141,7 +141,8 @@ def _claim_message(access, user_id, email, history_id, reason):
 
 
 def _run_message(access, user_id, email, graph):
-    result = start_run(user_id=user_id, email=email, mode="live", database=access.database, graph=graph)
+    result = start_run(user_id=user_id, email=email, mode="live", database=access.database, graph=graph,
+                       key_cipher=access.cipher)
     with access.database.session() as session:
         message = session.scalar(select(ProcessedMessage).where(
             ProcessedMessage.user_id == user_id,

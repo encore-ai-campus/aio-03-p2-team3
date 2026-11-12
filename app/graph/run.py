@@ -9,10 +9,11 @@ from app.db.models import Run, User, utcnow
 from app.graph.build import build_graph
 from app.graph.state import EmailMessage, initial_state
 from app.runlog.logger import log_event, recording
+from app.services.openai_keys import user_openai
 
 
 def start_run(*, user_id: int, email: EmailMessage, mode="live", reflection_enabled=None,
-              scenario=None, database: Database | None = None, graph=None):
+              scenario=None, database: Database | None = None, graph=None, key_cipher=None):
     if mode not in {"live", "test"}:
         raise ValueError("mode는 live 또는 test여야 합니다")
     database = database or get_database()
@@ -40,9 +41,13 @@ def start_run(*, user_id: int, email: EmailMessage, mode="live", reflection_enab
         })
         log_event(state["run_id"], "route", node="__start__", detail={"to": "load_memory", "reason": "fixed"})
         try:
-            result = (graph if graph is not None else get_graph()).invoke(
-                state, config={"recursion_limit": 64},
-            )
+            with user_openai(database, user_id, cipher=key_cipher) as ai:
+                result = (graph if graph is not None else get_graph()).invoke(
+                    state, config={"recursion_limit": 64},
+                )
+            if ai.issue is not None:
+                result.update(end_reason="failed", step_status="failed", needs_review=True,
+                              notice="openai_key_required", candidates=[])
             if result["end_reason"] is None:
                 result["end_reason"] = "ignored" if result["intent"] == "ignore" else "failed"
         except Exception as error:

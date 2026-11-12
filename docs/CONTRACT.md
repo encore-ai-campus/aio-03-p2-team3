@@ -9,7 +9,7 @@
 ## 1. 구조와 폴더
 - 서버 하나(FastAPI) 안에 화면(Jinja2 템플릿 + HTMX), LangGraph 그래프, 도구, DB를 둔다. 도구는 같은 서버 안의 LangGraph 도구 함수이고, 그 안에서 실제 외부 API(OpenAI·Gmail)를 부른다. 별도 서버로 떼지 않는다(왕복 지연이 늘어 속도 요구와 부딪침). [Request]
 - 알림 수신 경로는 Pub/Sub 요청을 확인하고 바로 응답한 뒤, 같은 프로세스의 백그라운드 작업(FastAPI `BackgroundTasks`)에서 그래프를 돌린다. 결과는 DB에 저장하고 화면은 저장된 결과만 읽는다. [Request · Claude proposal]
-- DB 연결, LLM 클라이언트, Gmail 클라이언트 생성 준비물, 컴파일한 그래프는 서버가 뜰 때 한 번 만들어 재사용한다(속도). [Request]
+- DB 연결, Gmail 클라이언트 생성 준비물, 컴파일한 그래프는 서버가 뜰 때 한 번 만들어 재사용한다. LLM 클라이언트는 사용자 키로 호출 시 구성한다. [Request]
 - 파이썬 패키지 이름은 `app`이다. 테스트는 `tests/`에 둔다. [Claude proposal]
 
 ```text
@@ -121,8 +121,8 @@ tests/
 | `reflection_retries` | 성찰 재실행 횟수 합 | `int` | `0` | `reflect` | `reflect` |
 | `reflection_retries_by_type` | 오류 유형별 성찰 재실행 횟수 | `dict[str,int]` | `{}` | `reflect` | `reflect` |
 | `errors` | 오류 기록(쌓기) | `list[AgentError]` | `[]` | `finish_failed`, `save_pending`, 실행 기록기 | 모든 노드 |
-| `needs_review` | '확인 필요' 표시(대체 경로로 끝남) | `bool` | `False` | `save_pending`, 화면 | 한도 오류 노드, `reflect` |
-| `notice` | 화면 안내 종류 | `Literal["rate_limit","reflection_limit"] \| None` | `None` | `save_pending`, 화면 | 한도 오류 노드, `reflect` |
+| `needs_review` | '확인 필요' 표시(대체 경로로 끝남) | `bool` | `False` | `save_pending`, 화면 | 한도 오류 노드, `reflect`, `start_run` |
+| `notice` | 화면 안내 종류 | `Literal["rate_limit","reflection_limit","openai_key_required"] \| None` | `None` | `save_pending`, 화면 | 한도 오류 노드, `reflect`, `start_run` |
 | `end_reason` | 종료 이유(3.3절) | `Literal["awaiting_approval","followup_question","ignored","failed"] \| None` | `None` | `start_run`, 실행 기록 | `analyze_email`(ignored), `save_pending`, `finish_failed` |
 
 - '후보 노드'는 `draft_replies`·`draft_followup`이다. 위 자료 형식(`EmailMessage` 등)은 4.3절에 정의한다. [Claude proposal]
@@ -371,7 +371,10 @@ class AgentError(TypedDict):
 - 새 키가 생기면 `DealTerms`와 `FIELD_LABELS`(같은 파일)에 함께 더한다(공통 부분 변경). [Claude proposal]
 
 ## 6. LLM 호출 (`app/llm/client.py`)
-- 모델: OpenAI Responses API `gpt-6-luna`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `OPENAI_MODEL`로 덮어씀), 패키지 `langchain-openai`, 키 `OPENAI_API_KEY`. 2026-11-11 요청에 따라 메일·요약·성찰·독립 무역 문서 추출까지 모두 전환했다. 기본 모델은 앞서 채택한 무역 추출 모델을 유지한다. 실제 개인정보를 넣지 않는다. [Request]
+- 사용자별 키(2026-11-12): `user_openai_keys`는 `user_id` PK/FK, `api_key_enc` Text, `updated_at` UTC를 저장한다. `TOKEN_ENCRYPTION_KEY`의 Fernet으로 암호화하며 평문을 화면/세션/상태/로그에 넣지 않는다. `GET /settings`는 등록 여부·CSRF 토큰만 전달한다. `POST /settings/openai-key`(api_key, csrf_token)와 `/settings/openai-key/delete`(csrf_token)는 로그인 사용자 행만 변경하며 요청의 user_id를 받지 않는다. 저장 시 실제 API를 호출하지 않는다.
+- 실행 격리: `start_run()`과 문서 `/extract`가 사용자 ID·DB·암호화 도구를 `ContextVar`로 묶는다. `get_backend()`는 매 논리 호출마다 현재 암호문을 다시 읽고 사용자 키로만 클라이언트를 만든다. 사용자 범위 밖, 키 누락, 암호화 설정 누락, 복호화 실패는 API 전송 없이 차단하며 공용 클라이언트/키 캐시를 두지 않는다. 메일 자동 처리도 로그인 세션 없이 메일함 소유자 키를 사용한다. 테스트의 명시적 가짜 백엔드 주입은 유지한다.
+- 키 오류: 문서 추출은 `OPENAI_KEY_REQUIRED`/`OPENAI_KEY_UNAVAILABLE`와 HTTP 409를 반환한다. 메일 실행은 `end_reason=failed`, `notice=openai_key_required`로 끝나고 `processed_messages`에 오류 상태를 남긴다. 기존 notice 값에 `openai_key_required`를 추가하며 그래프 노드/전이는 유지한다. 키 등록 전 실패한 메일은 자동 재처리하지 않는다. 교체·삭제는 다음 논리 호출부터 적용되며 이미 시작한 호출·재시도는 취소하지 않는다.
+- 모델: OpenAI Responses API `gpt-6-luna`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `OPENAI_MODEL`로 덮어씀), 패키지 `langchain-openai`, 키는 사용자별 설정 등록값이며 서버 `OPENAI_API_KEY`로 대체하지 않는다. 2026-11-11 요청에 따라 메일·요약·성찰·독립 무역 문서 추출까지 모두 전환했다. 기본 모델은 앞서 채택한 무역 추출 모델을 유지한다. 실제 개인정보를 넣지 않는다. [Request]
 - 호출은 모두 `call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) -> LLMResult` 하나로 한다. 실제 백엔드는 `ChatOpenAI(use_responses_api=True, max_retries=0, timeout=20)`이고, `structured_output()`이 `with_structured_output(schema, method="function_calling", strict=False)`를 적용한다. 기존 스키마의 기본값·자유 키 dict를 유지하면서 반환값은 Pydantic으로 검증한다. 대역은 기존 `with_structured_output(schema)` 인터페이스를 유지한다. [Request · Claude proposal]
 - `LLMResult`: `ok`, `value`(schema 객체), `error_kind`(`rate_limit`/`network`/`invalid_output`/`invalid_input`/`internal`), `attempts`, `prompt_version`, `duration_ms`. 노드는 이것을 `ToolResult`로 옮긴다. [Claude proposal]
 - 오류 구분: OpenAI SDK HTTP 429는 `rate_limit`(재시도 안 함) · 제한 시간 초과·연결 오류·HTTP 5xx는 `network`(`LLM_MAX_RETRIES`까지, 최초 포함 최대 3회·1초→2초 대기) · 스키마 검증 실패는 `invalid_output`(`LLM_INVALID_OUTPUT_RETRIES`까지 별도 1회) · 그 밖의 HTTP 4xx는 `invalid_input`(재시도 안 함). SDK 자동 재시도는 끄며 오류 원문·응답·키 대신 HTTP 코드나 예외 종류만 기록한다. [Request · Claude proposal]
@@ -387,6 +390,7 @@ class AgentError(TypedDict):
 | 표 | 뜻 | 주요 열 | 쓰는 하위 작업 |
 |---|---|---|---|
 | `users` | 사용자 | `id` PK · `google_sub` 유일 · `email` · `display_name` · `reflection_enabled`(bool, 기본은 환경변수) · `created_at` · `last_login_at` | 6, 11, 12 |
+| `user_openai_keys` | 사용자별 AI 키 | `user_id` PK/FK · `api_key_enc`(Fernet 암호문) · `updated_at` | 사용자별 키 |
 | `google_tokens` | 암호화한 Google 토큰 | `user_id` PK·FK · `refresh_token_enc` · `access_token_enc` · `expires_at` · `scopes` · `updated_at` | 6, 7, 9 |
 | `gmail_watches` | 감시 등록 | `user_id` PK·FK · `topic` · `history_id`(마지막 처리 historyId) · `expiration` · `last_renewed_at` · `status`(`active`/`stopped`/`error`) · `last_error` | 6, 7 |
 | `processed_messages` | 처리한 메일 | `id` PK · `user_id` · `gmail_message_id` · (`user_id`,`gmail_message_id`) 유일 · `thread_id` · `history_id` · `status`(`processing`/`awaiting_approval`/`sent`/`ignored`/`error`) · `skip_reason` · `notice` · `run_id` · `received_at` · `created_at` | 7, 9 |
@@ -486,7 +490,7 @@ class AgentError(TypedDict):
 ## 11. 환경변수 이름 (값은 `.env`와 Render 환경변수에만 둔다)
 | 이름 | 뜻 | 쓰는 하위 작업 |
 |---|---|---|
-| `OPENAI_API_KEY` | OpenAI API 키. 메일·요약·성찰·무역 문서 추출 공통 | 2, 8, 10, 12, 13, 무역 문서 API |
+| `OPENAI_API_KEY` | 하위 호환용 이름. AI 호출에 사용하지 않음. 키는 사용자별 설정에서 등록 | 없음 |
 | `OPENAI_MODEL` | 쓸 OpenAI 모델 이름(비우면 `gpt-6-luna`) | 모든 LLM 호출 |
 | `GOOGLE_OAUTH_CLIENT_ID` | OAuth 클라이언트 ID | 6 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 클라이언트 비밀번호 | 6 |
@@ -496,14 +500,14 @@ class AgentError(TypedDict):
 | `PUBSUB_PUSH_SERVICE_ACCOUNT` | 푸시 OIDC 토큰의 서비스 계정 이메일(추천 방식) | 7 |
 | `PUBSUB_PUSH_TOKEN` | 대체 방식의 비밀 토큰(대체 방식을 쓸 때만) | 7 |
 | `DATABASE_URL` | Postgres 접속 주소(로컬은 비우면 SQLite 파일) | 2, 4 |
-| `TOKEN_ENCRYPTION_KEY` | Google 토큰 암호화 키 | 6 |
+| `TOKEN_ENCRYPTION_KEY` | Google 토큰·사용자별 OpenAI 키 암호화 키 | 6, 사용자별 키 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 | 6 |
 | `APP_BASE_URL` | 서비스 주소(링크·리디렉션 확인용) | 6, 7 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값(`true`/`false`) | 12 |
 
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
-- 2026-11-11 전환: `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다. OpenAI 키를 로컬·Render에 먼저 등록하고 병합·자동 배포 뒤 실제 연결을 확인한 다음 예전 변수를 제거한다. Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. OpenAI API 결제·모델 권한은 사용자 계정에서 확인하고 Codex에는 키를 넣지 않는다.
+- 2026-11-12: 서버의 `OPENAI_API_KEY`는 사용하지 않으며 각 사용자가 로그인 후 키를 등록한다. 기존 `TOKEN_ENCRYPTION_KEY`·Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. 암호화 키를 바꾸면 Google 재로그인과 OpenAI 키 재등록이 필요하다. API 결제·모델 권한은 각 키의 프로젝트에서 확인한다. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`도 사용하지 않는다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)
