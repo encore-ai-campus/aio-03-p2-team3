@@ -33,6 +33,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 ```
 
 - 기본 화면: `http://127.0.0.1:8000/`(`/inbox`로 이동). 상태 확인: `http://127.0.0.1:8000/healthz` → `{"status":"ok"}`. 화면·상태 확인에는 API 키가 필요 없다.
+- 위 Uvicorn 명령은 기본 `AI_RUNTIME=server`의 사용자별 DB 키 방식이다. 개인 `.env` 키를 쓰려면 아래 전용 로컬 실행 절차를 따른다.
 - Render 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
 - 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 실제 Google 로그인에는 Google Cloud 설정(계획 5절)이 필요하고, 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py`로 실행한다.
@@ -55,11 +56,21 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 ## LLM·외부 API와 키 발급
 
-모든 LLM 호출은 OpenAI Responses API를 사용한다. 2026-11-12부터 OpenAI 키는 각 사용자가 Google 로그인 후 `/settings`의 **내 OpenAI API 키**에서 등록·교체·삭제한다. Gmail 자동 처리(분석·답장·요약·성찰)와 PI·PO·CI·PL AI 추출은 해당 사용자의 키만 쓰며, 키가 없거나 암호문을 읽지 못하면 API 호출 전에 차단한다. 로컬도 같은 방식이며 `.env`·Render의 `OPENAI_API_KEY`는 사용하지 않는다. 근거는 `.work/design/api-choice.md`, 환경변수 기준은 `docs/CONTRACT.md` 11절·`.env.example`이다. Codex 검증은 가짜 응답만 사용한다.
+모든 LLM 호출은 OpenAI Responses API를 사용한다. 공용 서버(기본 `AI_RUNTIME=server`)에서는 각 사용자가 Google 로그인 후 `/settings`의 **내 OpenAI API 키**에서 등록·교체·삭제한다. Gmail 자동 처리(분석·답장·요약·성찰)와 PI·PO·CI·PL AI 추출은 해당 사용자의 DB 키만 쓰며, 키가 없거나 암호문을 읽지 못하면 API 호출 전에 차단한다. 공용 `.env`·Render의 `OPENAI_API_KEY`로 대체하지 않는다. 개인 PC의 전용 로컬 실행에서만 지정 소유자의 `.env` 키를 지원한다. 근거는 `.work/design/api-choice.md`, 실행 계약은 `docs/CONTRACT.md` 6절·11절·`.env.example`이다. Codex 검증은 가짜 응답만 사용한다.
+
+### 개인 PC의 .env 키로 실행
+
+1. 레포 루트의 개인 `.env`에 `AI_RUNTIME=local`을 지정한다. 처음에는 `LOCAL_OWNER_GOOGLE_SUB`와 `OPENAI_API_KEY`를 비워도 화면을 열 수 있다. Google 로그인용 로컬 OAuth 콜백·`SESSION_SECRET`·`TOKEN_ENCRYPTION_KEY` 등은 기존 방식으로 준비한다.
+2. `uv run python -m app.local`을 실행하고 `http://127.0.0.1:8000`에서 본인 Google 계정으로 로그인한다. `/settings`의 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 개인 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정한다. 최초 로그인 사용자를 자동 소유자로 지정하지 않는다.
+3. 개인 `.env`의 `OPENAI_API_KEY`에 본인 키를 넣고 앱을 다시 시작한다. `/settings`에서 **로컬 .env 키 사용 가능**을 확인한다. 다른 계정·소유자 미지정·키 누락이면 AI를 차단한다. DB 사용자 키는 읽거나 저장하지 않으며 키·해시·일부 문자열도 화면에 표시하지 않는다. 키 변경도 `.env` 수정 후 재시작한다.
+
+전용 명령은 `127.0.0.1`에만 바인딩하며 `--port`만 지원한다(포트를 바꾸면 OAuth 콜백도 맞춘다). 공개 바인딩·리로드 옵션은 없다. 일반 Uvicorn 명령이나 Render·`PORT`가 지정된 공용 실행에서 `AI_RUNTIME=local`이면 시작을 거부한다. Host·`APP_BASE_URL`을 로컬 주소로 바꿔도 허용하지 않는다. 로컬 서비스를 외부 프록시·터널로 공개하지 않는다.
+
+**현재 구현 범위:** 로컬 키 선택·소유자 제한·설정 안내와 후속 작업의 실행 계약까지다. 개인 PC Gmail 연결·새 메일 수집은 계획 2절에서 별도로 구현한다. 현재 로그인/감시는 기존 동작이므로 공용 Pub/Sub 설정을 로컬용으로 바꾸지 않는다. Render 화면에서 개인 PC를 연결해 AI를 실행하는 장치 연결·작업 큐·개인 실행 프로그램은 아직 없다(계획 3·4절). 실제 키·Google 식별자는 채팅·Codex·Issue·PR·레포에 넣지 않는다.
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|
-| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 사용자별 `/settings` 등록. 모델만 `OPENAI_MODEL`로 설정(비우면 `gpt-6-luna`) |
+| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 서버: 사용자별 `/settings` 등록. 전용 로컬: `AI_RUNTIME=local`·`LOCAL_OWNER_GOOGLE_SUB`·`OPENAI_API_KEY`. 모델은 `OPENAI_MODEL`(비우면 `gpt-6-luna`) |
 | Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
 | Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
 | Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | Calendar API와 사용자별 Google OAuth를 사용. 일정 도구 작업 때 연결 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |

@@ -7,8 +7,13 @@
 <div class="intro">{{ status_badge('받은 메일') }}<h1>메일에서 답장과 견적까지</h1><p class="muted">받은 메일을 확인하고, 보낼 답장을 골라 보세요.</p></div>
 {% if user %}
 {% if not openai_registered %}
+{% if local_mode %}
+{{ banner('로컬 AI를 사용할 수 없습니다. 본인 .env 키와 Google 소유자 설정을 확인해 주세요.') }}
+<p><a href="/settings#openai-key">로컬 .env 키 설정 확인</a></p>
+{% else %}
 {{ banner('본인의 OpenAI API 키가 없어 AI 자동 처리가 차단됩니다. 설정에서 키를 등록해 주세요.') }}
 <p><a href="/settings#openai-key">내 OpenAI API 키 등록하기</a></p>
+{% endif %}
 {% endif %}
 {% call card('연결된 Gmail') %}
 <p><strong>{{ user.email }}</strong> {{ status_badge(status.label) }}</p>

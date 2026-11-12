@@ -276,10 +276,12 @@ def test_openai_backend_requires_key_without_contacting_sdk(monkeypatch, key):
         client._backend_for_settings(Settings(openai_api_key=key))
 
 
-def test_openai_settings_load_env_and_ignore_previous_provider(monkeypatch):
+@pytest.mark.parametrize("runtime", ["server", "local"])
+def test_openai_settings_load_env_and_ignore_previous_provider(monkeypatch, runtime):
     from app import config
     monkeypatch.setattr(config, "load_dotenv", lambda: None)
     monkeypatch.setenv("OPENAI_API_KEY", "fake-openai-key")
+    monkeypatch.setenv("AI_RUNTIME", runtime)
     monkeypatch.setenv("OPENAI_MODEL", "gpt-fake")
     monkeypatch.setenv("GEMINI_API_KEY", "unused-fake-key")
     monkeypatch.setenv("GEMINI_MODEL", "unused-fake-model")
@@ -287,7 +289,8 @@ def test_openai_settings_load_env_and_ignore_previous_provider(monkeypatch):
     config.get_settings.cache_clear()
     try:
         settings = config.get_settings()
-        assert settings.openai_api_key == "fake-openai-key" and settings.openai_model == "gpt-fake"
+        assert settings.openai_api_key == ("fake-openai-key" if runtime == "local" else "")
+        assert settings.openai_model == "gpt-fake"
         assert not hasattr(settings, "gemini_api_key") and not hasattr(settings, "trade_extract_backend")
         assert "fake-openai-key" not in repr(settings)
     finally:

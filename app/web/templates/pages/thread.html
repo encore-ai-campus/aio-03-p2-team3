@@ -20,7 +20,7 @@
 {{ banner('답장 후보를 만드는 중입니다. 준비되면 자동으로 보여 드립니다.', 'muted') }}
 {% elif entry.status == 'error' %}
 {% if entry.key_required %}
-{{ banner('본인 OpenAI API 키를 사용할 수 없어 AI 처리를 차단했습니다. 설정에서 키를 등록하거나 다시 저장해 주세요.') }}
+{{ banner('본인 OpenAI API 키를 사용할 수 없어 AI 처리를 차단했습니다. 설정에서 키 사용 상태를 확인해 주세요.') }}
 <p><a href="/settings#openai-key">내 OpenAI API 키 설정</a></p>
 {% else %}
 {{ banner('후보를 만들지 못했습니다.') }}

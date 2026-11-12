@@ -8,9 +8,10 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.clients.gmail import GoogleClient
-from app.config import Settings, get_settings
+from app.config import Settings, get_settings, validate_runtime
 from app.db.engine import get_database
 from app.graph.run import get_graph
 from app.services.auth import GoogleAccess, make_cipher
@@ -31,6 +32,7 @@ SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     """google: Google 호출 객체. 비우면 실제 `GoogleClient`, 테스트는 가짜를 넣는다."""
     config = settings or get_settings()
+    validate_runtime(config)
     same_site = config.session_same_site or "lax"
     if same_site not in {"lax", "strict", "none"}:
         raise ValueError("SESSION_SAME_SITE는 lax·strict·none 중 하나여야 합니다")
@@ -60,6 +62,8 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
             database.close()
 
     app = FastAPI(title="Gmail 견적 도우미", lifespan=lifespan)
+    if config.ai_runtime == "local":
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]"])
     if not config.session_secret:
         logging.getLogger(__name__).warning("SESSION_SECRET이 비어 임시 키를 씁니다(재시작하면 로그인이 풀림)")
     app.add_middleware(
