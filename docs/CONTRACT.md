@@ -412,13 +412,13 @@ class AgentError(TypedDict):
 
 ### 7.1. Supabase 전환 DB 목표 (2026-11-12, 계획 1절 확정)
 
-- 아래는 전환 계약이다. 3절(테스트 PostgreSQL)·4절(PostgreSQL 전용 설정·이전 도구)·5절(Supabase 인증·사용자 매핑)을 적용했고(2026-11-12), 8·9·10절은 [목표]로 남는다. 구현은 `docs/plans/react-supabase/PLAN.md` 순서대로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
+- 아래는 전환 계약이다. 3절(테스트 PostgreSQL)·4절(PostgreSQL 전용 설정·이전 도구)·5절(Supabase 인증·사용자 매핑)·8절(Storage 첨부 API)을 적용했고(2026-11-12), 9·10절은 [목표]로 남는다. 구현은 `docs/plans/react-supabase/PLAN.md` 순서대로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
 - DB는 Supabase PostgreSQL 하나다. `DATABASE_URL`은 PostgreSQL 주소만 받고 빈 값·비PostgreSQL 주소를 거부한다. SQLite 자동 fallback과 `app/db/local.sqlite3` 생성 경로는 없앴다(계획 4절 적용, 2026-11-12: `app/config.py`의 `resolved_database_url`이 거부). 테스트도 임시 PostgreSQL로 돈다(계획 3절). UTC 저장·JSONB·모든 조회의 `user_id` 필터는 그대로다.
 - 연결·migration(계획 4절 적용, 2026-11-12): 연결은 Supabase Session pooler 주소(포트 5432)를 기본으로 하고 `?sslmode=require`를 붙인다(트랜잭션 pooler 6543은 쓰지 않는다). 엔진 풀 상한은 프로세스당 `pool_size=5`·`max_overflow=10`·`pool_timeout=30초`·`pool_recycle=1800초`(`app/db/engine.py`). 서버 시작 migration(`app/db/migrations/`)은 대상 스키마를 `public`으로 고정(`SET LOCAL search_path`, `alembic_version`도 `public`)해 Supabase의 `auth`·`storage` 스키마를 건드리지 않는다.
 - 기존 데이터 복사·대조(계획 4절 적용, 2026-11-12): `uv run python -m app.db.copy_data --source <SQLite 파일|DB URL> [--target <PostgreSQL>] [--dry-run] [--yes]`가 일회성 이전을 담당한다. 원본 SQLite 파일은 임시 사본을 갱신해 읽고(원본 불변), 대상 확인(`--yes`)·반복 실행(이미 같으면 대조만 통과, 다른 데이터가 있으면 합침 없이 실패)·중단 지점(복사·시퀀스 정렬을 대상 한 트랜잭션으로 커밋)을 제공한다. 대조는 표별 행 수·모든 열 값(소유자·외래 키·timestamp·JSON·금액)·PK/시퀀스를 비교한다.
 - `users` 표 이행(계획 5절 적용, 2026-11-12): 기존 정수 `id` PK와 소유자 외래 키를 그대로 두고(Supabase `auth.users.id` UUID로 바꾸지 않는다) 유일한 nullable `supabase_uid`(UUID) 열을 더했고(migration `20261112_supabase_users`, 유일 인덱스 `uq_users_supabase_uid`) Google 메일 연결 없이 가입한 사용자를 위해 `google_sub`는 nullable로 바꿨다(기존 행 보존). 같은 이메일만으로 기존 행에 자동 연결하지 않는다(연결 증명은 9절).
-- 새 표 `file_assets`(계획 8절): `id` PK · `user_id` FK · `original_filename` · `content_type`(서버가 파일 시그니처로 확인한 실제 형식) · `size_bytes` · `sha256` · `object_key` · `created_at`. 파일 bytes는 DB에 두지 않는다.
-- 새 표 `trade_document_sources`(계획 8절): `id` PK · `user_id` FK · `trade_document_id` FK · `doc_kind` · `revision`(연결할 때 확인한 문서 revision) · `file_id` FK(`file_assets`) · `origin`(`upload`/`email` — `email`은 Gmail 첨부 가져오기(보류 범위) 구현 뒤 쓴다) · `created_at`.
+- 새 표 `file_assets`(계획 8절 적용, 2026-11-12): `id` PK · `user_id` FK · `original_filename` · `content_type`(서버가 파일 시그니처로 확인한 실제 형식) · `size_bytes` · `sha256` · `object_key` · `created_at`. 파일 bytes는 DB에 두지 않는다.
+- 새 표 `trade_document_sources`(계획 8절 적용, 2026-11-12): `id` PK · `user_id` FK · `trade_document_id` FK · `doc_kind` · `revision`(연결할 때 확인한 문서 revision) · `file_id` FK(`file_assets`) · `origin`(`upload`/`email` — `email`은 Gmail 첨부 가져오기(보류 범위) 구현 뒤 쓴다) · `created_at`.
 - 기존 표 이행: `company_branding`의 `logo`·`seal` bytes는 `file_assets` 파일 ID와 해시로 바꾸고(계획 9절 backfill), `trade_proposals`는 이미지 bytes 대신 이미지 파일 ID/해시 스냅샷을 고정하며, `trade_artifacts`는 `object_key`·`size_bytes` 열을 더하고 `content` 바이너리는 Storage로 옮긴다(계획 10절 backfill). 기존 파일 ID·형식·해시·승인 관계는 유지한다. 바이너리 열 DROP·원본 삭제는 검증 뒤 별도 변경이다(계획 22절).
 - [미확정] 기존 SQLite·Render Postgres 데이터의 보존 대상·기간은 계획 2절에서 사람이 확인한다. 확인 전에 운영 데이터를 삭제·덮어쓰지 않는다.
 
@@ -492,7 +492,7 @@ class AgentError(TypedDict):
 | 경로 | 인증 | 기간·역할 |
 |---|---|---|
 | HTML 화면(`/`·`/inbox`·`/threads/*`·`/quotes/*`·`/settings`·`/runs/*`), 로그인(`/login`·`/auth/google/start`), 기존 JSON `/api/session`·`/api/trade/*` | `gq_session` 쿠키 + `X-CSRF-Token`(변경 요청) | [현재 구현] 전환 기간 병행 유지(legacy). 계획 21절 같은 출처 배포 때 React 화면으로 대체를 시작하고 22절 운영 전환 확인 뒤 닫는다. `/api/session`의 의미(쿠키 세션·CSRF 발급)는 이 기간 그대로다 |
-| React JSON API: `GET /api/me`, `/api/gmail/*`(연결·해제·로그아웃), `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [적용 2026-11-12, 계획 5·7절] `/api/me`·`/api/gmail/*`·`/api/trade/*`(문서·설정)는 `Authorization` 헤더가 있으면 Bearer만 검증하고(쿠키 우회 금지, Bearer 변경 요청은 CSRF 토큰 불필요) 헤더가 없으면 legacy 쿠키+CSRF를 그대로 쓴다. CORS의 `Authorization` 헤더를 허용했다. `/api/files*`·메일·실행 기록 Bearer 연결은 계획 8·19·20절 |
+| React JSON API: `GET /api/me`, `/api/gmail/*`(연결·해제·로그아웃), `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [적용 2026-11-12, 계획 5·7절] `/api/me`·`/api/gmail/*`·`/api/trade/*`(문서·설정)는 `Authorization` 헤더가 있으면 Bearer만 검증하고(쿠키 우회 금지, Bearer 변경 요청은 CSRF 토큰 불필요) 헤더가 없으면 legacy 쿠키+CSRF를 그대로 쓴다. CORS의 `Authorization` 헤더를 허용했다. `/api/files*`는 Bearer 전용으로 구현했다(계획 8절, 2026-11-12 — 쿠키 경로 없음). 메일·실행 기록 Bearer 연결은 계획 19·20절 |
 
 - Gmail 연결 API(적용 2026-11-12, 계획 7절, `app/auth/gmail.py`): 앱 로그인(legacy 로그인)과 흐름을 분리한 Bearer 전용 경로다. `POST /api/gmail/connect`가 state·PKCE 검증값·연결할 내부 사용자·기대 Google subject를 서명된 세션 쿠키(`gq_session`, 10분·일회용)에 담아 Google 동의 화면 주소를 JSON으로 돌려주면, `GET /auth/google/callback`이 대기 값의 내부 사용자가 있을 때만 이 흐름으로 완성해 React 앱(`/app/settings?gmail=<결과>`)으로 안내한다. 결과 키: `connected`·`cancelled`·`login_failed`·`scope_missing`·`config_missing`·`expired`·`different_account`·`account_conflict`. 대기 값에 내부 사용자가 없으면 기존 legacy 로그인 콜백 그대로다(같은 redirect URI를 공유한다). 연결은 기존 `store_login`(토큰 암호화 저장)·`register_watch`(감시 등록)·`get_access_token`(갱신)을 그대로 재사용하고, `POST /api/gmail/logout`은 앱 로그아웃 때 감시만 멈추며, `POST /api/gmail/disconnect`는 Google 토큰 폐기(`GoogleClient.revoke`)까지 하는 연결 해제다(해제 후에도 `google_sub`는 남겨 같은 계정만 다시 연결한다). `GET /api/me`의 `gmail` 객체가 연결 상태이며, 그 요청 뒤 감시 갱신(`renew_watch_if_due`)을 건다(legacy HTML 방문뿐 아니라 알림 수신·API 경로에서도 갱신).
 - 계정 연결 규칙(적용 2026-11-12, 계획 7절): 연결 시작 때 서버가 `SUPABASE_SECRET_KEY`로 Supabase Auth의 사용자 조회(admin)를 불러 공급자 identity의 Google subject를 구한다(사용자가 고칠 수 있는 `user_metadata`는 근거로 안 씀). 콜백의 Google subject가 이 값이나 이미 연결된 `google_sub`와 다르면 `different_account`, 같은 Google 계정의 기존 행이 이미 다른 Supabase 로그인에 연결됐거나 확인 근거가 없으면 `account_conflict`로 거부한다. 확인 근거가 있을 때만 기존 정수 ID(자료)를 보존해 연결한다(빈 껍데기 사용자 행 삭제, 양쪽에 자료가 있으면 외래 키가 삭제를 막아 `account_conflict`). 서버 비밀 키가 없으면 연결 시작이 503 `auth_not_configured`, 계정 조회 장애는 503 `auth_unavailable`, Google 로그인 설정 누락은 503 `config_missing`이다.
@@ -536,14 +536,14 @@ class AgentError(TypedDict):
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값(`true`/`false`) | 12 |
 | `SUPABASE_URL` | Supabase 프로젝트 URL. 서버 JWT 검증·Storage 호출 공통. 5절 적용(2026-11-12): Bearer 토큰 검증의 JWKS 주소·issuer를 여기서 정한다(비면 Bearer 인증 503) | react-supabase 5·8절 |
 | `SUPABASE_SECRET_KEY` | Supabase 서버 비밀 키. 서버 전용이며 브라우저·프론트 빌드 산출물에 넣지 않는다. 7절 적용(2026-11-12): Gmail 연결 시작 때 Auth 서비스의 사용자 조회(admin)로 공급자 Google subject를 확인한다(비면 연결 시작 503 `auth_not_configured`) | react-supabase 5·7·8절 |
-| `SUPABASE_STORAGE_BUCKET` | 비공개 파일 버킷 이름. 기본 `trade-files` [목표] | react-supabase 8절 |
+| `SUPABASE_STORAGE_BUCKET` | 비공개 파일 버킷 이름. 비우면 기본 `trade-files` [적용 2026-11-12, 계획 8절 — `app/files/`가 읽는다] | react-supabase 8절 |
 | `VITE_SUPABASE_URL` | React 브라우저용 Supabase URL. `frontend/.env`에 두고 서버 환경과 분리 [적용 2026-11-12, 계획 6절 — `frontend/src/supabase.js`가 읽는다] | react-supabase 6절 |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 publishable 키(공개 가능 값. 서버 비밀 아님) [적용 2026-11-12, 계획 6절] | react-supabase 6절 |
 
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
 - 2026-11-11 전환: `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다. OpenAI 키를 로컬·Render에 먼저 등록하고 병합·자동 배포 뒤 실제 연결을 확인한 다음 예전 변수를 제거한다. Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. OpenAI API 결제·모델 권한은 사용자 계정에서 확인하고 Codex에는 키를 넣지 않는다.
-- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. `SUPABASE_URL`은 계획 5절부터 서버 JWT 검증에 읽는다(2026-11-12 적용). `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`는 계획 6절의 React 앱이 읽는다(2026-11-12 적용). `SUPABASE_SECRET_KEY`는 계획 7절부터 Gmail 연결의 계정 일치 확인에 읽는다(2026-11-12 적용), `SUPABASE_STORAGE_BUCKET`은 계획 8절 구현부터 적용한다. 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
+- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. `SUPABASE_URL`은 계획 5절부터 서버 JWT 검증에 읽는다(2026-11-12 적용). `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`는 계획 6절의 React 앱이 읽는다(2026-11-12 적용). `SUPABASE_SECRET_KEY`는 계획 7절부터 Gmail 연결의 계정 일치 확인에 읽는다(2026-11-12 적용), `SUPABASE_STORAGE_BUCKET`은 계획 8절 Storage 첨부 API가 읽는다(2026-11-12 적용, 비우면 `trade-files`). 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)
@@ -817,7 +817,7 @@ TradeDocDraft(TypedDict, total=False):
 
 ### 16.3. Supabase Storage 파일 계약 [목표] (2026-11-12, 계획 1절 확정)
 
-- 인증: 이 절의 파일 API는 9.1절 Bearer 전용 경로다. [현재 구현]은 사용자 첨부 파일 API가 없고, 회사 이미지(`company_branding`)·검토 제안 이미지·발급 파일 bytes(`trade_artifacts.content`)를 모두 DB에 둔다.
+- 인증: 이 절의 파일 API는 9.1절 Bearer 전용 경로다. [적용 2026-11-12, 계획 8절] 사용자 첨부 API(`app/files/`의 `POST /api/files`·메타데이터·다운로드·삭제·문서 출처 연결)를 구현했다. 회사 이미지(`company_branding`)·검토 제안 이미지·발급 파일 bytes(`trade_artifacts.content`)는 아직 DB에 두고 Storage 전환은 계획 9·10절이다.
 - 파일 나눔(표 정의는 7.1절):
 
 | 대상 | PostgreSQL에 남길 것 | Storage(비공개 버킷 `trade-files`)에 둘 것 |
@@ -829,7 +829,7 @@ TradeDocDraft(TypedDict, total=False):
 | 발급 PDF/XLSX | `trade_artifacts`: 기존 파일 ID·제안 ID·형식·해시·크기 + `object_key` | 승인한 버전의 실제 출력 파일 |
 
 - 버킷·경로 [확정]: private 버킷 하나 `trade-files`를 쓴다(`SUPABASE_STORAGE_BUCKET`). object key는 서버가 `{internal_user_id}/{attachments|branding|issued}/...`로 생성하고 원래 파일명을 경로에 쓰지 않는다. `..`·임의 URL·다른 소유자 prefix를 입력받지 않는다. 브라우저가 Storage에 직접 쓰지 않는다. 서버 비밀 키는 Storage 정책을 우회하므로 모든 파일 작업에서 서버가 소유권·연결 대상을 확인하고, private 버킷의 사용자 직접 접근은 기본 거부다(계획 2절 콘솔 설정).
-- 첨부 한도 [확정]: 파일당 5MiB, 문서당 5개, 형식 PDF·XLSX·TXT·PNG·JPEG. 로고·직인은 기존 2MiB PNG 검사를 유지한다. 확장자·클라이언트 Content-Type만 믿지 않고 서버가 파일 시그니처를 검사한다. [미확정] 첨부 내용 자동 읽기(파서·OCR)와 파서별 페이지·셀·압축 해제 한도는 별도 정의다(보류 범위).
+- 첨부 한도 [확정, 적용 2026-11-12 계획 8절]: 파일당 5MiB, 문서당 5개, 형식 PDF·XLSX·TXT·PNG·JPEG. 로고·직인은 기존 2MiB PNG 검사를 유지한다. 확장자·클라이언트 Content-Type만 믿지 않고 서버가 파일 시그니처로 실제 형식을 확인하며, 확장자가 가리키는 형식과 시그니처 결과가 다르면 415로 거부한다(위장 형식). [미확정] 첨부 내용 자동 읽기(파서·OCR)와 파서별 페이지·셀·압축 해제 한도는 별도 정의다(보류 범위).
 - 첨부 API [확정](계획 8절):
   - `POST /api/files` — 파일 한 개를 multipart로 받는다. 성공 200 `{file_id, filename, content_type, size_bytes, sha256}`. 오류: 401 인증 실패 · 413 크기 초과 · 415 허용하지 않는 형식·시그니처 불일치 · 422 빈 파일. 업로드와 `file_assets` 메타데이터 저장이 모두 성공한 뒤에만 파일 ID를 반환한다.
   - `GET /api/files/{file_id}` — 메타데이터 JSON. 본인 파일이 아니면 404.
@@ -837,7 +837,7 @@ TradeDocDraft(TypedDict, total=False):
   - `DELETE /api/files/{file_id}` — 문서 출처·검토 제안·회사 이미지가 참조하지 않은 파일만 삭제한다(204). 참조 중이면 409.
 - 문서 출처 연결 [확정]: `PUT /api/trade/{kind}/{document_id}/sources`에 본문 `{revision, file_ids}`를 보낸다. 서버는 소유자·문서 종류·개수(문서당 5개)·파일 존재·소유를 검사한다. 성공하면 새 revision을 만들고 대기 검토를 무효화하며 과거 버전의 연결 행은 보존한다. 오류: 404 본인 아님·없음 · 409 revision 불일치 · 422 개수·형식·소유 검사 실패.
 - 발급 파일 다운로드 [확정]: 기존 `GET /api/trade/files/{file_id}` 경로와 소유자 검사 의미를 유지하고 내부 저장만 DB 바이너리에서 Storage 읽기로 바뀐다(계획 10절). 첨부 파일은 위 `/api/files/{id}/download`를 쓴다.
-- 업로드/SQL 실패 처리 [확정]: 업로드 성공 뒤 SQL 실패는 미참조 객체를 남길 수 있다. 요청 실패 처리에서 승인된 파일·참조 중인 이미지를 무조건 지우지 않고, 미참조·충분히 오래된 객체를 목록화해 재확인 뒤 지우는 수동 관리 명령으로 정리한다(별도 크론·큐 없음).
+- 업로드/SQL 실패 처리 [확정, 적용 2026-11-12 계획 8절]: 업로드 성공 뒤 SQL 실패는 미참조 객체를 남길 수 있다. 요청 실패 처리에서 승인된 파일·참조 중인 이미지를 무조건 지우지 않고, 미참조·충분히 오래된 객체를 목록화해 재확인 뒤 지우는 수동 관리 명령(`uv run python -m app.files.cleanup`, `--delete`에 `--yes` 필요)으로 정리한다(별도 크론·큐 없음). 삭제는 `file_assets` 기록을 먼저 지우고 객체를 지운다(반대로 하면 기록만 남아 다운로드가 깨진다). 객체 삭제 실패는 503 `storage_cleanup_failed`로 알리고 남은 bytes는 같은 명령으로 정리한다.
 - 발급 파일 절차 [확정](계획 10절. 현재 DB 한 트랜잭션 원자성과 다른 경계다):
   1. 현재 검토 제안과 불변 이미지로 파일을 만든다. 문서 revision과 제안 해시는 기존 규칙대로 검사한다.
   2. `{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key에 덮어쓰기 없이 저장한다. 이미 있으면 같은 bytes로 확인된 경우만 재사용한다.

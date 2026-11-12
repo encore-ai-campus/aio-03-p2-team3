@@ -5,6 +5,7 @@ from pydantic import Field, create_model, model_validator
 from app.trade.common.api import require_write
 from app.trade.common import operations as common
 from app.trade.common.models import DocumentResult, DocumentSummary, InputModel
+from app.files.sources import SourcesLink, link_document_sources
 from app.trade.review import operations as review
 from app.trade.review.models import Decision, ReviewRequest, ReviewView
 from app.trade.review.repository import SQLReviews
@@ -64,6 +65,13 @@ def document_router(kind, input_model, operations, repository_factory, extractor
     def replace_document(document_id: int, command: Revision, request: Request, user_id: int = Depends(require_write)):
         repository, _ = repositories(request, user_id)
         return operations.revise(document_id, command.revision, command.document, repository=repository)
+
+    @router.put("/{document_id}/sources")
+    def replace_sources(document_id: int, command: SourcesLink, request: Request,
+                        user_id: int = Depends(require_write)):
+        # 문서 출처 연결(CONTRACT 16.3절): 파일 ID 목록·기대 revision 검증 후 새 revision·대기 검토 무효화.
+        return link_document_sources(request.app.state.database, user_id, kind, document_id,
+                                     command.revision, command.file_ids)
 
     @router.post("/{document_id}/reviews", response_model=ReviewView, status_code=201)
     def propose(document_id: int, command: ReviewRequest, request: Request, user_id: int = Depends(require_write)):

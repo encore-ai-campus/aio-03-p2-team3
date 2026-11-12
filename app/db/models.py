@@ -231,6 +231,36 @@ class TradeArtifact(Base, Owned, Created):
     content: Mapped[bytes] = mapped_column(LargeBinary)
 
 
+class FileAsset(Base, Owned, Created):
+    """CONTRACT 7.1·16.3절 file_assets — 첨부 파일 메타데이터(계획 8절).
+
+    파일 bytes는 DB에 두지 않고 비공개 Storage 버킷의 `object_key` 위치에만 둔다.
+    `content_type`은 확장자·클라이언트 값이 아니라 서버가 파일 시그니처로 확인한 실제 형식이다.
+    """
+    __tablename__ = "file_assets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    original_filename: Mapped[str] = mapped_column(String)
+    content_type: Mapped[str] = mapped_column(String)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    object_key: Mapped[str] = mapped_column(String)
+
+
+class TradeDocumentSource(Base, Owned, Created):
+    """CONTRACT 7.1·16.3절 trade_document_sources — 문서 버전과 첨부 파일의 출처 연결(계획 8절).
+
+    `revision`는 연결로 만들어진 문서 revision다. 출처를 바꾸면 새 revision 행이 쌓이고
+    과거 revision의 연결 행은 보존된다. `origin`이 `email`인 행은 Gmail 첨부 가져오기(보류 범위) 뒤 생긴다.
+    """
+    __tablename__ = "trade_document_sources"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trade_document_id: Mapped[int] = mapped_column(ForeignKey("trade_documents.id"), index=True)
+    doc_kind: Mapped[str] = mapped_column(String)
+    revision: Mapped[int] = mapped_column(Integer)
+    file_id: Mapped[int] = mapped_column(ForeignKey("file_assets.id"), index=True)
+    origin: Mapped[str] = mapped_column(String)
+
+
 class UserPreference(Base, Updated):
     __tablename__ = "user_preferences"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)

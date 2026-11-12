@@ -46,6 +46,7 @@ app/trade/
 | `POST /api/trade/{kind}/{id}/reviews` | `{revision, formats:["pdf","xlsx"]}`로 최종 검토 제안 |
 | `GET /api/trade/{kind}/{id}/reviews/{proposal_id}` | 보관한 제안과 선택 결과 조회 |
 | `POST /api/trade/{kind}/{id}/reviews/{proposal_id}/decisions` | 승인·취소·수정 선택 |
+| `PUT /api/trade/{kind}/{id}/sources` | `{revision, file_ids}`로 문서 출처 연결(첨부). 성공하면 새 revision·대기 검토 무효화, 과거 revision 연결은 보존(계획 8절, Bearer) |
 | `GET /api/trade/files/{file_id}` | 본인이 승인한 파일 다운로드 |
 
 선택 요청은 `action`, `revision`, 반환받은 `content_hash`가 필요하다. 제안 ID는 URL에 둔다. `modify`에만 새 편집 입력 전체를 `document`로 보낸다. 제안 본문은 화면에 보여 주고 변경하지 않은 서버의 해시를 돌려보낸다.
@@ -55,6 +56,8 @@ app/trade/
 - `modify`: 이전 제안을 superseded/modify로 기록하고 문서를 새 버전으로 만든다. 준비됐으면 새 제안을 반환하고, 미완성이면 DocumentResult(`needs_input`)를 반환한다. 이전 동의는 새 내용에 적용하지 않는다.
 
 문서 수정은 기대 revision과 일치해야 한다. 대기 제안은 무효화하고 과거 승인 파일은 보존한다. 승인한 회사·계좌·이미지는 제안 시점에 고정돼 설정 변경 후에도 같은 파일을 내려받는다. 파일 생성에 실패하면 발급하지 않고 pending/ready를 유지한다.
+
+첨부 파일은 Bearer 전용 `/api/files`(한 파일씩 multipart 업로드·메타데이터·다운로드·삭제)로 올려 위 `sources` 경로로 문서에 연결한다. bytes는 비공개 Storage 버킷에만 두고 DB에는 메타데이터(`file_assets`)만 남는다(계약 16.3절).
 
 ## 문서별 차이
 

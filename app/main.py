@@ -16,6 +16,9 @@ from app.auth.supabase import BearerAuthError, TokenVerifier
 from app.clients.gmail import GoogleClient
 from app.config import Settings, get_settings
 from app.db.engine import get_database
+from app.files import router as files_routes
+from app.files.service import FileError
+from app.files.storage import StorageClient
 from app.graph.run import get_graph
 from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
@@ -34,9 +37,10 @@ SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
 
 def create_app(settings: Settings | None = None, google=None,
-               supabase_auth: TokenVerifier | None = None) -> FastAPI:
+               supabase_auth: TokenVerifier | None = None, storage=None) -> FastAPI:
     """google: Google 호출 객체. 비우면 실제 `GoogleClient`, 테스트는 가짜를 넣는다.
-    supabase_auth: Supabase 토큰 검증기. 비우면 SUPABASE_URL로 만들고, 그것도 없으면 Bearer 인증 불가(503)."""
+    supabase_auth: Supabase 토큰 검증기. 비우면 SUPABASE_URL로 만들고, 그것도 없으면 Bearer 인증 불가(503).
+    storage: Storage 호출 객체. 비우면 SUPABASE_URL·SUPABASE_SECRET_KEY로 만들고, 없으면 파일 API 503."""
     config = settings or get_settings()
     same_site = config.session_same_site or "lax"
     if same_site not in {"lax", "strict", "none"}:
@@ -58,6 +62,12 @@ def create_app(settings: Settings | None = None, google=None,
         app.state.supabase_auth = supabase_auth or (
             TokenVerifier(config.supabase_url, secret_key=config.supabase_secret_key)
             if config.supabase_url.strip() else None
+        )
+        # 비공개 Storage 버킷 호출기(계획 8절). 서버 키가 없으면 파일 API를 503으로 막는다.
+        app.state.storage = storage or (
+            StorageClient(config.supabase_url, config.supabase_secret_key,
+                          config.supabase_storage_bucket.strip() or "trade-files")
+            if config.supabase_url.strip() and config.supabase_secret_key.strip() else None
         )
         # API 키가 없어도 기본 화면과 healthz는 사용할 수 있다.
         app.state.llm = get_backend(config) if config.openai_api_key.strip() else None
@@ -92,6 +102,7 @@ def create_app(settings: Settings | None = None, google=None,
     app.include_router(settings_routes.router)
     app.include_router(supabase_me.router)
     app.include_router(gmail_connection.router)
+    app.include_router(files_routes.router)
     app.include_router(trade_api.router)
     app.include_router(pi_routes.router)
     app.include_router(po_routes.router)
@@ -115,6 +126,10 @@ def create_app(settings: Settings | None = None, google=None,
 
     @app.exception_handler(GmailConnectionError)
     def gmail_connection_error(request: Request, error: GmailConnectionError):
+        return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
+
+    @app.exception_handler(FileError)
+    def file_error(request: Request, error: FileError):
         return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
 
     @app.get("/healthz")
