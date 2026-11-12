@@ -106,7 +106,8 @@ class TokenVerifier:
         for identity in identities:
             if not isinstance(identity, dict) or identity.get("provider") != "google":
                 continue
-            subject = identity.get("id") or (identity.get("identity_data") or {}).get("sub")
+            data = identity.get("identity_data")
+            subject = identity.get("provider_id") or (data.get("sub") if isinstance(data, dict) else None)
             if isinstance(subject, str) and subject:
                 return subject
         return None
@@ -157,7 +158,7 @@ class TokenVerifier:
         except PyJWTError:
             raise invalid_token() from None
         kid = header.get("kid")
-        if not kid:
+        if not isinstance(kid, str) or not kid:
             raise invalid_token("서명 키 식별자(kid)가 없는 토큰입니다.")
         key = self._key_for(kid)
         try:

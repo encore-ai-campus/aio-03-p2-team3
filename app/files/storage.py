@@ -80,17 +80,34 @@ class StorageClient:
             raise
 
     def list_objects(self, prefix: str = "") -> list[dict]:
-        """버킷 객체 목록(`name`·`created_at`·`metadata.size`). 정리 명령이 쓴다."""
+        """폴더와 페이지를 순회해 전체 object key·생성 시각·크기를 돌려준다."""
         entries: list[dict] = []
-        offset = 0
-        while True:
-            page = self._request("POST", f"/object/list/{self.bucket}", json={
-                "prefix": prefix, "limit": LIST_PAGE_SIZE, "offset": offset,
-                "sort_by": {"column": "name", "order": "asc"},
-            }).json()
-            if not isinstance(page, list):
-                raise StorageError("storage_http_error", "파일 저장소의 객체 목록을 읽지 못했습니다.")
-            entries.extend(entry for entry in page if isinstance(entry, dict) and entry.get("name"))
-            if len(page) < LIST_PAGE_SIZE:
-                return entries
-            offset += LIST_PAGE_SIZE
+        folders, visited = [prefix], set()
+        while folders:
+            folder = folders.pop()
+            if folder in visited:
+                continue
+            visited.add(folder)
+            offset = 0
+            while True:
+                page = self._request("POST", f"/object/list/{self.bucket}", json={
+                    "prefix": folder, "limit": LIST_PAGE_SIZE, "offset": offset,
+                    "sort_by": {"column": "name", "order": "asc"},
+                }).json()
+                if not isinstance(page, list):
+                    raise StorageError("storage_http_error", "파일 저장소의 객체 목록을 읽지 못했습니다.")
+                for entry in page:
+                    if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+                        continue
+                    name = entry["name"]
+                    if not name or name in {".", ".."} or "/" in name:
+                        raise StorageError("storage_http_error", "파일 저장소의 객체 경로를 읽지 못했습니다.")
+                    key = f"{folder}/{name}" if folder else name
+                    if entry.get("id") is None and entry.get("metadata") is None:
+                        folders.append(key)
+                    else:
+                        entries.append({**entry, "name": key})
+                if len(page) < LIST_PAGE_SIZE:
+                    break
+                offset += LIST_PAGE_SIZE
+        return entries

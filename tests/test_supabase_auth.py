@@ -69,14 +69,18 @@ class FakeJwks:
     def with_google_identity(self, sub, google_sub):
         """Supabase 사용자 `sub`가 Google 로그인(google_sub)으로 가입했게 만든다."""
         self.admin_users[str(sub)] = {"identities": [
-            {"provider": "google", "id": google_sub, "identity_data": {"sub": google_sub}},
+            {"provider": "google", "id": str(uuid4()), "provider_id": google_sub,
+             "identity_data": {"sub": google_sub}},
         ]}
 
     def token(self, *, key=None, kid="default", sub=None, exp=None, iss=None, aud=None,
               alg="RS256", email="supabase@example.invalid", with_kid=True, extra_headers=None):
         now = int(time.time())
+        sub = sub if sub is not None else uuid4()
+        if str(sub) not in self.admin_users:
+            self.with_google_identity(sub, "fake-sub-1")
         claims = {
-            "sub": str(sub if sub is not None else uuid4()),
+            "sub": str(sub),
             "iss": iss if iss is not None else ISSUER,
             "aud": aud if aud is not None else "authenticated",
             "exp": exp if exp is not None else now + 3600,
@@ -229,6 +233,18 @@ def test_unknown_kid_refreshes_jwks_and_rotation_keeps_working(auth_pair):
     assert jwks.calls == fetched + 1
     # JWKS에 없는 kid로 조작한 토큰은 401로 거부한다.
     assert client.get("/api/me", headers=bearer(jwks.token(kid="no-such-kid"))).status_code == 401
+
+
+@pytest.mark.parametrize("kid", [["key"], {"id": "key"}, 123])
+def test_non_string_kid_is_rejected_as_unauthorized(auth_pair, kid):
+    from base64 import urlsafe_b64encode
+
+    client, jwks = auth_pair
+    _, payload, signature = jwks.token().split(".")
+    header = urlsafe_b64encode(json.dumps({"alg": "RS256", "kid": kid}).encode()).rstrip(b"=").decode()
+    response = client.get("/api/me", headers=bearer(f"{header}.{payload}.{signature}"))
+    assert response.status_code == 401
+
 
 
 def test_jwks_outage_is_503_not_401(auth_pair):

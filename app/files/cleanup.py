@@ -21,6 +21,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db.engine import get_database
 from app.db.models import FileAsset, TradeArtifact
+from app.files.locks import lock_object
 from app.files.storage import StorageClient, StorageError
 
 DEFAULT_OLDER_THAN_HOURS = 24
@@ -68,8 +69,14 @@ def execute(database, storage, *, older_than_hours: float = DEFAULT_OLDER_THAN_H
         if not confirmed:
             raise SystemExit("삭제에는 --yes가 필요합니다. 먼저 --delete 없이 실행해 목록을 확인해 주세요.")
         for row in stale:
-            storage.delete(row["key"])
-            deleted.append(row["key"])
+            key = row["key"]
+            with database.session() as session:
+                lock_object(session, key)
+                referenced = (session.scalar(select(FileAsset.id).where(FileAsset.object_key == key).limit(1))
+                              or session.scalar(select(TradeArtifact.id).where(TradeArtifact.object_key == key).limit(1)))
+                if referenced is None:
+                    storage.delete(key)
+                    deleted.append(key)
     return rows, deleted
 
 

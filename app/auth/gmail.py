@@ -76,6 +76,9 @@ def connect(request: Request, user_id: int = Depends(bearer_user_id)):
     _, _, token = request.headers.get("authorization", "").partition(" ")
     verified = request.app.state.supabase_auth.verify(token.strip())
     expected = request.app.state.supabase_auth.provider_google_subject(verified.sub)
+    if not expected:
+        raise GmailConnectionError(409, "google_identity_required",
+                                   "앱 로그인에 사용한 Google 계정을 확인할 수 없습니다. Google로 다시 로그인해 주세요.")
     access = request.app.state.google_access
     # 저장된 범위에 GOOGLE_SCOPES가 다 없으면(범위를 더한 뒤 기존 사용자) 다시 동의를 받는다.
     with request.app.state.database.session() as session:
@@ -160,7 +163,7 @@ def _connect_user(access, pending: dict, login) -> int:
     """콜백 결과를 저장할 내부 사용자 id를 정한다. 조건이 맞으면 기존 정수 ID를 보존해 연결한다."""
     expected = pending.get("google_sub")
     current_id = pending["user_id"]
-    if expected and login.sub != expected:
+    if not expected or login.sub != expected:
         raise GmailConnectionError(
             409, "different_account",
             "앱 로그인에 쓴 Google 계정과 다른 계정이 돌아왔습니다. 같은 계정으로 다시 시도해 주세요.")

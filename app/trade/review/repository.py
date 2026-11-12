@@ -13,6 +13,7 @@ from sqlalchemy import select, update
 
 from app.db.models import FileAsset, TradeArtifact, TradeDocument, TradeProposal, utcnow
 from app.files.storage import StorageError
+from app.files.locks import lock_object
 from app.services.locks import user_lock
 from app.trade.settings.repository import PNG_MAGIC, branding_file_assets, download_verified_image
 from app.trade.common.models import DocumentError
@@ -191,6 +192,10 @@ class SQLReviews:
             if row.status == "approved":
                 # 동시 승인·응답 유실 재시도: Storage를 다시 건드리지 않고 기존 파일을 돌려준다.
                 return self._view(session, row)
+            keys = [issued_object_key(self.user_id, proposal_id, file.file_format,
+                                      sha256(file.content).hexdigest()) for file in files]
+            for key in sorted(keys):
+                lock_object(session, key)
             # ① 요청한 모든 형식을 먼저 Storage에 저장한다. 중간에 실패하면 아래 SQL은
             #    실행되지 않아 문서는 ready, 제안은 pending으로 남는다.
             stored = [self._store_issued(proposal_id, file) for file in files]

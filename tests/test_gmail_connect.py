@@ -392,3 +392,13 @@ def test_connect_needs_server_settings(database_url):
         response = client.post("/api/gmail/connect", headers=bearer(token))
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "auth_unavailable"
+
+
+def test_gmail_requires_verified_google_provider_identity(database_url):
+    jwks = FakeJwks()
+    sub = uuid4()
+    jwks.admin_users[str(sub)] = {"identities": [], "user_metadata": {"sub": "fake-sub-1"}}
+    with make_client(database_url, jwks, FakeGoogle()) as client:
+        response = client.post("/api/gmail/connect", headers=bearer(jwks.token(sub=sub)))
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "google_identity_required"

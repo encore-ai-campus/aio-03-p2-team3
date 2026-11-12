@@ -413,3 +413,29 @@ def test_cleanup_command_keeps_referenced_and_unknown_age_objects(database_url):
         assert deleted == ["7/attachments/orphan-old"]  # 오래된 미참조 객체만 지운다
         assert set(storage.objects) == {referenced_key, "7/attachments/orphan-fresh",
                                         "7/attachments/orphan-unknown"}
+
+
+def test_storage_listing_walks_folders_and_each_page(monkeypatch):
+    import httpx
+    from app.files import storage as module
+
+    folder = lambda name: {"name": name, "id": None, "metadata": None, "created_at": None}
+    file = lambda name: {"name": name, "id": "file-id", "metadata": {"size": 3},
+                         "created_at": "2026-11-01T00:00:00Z"}
+    pages = {"": [folder("1"), folder("2")], "1": [folder("issued"), folder("attachments")],
+             "1/issued": [folder("proposal")], "1/issued/proposal": [file("pdf")],
+             "1/attachments": [file("a"), file("b"), file("c")], "2": [folder("branding")],
+             "2/branding": [file("seal")]}
+    calls = []
+    def request(method, url, **kwargs):
+        query = kwargs["json"]
+        calls.append((query["prefix"], query["offset"]))
+        rows = pages[query["prefix"]]
+        return httpx.Response(200, json=rows[query["offset"]:query["offset"] + query["limit"]])
+
+    monkeypatch.setattr(module, "LIST_PAGE_SIZE", 2)
+    monkeypatch.setattr(module.httpx, "request", request)
+    rows = module.StorageClient("https://storage.example.invalid", "fake", "trade-files").list_objects()
+    assert {row["name"] for row in rows} == {"1/issued/proposal/pdf", "1/attachments/a",
+                                              "1/attachments/b", "1/attachments/c", "2/branding/seal"}
+    assert ("1/attachments", 2) in calls

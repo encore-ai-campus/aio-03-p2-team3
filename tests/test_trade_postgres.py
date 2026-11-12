@@ -5,7 +5,7 @@
 """
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
-from threading import Barrier
+from threading import Barrier, Event
 
 import pytest
 from sqlalchemy import func, inspect, select, update
@@ -349,3 +349,46 @@ def test_postgres_issued_backfill_moves_legacy_bytes_and_rerun_verifies(database
         again = issued_backfill(database, storage, confirmed=True)  # 반복 실행은 검증만 한다
         assert again["linked"] == 0 and again["uploaded"] == 0 and again["verified"] == 1
         assert again["skipped"] == plan["skipped"]
+
+
+def test_cleanup_waits_for_reused_issued_object_to_be_committed(database_url, monkeypatch):
+    """오래된 orphan을 재승인이 재사용하는 동안 정리가 승인 파일을 지우면 안 된다."""
+    with configured_client(database_url) as client:
+        database, storage = client.app.state.database, client.app.state.storage
+        created = create_pi(client)
+        proposal = propose(client, created)
+        upload = storage.upload
+        def partial(key, data, media_type):
+            if "/xlsx/" in key:
+                raise storage_error()
+            upload(key, data, media_type)
+        storage.upload = partial
+        assert decide(client, proposal, "approve").status_code == 503
+        storage.upload = upload
+        [key] = issued_uploads(storage)
+        storage.age_object(key, 48)
+        reading, release, listed = Event(), Event(), Event()
+        download = storage.download
+        def paused_download(object_key):
+            if object_key == key:
+                reading.set()
+                assert release.wait(10)
+            return download(object_key)
+        storage.download = paused_download
+        unreferenced = cleanup.unreferenced_objects
+        def list_then_signal(*args):
+            result = unreferenced(*args)
+            listed.set()
+            return result
+        monkeypatch.setattr(cleanup, "unreferenced_objects", list_then_signal)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            approving = pool.submit(decide, client, proposal, "approve")
+            try:
+                assert reading.wait(10)
+                cleaning = pool.submit(cleanup.execute, database, storage, delete=True, confirmed=True)
+                assert listed.wait(10)
+            finally:
+                release.set()
+            assert approving.result(timeout=15).status_code == 200
+            assert cleaning.result(timeout=15)[1] == []
+        assert key in storage.objects

@@ -470,9 +470,9 @@ def test_legacy_user_migration_preserves_data_and_default_mode(database_url):
         with db.engine.begin() as connection:
             connection.exec_driver_sql("""CREATE TABLE users (id INTEGER PRIMARY KEY, google_sub VARCHAR NOT NULL UNIQUE,
                 email VARCHAR NOT NULL, display_name VARCHAR, reflection_enabled BOOLEAN NOT NULL,
-                created_at DATETIME NOT NULL, last_login_at DATETIME)""")
+                created_at TIMESTAMPTZ NOT NULL, last_login_at TIMESTAMPTZ)""")
             connection.exec_driver_sql("""INSERT INTO users VALUES
-                (1,'fake-legacy-sub','legacy@example.invalid',NULL,0,'2026-11-12 00:00:00',NULL)""")
+                (1,'fake-legacy-sub','legacy@example.invalid',NULL,false,'2026-11-12 00:00:00+00',NULL)""")
         db.create_tables()
         upgrade_database(db.engine)
         with db.session() as session:

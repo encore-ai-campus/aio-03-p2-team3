@@ -70,6 +70,7 @@ export default function Layout() {
           <button className="link-button" type="button" onClick={signOut}>로그아웃</button>
         </header>
         <div className="content">
+          {state.notice && <p role="alert">{state.notice}</p>}
           <Outlet />
         </div>
       </main>

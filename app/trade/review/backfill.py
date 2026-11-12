@@ -24,6 +24,7 @@ from app.config import get_settings
 from app.db.engine import get_database
 from app.db.models import TradeArtifact
 from app.files.storage import StorageClient, StorageError
+from app.files.locks import lock_object
 from app.trade.review.repository import issued_object_key
 
 
@@ -43,22 +44,22 @@ def _link(database, storage, row, *, confirmed: bool) -> tuple[str, bool]:
     key = issued_object_key(row.user_id, row.proposal_id, row.file_format, digest)
     uploaded = False
     if confirmed:
-        existing = _download(storage, key)
-        if existing is None:
-            storage.upload(key, row.content, row.media_type)
-            uploaded = True
-        else:
-            if sha256(existing).hexdigest() != digest:
+        with database.session() as session:
+            lock_object(session, key)
+            existing = _download(storage, key)
+            if existing is None:
+                storage.upload(key, row.content, row.media_type)
+                uploaded = True
+            elif sha256(existing).hexdigest() != digest:
                 raise ValueError("같은 key에 다른 bytes가 있습니다")
-            uploaded = False
-        if sha256(_download(storage, key)).hexdigest() != digest:  # 저장 뒤 bytes 대조 검증
-            raise ValueError("저장한 객체를 다시 읽었을 때 해시가 다릅니다")
-        with database.session() as session:  # 조건부 갱신: 동시 실행·반복 실행에 안전하다.
+            stored = _download(storage, key)
+            if stored is None or sha256(stored).hexdigest() != digest:
+                raise ValueError("저장한 객체를 다시 읽었을 때 해시가 다릅니다")
             matched = session.execute(update(TradeArtifact).where(
                 TradeArtifact.id == row.id, TradeArtifact.object_key.is_(None),
             ).values(object_key=key, size_bytes=len(row.content))).rowcount
-        if matched != 1:
-            raise ValueError("동시 실행으로 이미 옮겨졌습니다")
+            if matched != 1:
+                raise ValueError("동시 실행으로 이미 옮겨졌습니다")
     return key, uploaded
 
 

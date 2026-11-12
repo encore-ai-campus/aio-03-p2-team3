@@ -47,6 +47,8 @@ _local_listener = ContextVar("local_listener", default=None)
 @contextmanager
 def local_listener(listener: socket.socket):
     """전용 실행기가 연 실제 소켓을 보관한다. 환경변수·요청 헤더는 허가가 아니다."""
+    # listen 성공으로 수신 소켓임을 보장한다. SO_ACCEPTCONN 조회는 macOS에서 지원하지 않는다.
+    listener.listen(128)
     token = _local_listener.set(listener)
     try:
         yield
@@ -63,7 +65,7 @@ def validate_runtime(settings: "Settings") -> None:
     try:
         allowed = (listener is not None and listener.family in {socket.AF_INET, socket.AF_INET6}
                    and ip_address(listener.getsockname()[0]).is_loopback
-                   and listener.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN))
+                   and listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_STREAM)
     except (OSError, ValueError):
         allowed = False
     if not allowed:
