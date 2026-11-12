@@ -210,7 +210,7 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 - 섞지 않을 것: 실제 데이터 삭제, 운영 DB 전환, 키를 Issue/PR/Codex에 붙여넣기, 비용이 드는 플랜의 임의 구매.
 - 선행 작업: 1절.
 - 하는 사람: 사람.
-- 설정 구분: 브라우저에는 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`만 제공한다. 서버의 `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_STORAGE_BUCKET`과 기존 Google/암호화/OpenAI 설정은 로컬·Render에만 둔다. 실제 이름은 1절 계약을 따른다.
+- 설정 구분(2026-11-12 사용자 요청으로 간소화): 루트 `.env` 한 곳에 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`를 입력한다. URL과 공개 키만 브라우저에 제공하며 서버 비밀 키·`DATABASE_URL`·Google/암호화/OpenAI 설정은 서버에만 둔다. 버킷은 기본 `trade-files`이며 변경할 때만 `SUPABASE_STORAGE_BUCKET`을 지정한다. 실제 이름은 계약 11절을 따른다.
 - 확인: 로그인 callback 왕복, 비로그인 파일 공개 URL 접근 거부, 업무 Data API 접근 거부를 가상 자료로 시험한다. 개발용 설정 확인과 운영 이관 완료를 혼동하지 않는다.
 
 <a id="3"></a>

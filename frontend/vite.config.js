@@ -5,6 +5,9 @@ import { defineConfig } from "vite"
 // 운영: base /app 아래 빌드해 기존 FastAPI가 같은 출처로 제공한다(계획 21절).
 export default defineConfig({
   base: "/app/",
+  envDir: "..",
+  // 루트 .env를 공유하되 공개 URL·publishable 키만 브라우저에 전달한다.
+  envPrefix: ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"],
   plugins: [react()],
   server: {
     proxy: {

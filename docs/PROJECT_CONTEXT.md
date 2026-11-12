@@ -112,7 +112,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-12 · React·Supabase 기반·설정과 PI 화면(12절)
+마지막 갱신: 2026-11-12 · Supabase 설정을 루트 .env 한 곳으로 간소화
 
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
 - 앱 DB는 PostgreSQL 전용이다. `DATABASE_URL`이 비었거나 비PostgreSQL이면 시작을 거부하며 SQLite 자동 생성은 없다. Alembic 대상은 `public`으로 고정해 Supabase `auth`·`storage`를 건드리지 않는다. `20261112_react_worker_merge`가 Supabase 전환/기존 worker 분기를 합친다. 운영 반영 전 DB 백업과 기존 `TOKEN_ENCRYPTION_KEY` 유지가 필요하다. SQLite 등 기존 원본은 `app.db.copy_data`, 회사 이미지/발급 바이너리는 backfill 명령으로 복사·해시 검증하며 원본·바이너리 열은 아직 삭제하지 않았다([전환 계획](plans/react-supabase/PLAN.md) 4·9·10·22절).
@@ -123,7 +123,7 @@
 - React 앱은 `frontend/`의 JavaScript/Vite이며 개발은 `npm ci` 후 `npm run dev`(`/app`, `/api` 프록시), `/app/settings`에서 회사·거래처·판매/구매 단가·통화별 계좌·로고/직인을 저장한다. 기존 API를 재사용하고 거래처 저장만 추가했다. 실패 입력 보존·조회 취소·이미지 객체 URL 정리를 두며 새 설정은 기존 제안/발급 파일을 바꾸지 않는다. PI는 `/app/trade/pi`·`/app/trade/pi/{id}`에서 입력/AI 추출/검토/승인/다운로드를 제공한다. 버전 충돌 때 입력을 보존하며 최신본 재조회와 재검토를 안내한다. 고정된 회사 이미지는 소유자·문서·제안 범위 읽기 API로 확인하고, 개인 키 관리는 기존 서비스를 Bearer API로 연결했다. PO·CI·PL/메일/현황 화면과 같은 출처 배포는 13~21절 후속 작업이다.
 - Supabase 로그인은 `SUPABASE_URL`의 JWKS로 Bearer 서명·issuer/audience·만료·UUID를 검증해 기존 정수 사용자 ID에 매핑한다. `/api/me`·`/api/gmail/*`·`/api/files*`와 무역/설정 API를 연결했으며 잘못된 Bearer가 쿠키 세션으로 우회하지 않는다. legacy 로그인/CSRF는 전환 기간 유지한다. Gmail 연결은 state·PKCE·같은 Google 공급자 subject를 확인하고, 앱 로그아웃 때 감시를 중지한다(계약 9.1절).
 - 첨부·회사 이미지·승인 PDF/XLSX의 bytes는 private Storage, 소유자/참조/해시는 PostgreSQL에 둔다. 모든 형식 업로드 뒤에만 문서 승인 SQL을 확정한다. 발급 객체 재사용·backfill·수동 정리는 같은 객체별 PostgreSQL 트랜잭션 잠금으로 조율하고 삭제 전 참조를 다시 확인한다. 상세 파일 계약/제한/이전 명령은 계약 16.3절과 README다.
-- 공용 OAuth·Gmail Pub/Sub·OIDC/대체 토큰은 유지한다. 로컬은 watch/stop을 호출하지 않는다. 문서/설정 API는 Bearer 또는 기존 세션/CSRF로 소유자를 검사하고, 장치 승인과 장치 통신의 기존 CSRF·장치 토큰 계약은 유지한다. 환경변수 원본은 `.env.example`·계약 11절이다. 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 둔다. 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인, 환경변수·실제 연결/운영 이전은 미완료다.
+- 공용 OAuth·Gmail Pub/Sub·OIDC/대체 토큰은 유지한다. 로컬은 watch/stop을 호출하지 않는다. 문서/설정 API는 Bearer 또는 기존 세션/CSRF로 소유자를 검사하고, 장치 승인과 장치 통신의 기존 CSRF·장치 토큰 계약은 유지한다. 환경변수 원본은 `.env.example`·계약 11절이다. Supabase는 루트 `.env`의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY` 세 값으로 설정하며 Vite는 URL과 공개 키만 브라우저에 제공한다. `frontend/.env`와 중복 URL은 제거했고 버킷은 기본 `trade-files`다. 실제 DB 연결용 `DATABASE_URL`은 별도로 필요하다. `frontend/`의 `npm run check:env`로 공개값 전달·비밀값 빌드 제외를 확인한다. 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인, 환경변수·실제 연결/운영 이전은 미완료다.
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치

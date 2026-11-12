@@ -57,7 +57,7 @@
 
 macOS의 과거 개인 PC 모의 시험 1개는 Gmail 후보 완료 시간 초과가 남아 있다. 이후 PR #166의 Windows 실행기 검사는 통과했지만 macOS 문제나 실제 사용자 PC 연결의 완료 근거로 대신하지 않는다. 두 CI 실패를 고친 뒤 최신 브랜치 전체 통과는 아직 미확인이다. 설정/PI의 표적 검사와 운영 연결은 별도로 구분한다.
 
-환경변수 설정 후 실제 Supabase 로그인·비공개 버킷·OAuth 연결 확인이 필요하다. 값은 저장소/채팅에 넣지 않는다. 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`, 서버에는 `DATABASE_URL`·`SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET` 및 기존 Google/암호화 설정을 사용한다.
+환경변수 설정 후 실제 Supabase 로그인·비공개 버킷·OAuth 연결 확인이 필요하다. 값은 저장소/채팅에 넣지 않는다. Supabase는 루트 `.env` 한 곳의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY` 세 값으로 설정한다. 버킷은 기본 `trade-files`를 쓰며 `DATABASE_URL`과 기존 Google/암호화 설정은 별도 서버 설정이다. Vite는 URL·공개 키만 브라우저에 전달하고 `frontend/.env`는 읽지 않는다. `npm run check:env`는 가짜 값으로 공개값 전달과 서버 비밀 키/DB 주소/암호화 설정의 빌드 제외를 확인해 통과했다. lint·규칙 검사도 통과했고 설정 변경만 확인했으므로 전체 pytest는 반복하지 않았다.
 
 ## 다음 작업
 

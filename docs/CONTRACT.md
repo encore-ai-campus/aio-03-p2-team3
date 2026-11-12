@@ -633,13 +633,12 @@ class AgentError(TypedDict):
 | `SUPABASE_URL` | Supabase 프로젝트 URL. 서버 JWT 검증·Storage 호출 공통. 5절 적용(2026-11-12): Bearer 토큰 검증의 JWKS 주소·issuer를 여기서 정한다(비면 Bearer 인증 503) | react-supabase 5·8절 |
 | `SUPABASE_SECRET_KEY` | Supabase 서버 비밀 키. 서버 전용이며 브라우저·프론트 빌드 산출물에 넣지 않는다. 7절 적용(2026-11-12): Gmail 연결 시작 때 Auth 서비스의 사용자 조회(admin)로 공급자 Google subject를 확인한다(비면 연결 시작 503 `auth_not_configured`) | react-supabase 5·7·8절 |
 | `SUPABASE_STORAGE_BUCKET` | 비공개 파일 버킷 이름. 비우면 기본 `trade-files` [적용 2026-11-12, 계획 8절 — `app/files/`가 읽는다] | react-supabase 8절 |
-| `VITE_SUPABASE_URL` | React 브라우저용 Supabase URL. `frontend/.env`에 두고 서버 환경과 분리 [적용 2026-11-12, 계획 6절 — `frontend/src/supabase.js`가 읽는다] | react-supabase 6절 |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 publishable 키(공개 가능 값. 서버 비밀 아님) [적용 2026-11-12, 계획 6절] | react-supabase 6절 |
+| `SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 공개 키. 루트 `.env`에 두며 Vite가 프로젝트 URL과 이 값만 브라우저에 제공한다 | react-supabase 6절 |
 
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
 - 2026-11-12: 서버의 `OPENAI_API_KEY`는 사용하지 않으며 각 사용자가 로그인 후 키를 등록한다. 기존 `TOKEN_ENCRYPTION_KEY`·Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. 암호화 키를 바꾸면 Google 재로그인과 OpenAI 키 재등록이 필요하다. API 결제·모델 권한은 각 키의 프로젝트에서 확인한다. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`도 사용하지 않는다.
-- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. `SUPABASE_URL`은 계획 5절부터 서버 JWT 검증에 읽는다(2026-11-12 적용). `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`는 계획 6절의 React 앱이 읽는다(2026-11-12 적용). `SUPABASE_SECRET_KEY`는 계획 7절부터 Gmail 연결의 계정 일치 확인에 읽는다(2026-11-12 적용), `SUPABASE_STORAGE_BUCKET`은 계획 8절 Storage 첨부 API가 읽는다(2026-11-12 적용, 비우면 `trade-files`). 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
+- Supabase 설정 간소화(2026-11-12, 사용자 요청): 루트 `.env` 한 곳의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY`를 입력한다. URL은 서버 JWT/Storage와 React가 공유하고 Vite의 `envDir`/`envPrefix`로 URL과 공개 키만 브라우저에 제공한다. `frontend/.env`·중복 `VITE_SUPABASE_URL`은 사용하지 않는다. 서버 비밀 키·`DATABASE_URL`·Google/암호화/OpenAI 설정은 브라우저에 제공하지 않는다. 버킷 이름은 기존 기본값 `trade-files`를 사용하며 이름이 다를 때만 `SUPABASE_STORAGE_BUCKET`을 지정한다. 실제 DB 연결에는 별도의 PostgreSQL `DATABASE_URL`이 필요하며 SQLite fallback은 없다. 실제 URL·키·redirect 설정은 사람이 확인한다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)
