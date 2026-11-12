@@ -32,6 +32,8 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
         user = session.get(User, user_id)
         local_sub = user.google_sub if local_mode and user and user.last_login_at is not None else None
     local_error = None
+    from app.worker.service import status as worker_status
+    worker = None if local_mode else worker_status(request.app.state.database, user_id)
     if local_mode:
         try:
             UserKeyAccess(request.app.state.database, user_id, None, config).read()
@@ -44,6 +46,7 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
                  "openai_registered": (local_error is None) if local_mode else key_registered(request.app.state.database, user_id, settings=config),
                  "openai_storage_ready": request.app.state.google_access.cipher is not None,
                  "csrf_token": csrf_token,
+                 "worker": worker, "worker_https": config.app_base_url.startswith("https://"),
                  "key_notice": {"saved": "OpenAI API 키를 저장했습니다. 키의 유효성은 실제 AI 요청 시 확인합니다.",
                                 "deleted": "OpenAI API 키를 삭제했습니다. 이후 AI 요청은 차단됩니다."}.get(
                                     request.query_params.get("key_notice", ""))},

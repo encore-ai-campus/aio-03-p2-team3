@@ -70,6 +70,9 @@ class UserKeyAccess:
             if self.settings.ai_runtime == "local":
                 return self._read_local()
             with self.database.session() as session:
+                user = session.get(User, self.user_id)
+                if user is not None and user.ai_execution_mode == "local_worker":
+                    raise OpenAIKeyError("LOCAL_WORKER_NOT_READY", "개인 실행 프로그램의 AI 연결은 다음 단계에서 제공됩니다. 서버 저장 키로 전환하지 않습니다.")
                 row = session.get(UserOpenAIKey, self.user_id)
                 encrypted = row.api_key_enc if row is not None else None
             if encrypted is None:
