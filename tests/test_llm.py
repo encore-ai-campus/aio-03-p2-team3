@@ -255,17 +255,15 @@ def test_backend_factory_failure_records_only_exception_type(monkeypatch):
     assert "private-" not in repr(logged) and "fake-api-key" not in repr(logged)
 
 
-def test_openai_backend_configuration_and_cache():
+def test_openai_backend_configuration_without_global_key_cache():
     settings = Settings(openai_api_key="fake-openai-key", openai_model=" gpt-fake ")
-    client._backend_for_settings.cache_clear()
     backend = client._backend_for_settings(settings)
     assert backend.model_name == "gpt-fake" and backend.use_responses_api is True
     assert backend.max_retries == 0 and backend.request_timeout == 20
     assert backend.openai_api_key.get_secret_value() == "fake-openai-key"
-    assert client._backend_for_settings(Settings(**vars(settings))) is backend
+    assert client._backend_for_settings(Settings(**vars(settings))) is not backend
     changed = client._backend_for_settings(Settings(openai_api_key="fake-other-key", openai_model="gpt-other"))
     assert changed is not backend and changed.model_name == "gpt-other"
-    client._backend_for_settings.cache_clear()
 
 
 @pytest.mark.parametrize("key", ["", "   "])
@@ -278,10 +276,12 @@ def test_openai_backend_requires_key_without_contacting_sdk(monkeypatch, key):
         client._backend_for_settings(Settings(openai_api_key=key))
 
 
-def test_openai_settings_load_env_and_ignore_previous_provider(monkeypatch):
+@pytest.mark.parametrize("runtime", ["server", "local"])
+def test_openai_settings_load_env_and_ignore_previous_provider(monkeypatch, runtime):
     from app import config
     monkeypatch.setattr(config, "load_dotenv", lambda: None)
     monkeypatch.setenv("OPENAI_API_KEY", "fake-openai-key")
+    monkeypatch.setenv("AI_RUNTIME", runtime)
     monkeypatch.setenv("OPENAI_MODEL", "gpt-fake")
     monkeypatch.setenv("GEMINI_API_KEY", "unused-fake-key")
     monkeypatch.setenv("GEMINI_MODEL", "unused-fake-model")
@@ -289,7 +289,8 @@ def test_openai_settings_load_env_and_ignore_previous_provider(monkeypatch):
     config.get_settings.cache_clear()
     try:
         settings = config.get_settings()
-        assert settings.openai_api_key == "fake-openai-key" and settings.openai_model == "gpt-fake"
+        assert settings.openai_api_key == ("fake-openai-key" if runtime == "local" else "")
+        assert settings.openai_model == "gpt-fake"
         assert not hasattr(settings, "gemini_api_key") and not hasattr(settings, "trade_extract_backend")
         assert "fake-openai-key" not in repr(settings)
     finally:

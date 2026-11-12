@@ -4,11 +4,12 @@ from pydantic import Field, create_model, model_validator
 
 from app.trade.common.api import require_write
 from app.trade.common import operations as common
-from app.trade.common.models import DocumentResult, DocumentSummary, InputModel
+from app.trade.common.models import DocumentError, DocumentResult, DocumentSummary, InputModel
 from app.files.sources import SourcesLink, link_document_sources
 from app.trade.review import operations as review
 from app.trade.review.models import Decision, ReviewRequest, ReviewView
 from app.trade.review.repository import SQLReviews
+from app.services.openai_keys import user_openai
 from app.web.deps import current_user_id
 
 
@@ -50,7 +51,14 @@ def document_router(kind, input_model, operations, repository_factory, extractor
         repository, _ = repositories(request, user_id)
         values = command.model_dump()
         text = values.pop("text")
-        return operations.extract(text, repository=repository, extractor=extractor, **values)
+        with user_openai(request.app.state.database, user_id, settings=request.app.state.settings,
+                         cipher=request.app.state.google_access.cipher) as ai:
+            try:
+                return operations.extract(text, repository=repository, extractor=extractor, **values)
+            except DocumentError:
+                if ai.issue is not None:
+                    raise DocumentError(ai.issue.code, ai.issue.message, ai.issue.status_code) from None
+                raise
 
     @router.get("/{document_id}", response_model=DocumentResult)
     def get_document(document_id: int, request: Request, user_id: int = Depends(current_user_id)):

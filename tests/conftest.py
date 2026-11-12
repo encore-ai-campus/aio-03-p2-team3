@@ -9,7 +9,6 @@ import os
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
-import pgserver
 import psycopg
 import pytest
 from sqlalchemy import text
@@ -26,12 +25,10 @@ def isolated_llm_keys():
     app.main import 시점에 이미 캐시된 설정도 지운다.
     """
     from app.config import get_settings
-    from app.llm.client import _backend_for_settings
 
     for name in ("OPENAI_API_KEY", "OPENAI_MODEL"):
         os.environ[name] = ""
     get_settings.cache_clear()
-    _backend_for_settings.cache_clear()
     yield
 
 
@@ -42,6 +39,7 @@ def postgres_uri(tmp_path_factory):
     if configured:
         yield configured
         return
+    import pgserver
     with pgserver.get_server(tmp_path_factory.mktemp("pgserver"), cleanup_mode="delete") as server:
         yield server.get_uri()
 

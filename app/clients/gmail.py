@@ -71,6 +71,10 @@ class WatchFailed(GoogleError):
     code = "watch_failed"
 
 
+class HistoryExpired(GoogleUnavailable):
+    """history.list의 404. 전체 메일함을 다시 읽지 않고 재연결을 요구한다."""
+
+
 @dataclass(frozen=True)
 class GoogleLogin:
     """로그인 콜백에서 코드를 바꿔 받은 결과."""
@@ -239,6 +243,19 @@ class GoogleClient:
         except Exception as error:
             raise GoogleUnavailable(_error_label(error)) from error
 
+    def get_history_id(self, access_token: str) -> str:
+        """감시를 변경하지 않고 현재 메일함 위치만 읽는다(로컬 최초 연결용)."""
+        try:
+            response = self.gmail(access_token).users().getProfile(userId="me").execute(
+                num_retries=LIMITS["GMAIL_MAX_RETRIES"],
+            )
+            history_id = str(response["historyId"])
+            if not history_id.isascii() or not history_id.isdecimal() or int(history_id) <= 0:
+                raise ValueError("invalid_history_id")
+            return history_id
+        except Exception as error:
+            raise GoogleUnavailable(_error_label(error)) from error
+
     def verify_push_token(self, token: str, audience: str, service_account: str) -> None:
         from google.oauth2 import id_token
 
@@ -253,6 +270,8 @@ class GoogleClient:
                 historyTypes=["messageAdded"], pageToken=page_token,
             ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])
         except Exception as error:
+            if getattr(getattr(error, "resp", None), "status", None) == 404:
+                raise HistoryExpired(_error_label(error)) from error
             raise GoogleUnavailable(_error_label(error)) from error
 
     def get_message(self, gmail, message_id: str) -> dict:

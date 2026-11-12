@@ -61,6 +61,7 @@ class User(Base, Created):
     display_name: Mapped[str | None] = mapped_column(String)
     reflection_enabled: Mapped[bool] = mapped_column(Boolean, default=lambda: _default_reflection())
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    ai_execution_mode: Mapped[str] = mapped_column(String, default="stored_key", server_default="stored_key")
 
 
 def _default_reflection():
@@ -75,6 +76,68 @@ class GoogleToken(Base, Updated):
     access_token_enc: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     scopes: Mapped[list] = mapped_column(JSON_VALUE, default=list)
+
+
+class UserOpenAIKey(Base, Updated):
+    __tablename__ = "user_openai_keys"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    api_key_enc: Mapped[str] = mapped_column(Text)
+
+
+class WorkerPairing(Base, Created):
+    __tablename__ = "worker_pairings"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    secret_hash: Mapped[str] = mapped_column(String)
+    code_hash: Mapped[str] = mapped_column(String, unique=True)
+    device_name: Mapped[str] = mapped_column(String(80))
+    capabilities: Mapped[dict] = mapped_column(JSON_VALUE)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    last_polled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class WorkerDevice(Base, Owned, Created):
+    __tablename__ = "worker_devices"
+    __table_args__ = (Index("uq_worker_active_user", "user_id", unique=True,
+                           sqlite_where=text("revoked_at IS NULL"),
+                           postgresql_where=text("revoked_at IS NULL")),)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    token_hash: Mapped[str] = mapped_column(String, unique=True)
+    scopes: Mapped[list] = mapped_column(JSON_VALUE, default=lambda: ["ai:claim", "ai:complete"])
+    capabilities: Mapped[dict] = mapped_column(JSON_VALUE)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class WorkerJob(Base, Owned, Created):
+    __tablename__ = "worker_jobs"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(String, unique=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("worker_devices.id"), index=True)
+    run_id: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="queued", index=True)
+    schema_id: Mapped[str] = mapped_column(String)
+    schema_version: Mapped[str] = mapped_column(String)
+    payload: Mapped[dict | None] = mapped_column(JSON_VALUE, nullable=True)
+    result_hash: Mapped[str | None] = mapped_column(String)
+    result_enc: Mapped[str | None] = mapped_column(Text)
+    error_kind: Mapped[str | None] = mapped_column(String)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    lease_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class WorkerRateLimit(Base):
+    __tablename__ = "worker_rate_limits"
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    window: Mapped[int] = mapped_column(Integer, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
 
 
 class GmailWatch(Base):

@@ -31,6 +31,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pgserver==0.1.4",
+    "pgserver==0.1.4 ; sys_platform != 'win32'",
     "pypdf==7.0.0",
     "pytest==9.2.0",
 ]

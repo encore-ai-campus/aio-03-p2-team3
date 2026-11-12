@@ -1,5 +1,7 @@
 # 비밀값: .env는 올리지 않는다(.env.example만 올린다)
 .env
+.env.worker
+.worker-device.json
 # uv 가상환경과 파이썬 캐시
 .venv/
 __pycache__/

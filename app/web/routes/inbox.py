@@ -12,6 +12,7 @@ from sqlalchemy import and_, func, select
 from app.config import LIMITS
 from app.db.models import ProcessedMessage, ReplyCandidate, ThreadMessage, User
 from app.web.routes.auth import connection_status, current_user, require_user
+from app.services.openai_keys import key_registered
 
 router = APIRouter()
 KST = timezone(timedelta(hours=9), "KST")
@@ -55,15 +56,24 @@ def inbox_items(database, user_id: int) -> list[dict]:
             "received": kst(message.received_at or message.created_at),
             "status_label": label, "tone": tone,
             "rate_limited": message.notice == "rate_limit",
+            "key_required": message.notice == "openai_key_required",
+            "worker_notice": worker_notice(message.notice),
             "pending": pending.get(message.gmail_message_id, 0) if message.status == "awaiting_approval" else 0,
         })
     return items
+
+
+def worker_notice(code):
+    from app.worker.adapter import ERRORS
+    return next((message for name, message, _ in ERRORS.values() if name.lower() == code), None)
 
 
 def _context(request: Request, user: User) -> dict:
     return {
         "user": user, "items": inbox_items(request.app.state.database, user.id),
         "poll_seconds": LIMITS["INBOX_POLL_SECONDS"],
+        "local_mode": request.app.state.settings.ai_runtime == "local",
+        "openai_registered": key_registered(request.app.state.database, user.id, settings=request.app.state.settings),
     }
 
 

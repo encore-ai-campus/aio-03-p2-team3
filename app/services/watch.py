@@ -34,6 +34,10 @@ def watch_is_due(watch: GmailWatch | None, now: datetime) -> bool:
 def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = None) -> str:
     """감시를 등록(또는 갱신)하고 결과 상태(`active`/`error`)를 돌려준다. 실패는 표에 남기고 예외를 내지 않는다."""
     now = now or utcnow()
+    if access.local_mode:
+        from app.services.local_gmail import connect_local
+
+        return connect_local(access, user_id, now)
     try:
         token = get_access_token(access, user_id, now)
         response = access.google.watch(token, access.topic)
@@ -61,6 +65,8 @@ def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = No
 
 def renew_watch_if_due(access: GoogleAccess, user_id: int, now: datetime | None = None) -> bool:
     """갱신할 때가 됐으면 다시 등록한다. 다시 등록을 시도했으면 True."""
+    if access.local_mode:
+        return False
     now = now or utcnow()
     with access.database.session() as session:
         due = watch_is_due(session.get(GmailWatch, user_id), now)
@@ -71,6 +77,13 @@ def renew_watch_if_due(access: GoogleAccess, user_id: int, now: datetime | None 
 
 def stop_watch(access: GoogleAccess, user_id: int) -> None:
     """감시를 멈춘다. Google 호출이 실패해도 표는 `stopped`로 바꾼다(남은 알림은 7이 무시)."""
+    if access.local_mode:
+        with access.database.session() as session:
+            watch = session.get(GmailWatch, user_id)
+            if watch is not None:
+                watch.status = "stopped"
+                watch.last_error = None
+        return
     try:
         access.google.stop(get_access_token(access, user_id))
     except GoogleError as error:

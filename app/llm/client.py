@@ -9,7 +9,7 @@ LangChain이 감싼 SDK 오류는 __cause__에서 원래 HTTP 코드를 읽는�
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import lru_cache
+from dataclasses import replace
 from time import perf_counter, sleep
 from typing import Literal
 
@@ -24,6 +24,8 @@ from app.prompts import Prompt
 from app.runlog.logger import current_event
 
 _override = ContextVar("llm_backend", default=None)
+_user_key = ContextVar("llm_user_key", default=None)
+_worker_call = ContextVar("llm_worker_call", default=None)
 # 무역 추출에서 사용하던 기본 모델을 모든 LLM 호출에 사용한다. OPENAI_MODEL로 덮어쓴다.
 DEFAULT_MODEL = "gpt-6-luna"
 RESPONSES_DEFAULT_MODEL = DEFAULT_MODEL
@@ -54,10 +56,15 @@ def responses_model_name(settings: Settings | None = None) -> str:
 
 
 def get_backend(settings: Settings | None = None):
-    return _backend_for_settings(settings or get_settings())
+    binding = _user_key.get()
+    if binding is None:
+        raise OpenAIKeyError()
+    provider, configured = binding
+    # 사용자 범위의 소스를 확인한다(DB 개인 키 또는 검증된 로컬 소유자의 .env).
+    key = provider()
+    return _backend_for_settings(replace(settings or configured or get_settings(), openai_api_key=key))
 
 
-@lru_cache(maxsize=1)
 def _backend_for_settings(settings: Settings):
     if not settings.openai_api_key.strip():
         raise ValueError("OPENAI_API_KEY 설정이 필요합니다")
@@ -68,6 +75,25 @@ def _backend_for_settings(settings: Settings):
         http_socket_options=(),
         max_retries=0, timeout=LIMITS["LLM_TIMEOUT_SECONDS"],
     )
+
+
+class OpenAIKeyError(ValueError):
+    """키 원문이나 SDK 오류를 담지 않는 사용자 키 오류."""
+
+    def __init__(self, code="OPENAI_KEY_REQUIRED", message="설정에서 본인의 OpenAI API 키를 등록해 주세요.",
+                 status_code=409):
+        super().__init__(message)
+        self.code, self.message, self.status_code = code, message, status_code
+
+
+@contextmanager
+def use_user_key(provider, settings: Settings | None = None):
+    """HTTP 요청·백그라운드 실행별 키 조회 함수만 보관한다. 키는 상태·로그에 넣지 않는다."""
+    token = _user_key.set((provider, settings))
+    try:
+        yield
+    finally:
+        _user_key.reset(token)
 
 
 def get_responses_backend(settings: Settings | None = None):
@@ -94,6 +120,21 @@ def use_backend(fake):
         yield fake
     finally:
         _override.reset(token)
+
+
+@contextmanager
+def use_worker_call(callback):
+    token = _worker_call.set(callback)
+    try:
+        yield
+    finally:
+        _worker_call.reset(token)
+
+
+def require_completed_ai():
+    """실패한 PC 호출이 성찰의 대체 경로를 통해 후보로 저장되지 않게 한다."""
+    if _worker_call.get() is not None and _override.get() is None:
+        _worker_call.get().guard()
 
 
 def _http_code(error: Exception):
@@ -147,6 +188,8 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict,
     `backend`는 백엔드 인스턴스, `backend_factory`는 인자 없는 팩토리. 팩토리는 앞선
     둘이 없을 때만 부른다(가짜 주입 테스트에서 키 없는 팩토리가 먼저 실패하는 일이
     없게 한다)."""
+    if _worker_call.get() is not None and _override.get() is None and backend is None:
+        return _worker_call.get()(prompt, schema, variables)
     started = perf_counter()
     attempts = 0
     counts = {"network": 0, "invalid_output": 0}
@@ -174,6 +217,9 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict,
         if chosen is None:
             chosen = get_backend()
         structured = structured_output(chosen, schema)
+    except OpenAIKeyError as error:
+        current_event("error", detail={"kind": error.code.lower(), "message": error.message})
+        return finish(False, error_kind="invalid_input", error=error)
     except Exception as error:
         return finish(False, error_kind="internal", error=error)
     while True:

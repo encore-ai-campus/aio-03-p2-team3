@@ -42,11 +42,17 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-11 · 전체 LLM OpenAI 전환
+마지막 갱신: 2026-11-12 · 개인 PC AI 실행 연결
+
+- 서버 장치 연결(계획 local-openai-execution 3절, #155): HTTPS `/settings`에서 `stored_key|local_worker`를 선택하고 PC의 10분 일회용 코드·장치 이름을 본인 Google 로그인+CSRF로 승인한다. secret/장치 토큰은 최초 응답에만 전달하고 서버는 해시만 보관한다. 온라인/오프라인·만료·해제를 안내한다. 4절(#156)의 PC 실행기로 메일 분석·답장·거래 추출·요약·성찰·네 문서 AI 추출을 실행한다. PC는 본인 .env 키만 사용하고 서버 DB/환경 키로 자동 전환하지 않는다. 오프라인·종료·해제·버전·키 거부·시간 초과를 안내하며 수동 작성·파일 발급·승인 후 발송은 유지한다. 기존 본인 키 제한과 공용 Gmail 설정은 유지한다.
+
+- 로컬 Gmail(계획 local-openai-execution 2절, #154): 개인 OAuth 앱·루프백 콜백으로 Pub/Sub 토픽 없이 로그인한다. 처음 연결은 `users.getProfile`의 현재 historyId부터 시작하고 본인 sub로 검증된 사용자만 30초 간격으로 새 메일을 읽는다. 기존 MIME·필터·중복 방지·`start_run()`과 승인 후 1회 발송을 재사용한다. 로컬에서는 Google watch/stop을 호출하지 않는다. 로그아웃·동의 취소·연결 만료·PC 종료는 추가 수집을 멈추고 history 404는 과거 전체 재처리 없이 재로그인을 안내한다. 공용 Pub/Sub와 본인 키 제한은 유지한다.
+
+- 사용자별 AI 키: 기본 `AI_RUNTIME=server`의 `stored_key`에서는 Google 로그인 후 `/settings`에서 본인 키를 등록·교체·삭제한다. `local_worker`는 연결한 본인 PC에서만 .env 키를 사용한다. 키는 `user_openai_keys`의 사용자별 행에 Fernet 암호문으로 저장한다. 서버 `OPENAI_API_KEY`는 호출에 사용하지 않으며 사용자 키 누락·복호화 실패 시 차단한다. 전용 `AI_RUNTIME=local`에서는 명시한 본인 Google sub와 일치하는 검증 사용자만 개인 `.env` 키를 사용하고 DB 키는 읽거나 저장하지 않는다. 저장 시 API 호출은 없고 수동 문서 작성·파일 발급은 키 없이 유지한다.
 
 - 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`.
 - 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
-- LLM: 요청에 따라 모든 메일 분석·답장·거래 추출·스레드 요약·성찰·독립 무역 문서 추출을 OpenAI Responses API로 통일했다(2026-11-11). 기존 무역 추출의 기본 모델 `gpt-6-luna`를 유지하고 `OPENAI_MODEL`로 덮어쓴다. 키는 `OPENAI_API_KEY`이며 패키지는 `langchain-openai`·`openai`다. Gemini 호출·의존성과 복귀 설정은 제거했다. 테스트용 Gmail과 가상 자료를 쓰며 키·결제·모델 권한은 로컬·Render에서 설정한다. 선택 근거와 적용 순서는 `.work/design/api-choice.md`·README다.
+- LLM: 요청에 따라 모든 메일 분석·답장·거래 추출·스레드 요약·성찰·독립 무역 문서 추출을 OpenAI Responses API로 통일했다(2026-11-11). 기존 무역 추출의 기본 모델 `gpt-6-luna`를 유지하고 `OPENAI_MODEL`로 덮어쓴다. 키는 사용자별 설정 등록값이며 패키지는 `langchain-openai`·`openai`다. Gemini 호출·의존성과 복귀 설정은 제거했다. 테스트용 Gmail과 가상 자료를 쓰며 키는 개인 설정에 등록하고 결제·모델 권한은 각 프로젝트에서 확인한다. 선택 근거와 적용 순서는 `.work/design/api-choice.md`·README다.
 - 외부 API: Gmail API(사용자별 Google OAuth로 메일 읽기·감시 등록·승인 후 발송)와 Cloud Pub/Sub(메일함 변경 푸시 알림)를 추가했다. Google Calendar는 도구 2(구글캘린더 등록)용으로 유지한다. 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외하고 `.work/design/api-choice.md`의 '일정 도구 추천 후보'로 옮겼다(2026-11-09 결정). API 연동·콘솔 설정은 별도 작업이다.
 - Google 로그인·감시 등록(계획 6절, 2026-11-10): 받은 메일 화면 'Gmail 연결하기' → `/login`('테스트용 Gmail로 등록하세요') → Google 동의 → 토큰을 Fernet으로 암호화해 저장 → `users.watch`(받은편지함만) 등록 → `/inbox`에 연결된 메일·알림 상태·로그아웃. 크론 없이 로그인·화면 요청(응답 뒤)·알림 수신 때 마지막 갱신이 24시간을 넘었거나 실패했으면 다시 등록하고, 로그아웃하면 멈춘다. 갱신 토큰 만료면 '다시 로그인', 등록 실패면 '다시 시도' 안내를 보인다. 실제 Google 연결 확인은 Google Cloud 설정(5절) 뒤 로컬·Render에서 한다. 이름과 규칙은 `docs/CONTRACT.md` 7·9·10절.
 - 감시 오류 진단(#95): 서버 로그와 `gmail_watches.last_error`에 `HTTP 403 (forbidden)`·`HTTP 403 (accessNotConfigured)`처럼 상태와 허용된 Google `reason`을 함께 남긴다. 알 수 없는 reason·응답 메시지·URL·키·메일 원문은 기록하지 않고, `last_error`의 200자 제한과 기존 상태·갱신 동작은 유지한다.
@@ -60,7 +66,11 @@
 - 독립 문서 작성(2026-11-11): React용 `/api/trade/{pi|po|ci|pl}`에서 직접 입력/문장 추출 → 수정 → 검토 → 승인·취소·수정 → PDF/XLSX 다운로드를 제공한다. 승인은 파일 발급이며 기존 Gmail 발송 승인을 호출하지 않는다. CI는 승인된 PI 특정 버전의 거래 사실을 보존하고, PL은 별도 포장 합계 확인 뒤 최종 검토한다. API 연결 안내는 `docs/trade-api.md`. React 화면·마스터 챗봇은 범위에서 제외했다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
-마지막 갱신: 2026-11-10 · kekorea-port 6절(무역서류 초안 상태)
+마지막 갱신: 2026-11-12 · PC 오류 안내·요약 대기 트랜잭션 분리
+
+- #156: `AgentState.notice`에 PC 오프라인/해제·시간 초과·버전·키·소유자·한도·통신·형식·입력·내부 실패 안내 키를 추가했다(계약 2·6절). 상태의 다른 필드·노드 이름·전이는 유지한다. 요약의 AI 대기는 DB 트랜잭션 밖에서 하고, 성공 후 이전 요약/커서가 같을 때만 갱신해 다른 서버 프로세스의 큐 쓰기를 막지 않는다.
+
+- 사용자 키가 없거나 읽을 수 없으면 `start_run()`은 `end_reason=failed`, `notice=openai_key_required`로 끝나며 메일 화면에 키 등록 링크를 안내한다. 키는 상태나 기억에 넣지 않는다. 노드·전이는 유지한다.
 
 - 계약의 `AgentState`·자료 형식·초기값을 `app/graph/state.py`에 구현했다(계획 2절, 2026-11-09). `tools_called`·`reflection_history`·`errors`·`call_retries`는 누적 리듀서다. 통신 재시도와 성찰 재실행은 별도로 유지한다. 기억 조회·요약·저장 서비스는 계획 13절에서 구현했다(2026-11-10).
 - 성찰 상태(계획 12절, Issue #58, 2026-11-10): `reflect`가 `reflection`(직전 결과)·`reflection_history`(쌓기)·`reflection_retries`(합)·`reflection_retries_by_type`(유형별)을 채우고, 경로를 바꿀 때 `intent`·`reply_mode`·`selected_tool`·`tool_reason`을, 한도를 넘으면 `candidates`(확인 필요 표시)·`needs_review`·`notice="reflection_limit"`을 고친다. `reflect_fix` 호출의 재시도는 `call_retries`에만 더한다. 상태 형식은 바꾸지 않았다.
@@ -73,7 +83,14 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-11 · 메일·무역 공통 OpenAI Responses 전환
+마지막 갱신: 2026-11-12 · Windows 네이티브 실행·개인 장치 자격증명
+
+- #156 후속 Windows 수정: `app/worker/credentials.py`가 Windows 현재 사용자의 DPAPI와 사용자 전용 보호 DACL로 장치 자격증명을 저장/검증한다. WSL 없이 PowerShell에서 같은 pair/run 명령을 사용한다. 읽을 때 소유자·DACL·일반 파일을 같은 핸들로 검사하고 평문/손상·reparse point·다른 사용자 접근을 거부한다. macOS/Linux의 소유자·600 권한 검증은 유지한다. 본인 Google sub·서비스·만료 확인, 개인 .env 키만 사용, 서버 키 대체 금지·Gmail 설정·큐 API·DB 스키마는 유지한다.
+
+- `app/worker/`는 서버의 설치 정의 12개·해시·모델 일치, 256 KiB 요청/결과, 엄격한 출력 스키마, 소유자/장치/시도 검증을 담당한다. `worker_pairings`·`worker_devices`·`worker_jobs`·`worker_rate_limits`와 `users.ai_execution_mode`를 데이터 보존 마이그레이션으로 추가했다. 작업은 내부 `enqueue()`만 생성하고 외부 장치는 claim/heartbeat/complete만 할 수 있다. 사용자 행 잠금과 조건부 UPDATE로 단일 임대/완료를 확정하고 만료 임대는 자동 재배포하지 않는다. 확정/취소/만료 뒤 payload를 지우고 재시작/5초 주기 정리를 한다. 장치 토큰에는 Gmail/세션/파일 권한이 없다. 4절에서 `pc.py`의 개인 실행기와 `adapter.py`의 서버 큐 연결을 구현했다. PC는 명시한 HTTPS 원점·본인 Google sub·동일 설치 정의/모델만 허용하고 .env 키·출력 토큰·호출 빈도·동시 1개를 강제한다. 서버가 120초 전체 기한과 기존 재시도 예산을 관리한다. 완료 결과는 기존 토큰 암호화 키로 임시 전달한 뒤 소비/해제/기한에 지우며, 여러 DB 연결·서버 프로세스 사이에서도 전달한다.
+
+- `app/services/openai_keys.py`가 암호화 저장·교체·삭제·소유자 조회를 담당한다. `start_run()`과 네 문서 `/extract`가 `user_openai()` 범위를 만들고 `get_backend()`는 현재 사용자의 키만 조회한다. Gmail 푸시는 `GoogleAccess.cipher`와 메일함 소유자 ID를 전달한다. 전역 LLM 클라이언트 캐시는 제거했다. 미등록·암호문 손상은 API 호출 전 차단하고 문서 HTTP 409·메일 실패 안내를 남긴다. 테스트용 명시적 가짜 백엔드 주입은 유지한다.
+- 로컬 실행(계획 local-openai-execution 1절, #153): 전용 실행기의 실제 루프백 리스너·`LOCAL_OWNER_GOOGLE_SUB`·검증된 로그인 사용자(`google_sub`, `last_login_at`)를 매 키 조회 때 확인하고 `.env`의 `OPENAI_API_KEY`만 선택한다. 사용자 범위 밖·소유자/키 미지정·다른 계정이면 차단하며 DB 키를 대체 소스로 쓰지 않는다. 설정 화면은 `.env` 상태·본인의 검증 식별자만 보여 주고 키 원문·해시·부분 문자열을 노출하지 않으며 DB 키 변경 API도 거부한다. `docs/CONTRACT.md` 6절에 후속 서버 실행 방식(`stored_key|local_worker`)·장치 인증·허용 구조화 호출·버전/크기/만료/시간/오류 계약을 확정했다. 서버 장치 연결·큐는 3절에서 구현했고, local_worker의 실제 AI 연결도 4절에서 구현했다. 서버 키를 읽는 직접 백엔드 경로는 local_worker에서 차단한다. 상태·도구 스키마·노드·엣지는 유지했다.
 
 - 독립 문서 API 준비(`docs/plans/trade-domain-api.md`, Issue #108~#111): 요청 범위는 기본 오류 → PI 독립 모듈/API → PO·CI·PL이다. 마스터 챗봇은 제외한다. 1절에서 기존 DB Alembic 갱신, 수정 시 가격 재검증, 문서 revision과 수정/발송의 조건부 갱신을 추가했다(계약 15.9절). PI JSON API와 검토·선택·파일 저장은 3절에서 구현했다.
 - PI 독립 모듈(2절): `app/trade/pi/`의 `models.py`·`operations.py`·`agent.py`·`repository.py`가 PI 입력, 작성·수정, LangChain 구조화 추출, 사용자/PI 범위 저장을 담당한다. 업무는 저장소 인터페이스와 추출 함수를 주입받고 기존 메일 그래프·HTTP·구체 DB에 의존하지 않는다. 공통 입력 숫자는 정확한 Decimal 문자열이며 서버의 가격 인증·승인·상태 필드는 입력으로 받지 않는다. AI의 단가 변경 승인 값은 제거하고 상품 코드·당사자 근거도 검증한다. HTTP 연결은 `/api/trade/pi`이며 작성·추출·조회·수정·버전·검토·승인/취소/수정·파일 다운로드를 제공한다. 문서 확정은 메일을 발송하지 않는다.
@@ -99,7 +116,9 @@
 - 무역 문서 AI 추출 백엔드(2026-11-11): 네 도메인 `POST /api/trade/{kind}/extract`의 `trade_backend()`도 메일과 같은 `get_backend()`·OpenAI Responses 모델을 사용한다. `TRADE_EXTRACT_BACKEND` 선택은 제거했다. wire 스키마(`app/trade/common/extraction.py`)는 입력 검증의 일부 제약을 떼고 십진수를 문자열로 전송하며 반환값은 원래 스키마로 다시 검증한다. `call_structured()`의 백엔드 우선순위는 `use_backend` 오버라이드 > 명시 백엔드 > 팩토리 > 공통 OpenAI다. 기존 `get_responses_backend()`·`responses_model_name()` 진입점도 같은 모델·백엔드를 제공한다. 그래프 상태·도구 입출력·승인과 계산 규칙은 유지했다.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
-마지막 갱신: 2026-11-11 · 무역 설정 조회 import 경로 정리
+마지막 갱신: 2026-11-12 · PC 실패 후보 저장 차단
+
+- #156: `save_pending`은 PC 호출의 미완료/거부 상태를 확인해 후보 저장을 막고 `start_run`이 안전한 PC 오류 안내로 실패 종료한다. 그래프 상태의 notice 허용값만 확장했고 노드 이름·엣지·도구 입력은 유지했다.
 
 - `app/graph/build.py`·`routing.py`에 계약의 10개 노드·모든 전이를 연결했다(계획 2절, 2026-11-09). `reflect`는 계획 12절에서 채웠고, `finish_failed`는 종료 이유만 정한다. 기억 조회(13)의 `load_memory`와 견적서 생성(11)의 `make_quote`는 업무 본문을 구현했다. 알림 수신 서비스가 `processed_messages`를 그래프 실행 결과에 연결한다(계획 7절).
 - 기억 연결(13, 2026-11-10): `load_memory`가 기억을 읽고 필요할 때 요약한다. 분석·추출·후보 노드는 같은 `context_for_model()`로 기억을 모델 입력에 붙이며, `save_pending`은 단기 기억도 저장한다. 요약 오류는 `analyze_email`이 상태를 덮어쓰지 않고 기존 전이로 대체 후보/실패 종료에 이른다. 일반·견적 승인 성공 경로를 합친 뒤 일반 승인도 최초 후보 조회부터 사용자 잠금 안에서 실행해 메모리 SQLite의 단일 연결을 동시 승인 요청이 함께 쓰지 않게 했다. 그래프 상태 형식·노드 이름·엣지·도구 스키마는 유지했다.
@@ -119,7 +138,21 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-12 · 발급 파일 Storage 전환 검증(react-supabase 10절)
+마지막 갱신: 2026-11-12 · 발급 Storage·최신 개인 실행기와 PostgreSQL 통합
+
+- Windows 후속 수정의 로컬 전체 회귀는 `uv run pytest` **829 passed·4 skipped**(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개)이며 규칙 검사 경고 0개다. 자격증명은 실제 OS 저장소의 별도 프로세스 읽기·소유자/서비스·만료·덮어쓰기/링크·크기 제한을 시험한다. Windows 전용 DPAPI 평문/변조 거부·다른 사용자 읽기 ACE 거부와 전체 개인 실행기/HTTPS 프로세스 시험은 GitHub `windows-worker` 작업에서 실행한다(결과는 해당 PR 검사 기준). 시험 인증서는 기존 cryptography로 만들어 외부 OpenSSL 설치에 의존하지 않는다. 실제 Windows의 첫 실행에서 DPAPI/DACL과 메일/문서 시험은 통과했지만 강제 종료 후 키 교체 재시작에서 시간 초과가 발생했다. 종료된 long poll의 연결 상태를 claim 전에 검사하도록 고치고, 끊어진 요청이 새 작업을 임대하지 못하는 회귀를 추가했다. 수정 후 Linux 전체 회귀는 통과했으며 Windows 재검증 결과는 PR 검사 기준이다. 실제 API·운영 DB·Render·공용 Gmail 설정은 변경하지 않았다.
+
+- #156 최종 검사: `uv run pytest` **820 passed·2 skipped**(선택 PostgreSQL 모듈), 별도 `uv run --with pgserver==0.1.4 pytest tests/test_worker_postgres.py tests/test_trade_postgres.py -q` **8 passed**, 규칙 검사 경고 0개다. `test_worker_execution.py` 29개는 PC 모델/토큰/빈도/소유자 제한, 키/인증값 출력 차단, 안전한 오류, 서버 단독 재시도 예산, 같은 논리 ID/기한·새 attempt, 암호화 소비/해제/기한 정리, PC 종료·임대/전체 만료 뒤 후보 미저장·지연 결과 거부를 검증한다. `test_worker_process.py` 5개는 실제 HTTPS 서버·별도 PC 프로세스 2개·모의 OpenAI HTTP로 서로 다른 .env 키, 동시 사용자, 서버 저장 키 대체 금지, 무세션 Gmail→요약·성찰·후보→명시적 승인 발송, 거래 추출·네 문서 /extract·수동 검토/파일 발급, 키 교체/삭제·401/429/503을 확인한다. Chromium 390px/1280px에서 연결·대기·키 실패·해제, 화면 넘침/브라우저 오류·키/토큰 비노출을 확인했다. 실제 키·개인 메일·운영 설정은 사용하지 않았다.
+
+- #155 최종 검사: `uv run pytest` **786 passed·2 skipped**(선택 PostgreSQL 모듈 두 개), 규칙 검사 경고 0개. 별도 `uv run --with pgserver==0.1.4 pytest tests/test_worker_postgres.py tests/test_trade_postgres.py -q` **7 passed**다. `tests/test_worker_queue.py`의 70개 시험은 실제 ASGI/파일 SQLite에서 두 사용자 격리, CSRF, 코드/토큰 단일 전달·교체·해제, 버전/스키마/크기, 여러 DB 연결의 동시 claim/complete, 임대/전체 만료·재시작·payload 삭제, 서버 키 대체 차단을 확인한다. 임시 PostgreSQL에서도 장치/작업 격리·경합·기존 사용자 갱신과 기존 무역 문서 회귀를 확인했다. Chromium의 실제 HTTPS 시험에서 모드 저장·연결 승인·토큰 비노출·연결 해제·390px/1280px 화면과 페이지 오류 없음을 확인했다. 실제 OpenAI/Gmail·Render·운영 DB는 사용하지 않았다.
+
+- #154 최종 검사: `uv run pytest` **716 passed·1 skipped**(선택 pgserver 모듈), 별도 `uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py -q` **3 passed**, 규칙 검사 경고 0개. 로컬 Gmail 시험은 실제 루프백 프로세스를 포함해 31개다. 프로세스 시험은 AI 응답 횟수가 아닌 후보 DB 저장 완료를 기다려 비동기 경합을 제거했다.
+
+- 로컬 Gmail(#154): `tests/test_local_gmail.py`는 토픽 없는 로그인·현재 위치 시작·지정 소유자만 수집·페이지/중복·조회 실패 재개·history 만료·Google 토큰 갱신/취소·로그아웃/동의 취소·프로그램 재시작/종료와 공용 watch/stop 유지를 확인한다. 실제 `.env` 로더와 LangChain/OpenAI SDK 모의 HTTP로 환경 키 사용·승인 전 미발송·승인 후 1회 발송·키 비노출을 검증한다. 별도 프로세스에서 실제 `app.local` 루프백 리스너를 열어 화면 요청 없는 주기 수집 → 후보 생성 → 승인 두 번/발송 한 번 → 로그아웃 후 조회 중단 → lifespan 정상 종료까지 확인한다. `tests/fakes/local_server.py`는 이 시험 전용이며 운영 앱에 시험 경로를 추가하지 않는다. 실제 Google/OpenAI·운영 설정·개인 메일은 사용하지 않았다.
+
+- 로컬 키 모드(#153): `tests/test_local_openai.py` 27개가 실제 `.env` 로더·가짜 검증 로그인·LangChain/OpenAI SDK 모의 HTTP로 본인 메일/4종 문서의 환경 키 사용, 사용자 범위 밖·소유자 미지정·미검증/다른 사용자·키 누락·공용 실행/Render 차단, DB 키 조회/저장 금지·키 비노출·설정 안내·가짜 주입을 확인한다. 기존 설정 시험은 server/local별 환경 키 로딩 차이를 검증하도록 갱신했다. `uv run pytest`는 **685 passed·1 skipped**(기본 환경의 선택 pgserver 모듈 제외), 별도 `uv run --with pgserver==0.1.4 pytest tests/test_trade_postgres.py -q`는 **3 passed**다. 전용 명령을 실제 프로세스로 띄워 health/login 200·공개 Host 400·종료와 일반 공개 Uvicorn/Render의 로컬 모드 시작 거부도 확인했다. 규칙 검사는 경고 0개로 통과했다. 실제 OpenAI/Gmail·운영 비밀값·Render·운영 DB는 사용하지 않았다.
+
+- `tests/test_openai_keys.py`에서 실제 서명 세션·LangChain/OpenAI SDK 모의 HTTP로 개인 키 등록/교체/삭제·CSRF·소유자 격리·암호화/오류 응답 비노출·4종 문서·무세션 Gmail 푸시·동시 실행·키 교체/삭제 직후 차단·DB 재연결을 검증한다. 전체 회귀는 657 passed·1 skipped이고 규칙 검사는 경고 0개로 통과했다. Chromium에서 키 등록·삭제·키 원문 비노출·390px 모바일 표시와 브라우저 오류 없음을 확인했다. 실제 OpenAI/Gmail·Render·운영 DB는 호출하지 않았다.
 
 - 전체 OpenAI 전환 검증(2026-11-11): `uv run pytest -q`는 **639 passed·1 skipped**(pgserver 미설치로 선택 PostgreSQL 모듈 제외), `python3 .work/check.py`는 경고 0개로 통과했다. 실제 LangChain·OpenAI SDK와 `httpx.MockTransport`로 운영 출력 스키마 12개(메일 분석·답장·재질문·거래 추출·무역 추출·요약·성찰·독립 4종 문서), `/v1/responses` 요청, 429/401 무재시도·503 최대 3회, 잘못된 JSON/스키마 재시도·복구, 실제 평가 호출 경로의 공통 어댑터 사용을 검증했다. 최신 main의 PDF 이미지 재사용 변경을 합친 뒤 Google 로그인·승인·PDF·사용자 격리 회귀도 통과했다. 실제 OpenAI/Gmail·Render·운영 DB는 호출하지 않았다.
 
@@ -159,7 +192,16 @@
 - PDF 공통 렌더러(PI·PO·CI·PL): 한 문서 렌더링 안에서 같은 PNG와 crop 조건의 RGB 변환·압축 결과를 재사용하고, 여러 페이지에서 같은 이미지 PDF 객체를 공유한다. 페이지별 콘텐츠 스트림과 이미지 배치 명령은 유지한다. `tests/test_trade_pdf_pagination.py`는 이미지 종류 수만큼만 변환·압축하며 PDF 이미지 객체가 중복되지 않고 각 페이지가 같은 객체를 참조하는지 확인한다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-12 · 발급 PDF·XLSX Storage 전환(react-supabase 10절)
+마지막 갱신: 2026-11-12 · 발급 Storage·최신 main 통합
+
+- Windows 후속 수정은 WSL 없이 PowerShell에서 개인 실행기를 지원한다. README에 개인 `.env.worker` 준비·설치·pair/run·중지와 DPAPI 파일 재연결 방법을 안내했고 이 개인 파일을 커밋에서 제외했다. 코드 브랜치와 운영 DB 백업은 별개이며, 실제 운영 데이터·암호화 키를 공개 GitHub에 올리지 않는다. 이번 Windows 수정에는 DB 마이그레이션이나 Render/Google 설정 변경이 없다.
+- 실제 서비스 전체 연결은 계획 5절(#157)에서 미확인이다. AI는 사전 점검·자동/모의 시험·실행 절차와 결과 정리를 맡을 수 있다. 이 Codex 환경에서 실제 키/API 시험은 하지 않으며 키 입력·Google 동의/장치 승인·본인 PC 실행·과금 프로젝트 확인은 사람이 한다. README에 이 범위를 분명히 한 AI 준비 작업 요청문을 뒀다.
+
+- #155의 `20261112_worker_queue`는 기존 사용자를 `stored_key`로 유지하고 장치/큐/횟수 제한 표만 추가한다. 배포 전 DB 백업과 기존 토큰 암호화 키·Google OAuth·Pub/Sub 설정을 유지한다. 이 PR은 실제 Render/운영 DB/키를 변경하지 않았다. 장치 API는 HTTPS 서버 전용이며 `local_worker` AI 연결을 4절에서 구현했다. `20261112_worker_delivery`는 기존 데이터를 보존하고 전달용 결과 암호문 열만 추가한다. 개인 PC 명령은 `uv run python -m app.worker.pc pair|run --service https://<서비스>`이며, .env의 본인 식별자·키와 개인 전용 장치 자격증명을 요구한다. 자세한 설치·중지·문제 해결·서버가 보는 데이터는 README와 명령 도움말에 있다.
+
+- 개인 PC `.env` 키 모드(계획 1~2절 구현, #153·#154): `AI_RUNTIME` 기본은 `server`다. 개인 `.env`에 `local`을 지정하고 `uv run python -m app.local [--port 8000]`로 실행한다. 실제 소켓을 `127.0.0.1`에만 열고 검증한 소켓을 Uvicorn에 전달하며 공개 바인딩·리로드 옵션은 없다. 일반 앱 실행·Render·`PORT`가 있는 공용 실행에서는 로컬 모드 시작을 거부한다. Host·`APP_BASE_URL`은 허가 근거가 아니다. 최초 Google 로그인 후 본인 로컬 `/settings`에 표시된 검증 식별자를 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 개인 키를 채운 뒤 재시작한다. 최초 방문 자동 등록은 없다. 공용 서버의 환경 키 대체 금지는 유지한다. 개인 OAuth 앱 생성·localhost 콜백·토큰 암호화 키·개인 DB·토픽 불필요·재연결/중지 안내는 README '로컬 Gmail 연결과 새 메일 수집'에 있다. 앱이 켜진 동안만 수집하며 화면을 닫아도 계속한다. Render 장치 연결·큐(3절)는 준비됐고 개인 실행 프로그램·기존 AI 연결(4절)도 구현했다. 공용 Pub/Sub 설정과 실제 키·운영 설정은 변경하지 않았다.
+
+- 사용자별 키 전환: 기존 DB 백업 후 배포한다. `20261112_user_openai_keys` 마이그레이션은 기존 데이터와 승인 이력을 유지한다. 기존 `TOKEN_ENCRYPTION_KEY`는 유지하고 서버 `OPENAI_API_KEY`는 제거한다. 사용자는 배포 후 `/settings`에 개인 키를 등록한다. 등록 전 실패 메일은 자동 재처리하지 않으며 이미 시작한 작업은 키 삭제로 취소되지 않는다. Render 설정 변경·실제 사용자 키 등록은 이 작업에서 하지 않았다.
 
 - React 화면(react-supabase 6절, 2026-11-12): 루트 `frontend/`에 React+JavaScript+Vite 앱이 생겼다. 런타임 의존성은 `react`·`react-dom`·`react-router-dom`·`@supabase/supabase-js`만(버전 고정), 개발 의존성은 `vite`·`@vitejs/plugin-react`·ESLint 도구뿐이고 TypeScript·상태관리·UI키트는 없다. 시안 `trade-agent ui_시안.html`의 로그인 화면(그라데이션 아트 포함)·색 토큰·사이드바 레이아웃·모바일 하단탐색을 `frontend/src/styles.css`와 컴포넌트로 그대로 옮겼다. React Router가 `/app` 아래 경로(로그인·대시보드 뼈대, 작업현황·받은 메일·문서함·실행 기록·설정은 자리만)를 맡고, `src/supabase.js`의 클라이언트 1개가 Google OAuth(PKCE·`redirectTo` /app/login)를 시작하며, `src/api.js`가 Bearer 헤더·오류 정규화·401 처리를 담당한다. 저장·조회는 Auth 구독 이벤트에서 1회 요청하고(Effect 반복 조회 금지), 구독 cleanup을 둔다. 개발은 `cd frontend && npm ci && npm run dev`로 `http://localhost:5173/app/`에 띄우고 `/api` 프록시가 로컬 FastAPI(8000)로 보낸다. 실제 Google 로그인은 계획 2절 콘솔 설정이 먼저(미착수). CI에 Node 작업은 아직 없다(계획 21절).
 - React API 설정: `FRONTEND_ORIGINS`(허용 출처, `Authorization` 헤더 허용), `SESSION_SAME_SITE`(기본 lax, none은 HTTPS만). 무역·설정 JSON API는 이제 `Authorization: Bearer <Supabase access token>`으로도 쓴다(react-supabase 5절, 2026-11-12): 헤더가 있으면 `app/auth/supabase.py`의 `TokenVerifier`가 `SUPABASE_URL`의 JWKS로만 검증하고(잘못된 토큰이면 쿠키 세션으로 우회하지 않고, Bearer 변경 요청은 CSRF 토큰 불필요) 검증된 UUID를 `users.supabase_uid`로 기존 정수 id에 매핑한다. `GET /api/me`가 Bearer 전용 인증 상태·프로필·Gmail 연결 진입점이고 요청 뒤 감시 갱신을 건다. 헤더가 없으면 기존 세션 쿠키+CSRF(legacy)를 그대로 쓴다. 검토 제안에 문서·회사·계좌·이미지를 고정하고 승인 파일을 DB에 보관한다(계약 16절).
@@ -167,6 +209,8 @@
 - 비공개 Storage 첨부 API(react-supabase 8절, 2026-11-12): `app/files/`가 생겼다. `POST /api/files`(Bearer, multipart 한 파일씩)가 크기(5MiB)·확장자·파일 시그니처를 검증해 비공개 버킷(`SUPABASE_STORAGE_BUCKET`, 비우면 trade-files)에 `{internal_user_id}/attachments/…` key로 올리고 DB에는 `file_assets` 메타데이터만 남긴다(확장자가 가리키는 형식과 시그니처가 다르면 415로 거부). `GET /api/files/{id}`(메타)·`GET /api/files/{id}/download`(no-store·안전한 파일명·해시 대조)·`DELETE`(문서 출처로 참조 중이면 409, 기록을 먼저 지우고 객체 삭제 실패는 503)가 있고, `PUT /api/trade/{kind}/{id}/sources`가 파일 ID 목록·기대 revision 검증 뒤 새 revision·대기 검토 무효화로 출처를 연결한다(`trade_document_sources`, 과거 revision 연결 보존). 업로드 성공 뒤 SQL 실패로 남은 미참조 객체는 `uv run python -m app.files.cleanup --delete --yes`(사람 확인)으로만 정리한다(크론·큐 없음). 회사 이미지·발급 파일의 Storage 전환은 계획 9·10절.
 - 회사 로고·직인 Storage 전환(react-supabase 9절, 2026-11-12): 설정 업로드(`POST /api/trade/settings/branding/{kind}`)는 기존 2MiB·PNG 검증을 유지하고 bytes를 같은 버킷의 `{user_id}/branding/…` 객체로 올려 `company_branding`이 `file_assets` 파일 ID로 가리킨다(migration `20261112_company_images`, DB 바이너리 열은 22절 삭제까지 보존). 검토 제안은 이미지 파일 ID를 고정하고 승인 렌더 때 Storage에서 bytes를 읽어 `file_assets.sha256`과 대조한다(설정 교체 뒤에도 과거 제안은 같은 이미지). 이미지 없음 503 `IMAGE_UNAVAILABLE`·변조 503 `IMAGE_CORRUPTED`·Storage 장애 503 `STORAGE_UNAVAILABLE`·직인 없음 409 `SEAL_REQUIRED`로 실패를 숨기지 않고, Gmail 승인 발송(`send_approved_trade_document`)의 PDF도 같은 조회로 만든다. `DELETE /api/files/{id}`는 회사 설정·검토 제안 참조 중이면 409다. 기존 바이너리 행은 `uv run python -m app.trade.settings.backfill --yes`(dry-run 기본, 반복 실행 안전, 같은 bytes 재사용·해시 불일치 행은 보고)로 옮긴다.
 - 발급 PDF·XLSX Storage 전환(react-supabase 10절, 2026-11-12): `trade_artifacts`가 `object_key`·`size_bytes`를 기록하고 새 승인은 `content`를 채우지 않는다(migration `20261112_issued_artifacts`, content 열은 22절 삭제까지 보존, backfill 전 옛 행은 DB bytes로 다운로드). 승인(`SQLReviews.approve`)은 ①렌더 ②요청한 모든 형식을 `{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key에 저장(이미 key가 있으면 같은 bytes만 재사용, 다르면 503 `ARTIFACT_CORRUPTED`) ③SQL 트랜잭션에서 revision 조건부 갱신·제안 claim·파일 참조 확정 순서다. ②③ 사이 실패는 ready/pending을 유지하고 올려둔 객체는 미참조로 남는다(`app.files.cleanup` 참조 집합에 `trade_artifacts.object_key` 추가). 재승인은 approved 상태에서 Storage 없이 기존 파일을 돌려준다. `GET /api/trade/files/{file_id}` 다운로드는 Storage 읽기+해시 대조다(Storage 미설정 503 `STORAGE_NOT_CONFIGURED`). 옛 바이너리 행은 `uv run python -m app.trade.review.backfill --yes`(dry-run 기본, 저장 뒤 해시 대조 검증, 반복 실행=검증 실행)로 옮긴다.
+
+- 최신 main 통합(2026-11-12, c6b1600): 사용자별 OpenAI 키·개인 PC 실행기·Windows 자격증명 기능을 유지했다. `20261112_react_worker_merge`는 두 Alembic 분기를 합쳐 기존 운영 DB와 이 브랜치 DB 모두에서 전진 갱신한다. 신규 로컬·worker 시험도 PostgreSQL로 옮겼으며 Windows CI는 runner에 준비된 PostgreSQL을 시작해 사용한다. 프로젝트·비공개 버킷·Google OAuth는 요청자가 준비했다고 답했으며 환경변수는 미설정이다. 실제 연결·데이터 이전·키 입력은 아직 하지 않았다.
 
 - DB 갱신 준비: 서버 시작 시 `app/db/migrations/`의 Alembic 리비전을 적용한다. 기존 데이터와 승인 이력을 유지하며 부분 유니크 제약도 변경한다(계약 15.9절). PostgreSQL에서는 갱신 대상 스키마를 `public`으로 고정(`SET LOCAL search_path`, `alembic_version`도 `public`)해 Supabase의 `auth`·`storage` 스키마를 건드리지 않는다(react-supabase 계획 4절, 2026-11-12). 운영 반영 전 DB 백업을 보관한다. 이번 작업에서는 Render·운영 DB·실제 메일을 변경하지 않았다.
 
@@ -176,15 +220,15 @@
 - 주의: 15분 동안 요청이 없으면 잠들고 깨는 데 최대 약 1분 걸린다. 재배포·재시작·잠들 때 로컬 파일이 사라지므로 저장은 Postgres에만 한다. 시연 전에 화면을 미리 열어 깨운다.
 - 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 앱 DB는 PostgreSQL 전용이다(2026-11-12, react-supabase 계획 4절): `DATABASE_URL`이 비었거나 비PostgreSQL 주소면 시작이 거부되고 `local.sqlite3` 자동 생성 경로는 없다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render·Supabase 연결 시험은 후속 작업이다.
 - 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
-- LLM·OAuth: `OPENAI_API_KEY`, `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`), `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다.
-- 전체 LLM 전환 적용(2026-11-11): 먼저 로컬·Render에 OpenAI 키와 필요한 모델 설정을 넣고 API 결제·권한을 확인한다. 병합 시 자동 배포 후 가상 메일(분석→후보·요약·성찰)과 PI·PO·CI·PL 추출을 확인한 뒤 예전 Gemini 변수·백엔드 선택 변수를 제거한다. 이 작업에서는 실제 키·Render 설정을 변경하거나 실제 API를 호출하지 않았다(설정·연동 확인 미완료). OpenAI API 이용료는 ChatGPT 구독과 별개다.
+- LLM·OAuth: 사용자별 OpenAI 키(`/settings` 등록), `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`), `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다.
+- 전체 LLM 전환 적용(2026-11-11): 각 사용자가 개인 설정에 OpenAI 키를 등록하고 API 결제·권한을 확인한다. 모델 설정은 서버 `OPENAI_MODEL`을 따른다. 병합 시 자동 배포 후 가상 메일(분석→후보·요약·성찰)과 PI·PO·CI·PL 추출을 확인한 뒤 예전 Gemini 변수·백엔드 선택 변수를 제거한다. 이 작업에서는 실제 키·Render 설정을 변경하거나 실제 API를 호출하지 않았다(설정·연동 확인 미완료). OpenAI API 이용료는 ChatGPT 구독과 별개다.
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
-- 앱 설정: `DATABASE_URL`(PostgreSQL 접속 주소만 받음, 빈 값·비PostgreSQL 거부 — Supabase는 Session pooler 주소+`?sslmode=require`, 엔진 풀 상한 pool_size 5·max_overflow 10), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값). 기존 SQLite→PostgreSQL 데이터 이전은 일회성 명령 `uv run python -m app.db.copy_data`(README 실행 방법 참고)로 한다.
-- 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
+- 앱 설정: `DATABASE_URL`(PostgreSQL 접속 주소만 받음, 빈 값·비PostgreSQL 거부 — Supabase는 Session pooler 주소+`?sslmode=require`, 엔진 풀 상한 pool_size 5·max_overflow 10), `TOKEN_ENCRYPTION_KEY`(Google 토큰·사용자 OpenAI 키 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값). 기존 SQLite→PostgreSQL 데이터 이전은 일회성 명령 `uv run python -m app.db.copy_data`(README 실행 방법 참고)로 한다.
+- 로그인(계획 6절): `GOOGLE_OAUTH_*`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 필요하고 `server`에서는 `GMAIL_PUBSUB_TOPIC`도 있어야 로그인 버튼이 켜진다. `local`은 개인 OAuth 앱과 루프백 콜백을 사용하며 토픽 없이 가능하다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).
 - 공개 페이지(#82): 로그인 없이 `/about`(앱 소개)·`/privacy`(개인정보처리방침)·`/terms`(서비스 약관)가 열리고 모든 페이지 아래쪽에 세 링크가 있다. 로그인 화면 본문 아래에도 세 링크를 두고, 개인정보처리방침에 과제 종료 뒤 삭제·Google 연결 관리 링크·GitHub Issue 문의를 안내한다. 승인·발송 라우터와 공개 페이지 라우터를 함께 등록해 받은 메일·후보 승인과 비로그인 공개 페이지를 모두 유지한다. `tests/test_pages.py`에서 비로그인 200 응답·필수 안내 문구·소개와 로그인 본문의 링크를 확인한다. Google Auth Platform 브랜딩의 홈페이지·개인정보처리방침·서비스 약관 링크가 이 주소를 가리키며, 승인된 도메인은 `aio3-gmail-quote.onrender.com`(`onrender.com`은 Public Suffix List에 있음). 앱 이름은 화면과 같은 `Gmail 견적 도우미`로 맞춘다. Google 검증(브랜딩·데이터 액세스)은 신청하지 않고, 검증 안 된 앱 경고와 사용자 100명 상한을 감수한다(2026-11-10).
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-12 · 발급 PDF·XLSX Storage 전환(react-supabase 10절)
+마지막 갱신: 2026-11-12 · 발급 Storage·최신 main 통합
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -193,10 +237,11 @@
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 틀 있음(2026-11-10, 시나리오·판정 기준·시험 환경. 결과는 18·19) |
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
+| 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1~4절 로컬 키·Gmail 수집·장치/큐·PC 실행기/기존 AI 연결 구현. 실제 키·Render 연동은 사람의 5절에서 미확인 |
 | KE KOREA 무역서류 로직 이식 계획 | `docs/plans/kekorea-port.md` | 있음(2026-11-10, 팀 협의 결과는 gmail-quote-mvp 21에서 반영) |
 | KE KOREA 원본 사본(이식용, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 있음(2026-11-10, ai-agents `8d397a1`. 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
-| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS)·`frontend/`(6절 앱) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 3절 테스트 PostgreSQL·4절 앱 DB PostgreSQL 전용(설정 거부·풀 상한·migration 스키마 경계·`app.db.copy_data` 이전 명령)·5절 Supabase 인증·사용자 매핑(pyjwt 검증·`supabase_uid` migration·`/api/me`·무역/설정 Bearer 연결)·6절 React 기본 화면·Supabase 로그인(frontend/ Vite 앱·시안 이식·/app 라우팅·인증 경계·개발 /api 프록시)·7절 Gmail 연결 분리(`app/auth/gmail.py` 연결/해제/로그아웃 Bearer API·callback 분기·계정 일치 확인·기존 정수 ID 보존 연결)·8절 비공개 Storage 첨부 API(`app/files/` Storage 호출·첨부 업로드/다운로드/삭제·문서 출처 연결·미참조 객체 정리 명령)·9절 회사 로고·직인 Storage 전환(브랜딩 file_assets 연결·제안 이미지 고정·렌더 시 Storage 읽기·해시 대조·`app.trade.settings.backfill`) 적용(2026-11-12). 콘솔 설정(2절)·실제 이전(22절)은 미착수 |
+| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`(README·PLAN·REQUESTS)·`frontend/`(6절 앱) | 전용 폴더에 계획·새 작업 요청문을 모음. Auth·PostgreSQL·private Storage·기존 데이터 보존·22개 하위 작업. 1절 전환 계약 확정(2026-11-12, CONTRACT 7.1·9.1·11·16.3절·api-choice·.env.example·README에 목표 표기). 3절 테스트 PostgreSQL·4절 앱 DB PostgreSQL 전용(설정 거부·풀 상한·migration 스키마 경계·`app.db.copy_data` 이전 명령)·5절 Supabase 인증·사용자 매핑(pyjwt 검증·`supabase_uid` migration·`/api/me`·무역/설정 Bearer 연결)·6절 React 기본 화면·Supabase 로그인(frontend/ Vite 앱·시안 이식·/app 라우팅·인증 경계·개발 /api 프록시)·7절 Gmail 연결 분리(`app/auth/gmail.py` 연결/해제/로그아웃 Bearer API·callback 분기·계정 일치 확인·기존 정수 ID 보존 연결)·8절 비공개 Storage 첨부 API(`app/files/` Storage 호출·첨부 업로드/다운로드/삭제·문서 출처 연결·미참조 객체 정리 명령)·9절 회사 이미지·10절 발급 PDF/XLSX Storage 전환과 backfill 적용(2026-11-12). 11~21절 화면/배포 연결은 남음. 2절 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인, 환경변수 미설정. 실제 이전(22절)은 미착수 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |

@@ -1,8 +1,12 @@
 """계약의 설정·상수. 비밀값은 환경에서만 읽는다."""
 
 from dataclasses import dataclass, field
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
+from ipaddress import ip_address
 import os
+import socket
 
 from dotenv import load_dotenv
 
@@ -37,12 +41,42 @@ DEFAULT_REQUIRED_FIELDS = [
     {"key": "due_date", "label": "납기"},
 ]
 
+_local_listener = ContextVar("local_listener", default=None)
+
+
+@contextmanager
+def local_listener(listener: socket.socket):
+    """전용 실행기가 연 실제 소켓을 보관한다. 환경변수·요청 헤더는 허가가 아니다."""
+    token = _local_listener.set(listener)
+    try:
+        yield
+    finally:
+        _local_listener.reset(token)
+
+
+def validate_runtime(settings: "Settings") -> None:
+    if settings.ai_runtime == "server":
+        return
+    if any(os.getenv(name) for name in ("RENDER", "RENDER_SERVICE_ID", "RENDER_EXTERNAL_URL", "PORT")):
+        raise ValueError("공용 실행·Render에서는 AI_RUNTIME=local을 사용할 수 없습니다")
+    listener = _local_listener.get()
+    try:
+        allowed = (listener is not None and listener.family in {socket.AF_INET, socket.AF_INET6}
+                   and ip_address(listener.getsockname()[0]).is_loopback
+                   and listener.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN))
+    except (OSError, ValueError):
+        allowed = False
+    if not allowed:
+        raise ValueError("AI_RUNTIME=local은 uv run python -m app.local로만 실행하세요")
+
 
 @dataclass(frozen=True)
 class Settings:
     database_url: str = field(default="", repr=False)
     openai_api_key: str = field(default="", repr=False)
     openai_model: str = ""
+    ai_runtime: str = "server"
+    local_owner_google_sub: str = field(default="", repr=False)
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = field(default="", repr=False)
     google_oauth_redirect_uri: str = ""
@@ -59,6 +93,10 @@ class Settings:
     supabase_url: str = ""  # 서버 JWT 검증·Storage 호출 공통(CONTRACT 11절. 5절부터 JWT 검증에 쓴다)
     supabase_secret_key: str = field(default="", repr=False)  # 서버 전용 비밀 키(CONTRACT 11절. 7절부터 Gmail 연결 계정 확인에 쓴다)
     supabase_storage_bucket: str = ""  # 비공개 파일 버킷 이름. 비우면 기본 trade-files(CONTRACT 11·16.3절, 계획 8절)
+
+    def __post_init__(self):
+        if self.ai_runtime not in {"server", "local"}:
+            raise ValueError("AI_RUNTIME은 server 또는 local이어야 합니다")
 
     @property
     def resolved_database_url(self) -> str:
@@ -80,9 +118,13 @@ class Settings:
 
 
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    load_dotenv()
-    values = {name: os.getenv(name.upper(), "") for name in Settings.__dataclass_fields__}
+def get_settings(env_file: str | None = None) -> Settings:
+    load_dotenv(env_file) if env_file is not None else load_dotenv()
+    values = {name: os.getenv(name.upper(), "") for name in Settings.__dataclass_fields__
+              if name != "openai_api_key"}
+    values["ai_runtime"] = values["ai_runtime"].strip() or "server"
+    if values["ai_runtime"] == "local":
+        values["openai_api_key"] = os.getenv("OPENAI_API_KEY", "")
     values["reflection_enabled_default"] = (
         values["reflection_enabled_default"].lower() == "true"
     )

@@ -5,7 +5,8 @@
 {% for item in items %}
 <li><a class="mail-row" href="/threads/{{ item.thread_id }}">
 <span class="mail-main"><strong>{{ item.subject }}</strong><span class="muted">{{ item.from_addr }} · {{ item.received }}</span></span>
-<span class="badges">{% if item.rate_limited %}{{ status_badge('한도 초과', 'warn') }}{% endif %}{% if item.pending %}{{ status_badge('후보 ' ~ item.pending ~ '개', 'muted') }}{% endif %}{{ status_badge(item.status_label, item.tone) }}</span>
+{% if item.worker_notice %}<span class="muted">{{ item.worker_notice }}</span>{% endif %}
+<span class="badges">{% if item.key_required %}{{ status_badge('API 키 확인 필요', 'warn') }}{% endif %}{% if item.rate_limited %}{{ status_badge('한도 초과', 'warn') }}{% endif %}{% if item.pending %}{{ status_badge('후보 ' ~ item.pending ~ '개', 'muted') }}{% endif %}{{ status_badge(item.status_label, item.tone) }}</span>
 </a></li>
 {% endfor %}
 </ul>

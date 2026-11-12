@@ -27,6 +27,8 @@ def _mailbox_lock(database, user_id):
 
 
 def process_notification(access: GoogleAccess, email_address: str, history_id: str, *, graph=None):
+    if access.local_mode:
+        return  # 로컬 수집은 검증된 소유자만 조회하며 Pub/Sub로 시작하지 않는다.
     with access.database.session() as session:
         user = session.scalar(select(User).where(func.lower(User.email) == email_address.lower()))
     if user is None:
@@ -62,28 +64,7 @@ def _process_mailbox(access, user, notification_id, graph):
     if int(notification_id) <= int(cursor):
         return
     gmail = access.google.gmail(get_access_token(access, user.id))
-    page_token = None
-    latest = int(cursor)
-    seen = set()
-    while True:
-        page = access.google.list_history(gmail, cursor, page_token)
-        latest = max(latest, int(page["historyId"]))
-        for history in page.get("history", []):
-            for added in history.get("messagesAdded", []):
-                message_id = added["message"]["id"]
-                if message_id in seen or _processed(access, user.id, message_id):
-                    continue
-                seen.add(message_id)
-                raw = access.google.get_message(gmail, message_id)
-                email = decode_message(raw, user.email, lambda attachment_id: access.google.get_attachment(
-                    gmail, message_id, attachment_id,
-                ))
-                reason = _skip_reason(email, raw.get("labelIds", []))
-                if _claim_message(access, user.id, email, history["id"], reason):
-                    _run_message(access, user.id, email, graph)
-        page_token = page.get("nextPageToken")
-        if not page_token:
-            break
+    latest = collect_history(access, user, gmail, cursor, graph=graph)
     # 모든 페이지와 메일 읽기가 성공한 뒤에만 커서를 옮긴다. 중간 실패 때 저장된 메일은
     # 다음 알림에서 유일 키로 건너뛰고 아직 못 읽은 메일부터 이어서 처리한다.
     with access.database.session() as session:
@@ -93,6 +74,41 @@ def _process_mailbox(access, user, notification_id, graph):
             if watch.last_error and watch.last_error.startswith("gmail_push:"):
                 watch.status = "active"
                 watch.last_error = None
+
+
+def collect_history(access, user, gmail, cursor, *, graph=None, should_continue=lambda: True):
+    """공용 푸시와 로컬 조회의 MIME·필터·중복·실행 경계. 중단되면 커서를 반환하지 않는다."""
+    page_token = None
+    latest = int(cursor)
+    seen = set()
+    while True:
+        if not should_continue():
+            return None
+        page = access.google.list_history(gmail, cursor, page_token)
+        latest = max(latest, int(page["historyId"]))
+        for history in page.get("history", []):
+            for added in history.get("messagesAdded", []):
+                message_id = added["message"]["id"]
+                if message_id in seen or _processed(access, user.id, message_id):
+                    continue
+                if not should_continue():
+                    return None
+                seen.add(message_id)
+                raw = access.google.get_message(gmail, message_id)
+                if not should_continue():
+                    return None
+                email = decode_message(raw, user.email, lambda attachment_id: access.google.get_attachment(
+                    gmail, message_id, attachment_id,
+                ))
+                reason = _skip_reason(email, raw.get("labelIds", []))
+                if not should_continue():
+                    return None
+                if _claim_message(access, user.id, email, history["id"], reason):
+                    _run_message(access, user.id, email, graph)
+        page_token = page.get("nextPageToken")
+        if not page_token:
+            break
+    return latest if should_continue() else None
 
 
 def _processed(access, user_id, message_id):
@@ -141,7 +157,8 @@ def _claim_message(access, user_id, email, history_id, reason):
 
 
 def _run_message(access, user_id, email, graph):
-    result = start_run(user_id=user_id, email=email, mode="live", database=access.database, graph=graph)
+    result = start_run(user_id=user_id, email=email, mode="live", database=access.database, graph=graph,
+                       key_cipher=access.cipher)
     with access.database.session() as session:
         message = session.scalar(select(ProcessedMessage).where(
             ProcessedMessage.user_id == user_id,

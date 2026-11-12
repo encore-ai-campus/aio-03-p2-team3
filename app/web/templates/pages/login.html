@@ -7,7 +7,11 @@
 <div class="intro"><h1>테스트용 Gmail로 등록하세요</h1><p class="muted">답장 후보를 만들기 위해 받은 메일 내용 일부를 OpenAI API로 보냅니다. 실제 개인 메일이나 업무 메일 대신 테스트용 Gmail 계정과 가상 메일로 이용해 주세요.</p></div>
 {% if notice %}{{ banner(notice) }}{% endif %}
 {% call card('Google 계정으로 Gmail 연결') %}
+{% if local_mode %}
+<p>이 PC에서 본인 Gmail의 새 메일을 30초마다 확인합니다. 연결 이후의 메일만 수집하며 PC 프로그램을 종료하거나 로그아웃하면 멈춥니다. 답장은 직접 고르고 승인해야만 보냅니다.</p>
+{% else %}
 <p>로그인하면 새 메일 알림을 등록하고, 받은 메일마다 답장 후보를 만들어 둡니다. 답장은 직접 고르고 승인해야만 보냅니다.</p>
+{% endif %}
 {% if missing %}
 <p class="muted">서버 설정이 끝나지 않아 지금은 로그인할 수 없습니다. 비어 있는 환경변수: {{ missing | join(', ') }}</p>
 {{ button('Google로 로그인') }}

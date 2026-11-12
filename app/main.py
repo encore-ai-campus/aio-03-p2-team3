@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 import secrets
 from urllib.parse import urlsplit
@@ -8,20 +9,21 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.auth import gmail as gmail_connection
 from app.auth import router as supabase_me
 from app.auth.gmail import GmailConnectionError
 from app.auth.supabase import BearerAuthError, TokenVerifier
 from app.clients.gmail import GoogleClient
-from app.config import Settings, get_settings
+from app.config import Settings, get_settings, validate_runtime
 from app.db.engine import get_database
 from app.files import router as files_routes
 from app.files.service import FileError
 from app.files.storage import StorageClient
 from app.graph.run import get_graph
-from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
+from app.services.local_gmail import LocalGmailCollector
 from app.trade.common.models import DocumentError
 from app.trade.common import api as trade_api
 from app.trade.pi import router as pi_routes
@@ -32,6 +34,8 @@ from app.trade.settings import router as trade_settings
 from app.web import WEB, templates
 from app.web.deps import LoginRequired
 from app.web.routes import auth, candidates, gmail_push, inbox, pages, quotes, runs, settings as settings_routes
+from app.worker import router as worker_routes, service as worker_service
+from app.worker.protocol import WorkerError
 
 SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
@@ -42,6 +46,7 @@ def create_app(settings: Settings | None = None, google=None,
     supabase_auth: Supabase 토큰 검증기. 비우면 SUPABASE_URL로 만들고, 그것도 없으면 Bearer 인증 불가(503).
     storage: Storage 호출 객체. 비우면 SUPABASE_URL·SUPABASE_SECRET_KEY로 만들고, 없으면 파일 API 503."""
     config = settings or get_settings()
+    validate_runtime(config)
     same_site = config.session_same_site or "lax"
     if same_site not in {"lax", "strict", "none"}:
         raise ValueError("SESSION_SAME_SITE는 lax·strict·none 중 하나여야 합니다")
@@ -69,18 +74,44 @@ def create_app(settings: Settings | None = None, google=None,
                           config.supabase_storage_bucket.strip() or "trade-files")
             if config.supabase_url.strip() and config.supabase_secret_key.strip() else None
         )
-        # API 키가 없어도 기본 화면과 healthz는 사용할 수 있다.
-        app.state.llm = get_backend(config) if config.openai_api_key.strip() else None
+        # 서버의 OPENAI_API_KEY는 사용하지 않는다. 사용자 키는 호출 시에만 읽는다.
+        app.state.llm = None
         app.state.google = google or GoogleClient(config)
         app.state.google_access = GoogleAccess(
             database, app.state.google, make_cipher(config), config.gmail_pubsub_topic,
+            settings=config,
         )
+        collector = LocalGmailCollector(app.state.google_access) if config.ai_runtime == "local" else None
+        app.state.local_gmail = collector
+        task = asyncio.create_task(collector.run()) if collector else None
+        worker_stop = asyncio.Event()
+        async def clean_worker_queue():
+            while not worker_stop.is_set():
+                try:
+                    await asyncio.wait_for(worker_stop.wait(), timeout=5)
+                except TimeoutError:
+                    try:
+                        await asyncio.to_thread(worker_service.cleanup, database)
+                    except Exception as error:
+                        logging.getLogger(__name__).error("장치 큐 정리 실패 (%s)", type(error).__name__)
+
+        if config.ai_runtime == "server":
+            worker_service.cleanup(database)
+        worker_task = asyncio.create_task(clean_worker_queue()) if config.ai_runtime == "server" else None
         try:
             yield
         finally:
+            if worker_task:
+                worker_stop.set()
+                await worker_task  # 정리 스레드가 끝난 다음 DB를 닫는다.
+            if collector:
+                collector.stop()
+                await task  # 작업 스레드가 멈춘 다음 DB를 닫는다.
             database.close()
 
     app = FastAPI(title="Gmail 견적 도우미", lifespan=lifespan)
+    if config.ai_runtime == "local":
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]"])
     if not config.session_secret:
         logging.getLogger(__name__).warning("SESSION_SECRET이 비어 임시 키를 씁니다(재시작하면 로그인이 풀림)")
     app.add_middleware(
@@ -103,6 +134,7 @@ def create_app(settings: Settings | None = None, google=None,
     app.include_router(supabase_me.router)
     app.include_router(gmail_connection.router)
     app.include_router(files_routes.router)
+    app.include_router(worker_routes.router)
     app.include_router(trade_api.router)
     app.include_router(pi_routes.router)
     app.include_router(po_routes.router)
@@ -131,6 +163,11 @@ def create_app(settings: Settings | None = None, google=None,
     @app.exception_handler(FileError)
     def file_error(request: Request, error: FileError):
         return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
+    @app.exception_handler(WorkerError)
+    def worker_error(request: Request, error: WorkerError):
+        return JSONResponse({"error": {"code": error.code}}, status_code=error.status,
+                            headers={"Cache-Control": "private, no-store", "Retry-After": "5"} if error.status == 429
+                            else {"Cache-Control": "private, no-store"})
 
     @app.get("/healthz")
     def healthz():
