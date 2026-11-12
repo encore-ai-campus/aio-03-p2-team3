@@ -25,10 +25,12 @@ app/trade/
 
 ## 연결 준비
 
-1. 기존 Google 로그인으로 세션 쿠키를 만든다.
-2. `GET /api/session`의 `csrf_token`을 변경 요청의 `X-CSRF-Token`에 담는다. React 요청은 `credentials: 'include'`를 사용한다.
-3. `/api/trade/settings` 하위에서 회사·단가·계좌·PNG 직인을 설정한다. 원본 회사의 실제 값은 코드에 들어 있지 않다.
-4. 다른 출처의 React는 `FRONTEND_ORIGINS`에 정확한 출처를 쉼표로 구분해 지정한다. 사이트가 달라 `SameSite=None`이 필요하면 HTTPS에서 `SESSION_SAME_SITE=none`을 설정한다. 기본값은 lax다.
+1. 로그인은 둘 중 하나다(계약 9.1절 경로 구분).
+   - React(Supabase): 변경 없는 요청의 `Authorization: Bearer <Supabase access token>` 헤더만 쓴다. 쿠키·CSRF 토큰은 필요 없고 잘못된 토큰이면 쿠키 세션으로 우회하지 않는다. 서버는 `SUPABASE_URL`의 JWKS로 서명·issuer·audience·만료·UUID subject를 검증해 기존 정수 `user_id`에 매핑한다. 사용자 상태·프로필은 `GET /api/me`(Bearer 전용)로 시작한다.
+   - 기존 HTML 화면(전환 기간 legacy): Google 로그인 세션 쿠키를 만들고 `GET /api/session`의 `csrf_token`을 변경 요청의 `X-CSRF-Token`에 담는다. React 요청은 `credentials: 'include'`를 사용한다.
+2. `/api/trade/settings` 하위에서 회사·단가·계좌·PNG 직인을 설정한다. 원본 회사의 실제 값은 코드에 들어 있지 않다. 직인·로고 업로드(`POST /api/trade/settings/branding/{kind}`)는 기존 2MiB·PNG 검증을 유지하고 bytes를 비공개 Storage에 저장해 `file_assets` 파일 ID로 가리킨다(계획 9절). Storage가 설정되지 않았거나 오류면 503 `STORAGE_NOT_CONFIGURED`/`STORAGE_UNAVAILABLE`이다.
+   - React 설정 화면은 `/app/settings`다(계획 11절). `GET /api/trade/settings`는 회사·단가·계좌·거래처와 branding 파일 ID를 private/no-store로 돌려준다. `PUT /counterparties`(settings 하위)는 legal_name·aliases·주소/연락처·기본 배송지를 받고 기존 회사명 정규화 키로 본인 행을 갱신한다. user_id·company_key 같은 서버 필드는 입력으로 받지 않는다. 이미지는 `/api/files/{file_id}/download`를 Bearer로 읽는다.
+3. 다른 출처의 React는 `FRONTEND_ORIGINS`에 정확한 출처를 쉼표로 구분해 지정한다(Authorization 헤더 허용). 사이트가 달라 `SameSite=None`이 필요하면 HTTPS에서 `SESSION_SAME_SITE=none`을 설정한다. 기본값은 lax다.
 
 정확한 필드와 예시는 `/docs`의 OpenAPI를 기준으로 한다. 금액/수량은 `"10"`, `"8.25"`와 같은 십진수 문자열이다. 부동소수점·음수·무한대·허용 범위를 넘는 값은 거부한다. 서버 계산 결과·가격 인증·승인 상태는 입력으로 받지 않는다.
 
@@ -46,18 +48,26 @@ app/trade/
 | `GET /api/trade/{kind}/{id}/versions/{revision}` | 보관한 버전 조회 |
 | `POST /api/trade/{kind}/{id}/reviews` | `{revision, formats:["pdf","xlsx"]}`로 최종 검토 제안 |
 | `GET /api/trade/{kind}/{id}/reviews/{proposal_id}` | 보관한 제안과 선택 결과 조회 |
+| `GET /api/trade/{kind}/{id}/reviews/{proposal_id}/branding/{logo|seal}` | 본인·문서 종류·문서 ID·제안에 고정된 이미지 조회. 해시 검증 PNG, private/no-store. 파일 발급·내용 변경 없음 |
 | `POST /api/trade/{kind}/{id}/reviews/{proposal_id}/decisions` | 승인·취소·수정 선택 |
+| `PUT /api/trade/{kind}/{id}/sources` | `{revision, file_ids}`로 문서 출처 연결(첨부). 성공하면 새 revision·대기 검토 무효화, 과거 revision 연결은 보존(계획 8절, Bearer) |
 | `GET /api/trade/files/{file_id}` | 본인이 승인한 파일 다운로드 |
 
 선택 요청은 `action`, `revision`, 반환받은 `content_hash`가 필요하다. 제안 ID는 URL에 둔다. `modify`에만 새 편집 입력 전체를 `document`로 보낸다. 제안 본문은 화면에 보여 주고 변경하지 않은 서버의 해시를 돌려보낸다.
 
-- `approve`: ready인 현재 버전을 issued로 확정하고 같은 트랜잭션에서 파일을 저장한다. 중복·동시 요청은 같은 파일을 반환한다.
+- `approve`: ready인 현재 버전을 issued로 확정한다. 파일 bytes는 요청한 모든 형식을 먼저 비공개 Storage에 저장한 뒤(`{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key, 같은 bytes만 재사용) SQL 트랜잭션에서 revision·제안·파일 참조를 함께 확정한다(계획 10절). 저장·확정 중 실패는 발급하지 않고 pending/ready를 유지한다. 중복·동시 요청은 같은 파일을 반환한다.
 - `cancel`: 제안만 cancelled로 종료한다. 문서 초안은 남고 파일은 발급하지 않는다.
 - `modify`: 이전 제안을 superseded/modify로 기록하고 문서를 새 버전으로 만든다. 준비됐으면 새 제안을 반환하고, 미완성이면 DocumentResult(`needs_input`)를 반환한다. 이전 동의는 새 내용에 적용하지 않는다.
 
-문서 수정은 기대 revision과 일치해야 한다. 대기 제안은 무효화하고 과거 승인 파일은 보존한다. 승인한 회사·계좌·이미지는 제안 시점에 고정돼 설정 변경 후에도 같은 파일을 내려받는다. 파일 생성에 실패하면 발급하지 않고 pending/ready를 유지한다.
+문서 수정은 기대 revision과 일치해야 한다. 대기 제안은 무효화하고 과거 승인 파일은 보존한다. 승인한 회사·계좌·이미지는 제안 시점의 파일 ID로 고정돼 설정 변경 후에도 Storage의 같은 이미지로 파일을 내려받는다(계획 9절). 렌더 때 이미지를 읽지 못하면(Storage 장애 503 `STORAGE_UNAVAILABLE`, bytes 불일치 503 `IMAGE_CORRUPTED`, 참조 없음 503 `IMAGE_UNAVAILABLE`) 발급하지 않고 pending/ready를 유지한다.
+
+`GET /api/trade/files/{file_id}`는 승인된 발급 파일을 Storage에서 읽어 기록된 해시와 대조해 돌려준다(계획 10절). Storage 장애·미설정은 503 `STORAGE_UNAVAILABLE`/`STORAGE_NOT_CONFIGURED`, bytes 불일치는 503 `ARTIFACT_CORRUPTED`로 실패시키고 10절 이전 옛 행은 보존된 DB bytes로 내려받는다.
+
+첨부 파일은 Bearer 전용 `/api/files`(한 파일씩 multipart 업로드·메타데이터·다운로드·삭제)로 올려 위 `sources` 경로로 문서에 연결한다. bytes는 비공개 Storage 버킷에만 두고 DB에는 메타데이터(`file_assets`)만 남는다(계약 16.3절). 회사 설정이나 검토 제안이 참조 중인 이미지 파일은 삭제가 409로 거부된다(계획 9절). 9절 이전 회사 이미지 바이너리 행은 `uv run python -m app.trade.settings.backfill --yes`로, 10절 이전 발급 파일 바이너리 행은 `uv run python -m app.trade.review.backfill --yes`로 옮긴다(둘 다 반복 실행 안전, 뒤의 명령은 재실행이 저장 객체 해시 대조 검증이다).
 
 ## 문서별 차이
+
+React PI 화면은 `/app/trade/pi`(새 작성)·`/app/trade/pi/{id}`(재개)다(계획 12절). 문장 추출/직접 입력→서버 계산→누락 보완→최종 검토→승인/취소/수정→PDF/XLSX 다운로드를 연결한다. 검토에 고정된 문서·회사·계좌·이미지·revision·해시를 표시하며 브라우저에서 금액을 계산하지 않는다. 오래된 탭의 409는 입력을 보존하고 최신본 재조회·재검토를 안내한다. 상품/통화/거래처/단위 변경은 단가 확인을 해제해 기존 동의를 재사용하지 않는다. 개인 키는 화면의 접힌 등록 영역에서 Bearer 전용 `PUT /api/openai-key`(form `api_key`)·`DELETE /api/openai-key`로 관리한다. 기존 암호화/본인 범위/로컬 환경 전용 규칙을 재사용하며 키 원문을 응답하지 않는다.
 
 **PO**: 발행사는 buyer, 공급처는 seller다. 매입 단가를 사용하며 PI의 판매 단가·계좌를 복사하지 않는다. **PI**: 발행사는 seller이며 판매 단가와 통화별 계좌를 적용한다. 사용자 지정 샘플 행은 독립된 수량·0원 단가를 허용한다. AI의 샘플 표시는 원문 근거가 있어야 한다. 통화·상품 변경 시 이전 단가 확인을 재사용하지 않는다.
 
@@ -88,9 +98,9 @@ app/trade/
 - `needs_input`: 부족한 정보를 보완하거나 PL 합계를 확인할 정상 경로다. 입력 초안과 revision은 저장된다.
 - `ready`: 최종 검토 제안을 만들 수 있는 문서다.
 - `issued`: 특정 버전의 파일을 발급했다. 이후 수정은 새 버전으로 처리한다.
-- 401 로그인 필요, 403 CSRF 토큰 오류, 404 본인 범위에서 찾을 수 없음, 409 오래된 버전/처리된 제안/업무 선행 조건, 422 입력·출력 형식 오류, 503 AI 추출 실패다.
+- 401 로그인 필요·Bearer 토큰 거부, 403 CSRF 토큰 오류, 404 본인 범위에서 찾을 수 없음, 409 오래된 버전/처리된 제안/업무 선행 조건, 422 입력·출력 형식 오류, 503 AI 추출 실패·로그인 서버 장애다.
 
-업무 오류 본문은 `{"error":{"code":"REVISION_CONFLICT","message":"최신 문서를 다시 확인하세요"}}` 형식이다. FastAPI 입력 형식 오류와 인증 토큰 오류는 기본 `detail` 형식이다. 승인되지 않은 파일이나 다른 사용자의 자료는 내려받을 수 없다.
+업무 오류 본문은 `{"error":{"code":"REVISION_CONFLICT","message":"최신 문서를 다시 확인하세요"}}` 형식이고 Bearer 인증 오류도 같은 형식이다(`invalid_token` 401, `auth_unavailable`/`auth_not_configured` 503). FastAPI 입력 형식 오류와 CSRF 토큰 오류는 기본 `detail` 형식이다. 승인되지 않은 파일이나 다른 사용자의 자료는 내려받을 수 없다.
 
 ## 검증
 

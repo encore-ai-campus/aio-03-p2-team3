@@ -52,6 +52,19 @@ jobs:
     name: tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # 테스트 DB는 전부 PostgreSQL이다(3절). service 컨테이너를 띄워 TEST_DATABASE_URL로 쓴다.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -63,6 +76,8 @@ jobs:
 
       - name: 테스트
         run: uv run pytest
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
   windows-worker:
     name: windows-worker
@@ -70,6 +85,7 @@ jobs:
     timeout-minutes: 10
     env:
       PYTHONUTF8: "1"
+      TEST_DATABASE_URL: postgresql://postgres:root@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
 
@@ -77,6 +93,13 @@ jobs:
 
       - name: 패키지 설치
         run: uv sync --locked
+
+      - name: Windows 시험 PostgreSQL 시작
+        shell: pwsh
+        run: |
+          $pgService = Get-Service -Name 'postgresql-x64-*' | Select-Object -First 1
+          Set-Service -Name $pgService.Name -StartupType Manual
+          Start-Service -Name $pgService.Name
 
       - name: Windows 개인 실행기·DPAPI·DACL·HTTPS 프로세스 검사
         run: uv run pytest tests/test_worker_credentials.py tests/test_worker_execution.py tests/test_worker_process.py -q

@@ -19,17 +19,19 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select
 
 from app.db.models import (
-    Approval, CompanyBankAccount, CompanyBranding, CompanyProfile, PriceListItem, ReplyCandidate,
-    TradeDocument, utcnow,
+    Approval, CompanyBankAccount, CompanyBranding, CompanyProfile, FileAsset, PriceListItem,
+    ReplyCandidate, TradeDocument, utcnow,
 )
 from app.graph.run import start_run
 from app.llm.client import use_backend
+from app.files.storage import StorageError
 from app.services.approval import send_approved_candidate, send_approved_trade_document
 from app.services.auth import GoogleAccess, TokenCipher, save_login
 from app.services.trade_docs import approve_packing_totals, revise_trade_document
 from tests.fakes.gmail import FakeGmailGoogle, message
 from tests.fakes.google import fake_login
 from tests.fakes.llm import FakeLLM
+from tests.fakes.storage import FakeStorage
 
 ISSUER_NAME = "Testworks Trading Co"  # 가상 발행 회사(영문)
 BANK_KEYS = ("BENEFICIARY", "BANK_NAME", "BRANCH", "SWIFT", "ACCOUNT_NUMBER", "BANK_ADDRESS")
@@ -52,8 +54,10 @@ def seal_png(width=1, height=1):
             chunk(b"IDAT", zlib.compress(pixels)) + chunk(b"IEND", b""))
 
 
-def put_settings(database):
-    """무역서류에 필요한 본인 설정: 발행 회사·계좌·무역 단가표(가상)·직인."""
+def put_settings(database, storage):
+    """무역서류에 필요한 본인 설정: 발행 회사·계좌·무역 단가표(가상)·직인.
+
+    직인은 9절 저장 경로와 같은 모양(file_assets 행 + Storage 객체)으로 심는다."""
     seal = seal_png()
     with database.session() as session:
         session.add(CompanyProfile(
@@ -70,7 +74,14 @@ def put_settings(database):
             PriceListItem(user_id=1, item_name="Virtual Serum", capacity="50ml", role="purchase",
                           currency="KRW", unit_price_text="8000", party_key="", price_basis="per PCS"),
         ])
-        session.add(CompanyBranding(user_id=1, seal=seal, seal_sha256=hashlib.sha256(seal).hexdigest()))
+        asset = FileAsset(user_id=1, original_filename="seal.png", content_type="image/png",
+                          size_bytes=len(seal), sha256=hashlib.sha256(seal).hexdigest(),
+                          object_key="1/branding/seed")
+        session.add(asset)
+        session.flush()
+        session.add(CompanyBranding(user_id=1, seal=seal, seal_sha256=hashlib.sha256(seal).hexdigest(),
+                                    seal_file_id=asset.id))
+    storage.objects[asset.object_key] = seal
 
 
 def trade_email(subject, body, message_id="fake-message", thread_id="fake-thread"):
@@ -152,7 +163,8 @@ def stored_candidates(database, result):
 # ── PI: 그래프 → 검토 입력(문서번호) → 승인 발송(PI 계좌·직인 PDF 첨부) ────────────
 
 def test_pi_flow_from_graph_to_sent(database):
-    put_settings(database)
+    storage = FakeStorage()
+    put_settings(database, storage)
     email = trade_email(
         "PI 작성 요청",
         "Hello, this is Acme Trading. Please create a PI for Virtual Serum 100 PCS "
@@ -179,11 +191,11 @@ def test_pi_flow_from_graph_to_sent(database):
 
     # 문서 확정(문서번호 입력) 뒤에만 발송 승인이 가능하다.
     access = approval_access(database)
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "needs_input"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "needs_input"
     finalized = revise_trade_document(1, row.id, {"document_number": "V-100"}, database=database)
     assert finalized["status"] == "ready" and finalized["ready_for_issue"] is True
 
-    outcome = send_approved_trade_document(1, row.id, candidates[0].id, access=access)
+    outcome = send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage)
     assert outcome.outcome == "sent" and outcome.thread_id == "fake-thread"
     sends = access.google.mailbox.called("send")
     assert len(sends) == 1  # 재시도 없이 1회(승인 경로 규칙)
@@ -206,13 +218,14 @@ def test_pi_flow_from_graph_to_sent(database):
         assert session.scalar(select(Approval).where(
             Approval.candidate_id == candidates[0].id)).send_status == "sent"
     # 이미 보낸 문서는 다시 보내지 않는다.
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "already_sent"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "already_sent"
 
 
 # ── PO: 매입가 적용·발행사(구매자) 검사 ───────────────────────────────────────
 
 def test_po_flow_applies_purchase_price_and_issuer_buyer(database):
-    put_settings(database)
+    storage = FakeStorage()
+    put_settings(database, storage)
     email = trade_email(
         "PO 작성 요청",
         "Hello, we order Virtual Serum 100 PCS, currency KRW. Please create a PO. "
@@ -237,7 +250,7 @@ def test_po_flow_applies_purchase_price_and_issuer_buyer(database):
     assert finalized["status"] == "ready" and finalized["total"] == "800000"
     access = approval_access(database)
     candidates = stored_candidates(database, result)
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "sent"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "sent"
     with database.session() as session:
         assert session.get(TradeDocument, row.id).status == "sent"
 
@@ -245,7 +258,8 @@ def test_po_flow_applies_purchase_price_and_issuer_buyer(database):
 # ── CI: 첨부 PI 가격 그대로·렌더 직전 ci_render_data ─────────────────────────────
 
 def test_ci_flow_uses_pi_prices_without_catalog_substitution(database):
-    put_settings(database)
+    storage = FakeStorage()
+    put_settings(database, storage)
     email = trade_email(
         "CI 작성 요청",
         "Shipment S-1 cleared customs. Quoted from the received document: "
@@ -265,11 +279,12 @@ def test_ci_flow_uses_pi_prices_without_catalog_substitution(database):
     assert finalized["status"] == "ready"  # PI 근거·금액 일치로 생성 차단이 풀린다
     access = approval_access(database)
     candidates = stored_candidates(database, result)
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "sent"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "sent"
 
 
 def test_ci_without_pi_source_is_blocked_from_sending(database):
-    put_settings(database)
+    storage = FakeStorage()
+    put_settings(database, storage)
     email = trade_email(
         "CI 작성 요청",
         "Please prepare a CI for Virtual Serum 100 PCS at USD 8.00 per PCS. "
@@ -284,14 +299,15 @@ def test_ci_without_pi_source_is_blocked_from_sending(database):
     row = stored_document(database, result)
     access = approval_access(database)
     candidates = stored_candidates(database, result)
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "needs_pi_source"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "needs_pi_source"
     assert access.google.mailbox.called("send") == []  # 보내지 않는다
 
 
 # ── PL: 합계 승인(문서 확정)과 발송 승인 구분 ───────────────────────────────────
 
 def test_pl_flow_requires_packing_approval_then_send(database):
-    put_settings(database)
+    storage = FakeStorage()
+    put_settings(database, storage)
     email = trade_email(
         "PL 작성 요청",
         "Please prepare a PL for shipment S-9. Virtual Serum 100 PCS in 10 cartons, "
@@ -313,13 +329,13 @@ def test_pl_flow_requires_packing_approval_then_send(database):
     access = approval_access(database)
     candidates = stored_candidates(database, result)
     # 문서번호(검토 입력) → PL 합계 승인 → 발송 승인 순서로만 갈 수 있다.
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "needs_input"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "needs_input"
     finalized = revise_trade_document(1, row.id, {"document_number": "L-100"}, database=database)
     assert finalized["status"] == "ready"  # 차이가 없는 PL: 승인 없이 ready
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "needs_input"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "needs_input"
     approved = approve_packing_totals(1, row.id, database=database)
     assert approved["packing_totals"]["approved"] is True  # 문서 확정 승인(원본 합계 보존)
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "sent"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "sent"
     with database.session() as session:
         assert session.get(TradeDocument, row.id).status == "sent"
 
@@ -327,7 +343,8 @@ def test_pl_flow_requires_packing_approval_then_send(database):
 # ── 경로 보호: 무역 문서 후보는 일반 승인 경로로 보내지 않는다 ─────────────────────
 
 def test_trade_candidate_cannot_be_sent_by_general_approval(database):
-    put_settings(database)
+    storage = FakeStorage()
+    put_settings(database, storage)
     email = trade_email(
         "PI 작성 요청",
         "Hello, this is Acme Trading. Please create a PI for Virtual Serum 100 PCS "
@@ -343,10 +360,11 @@ def test_trade_candidate_cannot_be_sent_by_general_approval(database):
 # ── 직인 없으면 발송 승인이 PDF 생성을 차단한다(원본 동작) ───────────────────────
 
 def test_missing_seal_blocks_trade_send(database):
-    put_settings(database)
-    with database.session() as session:  # 직인만 지운다
+    storage = FakeStorage()
+    put_settings(database, storage)
+    with database.session() as session:  # 직인 연결만 지운다
         branding = session.get(CompanyBranding, 1)
-        branding.seal, branding.seal_sha256 = None, None
+        branding.seal_file_id = None
     email = trade_email(
         "PI 작성 요청",
         "Hello, this is Acme Trading. Please create a PI for Virtual Serum 100 PCS "
@@ -356,8 +374,32 @@ def test_missing_seal_blocks_trade_send(database):
     revise_trade_document(1, row.id, {"document_number": "V-101"}, database=database)
     access = approval_access(database)
     candidates = stored_candidates(database, result)
-    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access).outcome == "needs_seal"
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "needs_seal"
     assert access.google.mailbox.called("send") == []
     with database.session() as session:
         assert session.get(TradeDocument, row.id).status == "ready"  # 문서 상태는 그대로
         assert session.get(ReplyCandidate, candidates[0].id).status == "pending"
+
+
+def test_seal_storage_failure_blocks_trade_send_without_fake_success(database):
+    # 9절: Gmail 렌더 경로의 직인도 Storage에서 읽는다. 저장소를 못 읽으면 발송하지 않는다.
+    storage = FakeStorage()
+    put_settings(database, storage)
+    email = trade_email(
+        "PI 작성 요청",
+        "Hello, this is Acme Trading. Please create a PI for Virtual Serum 100 PCS "
+        "at USD 8.00 per PCS. Incoterms FOB Busan, payment T/T.")
+    result, _ = run_flow(database, email, trade_response("PI", items=[item(unit_price="8.00")]))
+    row = stored_document(database, result)
+    revise_trade_document(1, row.id, {"document_number": "V-102"}, database=database)
+    access = approval_access(database)
+    candidates = stored_candidates(database, result)
+    storage.download_error = StorageError("storage_unavailable", "파일 저장소에 연결하지 못했습니다.")
+    outcome = send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage)
+    assert outcome.outcome == "failed"
+    assert access.google.mailbox.called("send") == []
+    with database.session() as session:
+        assert session.get(TradeDocument, row.id).status == "ready"  # 아직 claim하지 않았다
+        assert session.get(ReplyCandidate, candidates[0].id).status == "pending"
+    storage.download_error = None
+    assert send_approved_trade_document(1, row.id, candidates[0].id, access=access, storage=storage).outcome == "sent"

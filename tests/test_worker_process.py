@@ -75,7 +75,7 @@ def process(command, env):
 
 
 @pytest.fixture
-def system(tmp_path):
+def system(tmp_path, database_url):
     cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
@@ -92,7 +92,7 @@ def system(tmp_path):
     cert.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
     ports = free_port(), free_port()
     service, mock = (f"https://127.0.0.1:{port}" for port in ports)
-    config = Settings(database_url=f"sqlite:///{tmp_path / 'server.sqlite3'}", session_secret="fake-session",
+    config = Settings(database_url=database_url, session_secret="fake-session",
                       token_encryption_key=Fernet.generate_key().decode(), app_base_url=service,
                       gmail_pubsub_topic="projects/fake/topics/fake", pubsub_push_token="fake-push-token")
     envfile = tmp_path / "server.env"
@@ -112,7 +112,8 @@ def system(tmp_path):
             session.add(ThreadMessage(user_id=1, thread_id="fake-thread", gmail_message_id=f"old-{index}",
                 direction="in", from_addr="sender@example.invalid", to_addrs=["demo@example.invalid"],
                 subject="가상 과거 문의", body_text="가상 과거 내용", sent_at=datetime(2026, 11, 9, index, tzinfo=UTC)))
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("OPENAI_", "LOCAL_OWNER_", "AI_RUNTIME"))}
+    settings_names = {name.upper() for name in Settings.__dataclass_fields__}
+    env = {k: v for k, v in os.environ.items() if k not in settings_names}
     env["SSL_CERT_FILE"] = str(cert)
     with process(["server", "--env", str(envfile), "--port", str(ports[0]), "--cert", str(cert), "--key", str(key)], env), \
          process(["openai", "--port", str(ports[1]), "--cert", str(cert), "--key", str(key)], env), \

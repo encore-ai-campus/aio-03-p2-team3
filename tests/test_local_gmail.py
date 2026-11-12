@@ -38,11 +38,11 @@ from tests.test_local_openai import clean_environment, listener
 from tests.test_openai_keys import sdk
 
 
-def env_file(tmp_path):
+def env_file(tmp_path, database_url):
     path = tmp_path / ".env"
     path.write_text("\n".join([
         "AI_RUNTIME=local", "LOCAL_OWNER_GOOGLE_SUB=fake-sub-1", "OPENAI_API_KEY=fake-local-private-key",
-        f"DATABASE_URL=sqlite:///{tmp_path / 'local.sqlite3'}", "SESSION_SECRET=fake-local-session",
+        f"DATABASE_URL={database_url}", "SESSION_SECRET=fake-local-session",
         f"TOKEN_ENCRYPTION_KEY={Fernet.generate_key().decode()}",
         "GOOGLE_OAUTH_CLIENT_ID=fake-client", "GOOGLE_OAUTH_CLIENT_SECRET=fake-secret",
         "GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback",
@@ -51,8 +51,8 @@ def env_file(tmp_path):
 
 
 @pytest.fixture
-def local(tmp_path, monkeypatch, sdk):
-    settings = get_settings(str(env_file(tmp_path)))
+def local(tmp_path, database_url, monkeypatch, sdk):
+    settings = get_settings(str(env_file(tmp_path, database_url)))
     fake = FakeGmailGoogle()
     started = Event()
     original = LocalGmailCollector.poll_once
@@ -327,8 +327,8 @@ def test_new_collector_resumes_persisted_cursor_after_process_restart(local, sdk
     assert len(rows(access.database, Run)) == 2
 
 
-def test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector(tmp_path):
-    settings = replace(get_settings(str(env_file(tmp_path))), ai_runtime="server",
+def test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector(tmp_path, database_url):
+    settings = replace(get_settings(str(env_file(tmp_path, database_url))), ai_runtime="server",
                        gmail_pubsub_topic="projects/fake/topics/unchanged")
     fake = FakeGmailGoogle()
     with TestClient(create_app(settings, google=fake)) as client:
@@ -358,8 +358,8 @@ def test_real_google_profile_request_reads_position_without_watch(local):
     assert calls == [{"userId": "me"}, {"num_retries": 2}]
 
 
-def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_path):
-    path = env_file(tmp_path)
+def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_path, database_url):
+    path = env_file(tmp_path, database_url)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]

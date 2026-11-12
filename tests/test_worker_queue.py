@@ -30,13 +30,13 @@ MODEL = "gpt-6-luna"
 
 
 @pytest.fixture
-def web(tmp_path, monkeypatch):
+def web(database_url, monkeypatch):
     clock = [datetime(2026, 11, 12, 4, 0, tzinfo=UTC)]
     monkeypatch.setattr(service, "utcnow", lambda: clock[0])
     def forbidden(*args, **kwargs):
         pytest.fail("장치 연결/큐는 OpenAI를 호출하면 안 됩니다")
     monkeypatch.setattr(llm, "_backend_for_settings", forbidden)
-    config = Settings(database_url=f"sqlite:///{tmp_path / 'worker.sqlite3'}", session_secret="fake-session",
+    config = Settings(database_url=database_url, session_secret="fake-session",
                       token_encryption_key=Fernet.generate_key().decode(), app_base_url="https://testserver",
                       openai_api_key="fake-unused-server-key")
     with TestClient(create_app(config, google=FakeGmailGoogle()), base_url="https://testserver") as client:
@@ -191,7 +191,11 @@ def test_other_user_cannot_reapprove_a_used_code(web):
 
 
 def test_device_token_has_no_session_gmail_or_download_authority(web):
+    from app.auth.supabase import TokenVerifier
+    from tests.test_supabase_auth import FakeJwks, SUPABASE_URL
+
     client, config, clock = web
+    client.app.state.supabase_auth = TokenVerifier(SUPABASE_URL, fetch_jwks=FakeJwks().serve)
     device, _, _ = pair(web)
     job = enqueue(web)
     assert claim(web, device).status_code == 200
@@ -464,15 +468,15 @@ def test_selected_worker_mode_cannot_fall_back_to_existing_user_or_server_key(we
     assert UserKeyAccess(database, 1, client.app.state.google_access.cipher, config).read() == "fake-user-key"
 
 
-def test_legacy_user_migration_preserves_data_and_default_mode(tmp_path):
-    db = Database(f"sqlite:///{tmp_path / 'legacy.sqlite3'}")
+def test_legacy_user_migration_preserves_data_and_default_mode(database_url):
+    db = Database(database_url)
     try:
         with db.engine.begin() as connection:
             connection.exec_driver_sql("""CREATE TABLE users (id INTEGER PRIMARY KEY, google_sub VARCHAR NOT NULL UNIQUE,
                 email VARCHAR NOT NULL, display_name VARCHAR, reflection_enabled BOOLEAN NOT NULL,
-                created_at DATETIME NOT NULL, last_login_at DATETIME)""")
+                created_at TIMESTAMPTZ NOT NULL, last_login_at TIMESTAMPTZ)""")
             connection.exec_driver_sql("""INSERT INTO users VALUES
-                (1,'fake-legacy-sub','legacy@example.invalid',NULL,0,'2026-11-12 00:00:00',NULL)""")
+                (1,'fake-legacy-sub','legacy@example.invalid',NULL,false,'2026-11-12 00:00:00+00',NULL)""")
         db.create_tables()
         upgrade_database(db.engine)
         with db.session() as session:

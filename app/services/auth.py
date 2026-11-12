@@ -92,21 +92,46 @@ def save_login(access: GoogleAccess, login: GoogleLogin, now: datetime | None = 
         if user is None:
             user = User(google_sub=login.sub, email=login.email)
             session.add(user)
-        user.email = login.email
-        user.display_name = login.name
-        user.last_login_at = now
-        session.flush()
-        token = session.get(GoogleToken, user.id)
-        if token is None:
-            token = GoogleToken(user_id=user.id)
-            session.add(token)
-        token.access_token_enc = access.cipher.encrypt(login.access_token)
-        token.expires_at = login.expires_at
-        token.scopes = list(login.scopes)
-        # Google은 갱신 토큰을 처음 동의할 때만 준다. 새로 오지 않으면 저장한 것을 그대로 둔다.
-        if login.refresh_token:
-            token.refresh_token_enc = access.cipher.encrypt(login.refresh_token)
+        store_login(session, access, user, login, now)
         return user.id
+
+
+def store_login(session, access: GoogleAccess, user: User, login: GoogleLogin, now: datetime) -> None:
+    """한 사용자 행에 google_sub·프로필·암호화 토큰을 저장한다(로그인·Gmail 연결이 같이 쓴다)."""
+    user.google_sub = login.sub
+    user.email = login.email
+    user.display_name = login.name
+    user.last_login_at = now
+    session.flush()
+    token = session.get(GoogleToken, user.id)
+    if token is None:
+        token = GoogleToken(user_id=user.id)
+        session.add(token)
+    token.access_token_enc = access.cipher.encrypt(login.access_token)
+    token.expires_at = login.expires_at
+    token.scopes = list(login.scopes)
+    # Google은 갱신 토큰을 처음 동의할 때만 준다. 새로 오지 않으면 저장한 것을 그대로 둔다.
+    if login.refresh_token:
+        token.refresh_token_enc = access.cipher.encrypt(login.refresh_token)
+
+
+def google_refresh_token(access: GoogleAccess, user_id: int) -> str | None:
+    """연결 해제(폐기)에 쓸 갱신 토큰의 평문. 없으면 None."""
+    if access.cipher is None:
+        raise ConfigMissing("TOKEN_ENCRYPTION_KEY")
+    with access.database.session() as session:
+        token = session.get(GoogleToken, user_id)
+        if token is None or not token.refresh_token_enc:
+            return None
+        return access.cipher.decrypt(token.refresh_token_enc)
+
+
+def delete_login_tokens(access: GoogleAccess, user_id: int) -> None:
+    """저장된 Google 토큰 행을 지운다(연결 해제). `google_sub`는 계정 증명 기록으로 남긴다."""
+    with access.database.session() as session:
+        token = session.get(GoogleToken, user_id)
+        if token is not None:
+            session.delete(token)
 
 
 def has_refresh_token(access: GoogleAccess, google_sub: str) -> bool:

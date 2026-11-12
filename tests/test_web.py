@@ -6,7 +6,7 @@ from app.config import Settings
 from app.main import create_app
 
 
-def test_health_home_and_local_assets(monkeypatch):
+def test_health_home_and_local_assets(monkeypatch, database_url):
     from app import main
     from app.db.engine import get_database
 
@@ -16,7 +16,7 @@ def test_health_home_and_local_assets(monkeypatch):
         graph_builds.append(True)
         return original()
     monkeypatch.setattr(main, "get_graph", count_graph_build)
-    app = create_app(Settings(database_url="sqlite://"))
+    app = create_app(Settings(database_url=database_url))
     with TestClient(app) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
         home = client.get("/")
@@ -27,7 +27,7 @@ def test_health_home_and_local_assets(monkeypatch):
             assert client.get(f"/static/{path}").status_code == 200
         assert 'https://' not in home.text
         assert graph_builds == [True]
-        assert get_database(Settings(database_url="sqlite://")) is app.state.database
+        assert get_database(Settings(database_url=database_url)) is app.state.database
         assert app.state.llm is None
 
 
@@ -39,9 +39,9 @@ def test_every_template_compiles():
         templates.get_template(name)
 
 
-def test_app_does_not_initialize_a_shared_llm_even_with_server_key(monkeypatch):
+def test_app_does_not_initialize_a_shared_llm_even_with_server_key(monkeypatch, database_url):
     from app.llm import client as llm
-    settings = Settings(database_url="sqlite://", openai_api_key="fake-openai-key", openai_model="gpt-fake")
+    settings = Settings(database_url=database_url, openai_api_key="fake-openai-key", openai_model="gpt-fake")
     def backend(*args, **kwargs):
         raise AssertionError("서버 공용 키를 사용하면 안 됩니다")
 

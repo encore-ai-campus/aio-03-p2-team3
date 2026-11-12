@@ -5,11 +5,13 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
 from ipaddress import ip_address
-from pathlib import Path
 import os
 import socket
 
 from dotenv import load_dotenv
+
+# psycopg로 연결하는 PostgreSQL 주소 스킴(engine.py가 +psycopg 드라이버로 정규화한다).
+POSTGRES_URL_SCHEMES = ("postgres", "postgresql", "postgresql+psycopg")
 
 GOOGLE_SCOPES = (
     "openid", "email",
@@ -43,8 +45,11 @@ _local_listener = ContextVar("local_listener", default=None)
 
 
 @contextmanager
-def local_listener(listener: socket.socket):
+def local_listener(listener: socket.socket | None):
     """전용 실행기가 연 실제 소켓을 보관한다. 환경변수·요청 헤더는 허가가 아니다."""
+    # listen 성공으로 수신 소켓임을 보장한다. SO_ACCEPTCONN 조회는 macOS에서 지원하지 않는다.
+    if listener is not None:
+        listener.listen(128)
     token = _local_listener.set(listener)
     try:
         yield
@@ -61,7 +66,7 @@ def validate_runtime(settings: "Settings") -> None:
     try:
         allowed = (listener is not None and listener.family in {socket.AF_INET, socket.AF_INET6}
                    and ip_address(listener.getsockname()[0]).is_loopback
-                   and listener.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN))
+                   and listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_STREAM)
     except (OSError, ValueError):
         allowed = False
     if not allowed:
@@ -88,6 +93,9 @@ class Settings:
     reflection_enabled_default: bool = False
     frontend_origins: str = ""
     session_same_site: str = "lax"
+    supabase_url: str = ""  # 서버 JWT 검증·Storage 호출 공통(CONTRACT 11절. 5절부터 JWT 검증에 쓴다)
+    supabase_secret_key: str = field(default="", repr=False)  # 서버 전용 비밀 키(CONTRACT 11절. 7절부터 Gmail 연결 계정 확인에 쓴다)
+    supabase_storage_bucket: str = ""  # 비공개 파일 버킷 이름. 비우면 기본 trade-files(CONTRACT 11·16.3절, 계획 8절)
 
     def __post_init__(self):
         if self.ai_runtime not in {"server", "local"}:
@@ -95,10 +103,21 @@ class Settings:
 
     @property
     def resolved_database_url(self) -> str:
-        if self.database_url:
-            return self.database_url
-        path = Path(__file__).parent / "db" / "local.sqlite3"
-        return f"sqlite:///{path}"
+        """앱 DB는 PostgreSQL만 받는다(계획 4절). SQLite 자동 fallback은 없다."""
+        url = self.database_url.strip()
+        if not url:
+            raise ValueError(
+                "DATABASE_URL이 비었습니다. 앱 DB는 PostgreSQL만 사용하므로 접속 주소를 설정하세요"
+                "(Supabase는 Session pooler 주소, 예: postgresql://…pooler.supabase.com:5432/postgres?sslmode=require)."
+            )
+        scheme = url.split(":", 1)[0].lower()
+        if scheme not in POSTGRES_URL_SCHEMES:
+            raise ValueError(
+                f"DATABASE_URL은 PostgreSQL 접속 주소여야 합니다(입력된 스킴: {scheme})."
+                " SQLite 등 다른 주소는 받지 않습니다. 기존 SQLite 데이터는"
+                " uv run python -m app.db.copy_data 로 옮긴다."
+            )
+        return url
 
 
 @lru_cache(maxsize=1)

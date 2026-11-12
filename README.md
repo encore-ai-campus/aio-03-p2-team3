@@ -37,9 +37,15 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - Render 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
 - 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 필요하며, 기본 서버 모드에서는 `GMAIL_PUBSUB_TOPIC`도 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 로컬 모드는 아래 개인 OAuth 설정을 사용한다. 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py tests/test_local_gmail.py`로 실행한다.
-- `DATABASE_URL`을 비우면 `app/db/local.sqlite3`에 로컬 DB를 만든다(커밋 제외). Postgres는 `postgres://`·`postgresql://` 주소도 `psycopg` 드라이버로 연결한다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신한다. SQLite의 기존 단가표 제약 변경은 테이블 복사 방식이고 Postgres는 트랜잭션 안에서 변경한다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 메모리 SQLite와 이전 스키마에서의 갱신을 확인한다.
+- 앱 DB는 PostgreSQL 전용이다(react-supabase 계획 4절). `DATABASE_URL`이 비었거나 비PostgreSQL 주소면 서버가 시작을 거부한다(과거의 `app/db/local.sqlite3` 자동 생성 경로는 제거). `postgres://`·`postgresql://` 주소는 `psycopg` 드라이버로 연결하며, Supabase는 Session pooler 주소(포트 5432)에 `?sslmode=require`를 붙인다(트랜잭션 pooler 6543은 안 쓴다). 엔진 풀 상한은 프로세스당 pool_size 5·max_overflow 10·timeout 30초·recycle 1800초다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신하되, 대상 스키마를 `public`으로 고정해 Supabase의 `auth`·`storage` 스키마는 건드리지 않는다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 실제 PostgreSQL에서 갱신을 확인하고, 역사적 SQLite 이관 검사만 `tests/test_trade_upgrade.py` 첫 검사로 한시적으로 남긴다.
+- 기존 SQLite → PostgreSQL 데이터 이전(일회성): `uv run python -m app.db.copy_data --source <SQLite 파일 경로|DB URL> [--target <PostgreSQL 주소>] [--dry-run] [--yes]`. 원본 SQLite 파일은 임시 사본을 갱신해 읽어 원본을 고치지 않고, 쓰기는 `--yes`를 줄 때만 한다. 대상에 원본과 다른 데이터가 있으면 합치지 않고 실패하고, 이미 같으면 다시 쓰지 않고 대조만 통과한다. 복사·시퀀스 정렬은 대상 한 트랜잭션으로 커밋해 중간 실패 시 전부 롤백된다. 대조는 표별 행 수·모든 열 값·PK/시퀀스를 비교한다.
+- Storage 미참조 객체 목록·수동 정리(react-supabase 8절): `uv run python -m app.files.cleanup` — 버킷에 있지만 `file_assets`·`trade_artifacts`가 가리키지 않는 객체(업로드 성공 뒤 SQL 실패로 남은 것)를 목록화한다. `--older-than-hours <시간>`(기본 24)으로 대상을 줄이고 `--delete --yes`를 함께 줄 때만 지운다. 참조 중인 객체는 절대 지우지 않고 크론·자동 정리는 없다(사람이 확인 후 실행).
+- 회사 로고·직인 바이너리 backfill(react-supabase 9절): `uv run python -m app.trade.settings.backfill` — 기존 `company_branding`·`trade_proposals` 바이너리를 해시 대조하며 `file_assets`+Storage 객체로 옮긴다. 없이 실행하면 dry-run, `--yes`를 붙여 실행한다. 이미 파일 ID를 가진 행은 건너뛰고 같은 bytes는 기존 행을 재사용해 반복 실행이 안전하다. 대조 값과 해시가 다른 행은 옮기지 않고 보고한다.
+- 발급 파일 바이너리 backfill·검증(react-supabase 10절): `uv run python -m app.trade.review.backfill` — 기존 `trade_artifacts.content` 바이너리를 승인 절차와 같은 결정적 key(`{user_id}/issued/{proposal_id}/{format}/{sha256}`)로 Storage에 옮겨 `object_key`·`size_bytes`를 채운다. 없이 실행하면 dry-run, `--yes`를 붙여 실행하고 저장 뒤 bytes 해시 대조로 검증한다. 이미 `object_key`가 있는 행은 다시 옮기지 않고(재실행이 곧 검증 실행), bytes 해시가 기록과 다른 행·같은 key에 다른 bytes가 있는 행은 옮기지 않고 보고한다.
+- 테스트 DB 준비(별도 설치 불필요): 로컬 macOS·Linux는 개발 의존성 `pgserver`가 세션마다 임베디드 PostgreSQL을 띄우고(`uv run pytest`만 실행) 테스트별로 DB를 만들어 지운다. CI(GitHub Actions `tests` 작업)는 `postgres:16` service 컨테이너를 띄워 `TEST_DATABASE_URL`로 가리킨다. 로컬에서도 준비된 PostgreSQL에 `TEST_DATABASE_URL=postgres://… uv run pytest`로 연결할 수 있다. 단위 테스트는 `.env`의 실제 LLM 키가 스며들지 않게 키 환경을 비우고, LLM 응답은 각 테스트가 명시적으로 주입한 가짜만 쓴다.
 - DB 엔진·세션 팩터리와 컴파일한 그래프를 재사용한다. LLM은 호출 시 해당 사용자의 현재 키로 구성하며 공용 클라이언트를 캐시하지 않는다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
 - HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
+- React 화면(react-supabase 계획 6절, 2026-11-12): `cd frontend && npm ci && npm run dev`로 Vite 개발 서버를 띄우고 `http://localhost:5173/app/`(슬래시 포함)로 접속한다. `/api` 요청은 `frontend/vite.config.js` 프록시가 로컬 FastAPI(`127.0.0.1:8000`)로 보낸다. 로그인 연결에는 `frontend/.env`에 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`가 필요하고(틀: `frontend/.env.example`) 서버 `.env`의 `SUPABASE_URL`이 `GET /api/me`의 Bearer 검증에 쓰인다. 실제 Google 로그인은 계획 2절 콘솔 설정(비대칭 signing key·Google 공급자·redirect 허용)이 먼저다. 검사는 `frontend/`에서 `npm run lint`, `npm run build`. 로그인·사이드바/하단탐색·인증 경계와 `/app/settings`의 회사/거래 기준 설정, `/app/trade/pi`의 PI 직접 입력/AI 추출/검토/승인/다운로드를 연결했다(계획 11·12절). 문서 ID가 포함된 주소로 재개할 수 있다. PO·CI·PL 등은 13절 이후 작업이다.
 - 패키지 추가: `uv add <패키지>==<버전>`(개발용은 `uv add --dev …`). 버전은 `pip index versions <패키지>`로 확인하고, 바뀐 `pyproject.toml`·`uv.lock`을 함께 PR에 올린다.
 
 ## 산출물 위치
@@ -136,11 +142,13 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 | 환경변수 | 설명 |
 |---|---|
-| `DATABASE_URL` | Postgres 접속 주소. 로컬에서 비우면 SQLite 파일 사용 |
+| `DATABASE_URL` | 앱 DB PostgreSQL 접속 주소(빈 값·비PostgreSQL 주소는 거부). Supabase는 Session pooler 주소에 `?sslmode=require` |
 | `TOKEN_ENCRYPTION_KEY` | Google 토큰·사용자 OpenAI 키 암호화 키. 기존 값을 유지한다 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 |
 | `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값. 설정할 때 `true` 또는 `false` 지정 |
+| `SUPABASE_URL` `SUPABASE_SECRET_KEY` `SUPABASE_STORAGE_BUCKET` | Supabase 전환용 서버 설정. `SUPABASE_URL`은 Bearer 토큰 검증(JWKS·issuer)에 읽는다(계획 5절 적용). `SUPABASE_SECRET_KEY`는 Gmail 연결 시작의 계정 일치 확인(계획 7절 적용, 2026-11-12)과 Storage 전환(계획 8절)에, `SUPABASE_STORAGE_BUCKET`은 Storage 전환(계획 8절)부터 적용 |
+| `VITE_SUPABASE_URL` `VITE_SUPABASE_PUBLISHABLE_KEY` | React 브라우저용 Supabase 설정(계획 6절 적용, 2026-11-12). `frontend/.env`에만 두고 서버 비밀과 분리한다 |
 
 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외했다. 일정(캘린더) 도구 작업 때 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천하고 채택 여부를 확인한다.
 
@@ -171,8 +179,17 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 
 상세 경로·도메인 차이·요청 예시·폴더 구조는 [React 무역 문서 API](docs/trade-api.md)를 참고한다. PI와 같은 작성/수정/검토/선택/다운로드 경로를 PO·CI·PL에도 제공한다. CI는 승인된 PI 버전을 선택하고, PL은 최종 검토 전에 `/packing-review`의 합계를 확인한다.
 
-React는 기존 Google 로그인 세션으로 `GET /api/session`에서 CSRF 토큰을 받고, 변경 요청에 `X-CSRF-Token`과 세션 쿠키를 함께 보낸다. PI는 `/api/trade/pi`에서 작성/목록, `/extract`에서 텍스트 추출, `/{id}`에서 조회/전체 수정, `/{id}/versions/{revision}`에서 이전 버전을 조회한다. 입력 수량·금액은 정확한 십진수 문자열이며 API 형식은 `/docs`에서 확인한다.
+[현재 구현] React는 기존 Google 로그인 세션으로 `GET /api/session`에서 CSRF 토큰을 받고, 변경 요청에 `X-CSRF-Token`과 세션 쿠키를 함께 보낸다. PI는 `/api/trade/pi`에서 작성/목록, `/extract`에서 텍스트 추출, `/{id}`에서 조회/전체 수정, `/{id}/versions/{revision}`에서 이전 버전을 조회한다. 입력 수량·금액은 정확한 십진수 문자열이며 API 형식은 `/docs`에서 확인한다.
 
 `POST /api/trade/pi/{id}/reviews`에 `revision`과 `formats`(`pdf`, `xlsx`)를 보내 검토 제안을 만든다. 반환된 제안의 ID·revision·content_hash를 그대로 `…/reviews/{proposal_id}/decisions`로 보내 `approve`, `cancel`, `modify` 중 하나를 선택한다. 수정 선택은 `document`에 새 입력 전체를 함께 보내며 새 버전·새 제안을 다시 확인한다. 부족한 수정 입력은 `needs_input`으로 돌아온다. 승인은 문서 확정과 파일 발급이며 메일 발송을 포함하지 않는다. 취소 시 파일을 발급하지 않고, 승인 재시도는 같은 파일을 반환한다. 파일은 로그인한 소유자만 `/api/trade/files/{file_id}`에서 내려받는다.
 
-회사·통화별 은행·단가는 `/api/trade/settings` 하위 API, 직인/로고 PNG는 `/branding/{seal|logo}`에 설정한다. 검토 제안에는 그 시점의 문서·계좌·이미지를 보관해 이후 설정 변경이 승인 파일을 바꾸지 않는다. 다른 주소의 React는 `FRONTEND_ORIGINS`에 허용 출처를 지정하고 `credentials: 'include'`를 사용한다. 서로 다른 사이트의 쿠키가 필요하면 HTTPS에서만 `SESSION_SAME_SITE=none`을 사용한다. 운영 배포·React 화면은 이번 백엔드 구현에 포함하지 않는다.
+[현재 구현] 회사·통화별 은행·단가는 `/api/trade/settings` 하위 API, 직인/로고 PNG는 `/branding/{seal|logo}`에 설정한다(계획 9절 적용, 2026-11-12: 업로드는 기존 2MiB·PNG 검증을 유지하고 bytes는 Storage에, 설정은 `file_assets` 파일 ID를 가리킨다). 검토 제안은 그 시점의 문서·계좌·이미지 파일 ID를 고정해 이후 설정 변경이 승인 파일을 바꾸지 않는다. 다른 주소의 React는 `FRONTEND_ORIGINS`에 허용 출처를 지정하고 `credentials: 'include'`를 사용한다. 서로 다른 사이트의 쿠키가 필요하면 HTTPS에서만 `SESSION_SAME_SITE=none`을 사용한다.
+
+### React·Supabase 전환 목표(2026-11-12 확정, 6절까지 적용)
+
+화면을 React(JavaScript·Vite), 로그인을 Supabase Auth(Google), DB를 Supabase PostgreSQL, 파일을 비공개 Supabase Storage(버킷 `trade-files`)로 전환한다. 계획은 `docs/plans/react-supabase/PLAN.md`, 계약은 `docs/CONTRACT.md` 7.1·9.1·11·16.3절이다.
+
+- 로그인 뒤 `GET /api/me`(인증 상태·프로필·Gmail 연결 상태)에서 시작하고, React JSON API는 `Authorization: Bearer <Supabase access token>`만 쓴다. 위 쿠키+CSRF 안내는 전환 기간의 기존 경로용이다(계획 21·22절 전환 뒤 닫는다).
+- 서버는 검증한 Supabase UUID를 기존 정수 `user_id`(`users.supabase_uid` 매핑)에 연결한다. 파일은 서버가 `POST /api/files`로 한 파일씩 받아 Storage에 저장하고 메타데이터만 DB에 남긴다(첨부 파일당 5MiB·문서당 5개·PDF/XLSX/TXT/PNG/JPEG). 회사 로고·직인도 같은 버킷의 `{user_id}/branding/…` 객체로 저장한다(계획 9절 적용, 2026-11-12). 검토 승인이 발급하는 PDF/XLSX도 같은 버킷의 `{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key로 저장하고 `trade_artifacts`는 object key·크기·해시만 기록한다(계획 10절 적용, 2026-11-12 — 모든 형식 저장 뒤 SQL 확정, 재시도는 같은 파일 반환).
+- 개발은 `frontend/`의 Vite 개발 서버로 `/api`를 FastAPI로 프록시하고(계획 6절 적용, 2026-11-12 — 시안 이식 로그인 화면·`/app` 라우팅·인증 경계·`/api/me` 연결 포함), 배포는 React 빌드 파일을 기존 Render FastAPI가 같은 출처에서 제공한다(별도 프론트 호스팅 없음, 계획 21절).
+- 서버 설정 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`·`DATABASE_URL`(PostgreSQL), 브라우저 설정 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`. 서버는 `SUPABASE_URL`로 Bearer 토큰을 검증한다(계획 5절 적용, 2026-11-12). Storage 설정은 계획 8절부터 읽는다.

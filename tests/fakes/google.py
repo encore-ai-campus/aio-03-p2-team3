@@ -26,6 +26,7 @@ class FakeGoogle:
         self.logins = []          # exchange_code가 차례로 돌려줄 GoogleLogin
         self.refresh_error = None
         self.watch_error = None
+        self.revoke_error = None
         self.history_ids = iter(str(n) for n in range(1000, 2000))
         self.refreshed = 0
 
@@ -44,6 +45,11 @@ class FakeGoogle:
             raise self.refresh_error
         self.refreshed += 1
         return AccessToken(f"fake-access-refreshed-{self.refreshed}", datetime.now(UTC) + timedelta(hours=1))
+
+    def revoke(self, token):
+        self.calls.append(("revoke", token))
+        if self.revoke_error:
+            raise self.revoke_error
 
     def watch(self, access_token, topic):
         self.calls.append(("watch", access_token, topic))

@@ -55,11 +55,11 @@ def clean_environment(monkeypatch):
 
 
 @pytest.fixture
-def local_web(tmp_path, sdk):
+def local_web(tmp_path, database_url, sdk):
     env = tmp_path / ".env"
     env.write_text("\n".join([
         "AI_RUNTIME=local", "LOCAL_OWNER_GOOGLE_SUB=fake-sub-1", "OPENAI_API_KEY=fake-local-private-key",
-        f"DATABASE_URL=sqlite:///{tmp_path / 'local.sqlite3'}", "SESSION_SECRET=fake-session-secret",
+        f"DATABASE_URL={database_url}", "SESSION_SECRET=fake-session-secret",
         f"TOKEN_ENCRYPTION_KEY={Fernet.generate_key().decode()}",
         "GOOGLE_OAUTH_CLIENT_ID=fake-client", "GOOGLE_OAUTH_CLIENT_SECRET=fake-secret",
         "GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback",
@@ -118,11 +118,11 @@ def test_public_or_closed_socket_is_not_local_authorization():
             validate_runtime(Settings(ai_runtime="local"))
 
 
-def test_launcher_passes_actual_loopback_socket_to_uvicorn(monkeypatch):
+def test_launcher_passes_actual_loopback_socket_to_uvicorn(monkeypatch, database_url):
     from app import local
 
     monkeypatch.setattr(sys, "argv", ["app.local", "--port", "0"])
-    monkeypatch.setattr(local, "get_settings", lambda: Settings(ai_runtime="local"))
+    monkeypatch.setattr(local, "get_settings", lambda: Settings(ai_runtime="local", database_url=database_url))
     captured = []
 
     def run(server, sockets):

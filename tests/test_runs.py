@@ -53,8 +53,8 @@ def fake_run(database, email, mode="test", user_id=1):
 
 
 @pytest.fixture
-def client(tmp_path):
-    app = create_app(Settings(database_url=f"sqlite:///{tmp_path / 'runs.sqlite3'}"))
+def client(database_url):
+    app = create_app(Settings(database_url=database_url))
     with TestClient(app) as test_client:
         with app.state.database.session() as session:
             session.add_all([

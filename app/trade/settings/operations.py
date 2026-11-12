@@ -5,7 +5,7 @@ import zlib
 from app.trade.common.models import DocumentError
 from app.trade.common.counterparties import name_key
 from app.trade.common.pdf import _read_png_rgb
-from app.trade.settings.models import BankInput, CompanyInput, PriceInput, SettingsRepository
+from app.trade.settings.models import BankInput, CompanyInput, CounterpartyInput, PriceInput, SettingsRepository
 
 MAX_BRANDING_BYTES = 2 * 1024 * 1024
 
@@ -31,11 +31,20 @@ def save_price(command: PriceInput, *, repository: SettingsRepository) -> dict:
     return repository.save_price(values)
 
 
-def save_branding(kind: str, content: bytes, *, repository: SettingsRepository) -> dict:
+def save_counterparty(command: CounterpartyInput, *, repository: SettingsRepository) -> dict:
+    values = command.model_dump()
+    values["company_key"] = name_key(command.legal_name)
+    if not values["company_key"]:
+        raise DocumentError("COMPANY_NAME_REQUIRED", "거래처를 구분할 수 있는 회사명을 입력하세요", 422)
+    values["aliases"] = list(dict.fromkeys(command.aliases))
+    return repository.save_counterparty(values)
+
+
+def save_branding(kind: str, content: bytes, *, repository: SettingsRepository, storage) -> dict:
     if not content or len(content) > MAX_BRANDING_BYTES:
         raise DocumentError("INVALID_IMAGE_SIZE", "이미지는 2MB 이하의 PNG로 업로드하세요", 413)
     try:
         _read_png_rgb(content)
     except (ValueError, ArithmeticError, IndexError, struct.error, zlib.error) as error:
         raise DocumentError("INVALID_PNG", "지원하는 RGB/RGBA PNG 이미지를 업로드하세요", 422) from error
-    return repository.save_branding(kind, content, sha256(content).hexdigest())
+    return repository.save_branding(kind, content, sha256(content).hexdigest(), storage)

@@ -3,7 +3,7 @@ from typing import Annotated, Literal, Protocol
 
 from pydantic import BeforeValidator, Field
 
-from app.trade.common.models import InputModel, Text, decimal_input
+from app.trade.common.models import InputModel, Party, Text, decimal_input
 
 
 ISSUER_FIELDS = ("company_name", "legal_name_en", "business_no", "ceo_name", "contact", "address",
@@ -43,9 +43,17 @@ class PriceInput(InputModel):
     capacity: str | None = Field(default=None, max_length=200)
 
 
+class CounterpartyInput(Party):
+    legal_name: str = Field(min_length=1, max_length=200)
+    aliases: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(default_factory=list, max_length=20)
+    default_ship_to: Text | None = None
+    ship_to_phone: Text | None = None
+
+
 class SettingsRepository(Protocol):
     def read(self) -> dict: ...
     def save_company(self, values: dict) -> dict: ...
     def save_bank(self, currency: str, values: dict) -> dict: ...
     def save_price(self, values: dict) -> dict: ...
-    def save_branding(self, kind: str, content: bytes, content_hash: str) -> dict: ...
+    def save_counterparty(self, values: dict) -> dict: ...
+    def save_branding(self, kind: str, content: bytes, content_hash: str, storage) -> dict: ...

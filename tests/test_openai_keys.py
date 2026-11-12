@@ -63,8 +63,8 @@ def sdk(monkeypatch):
 
 
 @pytest.fixture
-def web(tmp_path, sdk):
-    settings = Settings(database_url=f"sqlite:///{tmp_path / 'keys.sqlite3'}", session_secret="fake-session-secret",
+def web(database_url, sdk):
+    settings = Settings(database_url=database_url, session_secret="fake-session-secret",
                         token_encryption_key=Fernet.generate_key().decode(), openai_api_key="fake-server-key",
                         gmail_pubsub_topic="projects/fake/topics/fake", pubsub_push_token="fake-push-token")
     with TestClient(create_app(settings, google=FakeGmailGoogle())) as client:

@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api", tags=["trade-session"])
 
 
 def require_write(request: Request, user_id: int = Depends(current_user_id)) -> int:
+    if request.headers.get("authorization"):
+        return user_id  # Bearer 인증은 헤더 자격증명이라 브라우저가 몰래 실어 보내지 않는다(CSRF 검사 생략).
     expected = request.session.get("trade_csrf")
     supplied = request.headers.get("X-CSRF-Token", "")
     if not expected or not supplied or not hmac.compare_digest(expected, supplied):
@@ -28,7 +30,8 @@ def session_info(request: Request, user_id: int = Depends(current_user_id)):
 
 @router.get("/trade/files/{file_id}")
 def download_file(file_id: str, request: Request, user_id: int = Depends(current_user_id)):
-    file = load_file(file_id, repository=SQLReviews(request.app.state.database, user_id, "PI"))
+    file = load_file(file_id, repository=SQLReviews(request.app.state.database, user_id, "PI",
+                                                    storage=request.app.state.storage))
     return Response(content=file["content"], media_type=file["media_type"], headers={
         "Content-Disposition": f'attachment; filename="{file["filename"]}"',
         "Cache-Control": "private, no-store", "ETag": f'"{file["content_hash"]}"',

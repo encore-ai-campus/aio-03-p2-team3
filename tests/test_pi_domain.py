@@ -12,6 +12,7 @@ from app.trade.pi.models import PIInput
 from app.trade.pi.operations import create_pi, extract_pi, get_pi, revise_pi
 from app.trade.pi.repository import pi_repository
 from tests.fakes.llm import FakeLLM
+from tests.fakes.storage import FakeStorage
 from tests.test_trade_flow import put_settings
 
 
@@ -87,7 +88,7 @@ def test_pi_revision_uses_snapshot_and_rejects_stale_revision():
 
 
 def test_pi_sql_store_is_scoped_to_user_and_document_kind(database):
-    put_settings(database)
+    put_settings(database, FakeStorage())
     repository = pi_repository(database, 1)
     created = create_pi(pi_input(), repository=repository)
     assert get_pi(created.document_id, repository=repository).document["total"] == "80.00"
