@@ -244,7 +244,12 @@ def test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_resul
     for value, tag in (("fake-pc-one", "one"), ("fake-pc-rotated", "rotated"), ("", None)):
         envfile.write_text(f"LOCAL_OWNER_GOOGLE_SUB=fake-sub-1\nOPENAI_API_KEY={value}\n")
         with process(command(system, envfile, credentials), system["env"]) as runner:
-            response = http.post("/api/trade/pi/extract", json={"text": "가상 문서"})
+            try:
+                response = http.post("/api/trade/pi/extract", json={"text": "가상 문서"})
+            except httpx.TimeoutException:
+                with system["database"].session() as session:
+                    states = [(job.status, job.error_kind) for job in session.scalars(select(WorkerJob))]
+                pytest.fail(f"PC restart {tag or 'deleted'}: exit={runner.poll()}, job states={states}")
             if tag:
                 assert response.status_code == 201, response.text
                 assert system["openai"].get("/test/state").json()[-1]["key_tag"] == tag

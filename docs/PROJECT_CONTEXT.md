@@ -140,7 +140,7 @@
 ## 6. 시험·평가
 마지막 갱신: 2026-11-12 · Windows DPAPI/DACL·HTTPS 실행 검증
 
-- Windows 후속 수정의 로컬 전체 회귀는 `uv run pytest` **828 passed·4 skipped**(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개)이며 규칙 검사 경고 0개다. 자격증명은 실제 OS 저장소의 별도 프로세스 읽기·소유자/서비스·만료·덮어쓰기/링크·크기 제한을 시험한다. Windows 전용 DPAPI 평문/변조 거부·다른 사용자 읽기 ACE 거부와 전체 개인 실행기/HTTPS 프로세스 시험은 GitHub `windows-worker` 작업에서 실행한다(결과는 해당 PR 검사 기준). 시험 인증서는 기존 cryptography로 만들어 외부 OpenSSL 설치에 의존하지 않는다. 실제 API·운영 DB·Render·공용 Gmail 설정은 변경하지 않았다.
+- Windows 후속 수정의 로컬 전체 회귀는 `uv run pytest` **829 passed·4 skipped**(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개)이며 규칙 검사 경고 0개다. 자격증명은 실제 OS 저장소의 별도 프로세스 읽기·소유자/서비스·만료·덮어쓰기/링크·크기 제한을 시험한다. Windows 전용 DPAPI 평문/변조 거부·다른 사용자 읽기 ACE 거부와 전체 개인 실행기/HTTPS 프로세스 시험은 GitHub `windows-worker` 작업에서 실행한다(결과는 해당 PR 검사 기준). 시험 인증서는 기존 cryptography로 만들어 외부 OpenSSL 설치에 의존하지 않는다. 실제 Windows의 첫 실행에서 DPAPI/DACL과 메일/문서 시험은 통과했지만 강제 종료 후 키 교체 재시작에서 시간 초과가 발생했다. 종료된 long poll의 연결 상태를 claim 전에 검사하도록 고치고, 끊어진 요청이 새 작업을 임대하지 못하는 회귀를 추가했다. 수정 후 Linux 전체 회귀는 통과했으며 Windows 재검증 결과는 PR 검사 기준이다. 실제 API·운영 DB·Render·공용 Gmail 설정은 변경하지 않았다.
 
 - #156 최종 검사: `uv run pytest` **820 passed·2 skipped**(선택 PostgreSQL 모듈), 별도 `uv run --with pgserver==0.1.4 pytest tests/test_worker_postgres.py tests/test_trade_postgres.py -q` **8 passed**, 규칙 검사 경고 0개다. `test_worker_execution.py` 29개는 PC 모델/토큰/빈도/소유자 제한, 키/인증값 출력 차단, 안전한 오류, 서버 단독 재시도 예산, 같은 논리 ID/기한·새 attempt, 암호화 소비/해제/기한 정리, PC 종료·임대/전체 만료 뒤 후보 미저장·지연 결과 거부를 검증한다. `test_worker_process.py` 5개는 실제 HTTPS 서버·별도 PC 프로세스 2개·모의 OpenAI HTTP로 서로 다른 .env 키, 동시 사용자, 서버 저장 키 대체 금지, 무세션 Gmail→요약·성찰·후보→명시적 승인 발송, 거래 추출·네 문서 /extract·수동 검토/파일 발급, 키 교체/삭제·401/429/503을 확인한다. Chromium 390px/1280px에서 연결·대기·키 실패·해제, 화면 넘침/브라우저 오류·키/토큰 비노출을 확인했다. 실제 키·개인 메일·운영 설정은 사용하지 않았다.
 
