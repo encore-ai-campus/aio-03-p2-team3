@@ -1,5 +1,7 @@
 """실제 ASGI/파일 DB에서 장치와 작업의 소유권·경합·재시작을 검증한다. 외부 API 없음."""
 from concurrent.futures import ThreadPoolExecutor
+import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
 from uuid import uuid4
@@ -8,6 +10,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import inspect, select
+from starlette.requests import Request
 
 from app.config import Settings
 from app.db.engine import Database
@@ -77,6 +80,25 @@ def path(device, suffix):
 
 def auth(device):
     return {"Authorization": "Bearer " + device["device_token"]}
+
+
+def test_disconnected_long_poll_does_not_lease_a_new_job(web):
+    from app.worker.router import claim as claim_route
+    device, _, _ = pair(web)
+    job = enqueue(web)
+    messages = iter([{"type": "http.request", "body": b'{"wait_seconds":0}', "more_body": False},
+                     {"type": "http.disconnect"}])
+    async def receive():
+        return next(messages)
+    request = Request({"type": "http", "method": "POST", "scheme": "https", "path": path(device, "claim"),
+                       "query_string": b"", "headers": [(b"authorization", auth(device)["Authorization"].encode()),
+                                                           (b"content-type", b"application/json")],
+                       "client": ("127.0.0.1", 1234), "server": ("testserver", 443), "app": web[0].app}, receive)
+    response = asyncio.run(claim_route(request, device["device_id"]))
+    assert json.loads(response.body) == {"job": None}
+    with web[0].app.state.database.session() as session:
+        assert session.get(WorkerJob, job["job_id"]).status == "queued"
+    assert claim(web, device).json()["job"] == job
 
 
 def result(job, **changes):

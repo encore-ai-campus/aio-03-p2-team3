@@ -154,6 +154,9 @@ async def claim(request: Request, device_id: str):
     token = bearer(request)
     deadline = asyncio.get_running_loop().time() + parsed.wait_seconds
     while True:
+        # Windows 강제 종료/연결 끊김 뒤 남은 long poll이 새 작업을 임대하지 않게 한다.
+        if await request.is_disconnected():
+            return response({"job": None})
         result = await asyncio.to_thread(service.claim, request.app.state.database, device_id, token,
                                          model_name(request.app.state.settings))
         if result["job"] is not None or asyncio.get_running_loop().time() >= deadline:

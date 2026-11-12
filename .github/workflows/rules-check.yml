@@ -63,3 +63,20 @@ jobs:
 
       - name: 테스트
         run: uv run pytest
+
+  windows-worker:
+    name: windows-worker
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: 패키지 설치
+        run: uv sync --locked
+
+      - name: Windows 개인 실행기·DPAPI·DACL·HTTPS 프로세스 검사
+        run: uv run pytest tests/test_worker_credentials.py tests/test_worker_execution.py tests/test_worker_process.py -q
