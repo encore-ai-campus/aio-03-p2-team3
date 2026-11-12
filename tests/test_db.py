@@ -11,7 +11,7 @@ from app.db.models import Base, ProcessedMessage, RunEvent, User
 
 def test_contract_tables_and_postgres_jsonb(database):
     assert set(inspect(database.engine).get_table_names()) == {
-        "users", "google_tokens", "gmail_watches", "processed_messages", "thread_messages",
+        "users", "google_tokens", "user_openai_keys", "gmail_watches", "processed_messages", "thread_messages",
         "thread_memory", "reply_candidates", "approvals", "deal_terms", "quotes",
         "trade_documents", "user_preferences", "company_profiles", "company_branding",
         "company_bank_accounts",

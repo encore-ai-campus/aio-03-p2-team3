@@ -13,7 +13,6 @@ from app.clients.gmail import GoogleClient
 from app.config import Settings, get_settings
 from app.db.engine import get_database
 from app.graph.run import get_graph
-from app.llm.client import get_backend
 from app.services.auth import GoogleAccess, make_cipher
 from app.trade.common.models import DocumentError
 from app.trade.common import api as trade_api
@@ -49,8 +48,8 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
         app.state.settings = config
         app.state.database = database
         app.state.graph = get_graph()
-        # API 키가 없어도 기본 화면과 healthz는 사용할 수 있다.
-        app.state.llm = get_backend(config) if config.openai_api_key.strip() else None
+        # 서버의 OPENAI_API_KEY는 사용하지 않는다. 사용자 키는 호출 시에만 읽는다.
+        app.state.llm = None
         app.state.google = google or GoogleClient(config)
         app.state.google_access = GoogleAccess(
             database, app.state.google, make_cipher(config), config.gmail_pubsub_topic,

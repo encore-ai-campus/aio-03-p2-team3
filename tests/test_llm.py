@@ -255,17 +255,15 @@ def test_backend_factory_failure_records_only_exception_type(monkeypatch):
     assert "private-" not in repr(logged) and "fake-api-key" not in repr(logged)
 
 
-def test_openai_backend_configuration_and_cache():
+def test_openai_backend_configuration_without_global_key_cache():
     settings = Settings(openai_api_key="fake-openai-key", openai_model=" gpt-fake ")
-    client._backend_for_settings.cache_clear()
     backend = client._backend_for_settings(settings)
     assert backend.model_name == "gpt-fake" and backend.use_responses_api is True
     assert backend.max_retries == 0 and backend.request_timeout == 20
     assert backend.openai_api_key.get_secret_value() == "fake-openai-key"
-    assert client._backend_for_settings(Settings(**vars(settings))) is backend
+    assert client._backend_for_settings(Settings(**vars(settings))) is not backend
     changed = client._backend_for_settings(Settings(openai_api_key="fake-other-key", openai_model="gpt-other"))
     assert changed is not backend and changed.model_name == "gpt-other"
-    client._backend_for_settings.cache_clear()
 
 
 @pytest.mark.parametrize("key", ["", "   "])

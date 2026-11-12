@@ -42,11 +42,13 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-11 · 전체 LLM OpenAI 전환
+마지막 갱신: 2026-11-12 · 사용자별 OpenAI 키 등록
+
+- 사용자별 AI 키: Google 로그인 후 `/settings`에서 본인 키를 등록·교체·삭제한다. 키는 `user_openai_keys`의 사용자별 행에 Fernet 암호문으로 저장한다. 서버/로컬 `OPENAI_API_KEY`는 호출에 사용하지 않으며 사용자 키 누락·복호화 실패 시 차단한다. 저장 시 API 호출은 없고 수동 문서 작성·파일 발급은 키 없이 유지한다.
 
 - 주제: 정함(2026-11-09). 사용자의 Gmail에 메일이 오면(푸시 알림) 에이전트가 답장 후보 2~3개를 만들고, 사용자가 하나를 골라 승인해야만 보낸다. 상대방 답장의 거래 내용으로 인보이스 필수 항목을 검토해, 빠지면 재질문 답장 후보를 만들고 다 있으면 견적서를 만든다. 사용자는 여럿이고 각자 자기 Gmail을 등록해 쓴다. 정한 것·확인한 사실·추천 설계는 `.work/design/mvp-plan-handoff.md`, 구현 계획은 `docs/plans/gmail-quote-mvp.md`.
 - 대표 입력·출력: 입력은 사용자 Gmail에 온 메일, 출력은 사용자가 승인한 답장과 견적서 PDF(승인 뒤 답장에 첨부). 구체 시나리오는 계획에서 정한다.
-- LLM: 요청에 따라 모든 메일 분석·답장·거래 추출·스레드 요약·성찰·독립 무역 문서 추출을 OpenAI Responses API로 통일했다(2026-11-11). 기존 무역 추출의 기본 모델 `gpt-6-luna`를 유지하고 `OPENAI_MODEL`로 덮어쓴다. 키는 `OPENAI_API_KEY`이며 패키지는 `langchain-openai`·`openai`다. Gemini 호출·의존성과 복귀 설정은 제거했다. 테스트용 Gmail과 가상 자료를 쓰며 키·결제·모델 권한은 로컬·Render에서 설정한다. 선택 근거와 적용 순서는 `.work/design/api-choice.md`·README다.
+- LLM: 요청에 따라 모든 메일 분석·답장·거래 추출·스레드 요약·성찰·독립 무역 문서 추출을 OpenAI Responses API로 통일했다(2026-11-11). 기존 무역 추출의 기본 모델 `gpt-6-luna`를 유지하고 `OPENAI_MODEL`로 덮어쓴다. 키는 사용자별 설정 등록값이며 패키지는 `langchain-openai`·`openai`다. Gemini 호출·의존성과 복귀 설정은 제거했다. 테스트용 Gmail과 가상 자료를 쓰며 키는 개인 설정에 등록하고 결제·모델 권한은 각 프로젝트에서 확인한다. 선택 근거와 적용 순서는 `.work/design/api-choice.md`·README다.
 - 외부 API: Gmail API(사용자별 Google OAuth로 메일 읽기·감시 등록·승인 후 발송)와 Cloud Pub/Sub(메일함 변경 푸시 알림)를 추가했다. Google Calendar는 도구 2(구글캘린더 등록)용으로 유지한다. 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외하고 `.work/design/api-choice.md`의 '일정 도구 추천 후보'로 옮겼다(2026-11-09 결정). API 연동·콘솔 설정은 별도 작업이다.
 - Google 로그인·감시 등록(계획 6절, 2026-11-10): 받은 메일 화면 'Gmail 연결하기' → `/login`('테스트용 Gmail로 등록하세요') → Google 동의 → 토큰을 Fernet으로 암호화해 저장 → `users.watch`(받은편지함만) 등록 → `/inbox`에 연결된 메일·알림 상태·로그아웃. 크론 없이 로그인·화면 요청(응답 뒤)·알림 수신 때 마지막 갱신이 24시간을 넘었거나 실패했으면 다시 등록하고, 로그아웃하면 멈춘다. 갱신 토큰 만료면 '다시 로그인', 등록 실패면 '다시 시도' 안내를 보인다. 실제 Google 연결 확인은 Google Cloud 설정(5절) 뒤 로컬·Render에서 한다. 이름과 규칙은 `docs/CONTRACT.md` 7·9·10절.
 - 감시 오류 진단(#95): 서버 로그와 `gmail_watches.last_error`에 `HTTP 403 (forbidden)`·`HTTP 403 (accessNotConfigured)`처럼 상태와 허용된 Google `reason`을 함께 남긴다. 알 수 없는 reason·응답 메시지·URL·키·메일 원문은 기록하지 않고, `last_error`의 200자 제한과 기존 상태·갱신 동작은 유지한다.
@@ -60,7 +62,9 @@
 - 독립 문서 작성(2026-11-11): React용 `/api/trade/{pi|po|ci|pl}`에서 직접 입력/문장 추출 → 수정 → 검토 → 승인·취소·수정 → PDF/XLSX 다운로드를 제공한다. 승인은 파일 발급이며 기존 Gmail 발송 승인을 호출하지 않는다. CI는 승인된 PI 특정 버전의 거래 사실을 보존하고, PL은 별도 포장 합계 확인 뒤 최종 검토한다. API 연결 안내는 `docs/trade-api.md`. React 화면·마스터 챗봇은 범위에서 제외했다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
-마지막 갱신: 2026-11-10 · kekorea-port 6절(무역서류 초안 상태)
+마지막 갱신: 2026-11-12 · 사용자 키 차단 안내
+
+- 사용자 키가 없거나 읽을 수 없으면 `start_run()`은 `end_reason=failed`, `notice=openai_key_required`로 끝나며 메일 화면에 키 등록 링크를 안내한다. 키는 상태나 기억에 넣지 않는다. 노드·전이는 유지한다.
 
 - 계약의 `AgentState`·자료 형식·초기값을 `app/graph/state.py`에 구현했다(계획 2절, 2026-11-09). `tools_called`·`reflection_history`·`errors`·`call_retries`는 누적 리듀서다. 통신 재시도와 성찰 재실행은 별도로 유지한다. 기억 조회·요약·저장 서비스는 계획 13절에서 구현했다(2026-11-10).
 - 성찰 상태(계획 12절, Issue #58, 2026-11-10): `reflect`가 `reflection`(직전 결과)·`reflection_history`(쌓기)·`reflection_retries`(합)·`reflection_retries_by_type`(유형별)을 채우고, 경로를 바꿀 때 `intent`·`reply_mode`·`selected_tool`·`tool_reason`을, 한도를 넘으면 `candidates`(확인 필요 표시)·`needs_review`·`notice="reflection_limit"`을 고친다. `reflect_fix` 호출의 재시도는 `call_retries`에만 더한다. 상태 형식은 바꾸지 않았다.
@@ -73,7 +77,9 @@
 - 고치기 전에 관련 팀원과 조율하고, 코드와 계약을 같은 PR에서 고친다(TASK.md 공통 부분 규칙).
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-11 · 메일·무역 공통 OpenAI Responses 전환
+마지막 갱신: 2026-11-12 · 사용자별 키 선택·공용 키 차단
+
+- `app/services/openai_keys.py`가 암호화 저장·교체·삭제·소유자 조회를 담당한다. `start_run()`과 네 문서 `/extract`가 `user_openai()` 범위를 만들고 `get_backend()`는 현재 사용자의 키만 조회한다. Gmail 푸시는 `GoogleAccess.cipher`와 메일함 소유자 ID를 전달한다. 전역 LLM 클라이언트 캐시는 제거했다. 미등록·암호문 손상은 API 호출 전 차단하고 문서 HTTP 409·메일 실패 안내를 남긴다. 테스트용 명시적 가짜 백엔드 주입은 유지한다.
 
 - 독립 문서 API 준비(`docs/plans/trade-domain-api.md`, Issue #108~#111): 요청 범위는 기본 오류 → PI 독립 모듈/API → PO·CI·PL이다. 마스터 챗봇은 제외한다. 1절에서 기존 DB Alembic 갱신, 수정 시 가격 재검증, 문서 revision과 수정/발송의 조건부 갱신을 추가했다(계약 15.9절). PI JSON API와 검토·선택·파일 저장은 3절에서 구현했다.
 - PI 독립 모듈(2절): `app/trade/pi/`의 `models.py`·`operations.py`·`agent.py`·`repository.py`가 PI 입력, 작성·수정, LangChain 구조화 추출, 사용자/PI 범위 저장을 담당한다. 업무는 저장소 인터페이스와 추출 함수를 주입받고 기존 메일 그래프·HTTP·구체 DB에 의존하지 않는다. 공통 입력 숫자는 정확한 Decimal 문자열이며 서버의 가격 인증·승인·상태 필드는 입력으로 받지 않는다. AI의 단가 변경 승인 값은 제거하고 상품 코드·당사자 근거도 검증한다. HTTP 연결은 `/api/trade/pi`이며 작성·추출·조회·수정·버전·검토·승인/취소/수정·파일 다운로드를 제공한다. 문서 확정은 메일을 발송하지 않는다.
@@ -119,7 +125,9 @@
 - 루트 정리의 그래프 영향: `make_quote`의 단가표 조회 import만 `app.trade.settings.repository`로 변경했다. 상태·노드 이름·엣지·호출 인자는 그대로다.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-11 · OpenAI 전환 회귀·SDK 모의 HTTP 검증·PDF 이미지 재사용
+마지막 갱신: 2026-11-12 · 사용자 키 격리 검증
+
+- `tests/test_openai_keys.py`에서 실제 서명 세션·LangChain/OpenAI SDK 모의 HTTP로 개인 키 등록/교체/삭제·CSRF·소유자 격리·암호화/오류 응답 비노출·4종 문서·무세션 Gmail 푸시·동시 실행·키 교체/삭제 직후 차단·DB 재연결을 검증한다. 전체 회귀는 657 passed·1 skipped이고 규칙 검사는 경고 0개로 통과했다. Chromium에서 키 등록·삭제·키 원문 비노출·390px 모바일 표시와 브라우저 오류 없음을 확인했다. 실제 OpenAI/Gmail·Render·운영 DB는 호출하지 않았다.
 
 - 전체 OpenAI 전환 검증(2026-11-11): `uv run pytest -q`는 **639 passed·1 skipped**(pgserver 미설치로 선택 PostgreSQL 모듈 제외), `python3 .work/check.py`는 경고 0개로 통과했다. 실제 LangChain·OpenAI SDK와 `httpx.MockTransport`로 운영 출력 스키마 12개(메일 분석·답장·재질문·거래 추출·무역 추출·요약·성찰·독립 4종 문서), `/v1/responses` 요청, 429/401 무재시도·503 최대 3회, 잘못된 JSON/스키마 재시도·복구, 실제 평가 호출 경로의 공통 어댑터 사용을 검증했다. 최신 main의 PDF 이미지 재사용 변경을 합친 뒤 Google 로그인·승인·PDF·사용자 격리 회귀도 통과했다. 실제 OpenAI/Gmail·Render·운영 DB는 호출하지 않았다.
 
@@ -152,7 +160,9 @@
 - PDF 공통 렌더러(PI·PO·CI·PL): 한 문서 렌더링 안에서 같은 PNG와 crop 조건의 RGB 변환·압축 결과를 재사용하고, 여러 페이지에서 같은 이미지 PDF 객체를 공유한다. 페이지별 콘텐츠 스트림과 이미지 배치 명령은 유지한다. `tests/test_trade_pdf_pagination.py`는 이미지 종류 수만큼만 변환·압축하며 PDF 이미지 객체가 중복되지 않고 각 페이지가 같은 객체를 참조하는지 확인한다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-11 · OpenAI 키 적용 순서·공개 안내 갱신
+마지막 갱신: 2026-11-12 · 사용자 키 전환 적용
+
+- 사용자별 키 전환: 기존 DB 백업 후 배포한다. `20261112_user_openai_keys` 마이그레이션은 기존 데이터와 승인 이력을 유지한다. 기존 `TOKEN_ENCRYPTION_KEY`는 유지하고 서버 `OPENAI_API_KEY`는 제거한다. 사용자는 배포 후 `/settings`에 개인 키를 등록한다. 등록 전 실패 메일은 자동 재처리하지 않으며 이미 시작한 작업은 키 삭제로 취소되지 않는다. Render 설정 변경·실제 사용자 키 등록은 이 작업에서 하지 않았다.
 
 - React API 설정: `FRONTEND_ORIGINS`(허용 출처), `SESSION_SAME_SITE`(기본 lax, none은 HTTPS만). 변경 API는 세션과 CSRF 토큰을 함께 요구한다. 검토 제안에 문서·회사·계좌·이미지를 고정하고 승인 파일을 DB에 보관한다(계약 16절).
 
@@ -164,8 +174,8 @@
 - 주의: 15분 동안 요청이 없으면 잠들고 깨는 데 최대 약 1분 걸린다. 재배포·재시작·잠들 때 로컬 파일이 사라지므로 저장은 Postgres에만 한다. 시연 전에 화면을 미리 열어 깨운다.
 - 로컬 서버 뼈대는 `uv run uvicorn app.main:app --reload`로 실행한다. `/`→`/inbox`와 `/healthz` 정상 응답을 확인했다. 키 없이 기본 화면을 열 수 있고, `DATABASE_URL`이 비면 커밋 제외된 `app/db/local.sqlite3`를 쓴다. Postgres 연결용 드라이버·없는 표 생성은 준비됐으며 실제 Render 연결 시험은 후속 작업이다.
 - 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`에 이름과 설명만 둔다. 값은 로컬 `.env`와 Render 환경변수에 두고 Codex에는 키를 넣지 않는다.
-- LLM·OAuth: `OPENAI_API_KEY`, `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`), `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다.
-- 전체 LLM 전환 적용(2026-11-11): 먼저 로컬·Render에 OpenAI 키와 필요한 모델 설정을 넣고 API 결제·권한을 확인한다. 병합 시 자동 배포 후 가상 메일(분석→후보·요약·성찰)과 PI·PO·CI·PL 추출을 확인한 뒤 예전 Gemini 변수·백엔드 선택 변수를 제거한다. 이 작업에서는 실제 키·Render 설정을 변경하거나 실제 API를 호출하지 않았다(설정·연동 확인 미완료). OpenAI API 이용료는 ChatGPT 구독과 별개다.
+- LLM·OAuth: 사용자별 OpenAI 키(`/settings` 등록), `OPENAI_MODEL`(선택, 비우면 `gpt-6-luna`), `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`·`GOOGLE_OAUTH_REDIRECT_URI`. `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다.
+- 전체 LLM 전환 적용(2026-11-11): 각 사용자가 개인 설정에 OpenAI 키를 등록하고 API 결제·권한을 확인한다. 모델 설정은 서버 `OPENAI_MODEL`을 따른다. 병합 시 자동 배포 후 가상 메일(분석→후보·요약·성찰)과 PI·PO·CI·PL 추출을 확인한 뒤 예전 Gemini 변수·백엔드 선택 변수를 제거한다. 이 작업에서는 실제 키·Render 설정을 변경하거나 실제 API를 호출하지 않았다(설정·연동 확인 미완료). OpenAI API 이용료는 ChatGPT 구독과 별개다.
 - Gmail 푸시: `GMAIL_PUBSUB_TOPIC`, OIDC 확인용 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`, 대체 비밀 토큰 방식일 때만 `PUBSUB_PUSH_TOKEN`.
 - 앱 설정: `DATABASE_URL`(Postgres 접속 주소, 로컬에서 비우면 SQLite 파일), `TOKEN_ENCRYPTION_KEY`(Google 토큰 암호화 키), `SESSION_SECRET`(세션 쿠키 서명 키), `APP_BASE_URL`(서비스 주소), `REFLECTION_ENABLED_DEFAULT`(성찰 기본값).
 - 로그인(계획 6절): `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`(Fernet 키)·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다. 두 키는 `.env.example`의 명령으로 만들고, `TOKEN_ENCRYPTION_KEY`를 바꾸면 모두 다시 로그인해야 한다. `APP_BASE_URL`이 `https://`면 세션 쿠키를 HTTPS 전용으로 보낸다(Render).

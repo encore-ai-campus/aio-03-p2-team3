@@ -1,6 +1,8 @@
 """공급자 정보·품목 단가표 설정(계획 11절)과 자가 성찰 켬/끔(계획 12절)."""
 
 from typing import Annotated
+import hmac
+import secrets
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -9,12 +11,15 @@ from sqlalchemy import select
 from app.db.models import CompanyProfile, PriceListItem, User
 from app.quote.calc import price
 from app.web.deps import current_user_id
+from app.llm.client import OpenAIKeyError
+from app.services.openai_keys import delete_key, key_registered, save_key
 
 router = APIRouter()
 
 
 @router.get("/settings")
 def settings(request: Request, user_id: int = Depends(current_user_id)):
+    csrf_token = request.session.setdefault("trade_csrf", secrets.token_urlsafe(32))
     with request.app.state.database.session() as session:
         company = session.get(CompanyProfile, user_id)
         prices = session.scalars(select(PriceListItem).where(
@@ -24,8 +29,43 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
         reflection_enabled = session.scalar(select(User.reflection_enabled).where(User.id == user_id))
     return request.app.state.templates.TemplateResponse(
         request=request, name="pages/settings.html",
-        context={"company": company, "prices": prices, "reflection_enabled": bool(reflection_enabled)},
+        context={"company": company, "prices": prices, "reflection_enabled": bool(reflection_enabled),
+                 "openai_registered": key_registered(request.app.state.database, user_id),
+                 "openai_storage_ready": request.app.state.google_access.cipher is not None,
+                 "csrf_token": csrf_token,
+                 "key_notice": {"saved": "OpenAI API 키를 저장했습니다. 키의 유효성은 실제 AI 요청 시 확인합니다.",
+                                "deleted": "OpenAI API 키를 삭제했습니다. 이후 AI 요청은 차단됩니다."}.get(
+                                    request.query_params.get("key_notice", ""))},
+        headers={"Cache-Control": "private, no-store"},
     )
+
+
+def check_key_csrf(request: Request, supplied: str):
+    expected = request.session.get("trade_csrf", "")
+    if not expected or not supplied or not hmac.compare_digest(expected.encode(), supplied.encode()):
+        raise HTTPException(403, "유효한 CSRF 토큰이 필요합니다")
+
+
+@router.post("/settings/openai-key")
+def save_openai_key(request: Request, api_key: Annotated[str, Form()] = "",
+                    csrf_token: Annotated[str, Form()] = "", user_id: int = Depends(current_user_id)):
+    check_key_csrf(request, csrf_token)
+    try:
+        save_key(request.app.state.database, user_id, api_key, request.app.state.google_access.cipher)
+    except OpenAIKeyError as error:
+        # Form에 길이/패턴 검증을 붙이면 422 응답이 입력한 비밀값을 다시 보여 줄 수 있다.
+        raise HTTPException(error.status_code, error.message) from None
+    return RedirectResponse("/settings?key_notice=saved", status_code=303,
+                            headers={"Cache-Control": "private, no-store"})
+
+
+@router.post("/settings/openai-key/delete")
+def delete_openai_key(request: Request, csrf_token: Annotated[str, Form()] = "",
+                      user_id: int = Depends(current_user_id)):
+    check_key_csrf(request, csrf_token)
+    delete_key(request.app.state.database, user_id)
+    return RedirectResponse("/settings?key_notice=deleted", status_code=303,
+                            headers={"Cache-Control": "private, no-store"})
 
 
 @router.post("/settings/reflection")

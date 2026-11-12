@@ -2,6 +2,26 @@
 {% from 'components/button.html' import submit_button %}
 {% block content %}
 <h1>설정</h1>
+<section class="card" id="openai-key"><h2>내 OpenAI API 키</h2>
+  <p>AI 기능은 본인이 등록한 키로만 실행하며, 이용료는 해당 키의 OpenAI 프로젝트에 청구됩니다. ChatGPT 구독과는 별도입니다.</p>
+  <p><strong>{{ '등록됨' if openai_registered else '미등록 — AI 기능 사용 불가' }}</strong></p>
+  {% if key_notice %}<p role="status">{{ key_notice }}</p>{% endif %}
+  <p class="muted">키는 암호화해 보관하고 화면에 다시 표시하지 않습니다. 저장할 때는 API를 호출하지 않습니다.</p>
+  {% if openai_storage_ready %}
+  <form method="post" action="/settings/openai-key" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>OpenAI API 키 <input type="password" name="api_key" required maxlength="512" autocomplete="new-password" spellcheck="false"></label>
+    {{ submit_button('키 교체' if openai_registered else '키 등록') }}
+  </form>
+  {% else %}<p role="alert">서버의 키 암호화 설정이 준비되지 않았습니다. 운영자에게 문의해 주세요.</p>{% endif %}
+  {% if openai_registered %}
+  <form method="post" action="/settings/openai-key/delete" class="form-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ submit_button('내 키 삭제') }}
+  </form>
+  {% endif %}
+  <p class="muted">등록 후 새로 도착한 메일부터 자동 처리합니다. 키가 없어 실패한 메일은 자동으로 다시 처리하지 않습니다. 이미 시작된 AI 작업은 삭제해도 취소되지 않습니다.</p>
+</section>
 <section class="card"><h2>자가 성찰</h2>
   <p class="muted">켜면 답장 후보를 저장하기 전에 원문에 없는 금액·수량·날짜, 경로 오류, 빠진 입력, 후보 수·받는 사람 불일치를 검사하고 고쳐서 다시 만듭니다. 고치지 못하면 '확인 필요'로 표시합니다. 다음에 오는 메일부터 적용됩니다.</p>
   <form method="post" action="/settings/reflection" class="form-stack">
