@@ -17,21 +17,23 @@ const SECTIONS = [
 ]
 
 export default function SettingsPage() {
-  const { state, retry: retryLogin } = useAuth()
+  const { state } = useAuth()
   const token = state.accessToken
   const [section, setSection] = useState("company")
   const [read, setRead] = useState({ phase: "loading", data: null, error: "" })
   const [reload, setReload] = useState(0)
   const [saveState, setSaveState] = useState({ saving: false, error: "", notice: "" })
   const mutation = useRef(null)
+  const savedVersion = useRef(0)
 
   useEffect(() => {
     const controller = new AbortController()
+    const versionAtRead = savedVersion.current
     setRead((previous) => ({ ...previous, phase: "loading", error: "" }))
     apiFetch("/trade/settings", { token, signal: controller.signal }).then((data) => {
-      if (!controller.signal.aborted) setRead({ phase: "ready", data, error: "" })
+      if (!controller.signal.aborted && versionAtRead === savedVersion.current) setRead({ phase: "ready", data, error: "" })
     }).catch((error) => {
-      if (!controller.signal.aborted) setRead((previous) => ({ ...previous, phase: "error", error: error.message }))
+      if (!controller.signal.aborted && versionAtRead === savedVersion.current) setRead((previous) => ({ ...previous, phase: "error", error: error.message }))
     })
     return () => controller.abort()
   }, [token, reload])
@@ -46,12 +48,13 @@ export default function SettingsPage() {
     try {
       const data = await apiFetch(`/trade/settings${path}`, { method, token, body, signal: controller.signal })
       if (controller.signal.aborted) return null
+      savedVersion.current += 1
       setRead({ phase: "ready", data, error: "" })
       setSaveState({ saving: false, error: "", notice: "저장했습니다. 새 문서·검토부터 적용됩니다." })
       return data
     } catch (error) {
       if (!controller.signal.aborted) setSaveState({ saving: false, notice: "", error: error.status === 401
-        ? "로그인 확인이 필요합니다. 입력 내용을 확인한 뒤 로그인 상태를 다시 확인해 주세요."
+        ? "로그인 확인이 필요합니다. 입력 내용을 별도로 보관한 뒤 다시 로그인해 주세요."
         : error.message })
       return null
     } finally {
@@ -67,7 +70,6 @@ export default function SettingsPage() {
       <div className="page-head"><div><h1 className="page-title">설정</h1><p className="page-sub">회사와 거래에 필요한 기준 정보를 관리합니다.</p></div></div>
       {read.error && <div className="settings-load-error" role="alert"><p>{read.error}</p>
         <button className="btn" type="button" onClick={() => setReload((value) => value + 1)}>다시 읽기</button>
-        <button className="btn" type="button" onClick={retryLogin}>로그인 상태 확인</button>
       </div>}
       {!read.data ? (read.phase === "loading" && <p role="status">설정을 불러오는 중입니다…</p>) : (
         <div className="settings-layout">
@@ -85,7 +87,6 @@ export default function SettingsPage() {
             {(section === "sale" || section === "purchase") && <PriceSettings key={section} role={section} {...props} />}
             {section === "banks" && <BankSettings {...props} />}
             {section === "branding" && <BrandingSettings token={token} {...props} />}
-            {saveState.error && <button className="link-button" type="button" onClick={retryLogin}>로그인 상태 다시 확인</button>}
           </section>
         </div>
       )}
