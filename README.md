@@ -36,7 +36,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - 위 Uvicorn 명령은 기본 `AI_RUNTIME=server`의 사용자별 DB 키 방식이다. 개인 `.env` 키를 쓰려면 아래 전용 로컬 실행 절차를 따른다.
 - Render 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
-- 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`GMAIL_PUBSUB_TOPIC`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 모두 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 실제 Google 로그인에는 Google Cloud 설정(계획 5절)이 필요하고, 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py`로 실행한다.
+- 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 필요하며, 기본 서버 모드에서는 `GMAIL_PUBSUB_TOPIC`도 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 로컬 모드는 아래 개인 OAuth 설정을 사용한다. 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py tests/test_local_gmail.py`로 실행한다.
 - `DATABASE_URL`을 비우면 `app/db/local.sqlite3`에 로컬 DB를 만든다(커밋 제외). Postgres는 `postgres://`·`postgresql://` 주소도 `psycopg` 드라이버로 연결한다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신한다. SQLite의 기존 단가표 제약 변경은 테이블 복사 방식이고 Postgres는 트랜잭션 안에서 변경한다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 메모리 SQLite와 이전 스키마에서의 갱신을 확인한다.
 - DB 엔진·세션 팩터리와 컴파일한 그래프를 재사용한다. LLM은 호출 시 해당 사용자의 현재 키로 구성하며 공용 클라이언트를 캐시하지 않는다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
 - HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
@@ -60,13 +60,24 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 ### 개인 PC의 .env 키로 실행
 
-1. 레포 루트의 개인 `.env`에 `AI_RUNTIME=local`을 지정한다. 처음에는 `LOCAL_OWNER_GOOGLE_SUB`와 `OPENAI_API_KEY`를 비워도 화면을 열 수 있다. Google 로그인용 로컬 OAuth 콜백·`SESSION_SECRET`·`TOKEN_ENCRYPTION_KEY` 등은 기존 방식으로 준비한다.
+1. 레포 루트의 개인 `.env`에 `AI_RUNTIME=local`을 지정한다. 처음에는 `LOCAL_OWNER_GOOGLE_SUB`와 `OPENAI_API_KEY`를 비워도 화면을 열 수 있다. 아래 절차로 본인 Google OAuth 앱과 로컬 콜백을 준비하고 `.env.example`의 명령으로 개인 `SESSION_SECRET`·`TOKEN_ENCRYPTION_KEY`를 만든다. `DATABASE_URL`은 공용 Render DB를 가리키지 않게 한다. 비우면 PC의 `app/db/local.sqlite3`를 쓴다.
 2. `uv run python -m app.local`을 실행하고 `http://127.0.0.1:8000`에서 본인 Google 계정으로 로그인한다. `/settings`의 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 개인 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정한다. 최초 로그인 사용자를 자동 소유자로 지정하지 않는다.
 3. 개인 `.env`의 `OPENAI_API_KEY`에 본인 키를 넣고 앱을 다시 시작한다. `/settings`에서 **로컬 .env 키 사용 가능**을 확인한다. 다른 계정·소유자 미지정·키 누락이면 AI를 차단한다. DB 사용자 키는 읽거나 저장하지 않으며 키·해시·일부 문자열도 화면에 표시하지 않는다. 키 변경도 `.env` 수정 후 재시작한다.
 
 전용 명령은 `127.0.0.1`에만 바인딩하며 `--port`만 지원한다(포트를 바꾸면 OAuth 콜백도 맞춘다). 공개 바인딩·리로드 옵션은 없다. 일반 Uvicorn 명령이나 Render·`PORT`가 지정된 공용 실행에서 `AI_RUNTIME=local`이면 시작을 거부한다. Host·`APP_BASE_URL`을 로컬 주소로 바꿔도 허용하지 않는다. 로컬 서비스를 외부 프록시·터널로 공개하지 않는다.
 
-**현재 구현 범위:** 로컬 키 선택·소유자 제한·설정 안내와 후속 작업의 실행 계약까지다. 개인 PC Gmail 연결·새 메일 수집은 계획 2절에서 별도로 구현한다. 현재 로그인/감시는 기존 동작이므로 공용 Pub/Sub 설정을 로컬용으로 바꾸지 않는다. Render 화면에서 개인 PC를 연결해 AI를 실행하는 장치 연결·작업 큐·개인 실행 프로그램은 아직 없다(계획 3·4절). 실제 키·Google 식별자는 채팅·Codex·Issue·PR·레포에 넣지 않는다.
+### 로컬 Gmail 연결과 새 메일 수집
+
+1. [Google Cloud 콘솔](https://console.cloud.google.com/)에서 본인 프로젝트를 만들고 **Gmail API**를 사용 설정한다. **Google Auth Platform**의 브랜딩·잠재고객을 설정하고 테스트 중인 외부 앱이면 본인 테스트용 Gmail을 테스트 사용자로 등록한다. 데이터 액세스 범위는 `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.send`다.
+2. **Clients → 클라이언트 만들기 → 웹 애플리케이션**에서 개인 OAuth 클라이언트를 만든다. 승인된 리디렉션 URI에 `http://127.0.0.1:8000/auth/google/callback`을 등록한다. 다른 포트를 쓰면 콘솔과 `.env`의 콜백 포트를 함께 바꾼다. 운영 OAuth 클라이언트 비밀값을 팀원에게 배포하거나 복사하지 않는다.
+3. 본인 PC의 `.env`에 개인 클라이언트 ID·비밀값을 `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`으로 넣고, `GOOGLE_OAUTH_REDIRECT_URI`를 위 URI와 일치시킨다. `APP_BASE_URL`은 `http://127.0.0.1:8000`으로 지정하고 브라우저도 같은 주소를 쓴다. 로컬의 `GMAIL_PUBSUB_TOPIC`과 `PUBSUB_PUSH_*`는 비워도 된다. 공용 Render의 OAuth·토픽·구독·푸시 주소는 변경하지 않는다.
+4. `uv run python -m app.local` 실행 → Google 로그인·Gmail 읽기/보내기 권한 동의 → 위 절차대로 본인 sub·OpenAI 키 지정 후 재시작 → `/inbox`의 **로컬 새 메일 수집 켜짐**과 `/settings`의 **로컬 .env 키 사용 가능**을 확인한다. 소유자 미지정·다른 계정이면 수집을 대기한다. 처음 연결할 때 `users.getProfile`의 현재 historyId만 저장하므로 연결 전에 있던 메일함 전체를 처리하지 않는다.
+
+앱이 켜져 있으면 본인 Google 토큰으로 30초 간격으로 `history.list`를 조회한다. 화면을 닫아도 앱이 켜져 있으면 수집하며 수신 포트·공개 터널·Pub/Sub가 필요 없다. 기존 MIME 변환·필터·중복 방지·AI 후보 생성과 사용자 승인 후 발송을 사용한다. 화면 목록은 별도로 90초마다 갱신된다. 로컬에서는 Google `users.watch`·`users.stop`을 호출하지 않아 같은 계정의 공용 감시를 덮어쓰지 않는다.
+
+로그아웃·재연결 동의 취소·Google 연결 만료/취소·앱/PC 종료 시 추가 수집을 멈춘다. 정상 접근 토큰 만료는 저장된 갱신 토큰으로 갱신한다. 통신 실패는 마지막 커서를 보존하고 다음 주기에 중복 메일을 건너뛰며 이어 읽는다. historyId가 만료(404)되면 자동 전체 동기화 없이 **다시 로그인**을 안내한다. 명시적으로 다시 로그인하면 현재 위치로 재설정하므로 로그아웃/만료 기간의 과거 메일은 처리하지 않는다. 프로그램만 재시작하면 같은 로컬 DB의 마지막 커서부터 이어 읽되, 커서가 만료됐으면 재로그인이 필요하다. Google 외부 앱 테스트 상태의 갱신 토큰은 7일 만료 등 Google 정책에 따라 재동의를 요구할 수 있다.
+
+**현재 구현 범위:** 로컬 키·소유자 제한과 Gmail 연결·새 메일 수집까지다. Render 화면에서 개인 PC를 연결해 AI를 실행하는 장치 연결·작업 큐·개인 실행 프로그램은 아직 없다(계획 3·4절). 실제 키·Google 식별자는 채팅·Codex·Issue·PR·레포에 넣지 않는다.
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|

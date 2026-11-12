@@ -19,7 +19,11 @@
 <p><strong>{{ user.email }}</strong> {{ status_badge(status.label) }}</p>
 {% if status.notice %}{{ banner(status.notice) }}{% endif %}
 {% if status.relogin %}<p>{{ link_button('다시 로그인', '/auth/google/start?consent=1') }}</p>{% endif %}
+{% if local_mode %}
+<p class="muted">이 PC에서 지정한 본인 계정의 새 메일을 30초마다 확인합니다. 로그아웃·연결 만료·프로그램 종료 시 수집을 멈춥니다. 화면 목록은 90초마다 갱신됩니다.</p>
+{% else %}
 <p class="muted">새 메일이 오면 답장 후보를 만들어 이 화면에 보여 줍니다.</p>
+{% endif %}
 <form method="post" action="/logout">{{ submit_button('로그아웃') }}</form>
 {% endcall %}
 {% call card('받은 메일') %}

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 import secrets
 from urllib.parse import urlsplit
@@ -15,6 +16,7 @@ from app.config import Settings, get_settings, validate_runtime
 from app.db.engine import get_database
 from app.graph.run import get_graph
 from app.services.auth import GoogleAccess, make_cipher
+from app.services.local_gmail import LocalGmailCollector
 from app.trade.common.models import DocumentError
 from app.trade.common import api as trade_api
 from app.trade.pi import router as pi_routes
@@ -55,10 +57,17 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
         app.state.google = google or GoogleClient(config)
         app.state.google_access = GoogleAccess(
             database, app.state.google, make_cipher(config), config.gmail_pubsub_topic,
+            settings=config,
         )
+        collector = LocalGmailCollector(app.state.google_access) if config.ai_runtime == "local" else None
+        app.state.local_gmail = collector
+        task = asyncio.create_task(collector.run()) if collector else None
         try:
             yield
         finally:
+            if collector:
+                collector.stop()
+                await task  # 작업 스레드가 멈춘 다음 DB를 닫는다.
             database.close()
 
     app = FastAPI(title="Gmail 견적 도우미", lifespan=lifespan)
