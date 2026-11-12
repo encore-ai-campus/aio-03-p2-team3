@@ -47,7 +47,8 @@ def start_run(*, user_id: int, email: EmailMessage, mode="live", reflection_enab
                 )
             if ai.issue is not None:
                 result.update(end_reason="failed", step_status="failed", needs_review=True,
-                              notice="openai_key_required", candidates=[])
+                              notice=ai.issue.code.lower() if ai.issue.code.startswith("WORKER_") else "openai_key_required",
+                              candidates=[])
             if result["end_reason"] is None:
                 result["end_reason"] = "ignored" if result["intent"] == "ignore" else "failed"
         except Exception as error:

@@ -119,6 +119,7 @@ class WorkerJob(Base, Owned, Created):
     schema_version: Mapped[str] = mapped_column(String)
     payload: Mapped[dict | None] = mapped_column(JSON_VALUE, nullable=True)
     result_hash: Mapped[str | None] = mapped_column(String)
+    result_enc: Mapped[str | None] = mapped_column(Text)
     error_kind: Mapped[str | None] = mapped_column(String)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
     lease_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())

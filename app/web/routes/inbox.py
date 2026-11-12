@@ -57,9 +57,15 @@ def inbox_items(database, user_id: int) -> list[dict]:
             "status_label": label, "tone": tone,
             "rate_limited": message.notice == "rate_limit",
             "key_required": message.notice == "openai_key_required",
+            "worker_notice": worker_notice(message.notice),
             "pending": pending.get(message.gmail_message_id, 0) if message.status == "awaiting_approval" else 0,
         })
     return items
+
+
+def worker_notice(code):
+    from app.worker.adapter import ERRORS
+    return next((message for name, message, _ in ERRORS.values() if name.lower() == code), None)
 
 
 def _context(request: Request, user: User) -> dict:

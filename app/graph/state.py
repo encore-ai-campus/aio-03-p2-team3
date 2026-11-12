@@ -275,7 +275,9 @@ class AgentState(TypedDict):
     reflection_retries_by_type: dict[str, int]
     errors: Annotated[list[AgentError], add]
     needs_review: bool
-    notice: Literal["rate_limit", "reflection_limit", "openai_key_required"] | None
+    notice: Literal["rate_limit", "reflection_limit", "openai_key_required", "worker_unavailable",
+                    "worker_timeout", "worker_version_mismatch", "worker_key_required", "worker_owner_mismatch",
+                    "worker_rate_limit", "worker_network", "worker_invalid_output", "worker_invalid_input", "worker_failed"] | None
     end_reason: Literal["awaiting_approval", "followup_question", "ignored", "failed"] | None
 
 

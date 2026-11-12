@@ -1,5 +1,6 @@
 """DB로 직렬화하는 장치/작업 상태 전이. 트랜잭션 안에서 네트워크를 기다리지 않는다."""
 from datetime import timedelta
+import json
 import hashlib
 import hmac
 import secrets
@@ -57,11 +58,16 @@ def _revoke(session, user_id, now):
         WorkerPairing.user_id == user_id, WorkerPairing.consumed_at.is_(None),
     ).values(expires_at=now))
     _finish(session, WorkerJob.user_id == user_id, "cancelled", "worker_unavailable", now)
+    session.execute(update(WorkerJob).where(WorkerJob.user_id == user_id).values(result_enc=None))
 
 
 def _cleanup_user(session, user_id, now):
+    session.execute(update(WorkerJob).where(
+        WorkerJob.user_id == user_id, WorkerJob.expires_at <= now,
+    ).values(result_enc=None))
     expired_ids = select(WorkerDevice.id).where(
         WorkerDevice.user_id == user_id, WorkerDevice.expires_at <= now)
+    session.execute(update(WorkerJob).where(WorkerJob.device_id.in_(expired_ids)).values(result_enc=None))
     _finish(session, WorkerJob.device_id.in_(expired_ids), "expired", "expired", now)
     session.execute(update(WorkerDevice).where(
         WorkerDevice.user_id == user_id, WorkerDevice.revoked_at.is_(None), WorkerDevice.expires_at <= now,
@@ -169,7 +175,7 @@ def set_mode(database, user_id, mode, *, now=None):
         if user.ai_execution_mode != mode:
             _revoke(session, user_id, now)
             user.ai_execution_mode = mode
-    return {"ai_execution_mode": mode, "ai_ready": False if mode == "local_worker" else None}
+    return {"ai_execution_mode": mode, "ai_ready": None}
 
 
 def disconnect(database, user_id, device_id, *, now=None):
@@ -192,8 +198,10 @@ def status(database, user_id, *, now=None):
             WorkerDevice.user_id == user_id, WorkerDevice.revoked_at.is_(None))).all()
         jobs = session.scalars(select(WorkerJob).where(
             WorkerJob.user_id == user_id).order_by(WorkerJob.created_at.desc()).limit(20)).all()
-        return dict(ai_execution_mode=user.ai_execution_mode, ai_ready=False if user.ai_execution_mode == "local_worker" else None,
-                    integration="pending_section_4", devices=[dict(device_id=d.id, name=d.name,
+        return dict(ai_execution_mode=user.ai_execution_mode,
+                    ai_ready=any(d.last_seen_at > now - timedelta(seconds=45) for d in devices)
+                    if user.ai_execution_mode == "local_worker" else None,
+                    integration="ready", devices=[dict(device_id=d.id, name=d.name,
                     expires_at=d.expires_at.isoformat(), last_seen_at=d.last_seen_at.isoformat(),
                     status="online" if d.last_seen_at > now - timedelta(seconds=45) else "offline") for d in devices],
                     jobs=[dict(job_id=j.id, attempt_id=j.attempt_id, status=j.status,
@@ -283,7 +291,7 @@ def heartbeat(database, device_id, token, job_id, attempt_id, *, now=None):
         return {"lease_expires_at": row.lease_expires_at.isoformat()}
 
 
-def complete(database, device_id, token, job_id, value, *, now=None):
+def complete(database, device_id, token, job_id, value, *, now=None, cipher=None):
     now = now or utcnow()
     with database.session() as session:
         device = _authenticate(session, device_id, token, now)
@@ -302,6 +310,7 @@ def complete(database, device_id, token, job_id, value, *, now=None):
             WorkerJob.attempt_id == result.attempt_id, WorkerJob.status == "leased",
             WorkerJob.expires_at > now, WorkerJob.lease_expires_at > now,
         ).values(status=state, error_kind=None if result.ok else result.error_kind, result_hash=fingerprint,
+                 result_enc=cipher.encrypt(json.dumps(value, ensure_ascii=False)) if result.ok and cipher else None,
                  payload=None, finished_at=now, lease_expires_at=None)).rowcount
         if changed != 1:
             raise WorkerError("expired", 410)
@@ -320,3 +329,53 @@ def cancel(database, user_id, job_id, *, now=None):
             raise WorkerError("job_finished", 409)
         _finish(session, WorkerJob.id == job_id, "cancelled", "worker_unavailable", now)
     return {"status": "cancelled"}
+
+
+def outcome(database, user_id, job_id, attempt_id, cipher, *, now=None):
+    """업무 호출자만 한 번 소비한다. 다른 웹 프로세스에서도 DB로 전달받는다."""
+    now = now or utcnow()
+    with database.session() as session:
+        user = _lock_user(session, user_id)
+        _cleanup_user(session, user_id, now)
+        row = session.get(WorkerJob, job_id)
+        if row is None or (row.user_id, row.attempt_id) != (user_id, attempt_id):
+            raise WorkerError("not_found", 404)
+        device = session.get(WorkerDevice, row.device_id)
+        if user.ai_execution_mode != "local_worker" or device.revoked_at is not None or device.expires_at <= now:
+            row.result_enc = None
+            return {"ok": False, "error_kind": "worker_unavailable"}
+        if row.expires_at <= now:
+            return {"ok": False, "error_kind": "expired"}
+        if row.status in PENDING:
+            return None
+        if row.status != "succeeded":
+            return {"ok": False, "error_kind": row.error_kind or "worker_unavailable"}
+        encrypted, row.result_enc = row.result_enc, None
+        try:
+            value = json.loads(cipher.decrypt(encrypted))
+            return validate_result(value, row.schema_id, row.schema_version).model_dump()
+        except Exception:
+            return {"ok": False, "error_kind": "internal"}
+
+
+def retry(database, user_id, payload, model, *, now=None):
+    """서버 호출자가 예산을 확인한 뒤 새 attempt만 배정한다. 논리 기한은 연장하지 않는다."""
+    now = now or utcnow()
+    with database.session() as session:
+        user = _lock_user(session, user_id)
+        _cleanup_user(session, user_id, now)
+        row = session.get(WorkerJob, payload["job_id"])
+        if row is None or (row.user_id, row.attempt_id) != (user_id, payload["attempt_id"]):
+            raise WorkerError("not_found", 404)
+        device = session.get(WorkerDevice, row.device_id)
+        if user.ai_execution_mode != "local_worker" or device.revoked_at is not None or device.expires_at <= now:
+            raise WorkerError("worker_unavailable", 409)
+        if device.last_seen_at <= now - timedelta(seconds=45):
+            raise WorkerError("worker_unavailable", 409)
+        if row.expires_at <= now or row.status not in {"failed", "expired"}:
+            raise WorkerError("expired", 410)
+        revised = {**payload, "attempt_id": str(uuid4())}
+        validate_request(revised, device.capabilities, model)
+        row.attempt_id, row.payload, row.status = revised["attempt_id"], revised, "queued"
+        row.result_enc = row.result_hash = row.error_kind = row.finished_at = row.lease_expires_at = None
+        return revised

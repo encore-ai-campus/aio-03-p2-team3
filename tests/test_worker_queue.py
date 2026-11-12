@@ -111,7 +111,7 @@ def test_two_users_pair_and_own_claim_complete_are_isolated(web):
     overview = client.get("/api/ai-execution").json()
     assert [d["device_id"] for d in overview["devices"]] == [second["device_id"]]
     assert [j["job_id"] for j in overview["jobs"]] == [two["job_id"]]
-    assert overview["ai_ready"] is False and overview["integration"] == "pending_section_4"
+    assert overview["ai_ready"] is True and overview["integration"] == "ready"
     assert client.post(f"/api/ai-execution/devices/{first['device_id']}/disconnect",
                        json={}, headers={"X-CSRF-Token": overview["csrf_token"]}).status_code == 404
     assert client.post(f"/api/ai-execution/jobs/{one['job_id']}/cancel",
@@ -433,10 +433,10 @@ def test_selected_worker_mode_cannot_fall_back_to_existing_user_or_server_key(we
     database = client.app.state.database
     save_key(database, 1, "fake-user-key", client.app.state.google_access.cipher, settings=config)
     device, _, csrf = pair(web)
-    with pytest.raises(llm.OpenAIKeyError, match="개인 실행"):
+    with pytest.raises(llm.OpenAIKeyError, match="개인 PC 실행"):
         UserKeyAccess(database, 1, client.app.state.google_access.cipher, config).read()
     page = client.get("/settings")
-    assert "개인 PC의 실제 AI 실행은 아직 지원하지 않습니다" in page.text
+    assert "PC가 켜져 있을 때 본인 .env 키로 AI를 실행합니다" in page.text
     assert "fake-user-key" not in page.text
     assert client.post("/api/ai-execution/mode", json={"ai_execution_mode": "stored_key", "csrf_token": csrf}).status_code == 200
     assert UserKeyAccess(database, 1, client.app.state.google_access.cipher, config).read() == "fake-user-key"

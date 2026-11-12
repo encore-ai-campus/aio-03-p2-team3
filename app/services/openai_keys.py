@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.config import Settings, get_settings, validate_runtime
 from app.db.engine import Database
 from app.db.models import User, UserOpenAIKey
-from app.llm.client import OpenAIKeyError, use_user_key
+from app.llm.client import OpenAIKeyError, use_user_key, use_worker_call
 from app.services.auth import TokenCipher, make_cipher
 
 
@@ -72,7 +72,7 @@ class UserKeyAccess:
             with self.database.session() as session:
                 user = session.get(User, self.user_id)
                 if user is not None and user.ai_execution_mode == "local_worker":
-                    raise OpenAIKeyError("LOCAL_WORKER_NOT_READY", "개인 실행 프로그램의 AI 연결은 다음 단계에서 제공됩니다. 서버 저장 키로 전환하지 않습니다.")
+                    raise OpenAIKeyError("LOCAL_WORKER_KEY_FORBIDDEN", "개인 PC 실행 방식에서는 서버 키를 읽지 않습니다.")
                 row = session.get(UserOpenAIKey, self.user_id)
                 encrypted = row.api_key_enc if row is not None else None
             if encrypted is None:
@@ -115,5 +115,9 @@ def user_openai(database: Database, user_id: int, *, settings: Settings | None =
     configured = settings or get_settings()
     access = UserKeyAccess(database, user_id,
                            None if configured.ai_runtime == "local" else cipher or make_cipher(configured), configured)
-    with use_user_key(access.read, configured):
+    with database.session() as session:
+        user = session.get(User, user_id)
+        worker = configured.ai_runtime == "server" and user is not None and user.ai_execution_mode == "local_worker"
+    from app.worker.adapter import QueueCall
+    with use_user_key(access.read, configured), use_worker_call(QueueCall(access) if worker else None):
         yield access
