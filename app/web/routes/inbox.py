@@ -66,7 +66,8 @@ def _context(request: Request, user: User) -> dict:
     return {
         "user": user, "items": inbox_items(request.app.state.database, user.id),
         "poll_seconds": LIMITS["INBOX_POLL_SECONDS"],
-        "openai_registered": key_registered(request.app.state.database, user.id),
+        "local_mode": request.app.state.settings.ai_runtime == "local",
+        "openai_registered": key_registered(request.app.state.database, user.id, settings=request.app.state.settings),
     }
 
 

@@ -12,13 +12,15 @@ from app.db.models import CompanyProfile, PriceListItem, User
 from app.quote.calc import price
 from app.web.deps import current_user_id
 from app.llm.client import OpenAIKeyError
-from app.services.openai_keys import delete_key, key_registered, save_key
+from app.services.openai_keys import UserKeyAccess, delete_key, key_registered, save_key
 
 router = APIRouter()
 
 
 @router.get("/settings")
 def settings(request: Request, user_id: int = Depends(current_user_id)):
+    config = request.app.state.settings
+    local_mode = config.ai_runtime == "local"
     csrf_token = request.session.setdefault("trade_csrf", secrets.token_urlsafe(32))
     with request.app.state.database.session() as session:
         company = session.get(CompanyProfile, user_id)
@@ -27,10 +29,19 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
             PriceListItem.role.is_(None),  # 국내 견적서 행만(무역 행은 계약 15.7절, 별도)
         ).order_by(PriceListItem.item_name)).all()
         reflection_enabled = session.scalar(select(User.reflection_enabled).where(User.id == user_id))
+        user = session.get(User, user_id)
+        local_sub = user.google_sub if local_mode and user and user.last_login_at is not None else None
+    local_error = None
+    if local_mode:
+        try:
+            UserKeyAccess(request.app.state.database, user_id, None, config).read()
+        except OpenAIKeyError as error:
+            local_error = error.message
     return request.app.state.templates.TemplateResponse(
         request=request, name="pages/settings.html",
         context={"company": company, "prices": prices, "reflection_enabled": bool(reflection_enabled),
-                 "openai_registered": key_registered(request.app.state.database, user_id),
+                 "local_mode": local_mode, "local_google_sub": local_sub, "local_key_error": local_error,
+                 "openai_registered": (local_error is None) if local_mode else key_registered(request.app.state.database, user_id, settings=config),
                  "openai_storage_ready": request.app.state.google_access.cipher is not None,
                  "csrf_token": csrf_token,
                  "key_notice": {"saved": "OpenAI API 키를 저장했습니다. 키의 유효성은 실제 AI 요청 시 확인합니다.",
@@ -51,7 +62,8 @@ def save_openai_key(request: Request, api_key: Annotated[str, Form()] = "",
                     csrf_token: Annotated[str, Form()] = "", user_id: int = Depends(current_user_id)):
     check_key_csrf(request, csrf_token)
     try:
-        save_key(request.app.state.database, user_id, api_key, request.app.state.google_access.cipher)
+        save_key(request.app.state.database, user_id, api_key, request.app.state.google_access.cipher,
+                 settings=request.app.state.settings)
     except OpenAIKeyError as error:
         # Form에 길이/패턴 검증을 붙이면 422 응답이 입력한 비밀값을 다시 보여 줄 수 있다.
         raise HTTPException(error.status_code, error.message) from None
@@ -63,7 +75,10 @@ def save_openai_key(request: Request, api_key: Annotated[str, Form()] = "",
 def delete_openai_key(request: Request, csrf_token: Annotated[str, Form()] = "",
                       user_id: int = Depends(current_user_id)):
     check_key_csrf(request, csrf_token)
-    delete_key(request.app.state.database, user_id)
+    try:
+        delete_key(request.app.state.database, user_id, settings=request.app.state.settings)
+    except OpenAIKeyError as error:
+        raise HTTPException(error.status_code, error.message) from None
     return RedirectResponse("/settings?key_notice=deleted", status_code=303,
                             headers={"Cache-Control": "private, no-store"})
 

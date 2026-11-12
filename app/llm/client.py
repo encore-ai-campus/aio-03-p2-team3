@@ -59,7 +59,7 @@ def get_backend(settings: Settings | None = None):
     if binding is None:
         raise OpenAIKeyError()
     provider, configured = binding
-    # 매 호출마다 현재 사용자의 저장값을 다시 읽는다. 서버의 키와 전역 클라이언트는 사용하지 않는다.
+    # 사용자 범위의 소스를 확인한다(DB 개인 키 또는 검증된 로컬 소유자의 .env).
     key = provider()
     return _backend_for_settings(replace(settings or configured or get_settings(), openai_api_key=key))
 
