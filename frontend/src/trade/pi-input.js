@@ -13,7 +13,7 @@ export function piDraft(input) {
 }
 
 export function piPayload(draft) {
-  return { ...draft, currency: draft.currency || null,
+  return { ...draft, currency: draft.currency || null, product_family: draft.product_family || null,
     items: draft.items.map((row) => {
       const item = { ...row }
       delete item.rowId
