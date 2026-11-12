@@ -48,6 +48,7 @@
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
 - `docs/plans/` — 큰 작업의 계획 파일 `<작업명>.md`(RULES 7절) [과제별]
+- `docs/plans/react-supabase/` — React·JavaScript·Vite와 Supabase 전환 문서 모음(안내·상세 계획·단계별 새 작업 요청문). 하위 작업은 PLAN.md의 자기 절만 읽는다 [과제별]
 - `docs/plans/kekorea-port.md` — KE KOREA 무역서류(PI/PO/CI/PL) 로직 이식 계획(RULES 7절). 하위 작업은 자기 절만 읽는다 [과제별]
 - `reference/kekorea/` — KE KOREA 원본 사본(이식용, 읽기 전용, 고치지 않음·앱에서 import 안 함). 담은 것·바꾼 것·원본 테스트 실행법은 그 폴더의 `README.md`. 이식 작업에서만 읽는다 [과제별]
 - `docs/CONTRACT.md` — gmail-quote-mvp 공통 계약(폴더 구조, 그래프 상태·노드·전이·한도, 도구 입출력, 필수 항목 출처, LLM 호출, DB 표, 실행 기록, 화면, Google, 환경변수). 하위 작업은 13절에서 자기가 읽을 절만 연다 [과제별]
