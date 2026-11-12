@@ -242,7 +242,7 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 
 <a id="5"></a>
 
-## 5. Supabase 인증과 기존 사용자 매핑
+## 5. Supabase 인증과 기존 사용자 매핑 (완료)
 
 - 할 일: 1절 계약을 읽고 서버 JWT 검증과 `supabase_uid` migration, 최초 접속 사용자 생성, `/api/me`와 API 의존성을 구현한다. React용 무역/설정/파일 JSON API를 Bearer-only로 연결하고 CORS의 Authorization 허용을 맞춘다. legacy 세션 의존성을 JSON 경로에서 암묵적 fallback으로 사용하지 않는다.
 - 완료 기준: Google Gmail 미연결 사용자도 문서 API를 사용할 수 있다. 정상/만료/위조/다른 issuer·audience·algorithm·subject 토큰이 구분되고, 동시 가입이 한 행으로 끝난다. 다른 사용자의 문서/파일은 404이며 요청 body의 소유자를 신뢰하지 않는다.

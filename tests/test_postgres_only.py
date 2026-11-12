@@ -57,5 +57,8 @@ def test_upgrade_targets_public_schema_and_keeps_supabase_schemas(database_url):
         assert connection.exec_driver_sql("SELECT mark FROM auth.users").scalar() == "supabase-auth"
         assert connection.exec_driver_sql("SELECT id FROM storage.buckets").scalar() == "trade-files"
         assert connection.exec_driver_sql(
-            "SELECT version_num FROM public.alembic_version").scalar() == "20261111_trade_reviews"
+            "SELECT version_num FROM public.alembic_version").scalar() == "20261112_supabase_users"
+        assert connection.exec_driver_sql(
+            "SELECT attname FROM pg_attribute WHERE attrelid = 'public.users'::regclass"
+            " AND attname = 'supabase_uid'").scalar() == "supabase_uid"
     db.close()

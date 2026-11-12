@@ -56,6 +56,7 @@ class Settings:
     reflection_enabled_default: bool = False
     frontend_origins: str = ""
     session_same_site: str = "lax"
+    supabase_url: str = ""  # 서버 JWT 검증·Storage 호출 공통(CONTRACT 11절. 5절부터 JWT 검증에 쓴다)
 
     @property
     def resolved_database_url(self) -> str:

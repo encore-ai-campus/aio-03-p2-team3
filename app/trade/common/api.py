@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api", tags=["trade-session"])
 
 
 def require_write(request: Request, user_id: int = Depends(current_user_id)) -> int:
+    if request.headers.get("authorization"):
+        return user_id  # Bearer 인증은 헤더 자격증명이라 브라우저가 몰래 실어 보내지 않는다(CSRF 검사 생략).
     expected = request.session.get("trade_csrf")
     supplied = request.headers.get("X-CSRF-Token", "")
     if not expected or not supplied or not hmac.compare_digest(expected, supplied):

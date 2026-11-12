@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.auth import router as supabase_me
+from app.auth.supabase import BearerAuthError, TokenVerifier
 from app.clients.gmail import GoogleClient
 from app.config import Settings, get_settings
 from app.db.engine import get_database
@@ -29,8 +31,10 @@ from app.web.routes import auth, candidates, gmail_push, inbox, pages, quotes, r
 SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
 
-def create_app(settings: Settings | None = None, google=None) -> FastAPI:
-    """google: Google 호출 객체. 비우면 실제 `GoogleClient`, 테스트는 가짜를 넣는다."""
+def create_app(settings: Settings | None = None, google=None,
+               supabase_auth: TokenVerifier | None = None) -> FastAPI:
+    """google: Google 호출 객체. 비우면 실제 `GoogleClient`, 테스트는 가짜를 넣는다.
+    supabase_auth: Supabase 토큰 검증기. 비우면 SUPABASE_URL로 만들고, 그것도 없으면 Bearer 인증 불가(503)."""
     config = settings or get_settings()
     same_site = config.session_same_site or "lax"
     if same_site not in {"lax", "strict", "none"}:
@@ -49,6 +53,9 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
         app.state.settings = config
         app.state.database = database
         app.state.graph = get_graph()
+        app.state.supabase_auth = supabase_auth or (
+            TokenVerifier(config.supabase_url) if config.supabase_url.strip() else None
+        )
         # API 키가 없어도 기본 화면과 healthz는 사용할 수 있다.
         app.state.llm = get_backend(config) if config.openai_api_key.strip() else None
         app.state.google = google or GoogleClient(config)
@@ -71,7 +78,7 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-                           allow_headers=["Content-Type", "X-CSRF-Token"])
+                           allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"])
     app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
     # 라우터 파일(app/web/routes/)은 request.app.state.templates(= app.web.templates)로 같은 템플릿을 쓴다.
     app.state.templates = templates
@@ -80,6 +87,7 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
     app.include_router(pages.router)
     app.include_router(quotes.router)
     app.include_router(settings_routes.router)
+    app.include_router(supabase_me.router)
     app.include_router(trade_api.router)
     app.include_router(pi_routes.router)
     app.include_router(po_routes.router)
@@ -95,6 +103,10 @@ def create_app(settings: Settings | None = None, google=None) -> FastAPI:
 
     @app.exception_handler(DocumentError)
     def document_error(request: Request, error: DocumentError):
+        return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
+
+    @app.exception_handler(BearerAuthError)
+    def bearer_auth_error(request: Request, error: BearerAuthError):
         return JSONResponse({"error": {"code": error.code, "message": error.message}}, status_code=error.status_code)
 
     @app.get("/healthz")

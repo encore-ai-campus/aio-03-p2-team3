@@ -75,7 +75,7 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 |
 | `APP_BASE_URL` | 서비스 주소. 링크·리디렉션 확인용 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값. 설정할 때 `true` 또는 `false` 지정 |
-| `SUPABASE_URL` `SUPABASE_SECRET_KEY` `SUPABASE_STORAGE_BUCKET` | [목표] Supabase 전환용 서버 설정(서버 토큰 검증·비공개 파일 Storage 버킷 `trade-files`). 현재 코드는 아직 읽지 않는다 |
+| `SUPABASE_URL` `SUPABASE_SECRET_KEY` `SUPABASE_STORAGE_BUCKET` | Supabase 전환용 서버 설정. `SUPABASE_URL`은 Bearer 토큰 검증(JWKS·issuer)에 읽는다(계획 5절 적용), 나머지는 Storage 전환(계획 8절)부터 적용 |
 | `VITE_SUPABASE_URL` `VITE_SUPABASE_PUBLISHABLE_KEY` | [목표] React 브라우저용 Supabase 설정. `frontend/.env`에만 두고 서버 비밀과 분리한다 |
 
 특일 정보·단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 제외했다. 일정(캘린더) 도구 작업 때 `.work/design/api-choice.md`의 '일정 도구 추천 후보'를 요청자에게 추천하고 채택 여부를 확인한다.
@@ -120,4 +120,4 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 - 로그인 뒤 `GET /api/me`(인증 상태·프로필·Gmail 연결 상태)에서 시작하고, React JSON API는 `Authorization: Bearer <Supabase access token>`만 쓴다. 위 쿠키+CSRF 안내는 전환 기간의 기존 경로용이다(계획 21·22절 전환 뒤 닫는다).
 - 서버는 검증한 Supabase UUID를 기존 정수 `user_id`(`users.supabase_uid` 매핑)에 연결한다. 파일은 서버가 `POST /api/files`로 한 파일씩 받아 Storage에 저장하고 메타데이터만 DB에 남긴다(첨부 파일당 5MiB·문서당 5개·PDF/XLSX/TXT/PNG/JPEG).
 - 개발은 `frontend/`의 Vite 개발 서버로 `/api`를 FastAPI로 프록시하고, 배포는 React 빌드 파일을 기존 Render FastAPI가 같은 출처에서 제공한다(별도 프론트 호스팅 없음).
-- 서버 설정 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`·`DATABASE_URL`(PostgreSQL), 브라우저 설정 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`. 현재 코드는 아직 읽지 않는다(구현은 계획 5절부터).
+- 서버 설정 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`SUPABASE_STORAGE_BUCKET`·`DATABASE_URL`(PostgreSQL), 브라우저 설정 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`. 서버는 `SUPABASE_URL`로 Bearer 토큰을 검증한다(계획 5절 적용, 2026-11-12). Storage 설정은 계획 8절부터 읽는다.

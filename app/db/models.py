@@ -1,8 +1,9 @@
 """CONTRACT 7절. JSON은 Postgres JSONB / SQLite JSON으로 저장한다."""
 
 from datetime import UTC, datetime
+from uuid import UUID
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, LargeBinary, String, Text, UniqueConstraint, Uuid, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -49,9 +50,13 @@ class Updated:
 
 
 class User(Base, Created):
+    """google_sub는 Google 메일 연결 사용자만 쓰고 Supabase 로그인 사용자는 supabase_uid로
+    구분한다(CONTRACT 7.1절, 계획 5절). 두 값 모두 유일하고 아직 연결 전이면 NULL이다."""
     __tablename__ = "users"
+    __table_args__ = (Index("uq_users_supabase_uid", "supabase_uid", unique=True),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    google_sub: Mapped[str] = mapped_column(String, unique=True)
+    google_sub: Mapped[str | None] = mapped_column(String, unique=True)
+    supabase_uid: Mapped[UUID | None] = mapped_column(Uuid())
     email: Mapped[str] = mapped_column(String)
     display_name: Mapped[str | None] = mapped_column(String)
     reflection_enabled: Mapped[bool] = mapped_column(Boolean, default=lambda: _default_reflection())

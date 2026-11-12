@@ -412,11 +412,11 @@ class AgentError(TypedDict):
 
 ### 7.1. Supabase 전환 DB 목표 (2026-11-12, 계획 1절 확정)
 
-- 아래는 전환 계약이다. 3절(테스트 PostgreSQL)·4절(PostgreSQL 전용 설정·이전 도구)을 적용했고(2026-11-12), 5·8·9·10절은 [목표]로 남는다. 구현은 `docs/plans/react-supabase/PLAN.md` 순서대로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
+- 아래는 전환 계약이다. 3절(테스트 PostgreSQL)·4절(PostgreSQL 전용 설정·이전 도구)·5절(Supabase 인증·사용자 매핑)을 적용했고(2026-11-12), 8·9·10절은 [목표]로 남는다. 구현은 `docs/plans/react-supabase/PLAN.md` 순서대로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
 - DB는 Supabase PostgreSQL 하나다. `DATABASE_URL`은 PostgreSQL 주소만 받고 빈 값·비PostgreSQL 주소를 거부한다. SQLite 자동 fallback과 `app/db/local.sqlite3` 생성 경로는 없앴다(계획 4절 적용, 2026-11-12: `app/config.py`의 `resolved_database_url`이 거부). 테스트도 임시 PostgreSQL로 돈다(계획 3절). UTC 저장·JSONB·모든 조회의 `user_id` 필터는 그대로다.
 - 연결·migration(계획 4절 적용, 2026-11-12): 연결은 Supabase Session pooler 주소(포트 5432)를 기본으로 하고 `?sslmode=require`를 붙인다(트랜잭션 pooler 6543은 쓰지 않는다). 엔진 풀 상한은 프로세스당 `pool_size=5`·`max_overflow=10`·`pool_timeout=30초`·`pool_recycle=1800초`(`app/db/engine.py`). 서버 시작 migration(`app/db/migrations/`)은 대상 스키마를 `public`으로 고정(`SET LOCAL search_path`, `alembic_version`도 `public`)해 Supabase의 `auth`·`storage` 스키마를 건드리지 않는다.
 - 기존 데이터 복사·대조(계획 4절 적용, 2026-11-12): `uv run python -m app.db.copy_data --source <SQLite 파일|DB URL> [--target <PostgreSQL>] [--dry-run] [--yes]`가 일회성 이전을 담당한다. 원본 SQLite 파일은 임시 사본을 갱신해 읽고(원본 불변), 대상 확인(`--yes`)·반복 실행(이미 같으면 대조만 통과, 다른 데이터가 있으면 합침 없이 실패)·중단 지점(복사·시퀀스 정렬을 대상 한 트랜잭션으로 커밋)을 제공한다. 대조는 표별 행 수·모든 열 값(소유자·외래 키·timestamp·JSON·금액)·PK/시퀀스를 비교한다.
-- `users` 표 이행: 기존 정수 `id` PK와 소유자 외래 키를 그대로 두고(Supabase `auth.users.id` UUID로 바꾸지 않는다) 유일한 nullable `supabase_uid`(UUID) 열을 더한다. Google 메일 연결 없이 가입한 사용자를 위해 `google_sub`는 nullable로 바꾼다(기존 행은 보존, 계획 5절 migration). 같은 이메일만으로 기존 행에 자동 연결하지 않는다(연결 증명은 9절).
+- `users` 표 이행(계획 5절 적용, 2026-11-12): 기존 정수 `id` PK와 소유자 외래 키를 그대로 두고(Supabase `auth.users.id` UUID로 바꾸지 않는다) 유일한 nullable `supabase_uid`(UUID) 열을 더했고(migration `20261112_supabase_users`, 유일 인덱스 `uq_users_supabase_uid`) Google 메일 연결 없이 가입한 사용자를 위해 `google_sub`는 nullable로 바꿨다(기존 행 보존). 같은 이메일만으로 기존 행에 자동 연결하지 않는다(연결 증명은 9절).
 - 새 표 `file_assets`(계획 8절): `id` PK · `user_id` FK · `original_filename` · `content_type`(서버가 파일 시그니처로 확인한 실제 형식) · `size_bytes` · `sha256` · `object_key` · `created_at`. 파일 bytes는 DB에 두지 않는다.
 - 새 표 `trade_document_sources`(계획 8절): `id` PK · `user_id` FK · `trade_document_id` FK · `doc_kind` · `revision`(연결할 때 확인한 문서 revision) · `file_id` FK(`file_assets`) · `origin`(`upload`/`email` — `email`은 Gmail 첨부 가져오기(보류 범위) 구현 뒤 쓴다) · `created_at`.
 - 기존 표 이행: `company_branding`의 `logo`·`seal` bytes는 `file_assets` 파일 ID와 해시로 바꾸고(계획 9절 backfill), `trade_proposals`는 이미지 bytes 대신 이미지 파일 ID/해시 스냅샷을 고정하며, `trade_artifacts`는 `object_key`·`size_bytes` 열을 더하고 `content` 바이너리는 Storage로 옮긴다(계획 10절 backfill). 기존 파일 ID·형식·해시·승인 관계는 유지한다. 바이너리 열 DROP·원본 삭제는 검증 뒤 별도 변경이다(계획 22절).
@@ -487,16 +487,16 @@ class AgentError(TypedDict):
 ### 9.1. React·Supabase 전환 인증 목표 (2026-11-12, 계획 1절 확정)
 
 - 위 `gq_session` 쿠키·CSRF 규칙은 [현재 구현]이자 전환 기간 규칙이다. React JSON API는 `Authorization: Bearer <Supabase access token>`만 쓰고, Bearer가 잘못됐을 때 기존 쿠키로 우회하지 않는다. [Request · Claude proposal]
-- 경로 구분(계획 5절부터 적용):
+- 경로 구분(계획 5절부터 적용, 무역·설정 Bearer 연결 적용 2026-11-12):
 
 | 경로 | 인증 | 기간·역할 |
 |---|---|---|
 | HTML 화면(`/`·`/inbox`·`/threads/*`·`/quotes/*`·`/settings`·`/runs/*`), 로그인(`/login`·`/auth/*`), 기존 JSON `/api/session`·`/api/trade/*` | `gq_session` 쿠키 + `X-CSRF-Token`(변경 요청) | [현재 구현] 전환 기간 병행 유지(legacy). 계획 21절 같은 출처 배포 때 React 화면으로 대체를 시작하고 22절 운영 전환 확인 뒤 닫는다. `/api/session`의 의미(쿠키 세션·CSRF 발급)는 이 기간 그대로다 |
-| React JSON API: `GET /api/me`, `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [목표 계약] 계획 5절부터 추가 |
+| React JSON API: `GET /api/me`, `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [적용 2026-11-12, 계획 5절] `/api/me`·`/api/trade/*`(문서·설정)는 `Authorization` 헤더가 있으면 Bearer만 검증하고(쿠키 우회 금지, Bearer 변경 요청은 CSRF 토큰 불필요) 헤더가 없으면 legacy 쿠키+CSRF를 그대로 쓴다. CORS의 `Authorization` 헤더를 허용했다. `/api/files*`·메일·실행 기록 Bearer 연결은 계획 8·19·20절 |
 
-- `GET /api/me`(Bearer 전용): 인증 상태·내부 `user_id`·프로필(표시 이름·이메일)·Gmail 연결 상태를 하나의 JSON으로 돌려준다. React 로그인·새로고침 복구가 이 경로부터 시작한다. 토큰이 없거나 검증에 실패하면 401.
-- 토큰 검증: 신뢰한 Supabase 프로젝트의 비대칭 signing key(JWKS)로 서명·issuer·audience·exp·알고리즘·subject(UUID)를 확인한다. 요청이 지정한 임의 JWKS URL은 부르지 않는다. 다른 프로젝트·변조 토큰은 401로 거부하고, 인증 실패(401)와 인증 서버 일시 장애(503)를 구분한다. 비밀값은 로그에 남기지 않는다.
-- 사용자 매핑(7.1절 `supabase_uid`): 검증된 UUID로 기존 정수 `id`를 찾고, 없으면 한 번만 생성한다. 동시 첫 접속은 `supabase_uid` 유일 제약으로 한 행으로 끝난다. 요청 본문의 `user_id`·이메일·파일 경로는 권한 근거로 쓰지 않는다.
+- `GET /api/me`(Bearer 전용, 적용 2026-11-12): 인증 상태·내부 `user_id`·프로필(표시 이름·이메일)·Gmail 연결 상태(`gmail.connected`·`gmail.watch`)를 하나의 JSON으로 돌려준다. React 로그인·새로고침 복구가 이 경로부터 시작한다. 토큰이 없거나 검증에 실패하면 401.
+- 토큰 검증(적용 2026-11-12, `app/auth/supabase.py`의 `TokenVerifier`·검증 라이브러리 `pyjwt`): 신뢰한 Supabase 프로젝트의 비대칭 signing key(JWKS)로 서명·issuer(`{SUPABASE_URL}/auth/v1`)·audience(`authenticated`)·exp·알고리즘(RS256·ES256만)·subject(UUID)를 확인한다. JWKS 주소는 설정에서만 정하고 요청이 지정한 임의 JWKS URL(jku 헤더 등)은 부르지 않는다. kid 캐시(300초)를 두고 unknown kid는 JWKS를 다시 가져온다(키 회전 대응). 다른 프로젝트·변조 토큰은 401(`invalid_token`)로 거부하고, 인증 실패(401)와 인증 서버 일시 장애(503 `auth_unavailable`)·미설정(503 `auth_not_configured`)을 구분한다. 비밀값은 로그에 남기지 않는다.
+- 사용자 매핑(적용 2026-11-12, 7.1절 `supabase_uid`): 검증된 UUID로 기존 정수 `id`를 찾고, 없으면 한 번만 생성한다. 동시 첫 접속은 `supabase_uid` 유일 제약으로 한 행으로 끝난다. 요청 본문의 `user_id`·이메일·파일 경로는 권한 근거로 쓰지 않는다.
 - 기존 계정 연결 증명 [확정]: 같은 이메일이라는 이유로 자동 병합하지 않는다. 서버가 Supabase Auth가 확인한 공급자 identity와 기존 Google 계정 재인증 결과의 provider subject 일치를 확인한 뒤 기존 행에 `supabase_uid`를 연결한다(신규 자료 작성 전에 안내). 양쪽에 이미 자료가 있으면 자동 합병하지 않는다. 사용자가 고칠 수 있는 `user_metadata` 값은 근거로 믿지 않는다.
 - CSRF·OAuth: Bearer 전용 JSON 경로는 위 cookie/CSRF 의존성과 구분한다. Google OAuth 연결의 state·PKCE·일회성 상태 검사는 유지한다(10절). Gmail 연결 시작은 인증된 API에서 시작 의도를 만들고 짧게 유효한 state로 기존 Google 동의 화면으로 이동하며, callback은 state에 결합된 내부 사용자만 갱신한다(계획 7절).
 - Gmail 계정 [확정]: 초기에는 앱 로그인과 같은 Google 계정만 연결한다. 다른 메일함 연결은 별도 요구다.
@@ -531,7 +531,7 @@ class AgentError(TypedDict):
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 | 6 |
 | `APP_BASE_URL` | 서비스 주소(링크·리디렉션 확인용) | 6, 7 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값(`true`/`false`) | 12 |
-| `SUPABASE_URL` | Supabase 프로젝트 URL. 서버 JWT 검증·Storage 호출 공통 [목표] | react-supabase 5·8절 |
+| `SUPABASE_URL` | Supabase 프로젝트 URL. 서버 JWT 검증·Storage 호출 공통. 5절 적용(2026-11-12): Bearer 토큰 검증의 JWKS 주소·issuer를 여기서 정한다(비면 Bearer 인증 503) | react-supabase 5·8절 |
 | `SUPABASE_SECRET_KEY` | Supabase 서버 비밀 키. 서버 전용이며 브라우저·프론트 빌드 산출물에 넣지 않는다 [목표] | react-supabase 5·8절 |
 | `SUPABASE_STORAGE_BUCKET` | 비공개 파일 버킷 이름. 기본 `trade-files` [목표] | react-supabase 8절 |
 | `VITE_SUPABASE_URL` | React 브라우저용 Supabase URL. `frontend/.env`에 두고 서버 환경과 분리 [목표] | react-supabase 6절 |
@@ -540,7 +540,7 @@ class AgentError(TypedDict):
 - `.env.example` 반영은 3이 한다(이 PR은 이름만 정함). 빼는 API의 변수(`DATA_GO_KR_SERVICE_KEY`, `NAVER_HUB_*`, `NCP_MAPS_*`)도 3이 지운다. [Request]
 - 이름은 [Claude proposal]. 21에서 임베딩 모델을 정하면 그 키 이름을 이 표에 더한다.
 - 2026-11-11 전환: `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`는 더 이상 읽지 않는다. OpenAI 키를 로컬·Render에 먼저 등록하고 병합·자동 배포 뒤 실제 연결을 확인한 다음 예전 변수를 제거한다. Google OAuth·Gmail·Pub/Sub 환경변수는 유지한다. OpenAI API 결제·모델 권한은 사용자 계정에서 확인하고 Codex에는 키를 넣지 않는다.
-- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. 지금 코드는 아직 읽지 않는다(계획 5·6·8절 구현부터 적용). 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
+- [목표 계약 — Supabase 전환(2026-11-12, 계획 1절)] 위 다섯 Supabase 이름을 확정했다. `SUPABASE_URL`은 계획 5절부터 서버 JWT 검증에 읽는다(2026-11-12 적용). 나머지는 계획 6·8절 구현부터 적용한다. 브라우저에는 `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`만 제공하고 `SUPABASE_SECRET_KEY`·`DATABASE_URL`·기존 Google/암호화/OpenAI 설정은 로컬·Render 서버에만 둔다. `DATABASE_URL`은 PostgreSQL 주소만 받는다(빈 값이면 SQLite를 만들던 동작은 계획 4절에서 제거했다, 2026-11-12). Supabase 프로젝트의 실제 URL·키·redirect 설정은 계획 2절에서 사람이 확인한다.
 
 ## 12. 하위 작업이 정할 것과 미리 정한 기준
 ### 12.1 성찰 오류 유형 (12가 채움, R-09·R-10)

@@ -270,10 +270,11 @@ def test_react_cors_and_cookie_configuration(database_url):
     with TestClient(app, base_url="https://api.example") as client:
         response = client.options("/api/trade/pi", headers={
             "Origin": "https://frontend.example", "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "Content-Type, X-CSRF-Token"})
+            "Access-Control-Request-Headers": "Content-Type, X-CSRF-Token, Authorization"})
         assert response.status_code == 200
         assert response.headers["access-control-allow-origin"] == "https://frontend.example"
         assert response.headers["access-control-allow-credentials"] == "true"
+        assert "Authorization" in response.headers["access-control-allow-headers"]
         rejected = client.options("/api/trade/pi", headers={
             "Origin": "https://untrusted.example", "Access-Control-Request-Method": "POST"})
         assert "access-control-allow-origin" not in rejected.headers
