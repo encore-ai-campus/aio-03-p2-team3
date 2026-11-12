@@ -12,7 +12,7 @@ export default function DocumentSnapshot({ document }) {
     <div className="snapshot-parties"><Details title="발행 회사" values={document.issuer} labels={PARTY_LABELS} />
       <Details title="판매자" values={document.seller} labels={PARTY_LABELS} /><Details title="구매자" values={document.buyer} labels={PARTY_LABELS} /></div>
     <div className="table-scroll"><table className="document-table"><thead><tr><th>품목</th><th>유상/무상 수량</th><th>단가</th><th>할인율</th><th>금액</th></tr></thead><tbody>
-      {(document.items ?? []).map((item,index) => <tr key={index}><td>{item.product_name || "미입력"}<small>{item.capacity || ""}{item.is_sample ? " · 샘플" : ""}</small></td>
+      {(document.items ?? []).map((item,index) => <tr key={index}><td>{item.product_name || "미입력"}<small>{[item.product_code,item.capacity,item.is_sample ? "샘플" : null].filter(Boolean).join(" · ")}</small></td>
         <td>{item.paid_quantity ?? item.quantity ?? "—"} / {item.free_quantity ?? "—"} {item.unit || ""}</td>
         <td>{item.unit_price ?? "—"}</td><td>{item.discount_percent ?? "—"}%</td><td>{item.line_total ?? "—"}</td></tr>)}
     </tbody></table></div>
