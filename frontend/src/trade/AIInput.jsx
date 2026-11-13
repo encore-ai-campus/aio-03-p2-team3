@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { apiFetch } from "../api"
 
-export default function AIInput({ token, disabled, onExtract }) {
+export default function AIInput({ token, disabled, onExtract, headingRef }) {
   const [text, setText] = useState("")
   const [keyState, setKeyState] = useState({ busy: false, error: "", notice: "" })
   const keyRequest = useRef(null)
@@ -29,14 +29,14 @@ export default function AIInput({ token, disabled, onExtract }) {
     }
   }
 
-  return <section className="card ai-input" aria-label="PI 문장 추출">
-    <h2 className="section-title">문장으로 PI 초안 만들기</h2>
-    <p className="section-note">거래 조건을 입력하면 OpenAI가 정보를 추출합니다. 금액과 발급 가능 여부는 서버가 검증하며 메일을 보내지 않습니다.</p>
+  return <section className="ai-input" aria-label="PI 문장 추출">
+    <h2 tabIndex={-1} ref={headingRef}>거래 원문을 붙여넣어 주세요</h2>
+    <p className="pi-question-note">거래 정보를 가져온 뒤, 빠진 내용만 물어볼게요.</p>
     <form onSubmit={(event) => { event.preventDefault(); if (!disabled && text.trim()) onExtract(text) }}>
       <div className="field"><label htmlFor={textId}>거래 원문</label><textarea id={textId} value={text} maxLength={20000} rows={4} disabled={disabled}
         onChange={(event) => setText(event.target.value)} placeholder="품목·수량·거래처·납품·지급 조건을 입력하세요." /></div>
-      <p className="section-note">새 PI로 저장하며 현재 입력을 교체합니다. 수정 중인 값은 먼저 저장하세요. 첨부 파일 자동 추출은 포함하지 않습니다.</p>
-      <button className="btn blue" type="submit" disabled={disabled || !text.trim()}>원문으로 새 PI 만들기</button>
+      <p className="section-note">원문은 OpenAI로 분석하며 새 PI 초안으로 저장해요. 파일 속 내용은 복사해서 넣어주세요.</p>
+      <button className="btn blue" type="submit" disabled={disabled || !text.trim()}>{disabled ? "정보를 가져오는 중…" : "원문에서 정보 가져오기"}</button>
     </form>
     <details className="ai-key"><summary>개인 OpenAI 키 등록·교체</summary>
       <p className="section-note">서버 저장 방식에서는 본인 키를 암호화해 보관합니다. 개인 PC 실행 방식은 PC의 환경 파일을 사용합니다. 수동 PI 작성은 AI 키 없이 가능합니다.</p>
