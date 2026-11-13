@@ -12,8 +12,8 @@ from app.config import LIMITS
 from app.db.models import Approval, ProcessedMessage, ReplyCandidate, ThreadMessage, User
 from app.services.approval import RESENDABLE, TAKEN, send_approved_candidate
 from app.tools.fallback import NOTICE_MESSAGES
-from app.web.routes.auth import require_user
-from app.web.routes.inbox import kst
+from app.auth.session import require_user
+from app.mail.inbox import kst
 
 router = APIRouter()
 
@@ -59,7 +59,7 @@ def thread_view(database, user_id: int, thread_id: str) -> list[dict] | None:
     if not messages and not candidates and not processed:
         return None
     taken = {c.source_message_id for c in candidates if c.status in TAKEN}
-    from app.web.routes.inbox import worker_notice
+    from app.mail.inbox import worker_notice
     by_source = {p.gmail_message_id: {"status": p.status, "run_id": p.run_id, "candidates": [],
                                     "worker_notice": worker_notice(p.notice),
                                     "key_required": p.notice == "openai_key_required"} for p in processed}

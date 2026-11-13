@@ -11,7 +11,7 @@ from sqlalchemy import and_, func, select
 
 from app.config import LIMITS
 from app.db.models import ProcessedMessage, ReplyCandidate, ThreadMessage, User
-from app.web.routes.auth import connection_status, current_user, require_user
+from app.auth.session import connection_status, current_user, require_user
 from app.services.openai_keys import key_registered
 
 router = APIRouter()

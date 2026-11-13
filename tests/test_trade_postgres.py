@@ -111,7 +111,7 @@ def test_postgres_pi_api_and_concurrent_approval_without_shared_python_lock(data
 
 
 def test_postgres_po_ci_pl_full_http_flows(database_url):
-    from app.web.deps import current_user_id
+    from app.auth.deps import current_user_id
     from tests.test_pi_api import configured_client
     from tests.test_trade_domain_api import test_each_domain_cancel_modify_approve_download_and_version_history
 

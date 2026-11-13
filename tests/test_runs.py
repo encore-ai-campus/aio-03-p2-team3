@@ -15,7 +15,7 @@ from app.llm import client as llm_client
 from app.runlog.export import export_jsonl
 from app.runlog.logger import current_event
 from app.runlog.mask import Masker
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 from tests.fakes.llm import FakeLLM, openai_error
 
 # 지어낸 값이다(실제 개인정보 아님).

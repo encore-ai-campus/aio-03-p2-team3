@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-13 · 메일 도구 연결과 사용자 화면 연결의 차이 검토
+마지막 갱신: 2026-11-13 · 메일 연결 검토와 HTTP 진입점 도메인 이동
 
 - 서비스: 사용자별 Gmail 메일을 분석해 답장 후보 2~3개를 만들고, 사용자가 고른 후보만 같은 스레드로 보낸다. 거래 메일은 필수 항목이 빠지면 재질문 후보, 갖춰지면 국내 견적서 또는 PI·PO·CI·PL 초안을 만든다. 문서 확정과 메일 발송 승인은 별개다.
 - 현재 지원하는 실행 방식은 아래와 같다. 모든 AI 호출은 OpenAI Responses API를 쓰며 기본 모델은 `gpt-6-luna`, 변경값은 `OPENAI_MODEL`이다(#127·#152·#159~#163).
@@ -53,7 +53,7 @@
 | `server` + `local_worker` | 연결한 본인 PC의 개인 환경 파일 키, PC 호출 | 서버가 수신·승인 발송, PC가 AI 처리 |
 | `local` | 검증된 지정 소유자의 `.env` 키, 본인 PC 호출 | 개인 OAuth·루프백 콜백, 30초 간격 history 수집 |
 
-- 화면: `/inbox`는 본인 메일의 처리 중·승인 대기·발송·오류를, `/threads/{thread_id}`는 원문·후보·처리 상태와 실행 기록 링크를 제공한다. 받은 메일 목록은 90초 간격 갱신, 스레드는 처리 중일 때만 자동 갱신한다(#85·#105). `/about`·`/privacy`·`/terms`는 비로그인 공개 페이지다(`app/web/routes/pages.py`).
+- 화면: `/inbox`는 본인 메일의 처리 중·승인 대기·발송·오류를, `/threads/{thread_id}`는 원문·후보·처리 상태와 실행 기록 링크를 제공한다. 받은 메일 목록은 90초 간격 갱신, 스레드는 처리 중일 때만 자동 갱신한다(#85·#105). 메일 HTTP 진입점은 `app/mail/`에 있고 템플릿은 `app/web/`에서 공유한다. `/about`·`/privacy`·`/terms`는 비로그인 공개 페이지다(`app/web/pages.py`).
 - 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. 해당 API 구현(#112) 뒤 개발용 React 로그인·설정과 PI 작성/검토/발급 화면을 연결했다(7절). PO·CI·PL 화면은 아직 없다. 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
 - 메일 그래프는 `make_quote` → `create_trade_document`로 네 무역 문서 초안을 저장한다. 그러나 기존 스레드 화면의 `thread_view()`는 후보의 `trade_doc_id`를 전달하지 않고 국내 `quote_id`만 링크로 표시한다. 따라서 무역 후보가 생성돼도 기존 화면에서 문서 검토·발송 승인으로 갈 수 없다. 임시 PostgreSQL·가짜 LLM으로 PI 후보 2개 생성과 링크/승인 폼 0개를 재현했다. 화면/JSON 연결은 전환 계획 19절(#147)에서 보완·검증해야 하며, 백엔드 발송 서비스 시험 통과를 사용자 화면 완주로 표시하지 않는다.
 - 과제 R-01·R-02·R-09·R-10의 실행 근거는 메일 StateGraph다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
@@ -72,18 +72,19 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-12 · OpenAI·문서·개인 실행기 구현 상태 요약
+마지막 갱신: 2026-11-13 · LLM/Google 역할 구분과 견적 라우터 이동
 
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`·`local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
+- `app/llm/`은 AI 구조화 실행·재시도·PC 위임, `app/clients/gmail.py`는 Google OAuth/Gmail 통신으로 구현이 겹치지 않아 분리 유지한다. 상세 비교와 호출 관계는 [도메인 구조도](domain-layout.md).
 - 호출 예산: SDK 자동 재시도 0, 호출 제한 20초. 429는 재시도 없이 한도 안내, 통신/5xx는 최대 3회(1·2초 대기), 형식 오류는 별도 1회 재시도다. PC 방식의 재시도는 서버 `app/worker/adapter.py` 한 곳에서 기존 예산과 전체 120초 기한으로 관리한다. 짧은 HTTP/예외 코드는 실행 기록에 남기고 키·원문은 남기지 않는다(#98).
 - 등록 도구 7개: `draft_replies`, `extract_deal_terms`, `check_required_fields`, `draft_followup_replies`, `create_quote`, `create_trade_document`, `send_email`(`app/tools/registry.py`). 필수 항목은 `get_required_fields()` 한 곳에서 받고, 답장 후보는 금액·문서번호를 복사하지 않고 첨부 문서를 안내한다. `send_email`은 승인 경로에서만 호출한다. 프롬프트 버전 원본은 `app/prompts/VERSIONS.md`다.
-- 국내 견적: 합의 단가 → 이름·단위가 같은 단가표 → 사용자 입력 순서로 채운다. 누락 단가는 `needs_price`, 완료는 `ready`이며 정수 금액·부가세 10% 버림·30일 유효기간과 한글 PDF를 지원한다. 코드 `app/quote/`, `app/web/routes/quotes.py`; 상세는 계약 4·9·12.2절(#89).
+- 국내 견적: 합의 단가 → 이름·단위가 같은 단가표 → 사용자 입력 순서로 채운다. 누락 단가는 `needs_price`, 완료는 `ready`이며 정수 금액·부가세 10% 버림·30일 유효기간과 한글 PDF를 지원한다. 코드 `app/quote/`, `app/quote/router.py`; 상세는 계약 4·9·12.2절(#89).
 - 무역 문서: `app/trade/{pi,po,ci,pl}/`가 도메인 업무를, `common/`·`review/`·`settings/`가 공유 계산/출력·검토·설정을 담당한다. 직접/AI 입력은 같은 계산·검증을 거친다. CI는 승인된 PI의 특정 버전·거래 사실을 보존하고 PL은 원본/계산 합계의 별도 승인을 요구한다. 검토는 문서 revision·내용 해시·회사/계좌/이미지를 고정한 뒤 승인 파일을 저장한다. 루트 호환 입구는 제거됐다(#107·#112·#114). 상세: 계약 15·16절, [API 안내](trade-api.md).
 - Gmail 문서 발송은 `app/services/approval.py`의 `send_approved_quote()`·`send_approved_trade_document()`가 담당한다. 무역 문서는 `ready`·PL 합계 승인·CI PI 원문 근거·직인을 확인하고, 발송 중 문서 변경과 중복 승인을 막는다. 성공 때 문서·후보·메일을 발송 상태로 바꾸고 같은 메일의 다른 후보는 종료한다. 발송 자체는 자동 재시도하지 않으며 시간 초과/5xx는 보낸편지함 확인 후 명시적 재승인 대상이다(#85·#107).
 - 개인 PC 실행: `app/worker/{protocol,service,adapter,pc}.py`가 설치된 구조화 정의·모델·소유자·장치·시도/기한을 검증한다. 서버는 키를 받지 않고 큐 결과를 암호화해 전달 후 소비/해제/기한에 지운다. 미완료/거부된 PC 결과로 후보·문서를 저장하지 않으며 만료된 임대는 자동 재배포하지 않는다. 장치 API는 메일 승인·발송·파일 권한을 갖지 않는다(#161·#162). Windows 자격증명은 `credentials.py`의 현재 사용자 DPAPI·보호 DACL, macOS/Linux는 소유자·600 권한으로 보호한다(#163). 상세: 계약 6절.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
-마지막 갱신: 2026-11-12 · 현재 전이·성찰·오류 종료 요약
+마지막 갱신: 2026-11-13 · 기존 그래프 유지·실행 기록 라우터 이동
 
 - 진입점은 `app/graph/run.py`의 `start_run()`, 10개 노드·전이는 `app/graph/build.py`·`routing.py`, 업무 본문은 `nodes/`다. 핵심 흐름은 다음과 같다(상세: 계약 3절).
   - `load_memory` → `analyze_email` → 일반 `draft_replies` / 거래 `extract_deal` → `check_required` → 누락 `draft_followup` / 충족 `make_quote` → `draft_replies`.
@@ -92,12 +93,14 @@
 - 성찰은 규칙으로 환각·도구 선택 오류·필수값 누락·응답 불일치를 찾고, 문제가 있을 때만 `reflect_fix`를 호출한다. 유형별 한도는 환각 2·도구 1·누락 1·불일치 2, 전체 3회다. 한도 초과·성찰 자체 오류는 확인 필요 후보로 끝낸다(#91). 새 사용자 기본값 → 사용자 설정 → 실행 옵션 순으로 성찰 여부를 정한다.
 - 직접 AI 호출의 한도 오류는 자동 재시도 없이 기본 후보 1개·`needs_review`·`rate_limit` 안내로 저장하고, 통신/형식 오류는 호출 예산 소진 후 실패한다(`nodes/common.py`). PC 실패는 `save_pending`의 완료 확인과 `start_run`의 안전한 오류 안내로 후보 저장을 막는다(#162).
 - Gmail 수신은 `app/services/gmail_push.py`의 사용자별 직렬화·메일 유일 제약으로 중복을 막고, 해당 수집의 모든 Gmail 조회가 성공한 뒤에만 history를 갱신한다. 프로세스 내 `BackgroundTasks` 방식이며 서버 재시작 중 작업 복구·공용 history 만료의 전체 재처리는 구현 범위 밖이다(#81). 로컬 history 만료는 전체 재처리 대신 재로그인을 안내한다(#160).
-- `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/web/routes/runs.py`.
+- `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-13 · PI 단계형 작성·누락 질문과 검토/발급 검증
+마지막 갱신: 2026-11-13 · HTTP 도메인 재배치·기존 UI 회귀 검증
 
-- React PI: `frontend/`의 `npm test`는 원문 추출 후 빈칸만 질문·완료 단계 건너뛰기·미확인 상품군/0원 샘플 구분·십진수 입력 보존을 확인한다(4개 통과). lint/build·규칙 검사와 전체 `uv run pytest` **917 passed·2 skipped**를 통과했다. 실제 FastAPI·임시 PostgreSQL·가짜 Storage/OpenAI의 브라우저 흐름으로 직접 작성/원문 누락 보완/품목 표 수정/재검토/승인, 발급 PDF·XLSX 해시 일치와 409 때 입력 보존을 확인했다. 1440·768·390px 화면에서 배치와 가로 넘침도 확인했다. 실제 OpenAI·운영 Supabase DB/Storage 연결 검증과 구분한다. 기존 전환 범위·제한은 [전환 진행 현황](plans/react-supabase/PROGRESS.md).
+- HTTP 도메인 재배치: `python3 .work/check.py`(경고 0개), 전체 `uv run pytest` **917 passed·2 skipped**, frontend lint/test(4개)/build를 통과했다. 이동 전후 등록 라우트 109개의 URL·메서드·이름과 OpenAPI 명세가 같다. 실제 Chromium·임시 PostgreSQL·가짜 Gmail로 공개/인증 경로, 받은메일·후보 승인 1회, 견적 단가 보완/PDF, 성찰 설정, 개인 키 CSRF/저장/삭제, 실행 기록/마스킹 내보내기와 390px 화면 렌더링을 확인했다. 구조도도 Mermaid로 렌더링했다. 운영 API 확인과 구분하며 위치·유지 조건은 [도메인 안내](domain-layout.md).
+
+- React PI: `frontend/`의 `npm test`는 원문 추출 후 빈칸만 질문·완료 단계 건너뛰기·미확인 상품군/0원 샘플 구분·십진수 입력 보존을 확인한다(4개 통과). 실제 FastAPI·임시 PostgreSQL·가짜 Storage/OpenAI의 브라우저 흐름으로 직접 작성/원문 누락 보완/품목 표 수정/재검토/승인, 발급 PDF·XLSX 해시 일치와 409 때 입력 보존을 확인했다. 1440·768·390px 화면에서 배치와 가로 넘침도 확인했다. 실제 OpenAI·운영 Supabase DB/Storage 연결 검증과 구분한다. 기존 전환 범위·제한은 [전환 진행 현황](plans/react-supabase/PROGRESS.md).
 
 - 기준 코드 `c6b1600`의 최근 병합 PR #163은 Linux 전체 **829 passed·4 skipped**를 기록했다(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개 제외). GitHub [CI 실행 43167274015](https://github.com/encore-ai-campus/aio-03-p2-team3/actions/runs/43167274015)의 `rules-check`·`tests`·`pr-check`·`windows-worker` 모두 성공을 직접 확인했다. Windows 작업은 자격증명·실행기·실제 HTTPS 프로세스 시험을 실행한다. 자동/모의 검증 통과와 실제 API/운영 검증은 별개다.
 
@@ -114,7 +117,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-13 · React 빌드·같은 출처 제공 선행 작업과 후속 검증 분리
+마지막 갱신: 2026-11-13 · React 배포 선행 작업·후속 검증 분리와 web 도메인 분리
 
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
 - 계획 21.1절(#149)은 6·7절을 선행으로 UI 개발과 병행한다. `render.yaml`·`scripts/render-build.sh`가 `uv sync --locked` → `npm ci --include=dev` → `npm run build`와 기존 서버 시작을 연결한다. FastAPI는 `frontend/dist`만 `/app/`에서 제공하며 상세 주소는 `index.html`로 복구하고 누락 자산은 404로 반환한다. `/api`·Google callback·Gmail Pub/Sub·공개 약관·기존 `/static`과 `/`→`/inbox`는 유지한다. 빌드가 없는 개발 환경에서도 서버는 동작하고 UI만 503이다. `frontend/` 파일은 수정하지 않았다. Dashboard 관리 서비스에는 README 절차대로 Build Command/Node 버전을 적용해야 하며 실제 Render 설정·배포 커밋·운영 응답은 미확인이다. 전체 UI 통합 검증/진입 전환은 20절 뒤 21.2절, 실제 운영 전환은 사람의 22절이다. #149는 후속 검증까지 열어 둔다.
@@ -126,17 +129,19 @@
 - 서버+PC 방식은 `uv run python -m app.worker.pc pair`로 본인 HTTPS 서비스와 연결 승인 후 `run`으로 실행한다. 개인 환경 파일·서비스 주소·검증된 본인 Google 식별자를 지정하고, 키 교체 뒤 재시작한다. Windows PowerShell도 WSL 없이 지원한다(#163). 설치·`--env`/`--credentials`·중지·재연결·문제 해결은 [README](../README.md)의 개인 PC 실행 안내에 있다.
 - React 앱은 `frontend/`의 JavaScript/Vite이며 개발은 `npm ci` 후 `npm run dev`(`/app`, `/api` 프록시)다. 루트 `.env`의 `FRONTEND_PORT`가 개발 포트이며 비우면 5174, 지정하면 그 포트만 쓴다(사용 중이거나 올바르지 않으면 실패). 로그인 반환 주소는 실제 포트의 `/app/login`과 맞춘다. `/app/settings`에서 회사·거래처·판매/구매 단가·통화별 계좌·로고/직인을 저장한다. 기존 API를 재사용하고 거래처 저장만 추가했다. 실패 입력 보존·조회 취소·이미지 객체 URL 정리를 두며 새 설정은 기존 제안/발급 파일을 바꾸지 않는다. PI는 `/app/trade/pi`·`/app/trade/pi/{id}`에서 작성 방법 선택 → 거래처/판매자/품목/거래 조건 → 전체 확인 → 검토/승인/다운로드로 진행한다. 원문 추출 결과와 설정 기본값을 보존하고 필요한 빈칸만 질문하며, 채워진 내용도 단계별 전체 수정에서 바꿀 수 있다. 품목은 표로 편집하고 규격·할인·샘플은 접어 둔다. 오른쪽 작성 요약은 모바일에서 펼쳐 보고, 전체 문서는 마지막에 한 번만 표시한다. 금액·가격 확인·revision/해시 검토·발급은 기존 서버 API를 그대로 쓴다. 버전 충돌 때 입력을 보존하며 최신본 재조회와 재검토를 안내한다. 고정된 회사 이미지는 소유자·문서·제안 범위 읽기 API로 확인하고, 개인 키 관리는 기존 서비스를 Bearer API로 연결했다. PO·CI·PL/메일/현황 화면은 13~20절, 전체 UI 통합 검증은 21.2절 후속 작업이다.
 - Supabase 로그인은 `SUPABASE_URL`의 JWKS로 Bearer 서명·issuer/audience·만료·UUID를 검증해 기존 정수 사용자 ID에 매핑한다. `/api/me`·`/api/gmail/*`·`/api/files*`와 무역/설정 API를 연결했으며 잘못된 Bearer가 쿠키 세션으로 우회하지 않는다. legacy 로그인/CSRF는 전환 기간 유지한다. Gmail 연결은 state·PKCE·같은 Google 공급자 subject를 확인하고, 앱 로그아웃 때 감시를 중지한다(계약 9.1절).
+- `web/routes`와 `web/deps.py`는 제거하고 HTTP 진입점을 `auth`·`mail`·`settings`·`quote`·`runlog`로 옮겼다. `web`에는 공개 페이지·공유 템플릿·정적 자산만 둔다. 공통 인증/폼 CSRF는 `auth/deps.py`에서 제공해 무역 API·worker가 화면 모듈을 import하지 않는다. 기존 URL·세션/Bearer 우선순위·승인·DB 의미는 유지한다. React 메일/실행기록·전체 UI 통합 검증이 미완료라 기존 HTML 자산은 아직 필요하다([이동표·유지 조건](domain-layout.md)).
 - 첨부·회사 이미지·승인 PDF/XLSX의 bytes는 private Storage, 소유자/참조/해시는 PostgreSQL에 둔다. 모든 형식 업로드 뒤에만 문서 승인 SQL을 확정한다. 발급 객체 재사용·backfill·수동 정리는 같은 객체별 PostgreSQL 트랜잭션 잠금으로 조율하고 삭제 전 참조를 다시 확인한다. 상세 파일 계약/제한/이전 명령은 계약 16.3절과 README다.
 - 공용 OAuth·Gmail Pub/Sub·OIDC/대체 토큰은 유지한다. 로컬은 watch/stop을 호출하지 않는다. 문서/설정 API는 Bearer 또는 기존 세션/CSRF로 소유자를 검사하고, 장치 승인과 장치 통신의 기존 CSRF·장치 토큰 계약은 유지한다. 환경변수 원본은 `.env.example`·계약 11절이다. Supabase는 루트 `.env`의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY` 세 값으로 설정하며 Vite는 URL과 공개 키만 브라우저에 제공한다. `frontend/.env`와 중복 URL은 제거했고 버킷은 기본 `trade-files`다. 실제 DB 연결용 `DATABASE_URL`은 별도로 필요하다. `frontend/`의 `npm run check:env`로 공개값 전달·비밀값 빌드 제외를 확인한다. 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인이며 로컬 Supabase URL/키와 개발 포트를 설정했다. Auth 설정 조회·Google 로그인 시작은 확인했고, 실제 계정 로그인·Gmail·운영 DB/파일 이전은 미확인이다. 현재 로컬 DB는 임시 PostgreSQL이며 실제 DATABASE_URL과 Google/암호화 설정은 별도로 확인해야 한다.
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-13 · 배포 선행 작업·통합 후속 단계 분리
+마지막 갱신: 2026-11-13 · 도메인 구조도·배포 선행 작업·후속 검증 분리
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
 | 과제 요구사항 정리(R-ID·D-ID) | `docs/REQUIREMENTS.md` | 있음(2026-11-09) |
 | 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 초안 있음(최종 코드와 맞춰 20에서 고침) |
+| 팀원용 도메인 구조도·파일 이동표 | `docs/domain-layout.md` | LLM/Google 역할 비교, HTTP 도메인 위치, web 자산 유지 근거·대체 조건 |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 틀 있음(2026-11-10, 시나리오·판정 기준·시험 환경. 결과는 18·19) |
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |

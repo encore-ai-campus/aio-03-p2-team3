@@ -42,8 +42,9 @@
 - `render.yaml`과 `scripts/render-build.sh`로 기존 Python 잠금 설치 뒤 npm 잠금 설치/빌드를 연결했다. `NODE_ENV=production`에서도 Vite를 설치하고 산출물을 확인한다. 가짜 실행기 5개 사례로 각 단계 실패 시 중단과 산출물 누락 거부도 확인했다.
 - FastAPI의 `/app/` 전용 정적 제공과 상세 주소 fallback을 추가했다. 숨김 파일/경로 이탈/외부 symlink를 거부하고 누락 자산은 404다. 기존 `/api`·Google callback·Gmail 알림·공개 약관·루트 동선을 보존한다. `frontend/` 파일 변경은 없다.
 - PostgreSQL 기반 새 회귀 검사 **6 passed**. lint·프론트 단위 검사 **4 passed**·`check:env`·실제 배포용 빌드를 통과했다. 가짜 공개값 2개 포함과 서버 전용 가짜 값 7개(Supabase 비밀 키·DB·Google·암호화·세션·OpenAI·Pub/Sub) 제외를 실제 `dist`에서 확인했다. 로컬 Node는 24.22.1, Render 선언의 22.16.0은 현재 패키지들의 Node 버전 조건을 충족한다.
-- 전체 `uv run pytest`: **923 passed·2 skipped, 301.69초**. `python3 .work/check.py`: 경고 0개. `git diff --check`와 `git diff --exit-code -- frontend/`도 통과했다. 이 결과는 앞 단계의 과거 실패/미확인 기록과 구분하는 현재 브랜치의 전체 회귀 검사다.
+- 최신 main과 합친 뒤 전체 `uv run pytest`: **923 passed·2 skipped, 341.32초**. `python3 .work/check.py`: 경고 0개. `git diff --check`와 main 대비 `frontend/` 변경 없음도 확인했다. 이 결과는 앞 단계의 과거 실패/미확인 기록과 구분하는 현재 브랜치의 전체 회귀 검사다.
 - Chromium + 실제 FastAPI/임시 PostgreSQL에서 `/app/`·`/app/trade/pi/123` 직접 열기와 새로고침, 비로그인 상태의 `/app/login` 안내, JS/CSS 200/304, API/누락 자산 404를 확인했다. 브라우저 실행 오류 0개다. 로그인 후 문서 작업 완주나 전체 UI 통합 검증으로 표시하지 않는다.
+- #174 도메인 이동을 포함한 main `0bd25d4`와 합치며 서버 등록·파일 지도·최신 흐름의 양쪽 변경을 보존했다. 기존 라우트 정의 110개(URL·메서드·이름)와 OpenAPI는 이 main과 같고 `/app` mount만 추가됐다. 합친 버전의 Chromium smoke도 다시 통과했다.
 - 기존 Render Dashboard의 Build Command·Node/공개값 적용은 README 절차를 따른다. 실제 Render 설정·배포 커밋·Supabase/Google 로그인/Gmail 성공은 미확인이다. 21.1절은 UI 개발과 병행하는 선행 작업이고, 21.2절은 20절 뒤 전체 UI 검증, 22절은 그 뒤 사람의 운영 전환이다. #149는 후속 검증이 남아 있으므로 열어 둔다. 아래 서비스 연결 검토의 `/app` 404/선행 20절은 변경 전 `7719c24`의 기록이다.
 
 ## 확인 결과

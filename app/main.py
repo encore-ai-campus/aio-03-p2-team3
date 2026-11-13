@@ -13,6 +13,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.auth import gmail as gmail_connection
 from app.auth import router as supabase_me
+from app.auth import session as session_routes
+from app.auth.deps import LoginRequired
 from app.auth.gmail import GmailConnectionError
 from app.auth.supabase import BearerAuthError, TokenVerifier
 from app.clients.gmail import GoogleClient
@@ -22,8 +24,12 @@ from app.files import router as files_routes
 from app.files.service import FileError
 from app.files.storage import StorageClient
 from app.graph.run import get_graph
+from app.mail import candidates, inbox, push as gmail_push
+from app.quote import router as quotes
+from app.runlog import router as runs
 from app.services.auth import GoogleAccess, make_cipher
 from app.services.local_gmail import LocalGmailCollector
+from app.settings import router as settings_routes
 from app.trade.common.models import DocumentError
 from app.trade.common import api as trade_api
 from app.trade.pi import router as pi_routes
@@ -31,10 +37,7 @@ from app.trade.po import router as po_routes
 from app.trade.ci import router as ci_routes
 from app.trade.pl import router as pl_routes
 from app.trade.settings import router as trade_settings
-from app.web import WEB, templates
-from app.web import frontend
-from app.web.deps import LoginRequired
-from app.web.routes import auth, candidates, gmail_push, inbox, pages, quotes, runs, settings as settings_routes
+from app.web import WEB, frontend, pages, templates
 from app.worker import router as worker_routes, service as worker_service
 from app.worker.protocol import WorkerError
 
@@ -125,9 +128,9 @@ def create_app(settings: Settings | None = None, google=None,
                            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
                            allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"])
     app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
-    # 라우터 파일(app/web/routes/)은 request.app.state.templates(= app.web.templates)로 같은 템플릿을 쓴다.
+    # 도메인 라우터는 request.app.state.templates(= app.web.templates)로 화면 자산을 공유한다.
     app.state.templates = templates
-    app.include_router(auth.router)
+    app.include_router(session_routes.router)
     app.include_router(gmail_push.router)
     app.include_router(pages.router)
     app.include_router(quotes.router)

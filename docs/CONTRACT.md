@@ -11,6 +11,7 @@
 - 알림 수신 경로는 Pub/Sub 요청을 확인하고 바로 응답한 뒤, 같은 프로세스의 백그라운드 작업(FastAPI `BackgroundTasks`)에서 그래프를 돌린다. 결과는 DB에 저장하고 화면은 저장된 결과만 읽는다. [Request · Claude proposal]
 - DB 연결, Gmail 클라이언트 생성 준비물, 컴파일한 그래프는 서버가 뜰 때 한 번 만들어 재사용한다. LLM 클라이언트는 사용자 키로 호출 시 구성한다. [Request]
 - 파이썬 패키지 이름은 `app`이다. 테스트는 `tests/`에 둔다. [Claude proposal]
+- 2026-11-13 도메인 정리: 새 UI는 루트 `frontend/`의 React/Vite 앱이다. `web/`에는 공유 템플릿·정적 자산·공개 페이지만 두고 업무 HTTP 처리는 해당 도메인으로 옮겼다. 기존 URL·인증·업무 동작은 유지한다. `llm/`은 AI 구조화 실행, `clients/`는 Google 통신으로 서로 중복이 아니므로 분리한다. 상세 구조도·이동표·기존 화면을 유지하는 이유는 [도메인 안내](domain-layout.md). [Request]
 
 ```text
 app/
@@ -27,6 +28,18 @@ app/
     format.py              메일·스레드·선호를 프롬프트 변수 텍스트로 바꾸기(8에서 더함, 10도 씀)
   clients/
     gmail.py               사용자별 Gmail API 클라이언트 만들기(토큰 갱신 포함), 재시도
+  auth/
+    deps.py                current_user_id·LoginRequired·세션 폼 CSRF 검사 — 9절
+    session.py             기존 Google 로그인·콜백·로그아웃·화면용 사용자 확인
+    router.py              /api/me·개인 OpenAI 키 Bearer API
+    supabase.py            Supabase 토큰 검증·사용자 매핑
+    gmail.py               Bearer 기반 Gmail 연결·해제
+  mail/
+    inbox.py               받은메일 목록·HTMX 갱신
+    candidates.py          스레드·후보 조회·명시적 발송 승인
+    push.py                Gmail Pub/Sub 수신 인증·백그라운드 수집 등록
+  settings/
+    router.py              개인 키·성찰·국내 견적 기본 설정(무역 설정 API는 trade/settings/)
   graph/
     state.py               AgentState와 자료 형식 — 2절, 4.3절 (공통 부분)
     build.py               build_graph(): 노드·엣지 연결 — 3절 (공통 부분, 2 뒤로는 고치지 않음)
@@ -55,6 +68,7 @@ app/
     create_quote.py
     send_email.py
   quote/
+    router.py              견적 확인·단가 입력·PDF 미리보기·발송 승인
     required_fields.py     get_required_fields() — 5절
     calc.py                견적번호·금액 계산
     pdf.py                 render_quote_pdf()
@@ -66,12 +80,12 @@ app/
     approval.py            승인 뒤 보내기 경로(그래프 밖)
     memory.py              기억 저장(발송 뒤 거래 기록, 선호, 요약)
   runlog/
+    router.py              실행 기록 화면·본인 기록 내보내기
     logger.py              traced_node 감싸기, log_event(), current_database()(실행 중인 DB)
     export.py              실행 하나를 파일로 내보내기
     mask.py                개인정보 가리기 — 8.3절
   web/
-    routes/                auth.py · inbox.py · candidates.py · quotes.py · settings.py · runs.py · gmail_push.py
-    deps.py                current_user_id(로그인한 사용자 id) — 9절
+    pages.py               공개 소개·개인정보처리방침·약관
     templates/
       base.html            기본 레이아웃
       components/          화면 조각 — 9절
@@ -572,7 +586,7 @@ class AgentError(TypedDict):
   - 설정(11): `/settings/company`는 `company_name`·`business_no`·`ceo_name`·`contact`, `/settings/prices`는 `item_name`·`unit`·`unit_price`를 받고 본인 행만 저장한다. 같은 품목명 저장은 단가·단위 갱신이다. 성찰 설정은 12가 구현한다.
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
 - 로컬 모드 로그인은 `GMAIL_PUBSUB_TOPIC` 없이 허용하며 개인 PC에서 새 메일만 조회한다는 안내를 보인다. 연결 상태는 `로컬 새 메일 수집 켜짐`·`로컬 수집 확인 필요`·`로컬 수집 꺼짐`이며 본인 소유자 미지정/불일치면 `로컬 수집 대기`다. `history_expired`는 다시 로그인하면 현재 위치로 재설정되고 이전 메일을 자동 처리하지 않는다고 안내한다. 수집은 화면 요청과 독립적이며 받은 메일 목록의 기존 90초 갱신은 유지한다.
-- 본인 확인: 로그인(6)이 세션(`SESSION_SECRET`으로 서명한 쿠키 `gq_session`, 14일)에 `user_id`만 넣는다. 로그인이 필요한 경로는 둘 중 하나를 `Depends`로 받고, 로그인 안 했으면 둘 다 `/login`으로 보낸다(303). ① `app/web/deps.py`의 `current_user_id`: id만 필요할 때(14가 씀). ② `app/web/routes/auth.py`의 `require_user`(없으면 `/login`, HTMX면 `HX-Redirect`)·`current_user`(없으면 None): `User` 행이 필요하거나 화면 요청 때 감시 갱신까지 걸 때(응답 뒤, 받은 메일 화면이 씀). id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user_id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 라우터는 `request.app.state.templates`(`app.web`의 `templates`와 같은 객체)·`request.app.state.database`를 쓴다. [Claude proposal]
+- 본인 확인: 로그인(6)이 세션(`SESSION_SECRET`으로 서명한 쿠키 `gq_session`, 14일)에 `user_id`만 넣는다. 로그인이 필요한 경로는 둘 중 하나를 `Depends`로 받고, 로그인 안 했으면 둘 다 `/login`으로 보낸다(303). ① `app/auth/deps.py`의 `current_user_id`: id만 필요할 때(14가 씀). ② `app/auth/session.py`의 `require_user`(없으면 `/login`, HTMX면 `HX-Redirect`)·`current_user`(없으면 None): `User` 행이 필요하거나 화면 요청 때 감시 갱신까지 걸 때(응답 뒤, 받은 메일 화면이 씀). id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user_id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 라우터는 `request.app.state.templates`(`app.web`의 `templates`와 같은 객체)·`request.app.state.database`를 쓴다. [Claude proposal]
 
 ### 9.1. React·Supabase 전환 인증 목표 (2026-11-12, 계획 1절 확정)
 

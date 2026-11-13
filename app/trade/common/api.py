@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from app.trade.review.repository import SQLReviews
 from app.trade.review.operations import download_file as load_file
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 
 router = APIRouter(prefix="/api", tags=["trade-session"])
 

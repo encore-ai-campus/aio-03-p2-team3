@@ -22,7 +22,7 @@ from app.main import create_app
 from app.services.auth import GoogleAccess, TokenCipher, get_access_token, get_owned, save_login
 from app.services.watch import renew_watch_if_due
 from app.tools.send_email import google_error_kind
-from app.web.routes.auth import CONNECTION_NOTICES, LOGIN_NOTICES, require_user
+from app.auth.session import CONNECTION_NOTICES, LOGIN_NOTICES, require_user
 from tests.fakes.google import FakeGoogle, fake_login
 
 TOPIC = "projects/fake-project/topics/fake-topic"
