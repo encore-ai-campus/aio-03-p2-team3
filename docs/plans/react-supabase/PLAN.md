@@ -160,7 +160,7 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 
 ### 작업 순서와 Issue
 
-모든 후속 작업은 이 계획 PR 병합 뒤 시작한다. 표의 선행 번호는 해당 구현 PR도 병합돼야 한다는 뜻이다. 각 절 하나가 하나의 Issue·PR이다. 같은 공통 파일을 수정하는 작업은 선행 관계대로 진행한다. 표의 Issue는 미착수이며 담당자는 실제 착수할 때 Assignees를 확인한다.
+모든 후속 작업은 이 계획 PR 병합 뒤 시작한다. 표의 선행 번호는 해당 구현 PR도 병합돼야 한다는 뜻이다. 같은 공통 파일을 수정하는 작업은 선행 관계대로 진행한다. 담당자는 실제 착수할 때 Assignees를 확인한다. 21절은 사용자 요청(2026-11-13)에 따라 UI 개발과 병행하는 21.1 선행 배포 작업과 21.2 후속 통합 검증으로 나눈다. #149는 두 범위가 끝날 때까지 열어 둔다.
 
 | 절 | 작업 | 선행 | 담당 | Issue |
 |---|---|---|---|---|
@@ -184,8 +184,9 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 | 18 | 파일 첨부 화면 | 8,17 | Codex | [#146](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/146) |
 | 19 | 받은 메일·승인 화면 | 7,18 | Codex | [#147](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/147) |
 | 20 | 실행 기록 화면 | 19 | Codex | [#148](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/148) |
-| 21 | 통합 배포·브라우저 검증 | 20 | Codex | [#149](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/149) |
-| 22 | 실제 데이터 이전·전환 확인 | 21 | 사람 | [#150](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/150) |
+| 21.1 | React 빌드·FastAPI 제공·상세 주소 복구(선행 작업) | 6,7(UI 개발과 병행) | Codex | [#149](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/149) |
+| 21.2 | 전체 UI 통합 브라우저 검증·전환 실행서(후속 작업) | 20,21.1 | Codex | [#149](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/149) |
+| 22 | 실제 데이터 이전·전환 확인 | 21.2 | 사람 | [#150](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/150) |
 
 <a id="1"></a>
 
@@ -438,13 +439,32 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 
 ## 21. 같은 출처 배포와 통합 브라우저 검증
 
-- 할 일: React 빌드 결과를 기존 FastAPI `/app`에서 제공하고 루트/기존 진입 경로의 이동을 정리한다. Node·npm build와 `uv sync --locked`·서버 시작을 기존 배포 흐름에 연결한다. 불필요한 별도 프론트 서비스·Next.js는 만들지 않는다. 실제 키 없는 브라우저 통합 검증과 최종 전환 실행서를 작성한다.
-- 완료 기준: deep link 새로고침·JS/CSS 캐시·API 404·OAuth callback·Pub/Sub·공개 약관 경로가 정상이다. 배포 산출물에 서버 키가 없고, 비공개 사용자 데이터가 정적 파일에 포함되지 않는다. 필요한 화면이 실제 API에 연결됐는지 체크표가 있다.
+관련 Issue: #149. 선행 작업만 완료해 전체 UI 통합이나 운영 전환 완료로 표시하지 않는다.
+
+<a id="21.1"></a>
+
+### 21.1. React 빌드·FastAPI 제공·상세 주소 복구 — 선행 작업 (완료)
+
+- 할 일: Render 빌드에서 기존 `uv sync --locked`를 유지한 뒤 `frontend/`의 `npm ci --include=dev` → `npm run build`로 `frontend/dist`를 만든다. 기존 FastAPI가 이를 `/app/`에서 제공하며 `/app/trade/pi/123` 직접 진입·새로고침은 같은 `index.html`로 복구한다. Supabase URL·공개 키는 빌드 환경에서 전달하고 서버 비밀 키·DB 접속 정보는 브라우저 산출물에서 제외한다.
+- 완료 기준: 빌드 실행기와 Render 선언/기존 Dashboard 적용 안내가 있다. `/app`→`/app/`·상세 주소의 GET/HEAD·JS/CSS 형식/캐시 재검증이 정상이고 누락 자산은 HTML 대신 404다. `/api`·없는 API의 JSON 404·기존 인증 실패 응답, `/auth/google/callback`의 state 검증/리디렉션, `/gmail/push`의 인증/형식 검사/204 처리를 보존한다. `/docs`·`/healthz`·`/about`·`/privacy`·`/terms`·기존 `/static`과 `/`→`/inbox`도 유지한다. 가짜 값 빌드에서 URL·공개 키만 포함되고 서버 비밀 키·`DATABASE_URL`·Google/암호화/OpenAI 값은 포함되지 않는지 검사한다. UI 빌드가 없어도 기존 서버 경로는 작동하며 UI는 명시적인 503을 반환한다.
 - 영향받는 상태·도구·노드: 배포/라우팅·정적 파일·빌드. 업무 그래프 변경 없음.
-- 섞지 않을 것: 운영 데이터 자동 삭제, 운영 Supabase 키로 Codex에서 시험, 별도 인프라 플랫폼 재구축.
-- 선행 작업: 20절.
+- 수정 범위: `render.yaml`·빌드 실행기·서버 정적 제공 모듈/등록·검사·배포 안내/계획/최신 흐름/파일 지도. 팀원이 작업 중인 `frontend/`의 UI·라우터·CSS·Vite 설정·package/lockfile은 수정하지 않는다.
+- 섞지 않을 것: 13~20절 UI 구현, 루트/기존 화면 강제 이동, 전체 UI 통합 완료 판정, 운영 설정 적용·실제 키 시험·DB/Storage 이전, 별도 프론트 서비스 구축.
+- 선행 작업: 6·7절(병합됨). 13~20절 UI 개발과 병행하며 20절을 기다리지 않는다.
 - 하는 사람: Codex.
-- 확인 명령: `python3 .work/check.py`, PostgreSQL 기반 `uv run pytest`, `npm ci`, frontend lint/build, 대표 흐름 브라우저 검증. 새 테스트는 인증·사용자 격리·승인·파일 손실 방지에 집중하며 단순 스타일별 snapshot 테스트를 대량 추가하지 않는다.
+- 확인: `bash scripts/render-build.sh`, `python3 .work/check.py`, PostgreSQL 기반 `uv run pytest`, frontend lint/test/`check:env`, 가짜 공개값을 넣은 실제 빌드의 상세 주소/자산 브라우저 smoke 검사. 이 완료 표시는 코드·모의 검증이며 실제 Render 적용/로그인 성공은 별도 확인한다.
+
+<a id="21.2"></a>
+
+### 21.2. 전체 UI 통합 브라우저 검증·전환 실행서 — 후속 작업
+
+- 할 일: 13~20절 화면이 연결된 뒤 필요한 화면/API 체크표를 만들고 실제 키 없는 전체 통합 브라우저 검증과 최종 전환 실행서를 작성한다. 루트/기존 진입 경로의 React 이동은 이때 정하며 운영 적용은 22절에서 한다.
+- 완료 기준: 아래 대표 흐름, 모바일·키보드 접근, 사용자 격리·버전 충돌·파일 실패·명시적 발송 승인, API 404·Google callback·Pub/Sub·공개 약관을 함께 확인한 기록이 있다. 배포 산출물에 서버 키·비공개 사용자 데이터가 없고 전환/되돌리기 실행서가 있다.
+- 영향받는 상태·도구·노드: 화면/API 연결 검증·전환 문서. 기존 업무 그래프/승인 의미 유지.
+- 섞지 않을 것: 운영 데이터 자동 삭제, 운영 Supabase 키로 Codex에서 시험, 별도 인프라 플랫폼 재구축, 22절의 실제 운영 전환.
+- 선행 작업: 20절과 21.1절 병합.
+- 하는 사람: Codex.
+- 확인 명령: `python3 .work/check.py`, PostgreSQL 기반 `uv run pytest`, frontend lint/build, 대표 흐름 브라우저 검증. 인증·사용자 격리·승인·파일 손실 방지에 집중하고 단순 스타일별 snapshot을 대량 추가하지 않는다.
 - 브라우저 사례: 로그인/로그아웃, 설정, PI 완주, PO 역할, CI 원본 버전, PL 두 승인, 첨부 실패, stale revision, 다른 사용자 404, 중복 승인, Storage 장애, 메일 발송 불명확 오류, 모바일·키보드 접근.
 
 <a id="22"></a>
@@ -455,7 +475,7 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 - 완료 기준: 보존 대상 row 수·소유자·버전·승인·파일 수/해시·sequence가 일치하고, 기존 사용자 재연결과 승인 파일 다운로드가 된다. 실제 배포 주소에서 로그인→PI 발급→재접속→동일 파일 다운로드, Gmail 승인 1회 발송, Storage 비공개 접근을 확인한 기록이 있다. SQLite fallback을 쓰는 실행 경로가 없다.
 - 영향받는 상태·도구·노드: 실제 DB·Storage·Auth·Google 연결·배포. 기존 업무 상태 의미 유지.
 - 섞지 않을 것: 검증 전 원본 삭제·메일 재발송·무검증 테이블 덮어쓰기·새/구 DB에 동시에 쓰기.
-- 선행 작업: 21절 및 운영 전환 시간/보존 대상 확인.
+- 선행 작업: 21.2절 및 운영 전환 시간/보존 대상 확인. 21.1절의 최소 배포 준비 완료만으로 시작하지 않는다.
 - 하는 사람: 사람.
 - 전환 순서: 쓰기 중단 → 백업/복원 확인 → 복사/backfill → 데이터·파일 해시 대조 → 환경/서비스 전환 → 실제 대표 시험 → 사용자 재연결 안내 → 구 쓰기 경로 종료. 바이너리 열 DROP과 원본 파일 삭제는 검증 뒤 별도 변경으로 남긴다.
 - 되돌리기: 새 서비스에 쓰기가 생기기 전에는 구 서비스/DB로 되돌릴 수 있다. 새 쓰기 이후에는 구 DB로 주소만 바꾸지 말고 쓰기를 중지한 뒤 새 데이터 보존·재이전 방안을 정한다. 원본/새 DB 양쪽에 계속 쓰는 이중 쓰기는 만들지 않는다.
