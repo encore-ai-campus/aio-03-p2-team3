@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-12 · 코드·병합 PR 대조 후 현재 상태 요약
+마지막 갱신: 2026-11-13 · 메일 도구 연결과 사용자 화면 연결의 차이 검토
 
 - 서비스: 사용자별 Gmail 메일을 분석해 답장 후보 2~3개를 만들고, 사용자가 고른 후보만 같은 스레드로 보낸다. 거래 메일은 필수 항목이 빠지면 재질문 후보, 갖춰지면 국내 견적서 또는 PI·PO·CI·PL 초안을 만든다. 문서 확정과 메일 발송 승인은 별개다.
 - 현재 지원하는 실행 방식은 아래와 같다. 모든 AI 호출은 OpenAI Responses API를 쓰며 기본 모델은 `gpt-6-luna`, 변경값은 `OPENAI_MODEL`이다(#127·#152·#159~#163).
@@ -54,7 +54,9 @@
 | `local` | 검증된 지정 소유자의 `.env` 키, 본인 PC 호출 | 개인 OAuth·루프백 콜백, 30초 간격 history 수집 |
 
 - 화면: `/inbox`는 본인 메일의 처리 중·승인 대기·발송·오류를, `/threads/{thread_id}`는 원문·후보·처리 상태와 실행 기록 링크를 제공한다. 받은 메일 목록은 90초 간격 갱신, 스레드는 처리 중일 때만 자동 갱신한다(#85·#105). `/about`·`/privacy`·`/terms`는 비로그인 공개 페이지다(`app/web/routes/pages.py`).
-- 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. 해당 API 구현(#112) 뒤 React 로그인·설정과 PI 작성/검토/발급 화면을 연결했다(7절). PO·CI·PL 화면과 마스터 챗봇은 아직 연결하지 않았다.
+- 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. 해당 API 구현(#112) 뒤 개발용 React 로그인·설정과 PI 작성/검토/발급 화면을 연결했다(7절). PO·CI·PL 화면은 아직 없다. 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
+- 메일 그래프는 `make_quote` → `create_trade_document`로 네 무역 문서 초안을 저장한다. 그러나 기존 스레드 화면의 `thread_view()`는 후보의 `trade_doc_id`를 전달하지 않고 국내 `quote_id`만 링크로 표시한다. 따라서 무역 후보가 생성돼도 기존 화면에서 문서 검토·발송 승인으로 갈 수 없다. 임시 PostgreSQL·가짜 LLM으로 PI 후보 2개 생성과 링크/승인 폼 0개를 재현했다. 화면/JSON 연결은 전환 계획 19절(#147)에서 보완·검증해야 하며, 백엔드 발송 서비스 시험 통과를 사용자 화면 완주로 표시하지 않는다.
+- 과제 R-01·R-02·R-09·R-10의 실행 근거는 메일 StateGraph다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
 - Google 로그인·암호화 토큰 저장·감시 갱신과 푸시 수신은 구현됐다(#79·#81). 로컬 Gmail 수집은 Pub/Sub·watch/stop 없이 동작한다(#160). 실제 운영 연동의 확인 범위는 6·7절과 #157에서 구분한다.
 - 남은 범위: 필수 항목 출처는 현재 `app/quote/required_fields.py`의 `source="config"`, `evidence=[]`다. 규칙 근거 RAG는 gmail-quote-mvp 22절의 후속 작업이며, 일정 도구 후보는 `.work/design/api-choice.md`의 '일정 도구 추천 후보'에 있다. 일정 도구의 LLM 입력은 제목 없이 바쁜 시간대만 전달하는 범위다.
 - 상세 위치: [공통 계약](CONTRACT.md) 6·9·10·15·16절, [독립 문서 API](trade-api.md), [로컬 실행 계획](plans/local-openai-execution.md) 1~5절. 계획 머리말과 README 일부의 '미구현' 표현은 작성 당시 기록이며, 현재 지원 범위는 위 표처럼 코드와 병합된 구현 PR을 대조했다.
@@ -112,9 +114,10 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-13 · PI 단계형 작성·원문 누락 보완과 로컬 연결 설정
+마지막 갱신: 2026-11-13 · React 제공 경로 누락과 운영 검증 범위 확인
 
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
+- 최신 main `7719c24` 기준 FastAPI는 React `frontend/dist`를 제공하지 않으며 `/`는 `/inbox`로 이동한다. ASGI 요청으로 `/app/`·`/app/trade/pi`의 404를 확인했다. Python 빌드만으로는 새 React 화면이 배포되지 않고, 프론트 빌드만 추가해도 `/app` 제공과 deep link 처리가 없으면 진입할 수 없다. 계획 21절(#149, 조회 시 open)은 이 연결 작업이며 선행 작업은 20절이다. 현재 배포 URL에서 PI 화면 주소만 바꾸면 된다고 안내하지 않는다. 이번 환경의 Render 접근은 네트워크 프록시의 CONNECT 403으로 차단돼 운영 응답/배포 커밋은 미확인이다.
 - 앱 DB는 PostgreSQL 전용이다. `DATABASE_URL`이 비었거나 비PostgreSQL이면 시작을 거부하며 SQLite 자동 생성은 없다. Alembic 대상은 `public`으로 고정해 Supabase `auth`·`storage`를 건드리지 않는다. `20261112_react_worker_merge`가 Supabase 전환/기존 worker 분기를 합친다. 운영 반영 전 DB 백업과 기존 `TOKEN_ENCRYPTION_KEY` 유지가 필요하다. SQLite 등 기존 원본은 `app.db.copy_data`, 회사 이미지/발급 바이너리는 backfill 명령으로 복사·해시 검증하며 원본·바이너리 열은 아직 삭제하지 않았다([전환 계획](plans/react-supabase/PLAN.md) 4·9·10·22절).
 - 무료 서버는 15분 미사용 시 잠들 수 있고 재시작/배포 때 로컬 파일을 잃으므로 운영 데이터는 Postgres에 둔다. 2026-11-10 생성한 무료 Postgres는 당시 안내상 12/10경 만료·14일 유예 후 삭제 예정이었다. 현재 요금제·보존 상태는 운영 담당자가 확인한다.
 - 서버 `stored_key`는 본인 로그인 후 `/settings`에서 키를 등록한다. 서버 `OPENAI_API_KEY` 대체는 차단돼 있다. `local_worker`는 개인 PC가 켜져 있고 같은 모델/설치 정의로 연결돼 있어야 한다. 메일·문서 입력과 AI 결과는 서버를 거치지만 PC 키는 서버에 전송/저장하지 않는다. 키를 지우거나 PC를 중지해도 이미 외부 API에 전송한 요청의 취소를 보장하지 않는다.
