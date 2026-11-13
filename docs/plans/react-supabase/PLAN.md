@@ -7,6 +7,8 @@
 - 조율함: 미확인. DB·로그인·검토·파일 저장을 고치는 후속 작업은 공통 기반/검토 담당과, Gmail 화면은 해당 기능 담당과, 첨부 내용 추출은 이미지→견적서 담당과 범위를 조율한다. 이번 PR은 업무 코드를 고치지 않는다.
 - 시안: `trade-agent ui_시안.html`(제공 파일 SHA-256 `26a423b9ecc69e6bb3cc518fec73452825578b04e4caaca7cf07b99a89c6d73a`). 시안 안의 문구·수치·동작은 참고 자료이며 신규 기능의 완료 근거가 아니다. 다른 사람이 구현할 때 같은 파일을 첨부한다.
 
+2026-11-13 설계 보완: 13~15절은 팀 원격 `main`의 `7719c24fa6ee645ff1cc10168d984c5dc2a9f91c`(PI 단계형 편집, PR #171)을 기준으로 구체화했다. 조회 당시 로컬 `main`·`origin/main`·`upstream/main`이 같고 작업 파일 변경은 없었다. 아래 초기 전환 검토의 과거 상태와 구분한다. 이번 변경은 설계이며 화면/API 구현은 하지 않는다. 기존 Issue #141·#142·#143을 그대로 사용한다. 사용자는 CI의 승인 PI 버전 목록을 위한 읽기 전용 API 추가안을 설계에 포함하도록 승인했다.
+
 ### 확정된 선택과 계획 기본안
 
 | 구분 | 내용 | 근거/상태 |
@@ -350,6 +352,38 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 - 하는 사람: Codex.
 - 확인: 같은 상품의 매입/판매 단가가 다른 가상 자료로 입력→승인→다운로드를 시험한다.
 
+### PI 기준과 세 화면이 공유할 동작
+
+기준 화면 코드는 `frontend/src/pages/PIPage.jsx`, `trade/PIForm.jsx`, `trade/pi-input.js`다. 첨부된 문서작성 화면은 `pages/DashboardPage.jsx`와 일치한다. 사이드바·내 계정·카드·색·간격·반응형 배치와 기존 PI의 단계/문구/동작을 유지하고, 각 기능을 연결하는 PR에서 같은 카드 안에 해당 문서의 작성 링크와 이용 가능 안내만 추가한다. 새 대시보드·탭·채팅 UI를 만들지 않는다.
+
+| 동작 | 세 화면의 적용 방식 |
+|---|---|
+| 진입·재개 | `/app/trade/{po|ci|pl}`과 `/app/trade/{kind}/{documentId}`를 명시적인 React 경로로 추가한다. 새 문서를 서버에 저장한 뒤 ID 주소로 이동하고 새로고침하면 해당 문서/검토를 읽는다. |
+| 작성 | PI처럼 작성 방법 선택 → 직접 입력 또는 원문 붙여넣기 → 빈칸이 있는 단계 보완 → 저장 후 전체 확인으로 진행한다. 직접 작성은 단계 순서대로, 추출은 채워진 단계 건너뛰기·각 단계 전체 수정·이전·임시 저장을 지원한다. 문서별 입력만 다르게 둔다. |
+| 요약·전체 표시 | 데스크톱 오른쪽 요약, 모바일 펼쳐 보기, 마지막 전체 확인 배치를 재사용한다. 미저장 값은 표시해도 합계는 마지막 서버 저장 결과로 구분한다. PL 요약은 금액 대신 서버의 포장/단위별 합계를 사용한다. |
+| 저장·검증 | 문서별 API의 `input`으로 편집하고 `document`로 결과를 표시한다. 십진수는 문자열로 보존한다. 질문할 빈칸은 문서별 helper로 고르되 `missing_fields`·`issues`·`status`를 최종 판단으로 삼는다. 알려지지 않은 오류를 숨기거나 임의 기본값으로 통과시키지 않는다. |
+| 최종 검토 | `POST /api/trade/{kind}/{id}/reviews`에 현재 `revision`과 선택한 `formats`를 보낸다. 반환된 제안의 문서·회사·이미지·revision·해시를 표시한다. 승인/취소는 그 제안의 `revision`·`content_hash`를 그대로 보내고, 수정은 `action:modify`와 문서별 전체 입력을 보낸다. |
+| 상태 | `needs_input`은 입력/업무 확인, `ready`는 검토 가능, `issued`는 발급 완료다. 로컬 단계 선택이나 요청 시작만으로 서버 상태를 바꾸지 않는다. 수정은 새 revision이며 이전 발급 파일은 보존한다. |
+| 오류·동시 요청 | PI의 입력 보존·요청 중 버튼 잠금·중복 요청 방지·문서 이동 시 AbortController·늦은 응답 무시·동일 사용자 토큰 갱신 시 미저장 입력 보존을 따른다. 409는 자동 덮어쓰기/재승인하지 않고 최신본 재조회가 입력을 교체함을 안내한다. |
+| 발급·다운로드 | 승인 응답 뒤에만 서버 파일을 내려받는다. 다운로드 실패는 재시도를 제공하고 발급 승인과 Gmail 발송은 분리한다. 수동 작성에는 AI 키가 필요 없다. 기존 개인 키 관리와 서버/PC 실행 경로를 재사용한다. |
+
+공통 요청 순서는 `POST /{kind}` 또는 `POST /{kind}/extract` → 필요 시 `PUT /{kind}/{id}`의 `{revision, document}` → `POST /{kind}/{id}/reviews` → `POST /{kind}/{id}/reviews/{proposal_id}/decisions` → 기존 발급 파일 다운로드다(모두 `/api/trade` 아래). PL의 합계 확인은 15절처럼 최종 검토 앞에 추가된다.
+
+재사용 범위는 이미 있는 `apiFetch`·`downloadFile`·`AIInput`·`ReviewPanel`·`PrivateImage`와 CSS다. `AIInput`은 문서명 prop의 기본값을 PI로 두고 PI 고정 문구만 치환한다. `ReviewPanel`은 이미 있는 `kind` prop으로 이미지 경로를 선택하고 계좌 관련 안내도 실제 문서 종류에 맞춘다. `DocumentSnapshot`은 PI 출력을 유지하면서 PO의 구매 역할, CI의 선적 필드/출하·FOC 수량을 표시하고 CI의 결제·은행 정보는 숨긴다. PL은 가격 열이 없는 별도 표시 컴포넌트를 연결한다. 새 범용 폼/업무 엔진·상태관리·UI 패키지·공통 기반 재구성은 하지 않는다. PI의 `piMissing`·`PIForm`을 종류만 바꿔 호출하지 않는다.
+
+### PO의 입력과 화면 순서
+
+작성 방식 선택 → 공급처(seller) → 구매자(buyer, 우리 회사) → 품목 → 거래 조건 → 전체 확인 → 공통 최종 검토/발급으로 연결한다. PI의 거래처 선택 위치를 공급처 선택으로 적용하고, 직접 작성 시 회사 설정은 buyer에만 기본 적용한다. 추출/저장 응답의 값은 빈칸을 제외하고 덮어쓰지 않는다.
+
+- 입력 원본: `app/trade/po/models.py`의 `POInput`·`POItem`, 역할 검증은 `po/rules.py`, 가격 준비는 `po/operations.py`와 `common/operations.py`다. `product_family`, 문서번호, buyer/seller, 통화, 납품/지급 조건, 배송지/청구지/비고와 품목을 편집한다.
+- 품목: 상품명·코드·규격·수량·단위·단가·가격 기준·할인·무상 수량·프로모션·직접 단가 확인을 기존 PO 입력 형식대로 다룬다. 유상 수량 입력은 `quantity`/`paid_quantity`를 일관되게 갱신한다. PO에 없는 PI 전용 `is_sample` 필드를 보내거나 샘플 토글을 추가하지 않는다(`extra=forbid`).
+- 가격: 공급처·상품/규격/단위·통화가 바뀌면 이전 직접 단가 확인을 해제한다. 서버의 매입 단가와 PO buyer/seller 검증을 사용하고, 브라우저에서 판매 가격·PI 계좌·총액을 복사하지 않는다. 가격 미확정은 서버가 반환한 보완 경로로 처리한다.
+- 수정 범위: `App.jsx`의 PO 두 경로, `DashboardPage.jsx`의 PO 링크, 새 `pages/POPage.jsx`·`trade/POForm.jsx`·`trade/po-input.js`, 위 공통 컴포넌트의 실제 필요한 문서명/표시 변경, 기존 CSS의 필요한 부분, 해당 검사와 문서. 서버 PO 업무와 PI 화면 로직은 변경하지 않는다.
+
+### PO 완료 확인
+
+같은 상품에 다른 판매/매입 단가를 설정해 PO가 매입 가격을 쓰는지 확인한다. 직접 작성/가짜 AI 추출 → 빈칸만 보완 → 수정 → 검토 승인/취소/수정 → PDF/XLSX 다운로드와 ID 재개를 확인한다. buyer/seller 뒤바뀜·미확정 가격·할인/무상 입력·통화/공급처 변경·409 입력 보존을 포함하고, 기존 PI의 단계·샘플·금액·발급을 회귀 확인한다. 브라우저는 1440·768·390px와 키보드로 확인하며 파일 bytes 해시를 서버 발급 기록과 대조한다. 기존 `npm test`가 PI 파일만 실행하므로 새 helper 검사가 있으면 해당 파일도 실행 명령에 포함한다.
+
 <a id="14"></a>
 
 ## 14. CI의 승인된 PI 선택과 버전 고정
@@ -362,6 +396,37 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 - 하는 사람: Codex.
 - 확인: PI revision 1 승인→revision 2 수정→CI에서 1 선택→발급 시 거래가격이 1과 같음을 확인한다.
 
+### CI의 기존 동작과 필요한 읽기 API
+
+13절의 공통 동작을 읽고 적용한다. `ci/repository.py`의 `source_pi()`는 본인 PI의 `TradeDocumentVersion`과 같은 revision의 approved 제안을 검사한다. 현재 PI가 수정돼도 과거 승인 버전은 유효하다. 반면 `GET /api/trade/pi`는 최근 50개 문서의 현재 요약만 반환하며, `/pi/{id}/versions/{revision}`는 지정한 버전만 조회한다. 승인된 과거 버전을 열거하는 API는 없다. 현재 `status=issued`로 필터링하거나 revision 번호를 차례로 추측해 승인 목록을 만들지 않는다.
+
+사용자 승인(2026-11-13): 아래 읽기 전용 목록 API 추가안을 설계에 포함한다. 실제 구현은 이 절의 PR에서만 수행한다.
+
+| 항목 | 최소 계약 |
+|---|---|
+| 경로 | `GET /api/trade/ci/source-pis?cursor=...`(첫 요청은 cursor 생략). 목록 크기는 50개 고정, 응답은 `{items, next_cursor}`, 끝이면 `next_cursor:null`. |
+| 항목 | `{source_pi_id, source_revision, document_number, currency, total}`. 문서번호/통화/합계는 선택할 `TradeDocumentVersion.payload`에서 읽는다. 현재 문서 값이나 현재 단가로 교체하지 않는다. |
+| 대상·순서 | 본인 소유 PI 중 본인의 approved 제안이 있는 `(document_id, revision)`만 중복 없이, ID 내림차순·revision 내림차순으로 조회한다. 현재 status가 issued일 조건은 두지 않는다. |
+| 페이지 | 마지막 `(document_id, revision)` 쌍을 `cursor=123:2` 형태로 보내 다음 페이지를 조회한다. cursor는 양의 정수 쌍으로 검증하고 잘못된 값은 422다. 매 요청에 소유권/승인 조건을 적용하며 cursor를 권한 근거로 쓰지 않는다. 전체 검색/집계 API는 만들지 않는다. |
+| 상세 | 사용자가 목록에서 고른 뒤 기존 `GET /api/trade/pi/{id}/versions/{revision}`로 해당 버전을 읽어 거래 사실을 확인한다. 목록 없음은 빈 화면에서 PI 작성 경로를 안내한다. 조회는 revision·승인·파일을 변경하지 않으며 private/no-store로 반환한다. |
+| 생성 시 검증 | 기존 `source_pi()`를 다시 호출해 본인 소유/실제 승인 여부를 검증한다. 프론트의 목록 선택 결과만 신뢰하지 않는다. |
+
+새 경로는 CI 라우터의 `/{document_id}`보다 먼저 등록해 정적 경로가 ID로 해석되지 않게 한다. `ci/repository.py`의 구체 SQL 조회를 사용하고 테이블·migration·공통 `DocumentRepository`·그래프·가격 규칙을 늘리지 않는다. 승인 PI 목록 계약만 `docs/trade-api.md`·`docs/CONTRACT.md` 16절에 같은 PR로 기록한다.
+
+### CI의 입력과 화면 순서
+
+PI와 같은 작성 방식 선택에서 시작하고, 직접/원문 어느 쪽도 승인 PI 버전 선택을 거친 뒤 입력/추출을 실행한다. 원본 선택 → 선적 정보 빈칸 보완 → 전체 확인 → 공통 최종 검토/발급으로 진행한다. 거래처·품목·가격 단계는 선택한 PI의 읽기 전용 내용으로 확인하며 다시 질문하지 않는다. 원본 버전은 요약과 전체 확인에 표시한다.
+
+- `CIInput`: `source_pi_id`, `source_revision`, `document_number`, `shipment_reference`, `country_of_origin`, `incoterms`, `ship_to`, `bill_to`, `remarks`만 보낸다. `/ci/extract`는 `{text, source_pi_id, source_revision}`이다. 원본 ID/revision은 사용자가 선택하고 AI가 정하지 않는다.
+- 거래 사실(당사자·품목·수량·통화·거래 단가·할인·FOC)은 원본에서 서버가 가져온다. 현재 단가/회사 설정을 덮어씌우거나 브라우저에서 재계산하지 않는다. 별도 CI 문서번호·선적 참조·원산지는 사용자 입력/추출 결과로 보완하고, 납품 조건·배송지·청구지·비고는 기존 서버가 허용하는 범위에서만 수정한다.
+- CI 전체 확인/검토에는 선적 참조·원산지·원본 버전·출하 수량·FOC를 보여 준다. PI snapshot을 그대로 노출하면 `payment_terms:N/A`가 보일 수 있으므로 결제/은행 구역을 제외한다. PDF/XLSX의 기존 FOC 처리·렌더러는 바꾸지 않는다.
+- 저장된 CI의 원본 교체는 기존 `SOURCE_PI_CHANGE_REQUIRES_NEW_CI`에 따라 새 CI 경로로 안내한다. 원본 연결이 없는 이전 메일 CI는 기존 `SOURCE_PI_SELECTION_REQUIRED`에 따라 승인 PI를 선택해 수정할 수 있다.
+- 수정 범위: CI 경로/작성 링크, `pages/CIPage.jsx`·필요한 최소 선적 폼, 기존 공통 표시 컴포넌트, CI 목록 라우터/구체 저장소·응답 모델, 위 API 계약 문서·검사. 원본 조회 외의 서버 업무·현재 단가 적용·파일 파싱·PI 선택 자동화는 추가하지 않는다.
+
+### CI 완료 확인
+
+PI v1 승인 → v2 수정 후 v1이 목록에 남고 그 거래가격·수량·FOC로 CI가 발급되는지 확인한다. 승인 제안이 여러 개여도 같은 버전은 한 번 표시하고 50개 초과 시 다음 페이지에서 과거 버전을 선택할 수 있어야 한다. 미승인 버전·타인 PI는 목록에서 제외하고 직접 생성 요청에서도 거부한다. 잘못된 cursor, 빈 목록/조회 실패, 원본 변경 거부, 이전 CI 원본 연결 보완, 추출 후 빈칸 보존, 검토 수정/409, PDF/XLSX에 결제·은행 미출력과 FOC 중복 없음, 파일 해시·모바일·PI/PO 회귀를 확인한다.
+
 <a id="15"></a>
 
 ## 15. PL 포장 합계 확인과 최종 검토
@@ -373,6 +438,38 @@ Bearer-only 경로는 쿠키를 보내지 않아도 동작해야 한다. 기존 
 - 선행 작업: 14절.
 - 하는 사람: Codex.
 - 확인: 원본/계산 불일치·서로 다른 단위·합계 취소·승인 후 행 수정·오래된 제안 선택을 확인한다.
+
+### PL의 입력과 화면 순서
+
+13절의 공통 동작을 읽고 적용한다. 작성 방식 선택 → 거래처/판매자 → 품목·포장 행 → 선적 조건·원본 합계 → 저장 후 전체 확인/포장 합계 확인 → 합계 승인 → 공통 최종 검토/발급이다. PI의 단계형 입력·표·접힌 상세·요약 배치를 사용하며 금액·단가·할인·은행 입력은 두지 않는다. 원문 추출 뒤 이미 채워진 값을 보존하고 필요한 빈칸만 보완한다.
+
+| 입력 구역 | 기존 `PLInput`/행 필드 |
+|---|---|
+| 기본·당사자 | 상품군, PL 문서번호, seller/buyer의 회사·주소·연락처/등록 정보, 납품 조건, 배송지·청구지·비고 |
+| 선적 | `shipment_reference`, `hs_code` |
+| 품목 행 `items` | 상품명·코드·규격, `quantity`, `unit`, `volume_cbm`, `source`, 아래 포장 필드 |
+| 별도 포장 행 `packages` | `package_type`, `package_count`, `net_weight_kg`, `gross_weight_kg`, `dimensions`, `shipping_marks` |
+| 원본 합계 | `actual_package_count`, `container_count`, `declared_net_weight_kg`, `declared_gross_weight_kg`, `declared_volume_cbm`, `declared_total_quantity`, `declared_total_quantity_unit` |
+
+품목별 포장과 별도 `packages`는 서버가 이미 지원하는 두 입력을 그대로 편집한다. 한쪽을 강제로 삭제하거나 두 쪽을 임의로 합산하지 않는다. 각 행은 최대 500개, 숫자 입력은 십진수 문자열이며 원본 합계의 단위/FT 표기 문자열도 그대로 보존한다. `_packing_*`·승인 상태·계산 합계는 입력 payload에 섞지 않는다. 기존 서버는 컨테이너 없는 선적을 허용하므로 빈 `container_count`를 화면에서 필수로 만들지 않는다. 중량·행·단위 검증은 `pl/rules.py`·`packing_review.py`·`operations.py`의 결과를 표시한다.
+
+### 두 승인을 연결하는 상태와 요청
+
+1. `POST /api/trade/pl` 또는 `/extract` 뒤 `DocumentResult.input`을 편집값으로 보관한다. 합계 확인 전 `needs_input`은 정상 경로다. `input`은 승인 이후에도 처음 제시한 원본 합계를 담으므로 계산값으로 덮어쓰지 않는다.
+2. 저장된 최신 revision에 대해 `GET /api/trade/pl/{id}/packing-review`를 읽는다. 반환의 `payload.document.packing_totals`에 있는 `calculated`·`changes`·`quantities`·`quantity_complete`·`packages_total`·`discrepancies`·`issues`와 `payload.document._packing_original_totals`의 원본 합계를 표시한다. `changes`의 각 항목에는 바뀔 필드와 `source`·`calculated`가 있다. 원본은 읽기만 한다. PCS/KG는 나눠 보이고 컨테이너 개수×FT나 브라우저 합계 계산은 하지 않는다.
+3. 사용자가 합계 승인/취소를 누르면 `POST /api/trade/pl/{id}/packing-review/decisions`에 해당 응답의 `{action, revision, content_hash}`만 보낸다. 미저장 변경 중에는 합계 선택을 막고 먼저 저장하게 한다. 잘못된 행/단위(`issues` 또는 `quantity_complete:false`)는 수정 안내를 하되, 원본/계산의 `discrepancies`만으로 합계 승인을 막지 않는다. 그 차이를 확인하고 계산 가능한 값만 적용하는 것이 기존 승인의 목적이다. 서버 422/409도 그대로 처리한다.
+4. 응답의 새 revision·`packing_totals.approved`·문서 status를 반영한다. 합계를 승인해도 다른 누락이 남아 `needs_input`이면 보완을 계속한다. `ready`이고 현재 합계가 승인된 경우에만 **별도 사용자 동작**으로 공통 최종 검토를 요청한다. 합계 승인 버튼이 곧 파일 발급 승인이 되지 않는다.
+5. 합계 취소는 서버가 보관한 원본으로 돌아가고 새 revision이 된다. 이후 행/원본/조건을 수정하면 기존 합계 동의와 대기 최종 제안은 재사용하지 않고 합계부터 다시 확인한다. 최종 제안에서 `modify`한 결과가 `needs_input`이면 합계 확인 단계로 복귀한다. 이전 승인 파일은 보존한다.
+
+수정 범위: PL 경로/작성 링크, `pages/PLPage.jsx`·`trade/PLForm.jsx`·필요한 최소 입력 helper, 포장 합계 확인 패널과 가격 열 없는 PL snapshot, 기존 검토 패널의 문서별 표시, CSS·검사·문서다. 계산/원본 보존/두 승인 API는 그대로 사용하며 새 서버 API·PI 자동 연결·가격 기능을 추가하지 않는다.
+
+### PL 완료 확인
+
+품목별 포장과 별도 `packages` 각각의 정상 입력, 원문 누락 질문, 원본/계산 불일치 승인, 합계 취소·새 revision, 승인 후 행 수정과 재승인, 최종 제안 수정 후 합계 복귀, 잘못된 행 거부, PCS/KG 분리, 컨테이너 없는 선적과 `2 x 40FT` 표기 보존을 확인한다. 오래된 합계 해시/revision 거부·입력 보존, 합계 승인만으로 파일 미발급, 최종 검토 승인 뒤 PDF/XLSX 해시 일치·다운로드 재시도·모바일·PI/PO/CI 회귀를 확인한다.
+
+### 13~15절의 검증 범위
+
+각 절의 구현 PR에서 관련 입력 helper 검사와 기존 무역 도메인/API 회귀를 실행하고, 실제 FastAPI·임시 PostgreSQL·가짜 인증/Storage/OpenAI로 해당 문서의 브라우저 흐름을 검증한다. `frontend`의 test/lint/build와 필수 규칙 검사·전체 `uv run pytest`를 통과시킨다. 실제 사용자 키/운영 DB/실제 외부 API 시험과 구분하며 여기서 새 운영 설정이나 유료 호출은 하지 않는다. 이번 설계 PR의 검사 결과는 화면 구현 완료의 근거로 사용하지 않는다. 공통 컴포넌트/진입 화면을 차례로 바꾸므로 기존 선행 순서 13→14→15와 각 1개 PR 원칙을 유지한다.
 
 <a id="16"></a>
 
