@@ -46,6 +46,7 @@
 - `docs/PROJECT_CONTEXT.md` — 최신 흐름(과제 개요, 영역별 현재 상태, 산출물 위치). 모든 작업 전에 읽는다 [과제별]
 - `docs/plans/README.md` — 계획 파일 형식(RULES 7절) [공통]
 - `docs/plans/` — 큰 작업의 계획 파일 `<작업명>.md`(RULES 7절) [과제별]
+- `docs/plans/document-ingestion.md` — 전량 비전 AI 문서 추출·교체 가능한 추출/임베딩·청크·pgvector 저장 계획과 parent-child 비교안(검색·LangGraph/메일 연결 제외) [과제별]
 - `docs/plans/react-supabase/` — React·JavaScript·Vite와 Supabase 전환 문서 모음(안내·상세 계획·단계별 새 작업 요청문). 하위 작업은 PLAN.md의 자기 절만 읽는다 [과제별]
 - `docs/plans/kekorea-port.md` — 완료한 KE KOREA 무역서류(PI/PO/CI/PL) 이식 계획 이력 [과제별]
 - `reference/kekorea/` — 완료한 이식의 원본 사본(참고 이력, 읽기 전용). 담은 것·바꾼 것·원본 테스트 실행법은 그 폴더의 `README.md` [과제별]

@@ -3,6 +3,15 @@
 세팅 3-2-1(LLM)·3-2-2(외부 API)의 선택과, 요청자가 2026-11-09에 정한 Gmail 견적 MVP의 API 변경을 기록한다(`docs/plans/gmail-quote-mvp.md#3`, R-04·D-03). 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`·README에 반영한다. [Request]
 나중에 기능을 더하며 다른 LLM·API를 더하거나 바꾸면 요청자에게 묻고 이 파일을 고친다(`.work/TASK.md` 이 레포의 규칙). [Request]
 
+## 지식 문서 비전 AI 추출 방식 (2026-11-13, 계획)
+
+- 사용자 선택: 지식 문서는 전부 비전 AI로 읽는다. 텍스트 PDF와 스캔을 일반 파서/Tesseract로 나누어 추출하는 방식은 사용하지 않는다. 이 선택은 `docs/plans/document-ingestion.md`의 계획이며 기존 메일/무역 추출 코드나 운영 설정을 바꾸지 않았다.
+- 경계: `DocumentExtractor`와 `Embedder`를 독립적으로 주입해 비전 추출 모델과 임베딩 모델을 각각 바꿀 수 있게 한다. 현재 앱의 구조화 AI·PC 실행 프로토콜이 지식 문서 이미지/임베딩 입력을 이미 지원한다고 가정하지 않는다.
+- 입력: 확정 형식은 전 페이지를 출처/순서가 있는 이미지로 변환해 비전 모델에 전달한다. PDF·Office·TXT 등의 변환/렌더러 설치와 표·인쇄 영역/잘림은 별도 검증한다. Tesseract/한국어 데이터 설치를 이번 필수 조건으로 두지 않는다.
+- 미확정: 구체 비전 공급자/모델, 임베딩 공급자/모델·차원, 실제 문서 외부 전송/보관 범위, 변환 도구와 HWP 대응. 기존 사용자 키를 쓰는 OpenAI는 후보이며 기본 `OPENAI_MODEL`이 비전 입력을 지원하는지/정확한지 실제 확인한 것은 아니다. 새로운 환경변수·모델 기본값은 공급자를 선택하는 후속 작업에서 README·`.env.example`과 함께 정한다.
+- 검증: 원문/표/페이지 대응·출력 중단·판독 불가를 확인하고 의심 구간은 검토/수정 후 임베딩한다. 실제 문서 업로드·모델 호출·비용/정확도 측정·운영 배포는 하지 않았다. Parent-child는 별도의 청크/검색 구조 추천이며 사용자 채택으로 기록하지 않는다.
+- 출처: [OpenAI 파일 입력](https://developers.openai.com/api/docs/guides/file-inputs), [비전의 한계](https://developers.openai.com/api/docs/guides/images-vision#limitations). API의 PDF·일반 문서 처리 차이와 작은 글씨/한국어/정확도 제한을 확인했다. 특정 공급자 채택의 근거로 바꾸지 않는다.
+
 ## LLM
 ### 전용 로컬 .env 키 모드 (2026-11-12, Issue #153)
 - 요청: 개인 PC에서 본인 `.env` 키를 사용하고 공용 서버의 환경 키 사용 금지를 유지한다. `AI_RUNTIME` 기본은 `server`이며, 전용 `uv run python -m app.local`의 실제 루프백 리스너가 있는 `local` 실행에서만 환경 키를 선택한다. Render·공용 실행은 로컬 모드로 시작할 수 없다.
