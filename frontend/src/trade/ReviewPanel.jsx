@@ -1,12 +1,12 @@
 import PrivateImage from "../components/PrivateImage"
 import DocumentSnapshot from "./DocumentSnapshot"
 
-export default function ReviewPanel({ proposal, token, kind = "pi", busy, dirty, modifying, onDecision, onModify, onDownload }) {
+export default function ReviewPanel({ proposal, token, kind = "pi", busy, dirty, modifying, onDecision, onModify, onDownload, headingRef }) {
   const payload = proposal.payload
   const statuses = { pending: "승인 대기", approved: "발급 완료", cancelled: "검토 취소", superseded: "새 검토 필요" }
   const base = `/trade/${kind}/${proposal.document_id}/reviews/${proposal.id}/branding`
   return <section className="card review-panel" aria-label="최종 검토 제안">
-    <div className="panel-head"><h2 className="section-title">최종 검토 · 버전 {proposal.revision}</h2><span className="document-status">{statuses[proposal.status] ?? proposal.status}</span></div>
+    <div className="panel-head"><h2 className="section-title" tabIndex={-1} ref={headingRef}>최종 검토 · 버전 {proposal.revision}</h2><span className="document-status">{statuses[proposal.status] ?? proposal.status}</span></div>
     <p className="section-note">아래 문서·회사·계좌·이미지를 고정한 검토입니다. 승인하면 파일을 발급하며 메일은 발송하지 않습니다.</p>
     {dirty && <p className="form-error">입력한 변경사항을 먼저 저장하고 다시 검토해 주세요.</p>}
     {modifying && <p className="form-success">위 입력을 수정한 뒤 ‘수정 저장·재검토’를 눌러 주세요.</p>}

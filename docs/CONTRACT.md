@@ -629,6 +629,7 @@ class AgentError(TypedDict):
 | `TOKEN_ENCRYPTION_KEY` | Google 토큰·사용자별 OpenAI 키 암호화 키 | 6, 사용자별 키 |
 | `SESSION_SECRET` | 로그인 세션 쿠키 서명 키 | 6 |
 | `APP_BASE_URL` | 서비스 주소(링크·리디렉션 확인용) | 6, 7 |
+| `FRONTEND_PORT` | React 개발 포트. 루트 `.env`에서 읽고 비우면 5174. 1~65535 정수만 허용하고 사용 중인 포트는 자동 변경하지 않는다. 포트 변경 뒤 OAuth 반환 주소도 일치시킨다 | React 개발 환경 |
 | `REFLECTION_ENABLED_DEFAULT` | 성찰 기본값(`true`/`false`) | 12 |
 | `SUPABASE_URL` | Supabase 프로젝트 URL. 서버 JWT 검증·Storage 호출 공통. 5절 적용(2026-11-12): Bearer 토큰 검증의 JWKS 주소·issuer를 여기서 정한다(비면 Bearer 인증 503) | react-supabase 5·8절 |
 | `SUPABASE_SECRET_KEY` | Supabase 서버 비밀 키. 서버 전용이며 브라우저·프론트 빌드 산출물에 넣지 않는다. 7절 적용(2026-11-12): Gmail 연결 시작 때 Auth 서비스의 사용자 조회(admin)로 공급자 Google subject를 확인한다(비면 연결 시작 503 `auth_not_configured`) | react-supabase 5·7·8절 |
