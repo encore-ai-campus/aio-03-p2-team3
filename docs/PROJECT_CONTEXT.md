@@ -127,7 +127,7 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-13 · 로컬 연결 설정 상태 갱신
+마지막 갱신: 2026-11-13 · PI 기준 PO·CI·PL 화면 상세 설계와 승인된 CI 목록 API 추가안
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -140,7 +140,7 @@
 | KE KOREA 무역서류 로직 이식 계획 이력 | `docs/plans/kekorea-port.md` | 1~6절 완료, 참고 이력 |
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
-| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`·`frontend/` | 1·3~12절 구현. 콘솔 준비는 사용자 확인·로컬 Supabase URL/키 설정, 실제 계정 로그인·운영 전환 미확인. 13~21절과 사람의 22절 남음. 상세 검증/제한은 PROGRESS.md |
+| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`·`frontend/` | 1·3~12절 구현. 13~15절은 원격 main `7719c24`의 PI 단계형 화면 기준 상세 설계 보완(기존 Issue #141~#143). CI의 과거 승인 PI 버전 선택용 읽기 목록 API 추가안은 사용자 승인. 화면/API 구현은 대기이며 13→14→15 순서. 콘솔/실제 환경의 검증 범위는 PROGRESS.md, 16~21절과 사람의 22절도 남음 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |
