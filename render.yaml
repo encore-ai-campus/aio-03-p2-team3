@@ -1,0 +1,22 @@
+# 기존 Dashboard 관리 서비스는 README의 Build Command 적용 절차를 따른다.
+services:
+  - type: web
+    name: aio3-gmail-quote
+    runtime: python
+    branch: main
+    region: singapore
+    plan: free
+    buildCommand: bash scripts/render-build.sh
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22.16.0"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false

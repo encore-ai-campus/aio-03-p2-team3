@@ -37,7 +37,7 @@ from app.trade.po import router as po_routes
 from app.trade.ci import router as ci_routes
 from app.trade.pl import router as pl_routes
 from app.trade.settings import router as trade_settings
-from app.web import WEB, pages, templates
+from app.web import WEB, frontend, pages, templates
 from app.worker import router as worker_routes, service as worker_service
 from app.worker.protocol import WorkerError
 
@@ -184,6 +184,7 @@ def create_app(settings: Settings | None = None, google=None,
     app.include_router(inbox.router)
     app.include_router(candidates.router)
     app.include_router(runs.router)
+    app.mount("/app", frontend.FrontendFiles(directory=frontend.DIST, check_dir=False), name="frontend")
     return app
 
 
