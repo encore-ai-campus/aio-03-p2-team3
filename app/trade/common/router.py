@@ -13,7 +13,7 @@ from app.trade.review import operations as review
 from app.trade.review.models import Decision, ReviewRequest, ReviewView
 from app.trade.review.repository import SQLReviews
 from app.services.openai_keys import user_openai
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 
 
 class TextInput(InputModel):

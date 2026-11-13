@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.web.routes.pages import APP_NAME
+from app.web.pages import APP_NAME
 
 
 @pytest.mark.parametrize(("path", "heading", "required_text"), [

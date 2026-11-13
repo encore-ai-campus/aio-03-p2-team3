@@ -9,8 +9,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
 from app.llm.client import model_name
-from app.web.deps import current_user_id
-from app.web.routes.settings import check_key_csrf
+from app.auth.deps import check_session_csrf, current_user_id
 from app.worker import service
 from app.worker.protocol import (
     ApprovePair, ExecutionMode, MAX_JSON_BYTES, PairPoll, PairRequest, StrictModel,
@@ -61,7 +60,7 @@ async def body(request, schema=None, *, csrf=False):
             token = value.pop("csrf_token", "") or request.headers.get("x-csrf-token", "")
             if not isinstance(token, str) or len(token) > 256:
                 raise WorkerError("csrf_required", 403)
-            check_key_csrf(request, token)
+            check_session_csrf(request, token)
         return schema.model_validate(value) if schema else value
     except (ValidationError, ValueError, TypeError, UnicodeError, RecursionError):
         raise WorkerError() from None

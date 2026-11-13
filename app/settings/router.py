@@ -1,7 +1,6 @@
 """공급자 정보·품목 단가표 설정(계획 11절)과 자가 성찰 켬/끔(계획 12절)."""
 
 from typing import Annotated
-import hmac
 import secrets
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -10,7 +9,7 @@ from sqlalchemy import select
 
 from app.db.models import CompanyProfile, PriceListItem, User
 from app.quote.calc import price
-from app.web.deps import current_user_id
+from app.auth.deps import check_session_csrf, current_user_id
 from app.llm.client import OpenAIKeyError
 from app.services.openai_keys import UserKeyAccess, delete_key, key_registered, save_key
 
@@ -57,16 +56,10 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
     )
 
 
-def check_key_csrf(request: Request, supplied: str):
-    expected = request.session.get("trade_csrf", "")
-    if not expected or not supplied or not hmac.compare_digest(expected.encode(), supplied.encode()):
-        raise HTTPException(403, "유효한 CSRF 토큰이 필요합니다")
-
-
 @router.post("/settings/openai-key")
 def save_openai_key(request: Request, api_key: Annotated[str, Form()] = "",
                     csrf_token: Annotated[str, Form()] = "", user_id: int = Depends(current_user_id)):
-    check_key_csrf(request, csrf_token)
+    check_session_csrf(request, csrf_token)
     try:
         save_key(request.app.state.database, user_id, api_key, request.app.state.google_access.cipher,
                  settings=request.app.state.settings)
@@ -80,7 +73,7 @@ def save_openai_key(request: Request, api_key: Annotated[str, Form()] = "",
 @router.post("/settings/openai-key/delete")
 def delete_openai_key(request: Request, csrf_token: Annotated[str, Form()] = "",
                       user_id: int = Depends(current_user_id)):
-    check_key_csrf(request, csrf_token)
+    check_session_csrf(request, csrf_token)
     try:
         delete_key(request.app.state.database, user_id, settings=request.app.state.settings)
     except OpenAIKeyError as error:

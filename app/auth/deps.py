@@ -1,4 +1,6 @@
-"""여러 화면이 함께 쓰는 FastAPI 의존성."""
+"""도메인 라우터가 공유하는 사용자 인증과 세션 폼 CSRF 검사."""
+import hmac
+
 from fastapi import HTTPException, Request
 
 from app.auth.supabase import bearer_user_id
@@ -22,3 +24,10 @@ def current_user_id(request: Request) -> int:
     if user_id is None:
         raise LoginRequired()
     return int(user_id)
+
+
+def check_session_csrf(request: Request, supplied: str):
+    """개인 키·PC 연결 승인 폼의 세션 토큰을 검사한다."""
+    expected = request.session.get("trade_csrf", "")
+    if not expected or not supplied or not hmac.compare_digest(expected.encode(), supplied.encode()):
+        raise HTTPException(403, "유효한 CSRF 토큰이 필요합니다")

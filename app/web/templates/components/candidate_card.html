@@ -1,7 +1,7 @@
 {% from 'components/status_badge.html' import status_badge %}
 {% from 'components/banner.html' import banner %}
 {% from 'components/button.html' import submit_button %}
-{# candidate: app/web/routes/candidates.py의 thread_view()가 만든 후보 한 개 #}
+{# candidate: app/mail/candidates.py의 thread_view()가 만든 후보 한 개 #}
 {% macro candidate_card(candidate) -%}
 <article class="card candidate">
 <header class="candidate-head"><h3>{{ candidate.label }}</h3><span class="badges">{{ status_badge(candidate.kind_label, 'muted') }}{% if candidate.needs_review %}{{ status_badge('확인 필요', 'warn') }}{% endif %}{{ status_badge(candidate.status_label, candidate.tone) }}</span></header>

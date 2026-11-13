@@ -11,8 +11,8 @@ from app.db.models import Quote, ReplyCandidate
 from app.quote.calc import fill_prices
 from app.quote.pdf import render_quote_pdf
 from app.services.approval import send_approved_quote
-from app.web.deps import current_user_id
-from app.web.routes.candidates import APPROVAL_NOTICES
+from app.auth.deps import current_user_id
+from app.mail.candidates import APPROVAL_NOTICES
 
 router = APIRouter()
 
