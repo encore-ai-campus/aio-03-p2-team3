@@ -3,7 +3,7 @@
 from sqlalchemy import select
 
 from app.db.models import DealTerms as DealTermsRow
-from app.graph.nodes.common import call_tool, failure_update
+from app.graph.master.common import call_tool, failure_update
 from app.graph.state import AgentState
 from app.quote.required_fields import get_required_fields
 from app.runlog.logger import current_database, current_event

@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-13 · 메일 연결 검토와 HTTP 진입점 도메인 이동
+마지막 갱신: 2026-11-13 · 메일 연결·HTTP 도메인과 마스터 실행 경계
 
 - 서비스: 사용자별 Gmail 메일을 분석해 답장 후보 2~3개를 만들고, 사용자가 고른 후보만 같은 스레드로 보낸다. 거래 메일은 필수 항목이 빠지면 재질문 후보, 갖춰지면 국내 견적서 또는 PI·PO·CI·PL 초안을 만든다. 문서 확정과 메일 발송 승인은 별개다.
 - 현재 지원하는 실행 방식은 아래와 같다. 모든 AI 호출은 OpenAI Responses API를 쓰며 기본 모델은 `gpt-6-luna`, 변경값은 `OPENAI_MODEL`이다(#127·#152·#159~#163).
@@ -56,14 +56,15 @@
 - 화면: `/inbox`는 본인 메일의 처리 중·승인 대기·발송·오류를, `/threads/{thread_id}`는 원문·후보·처리 상태와 실행 기록 링크를 제공한다. 받은 메일 목록은 90초 간격 갱신, 스레드는 처리 중일 때만 자동 갱신한다(#85·#105). 메일 HTTP 진입점은 `app/mail/`에 있고 템플릿은 `app/web/`에서 공유한다. `/about`·`/privacy`·`/terms`는 비로그인 공개 페이지다(`app/web/pages.py`).
 - 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. 해당 API 구현(#112) 뒤 개발용 React 로그인·설정과 PI 작성/검토/발급 화면을 연결했다(7절). PO·CI·PL 화면은 아직 없다. 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
 - 메일 그래프는 `make_quote` → `create_trade_document`로 네 무역 문서 초안을 저장한다. 그러나 기존 스레드 화면의 `thread_view()`는 후보의 `trade_doc_id`를 전달하지 않고 국내 `quote_id`만 링크로 표시한다. 따라서 무역 후보가 생성돼도 기존 화면에서 문서 검토·발송 승인으로 갈 수 없다. 임시 PostgreSQL·가짜 LLM으로 PI 후보 2개 생성과 링크/승인 폼 0개를 재현했다. 화면/JSON 연결은 전환 계획 19절(#147)에서 보완·검증해야 하며, 백엔드 발송 서비스 시험 통과를 사용자 화면 완주로 표시하지 않는다.
-- 과제 R-01·R-02·R-09·R-10의 실행 근거는 메일 StateGraph다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
+- 과제 R-01·R-02·R-09·R-10의 기존 실행 근거는 Gmail 수신 경로이며, 현재 코드는 업무별 마스터 StateGraph에서 호환 준비 단계를 실행한다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
 - Google 로그인·암호화 토큰 저장·감시 갱신과 푸시 수신은 구현됐다(#79·#81). 로컬 Gmail 수집은 Pub/Sub·watch/stop 없이 동작한다(#160). 실제 운영 연동의 확인 범위는 6·7절과 #157에서 구분한다.
 - 남은 범위: 필수 항목 출처는 현재 `app/quote/required_fields.py`의 `source="config"`, `evidence=[]`다. 규칙 근거 RAG는 gmail-quote-mvp 22절의 후속 작업이며, 일정 도구 후보는 `.work/design/api-choice.md`의 '일정 도구 추천 후보'에 있다. 일정 도구의 LLM 입력은 제목 없이 바쁜 시간대만 전달하는 범위다.
 - 상세 위치: [공통 계약](CONTRACT.md) 6·9·10·15·16절, [독립 문서 API](trade-api.md), [로컬 실행 계획](plans/local-openai-execution.md) 1~5절. 계획 머리말과 README 일부의 '미구현' 표현은 작성 당시 기록이며, 현재 지원 범위는 위 표처럼 코드와 병합된 구현 PR을 대조했다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
-마지막 갱신: 2026-11-12 · 상태·기억의 현재 계약과 경계 요약
+마지막 갱신: 2026-11-13 · 업무별 마스터 상태와 Gmail 호환 경계
 
+- 범용 상태는 `app/graph/master/state.py`의 `WorkflowState`, 입출력은 `app/graph/schemas.py`다. 작업 DAG·실제 결과·최신 회차 근거·질문/승인 제안·실행 시도/영수증을 분리한다. 마스터는 순차 실행하고 map을 task/action ID로 교체한다. 외부 효과는 성공/실패/불명으로 구분하며 승인 권한은 체크포인트에 저장하지 않는다. 상세: 계약 2.1·3.0·17절.
 - 정의 원본: `app/graph/state.py`의 `AgentState`·`initial_state`, [공통 계약](CONTRACT.md) 2·3.4·7·12.4절. 입력(`run_id`·`user_id`·`email`), 기억(`thread_context`·`long_term`), 판단(`intent`·`selected_tool`), 거래·결과(`deal_terms`·`required_fields`·`missing_fields`·`candidates`·`quote_draft`·`trade_doc_draft`), 성찰·오류·횟수·종료 상태를 분리한다.
 - `deal_terms`는 국내 `DealTerms`와 무역 `TradeDocTerms`를 `doc_kind`로 구분한다(없으면 `quote`). 무역 수량·금액은 Decimal 문자열이다. 정확한 필드·기본값은 코드와 계약 2·15.2절에 있다(#107·#112).
 - `tools_called`·`reflection_history`·`errors`·`call_retries`는 누적 리듀서다. 통신·형식 재시도(`call_retries`)와 성찰 재실행(`reflection_retries`·`reflection_retries_by_type`)은 따로 센다. `notice`에는 사용자 키와 개인 PC 실행 오류 안내도 있다(#91·#152·#162).
@@ -72,8 +73,9 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-13 · LLM/Google 역할 구분과 견적 라우터 이동
+마지막 갱신: 2026-11-13 · 업무 어댑터·LLM/Google 역할과 HTTP 도메인 경계
 
+- 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`·`local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
 - `app/llm/`은 AI 구조화 실행·재시도·PC 위임, `app/clients/gmail.py`는 Google OAuth/Gmail 통신으로 구현이 겹치지 않아 분리 유지한다. 상세 비교와 호출 관계는 [도메인 구조도](domain-layout.md).
 - 호출 예산: SDK 자동 재시도 0, 호출 제한 20초. 429는 재시도 없이 한도 안내, 통신/5xx는 최대 3회(1·2초 대기), 형식 오류는 별도 1회 재시도다. PC 방식의 재시도는 서버 `app/worker/adapter.py` 한 곳에서 기존 예산과 전체 120초 기한으로 관리한다. 짧은 HTTP/예외 코드는 실행 기록에 남기고 키·원문은 남기지 않는다(#98).
@@ -84,28 +86,33 @@
 - 개인 PC 실행: `app/worker/{protocol,service,adapter,pc}.py`가 설치된 구조화 정의·모델·소유자·장치·시도/기한을 검증한다. 서버는 키를 받지 않고 큐 결과를 암호화해 전달 후 소비/해제/기한에 지운다. 미완료/거부된 PC 결과로 후보·문서를 저장하지 않으며 만료된 임대는 자동 재배포하지 않는다. 장치 API는 메일 승인·발송·파일 권한을 갖지 않는다(#161·#162). Windows 자격증명은 `credentials.py`의 현재 사용자 DPAPI·보호 DACL, macOS/Linux는 소유자·600 권한으로 보호한다(#163). 상세: 계약 6절.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
-마지막 갱신: 2026-11-13 · 기존 그래프 유지·실행 기록 라우터 이동
+마지막 갱신: 2026-11-13 · 업무별 마스터·기존 수신 호환·실행 기록 라우터
 
-- 진입점은 `app/graph/run.py`의 `start_run()`, 10개 노드·전이는 `app/graph/build.py`·`routing.py`, 업무 본문은 `nodes/`다. 핵심 흐름은 다음과 같다(상세: 계약 3절).
+- 범용 진입점은 `run.Workflow`의 start/inspect/resume/recover, 조립은 `wiring.make_workflow`다. `build.py`의 StateGraph가 계획 검증 → 의존 작업 선택 → 업무 prepare → 질문/성찰/승인 → 현재 대상 재검사 → 실행 직전 체크포인트 → 실행/영수증 조회 → 실제 결과 종합을 담당한다. 메일/문서/일정 폴더의 nodes는 업무를, adapters/ports는 외부 연결을 소유한다.
+- 새 질문/승인은 interrupt로 대기하고 소유자·action/hash를 검증한다. 수정은 새 준비/승인, 취소는 해당 작업과 의존 작업만 종료한다. 응답 유실/재생은 자동 발송/등록 없이 같은 영수증만 조회한다. 운영 saver는 주입해야 하며 InMemorySaver는 재시작 보존을 보장하지 않는다. 새 범용 HTTP/UI와 실제 Calendar 연결은 후속 작업이다. 계약 3.0·17절에 입출력·전이·정상/실패 시나리오가 있다.
+- `start_run()`·`build_graph()`는 기존 Gmail 수신/평가/PC 경계를 유지하며 새 마스터의 수신 준비 작업으로 변환한다. 10개 준비 단계의 기존 호출/기록은 `master/inbound.py`가 연결하며 별도 StateGraph를 만들지 않는다. 본문은 `master/`, `mail/`, `documents/`로 이동했고 `nodes/`에는 PC 공개 스키마 재수출 두 개만 남는다. 기존 수신 준비 흐름은 다음과 같다.
   - `load_memory` → `analyze_email` → 일반 `draft_replies` / 거래 `extract_deal` → `check_required` → 누락 `draft_followup` / 충족 `make_quote` → `draft_replies`.
-  - 후보 생성 뒤 성찰을 켰으면 `reflect`에서 필요 노드를 재실행·재검증하고, 마지막에 `save_pending`으로 저장한다. 처리 제외는 즉시 끝나며 실패는 `finish_failed`로 간다. 승인·메일 발송은 그래프 밖이다.
+  - 후보 생성 뒤 성찰을 켰으면 `reflect`에서 필요 노드를 재실행·재검증하고, 마지막에 `save_pending`으로 저장한다. 처리 제외는 즉시 끝나며 실패는 `finish_failed`로 간다. 기존 Gmail UI의 승인/메일 발송은 기존 서비스 경로를 유지한다. 새 범용 마스터는 같은 서비스를 승인 검증 뒤 호출한다.
 - `make_quote`는 `doc_kind`로 국내/무역 생성 도구를 고르고 본인 회사·계좌·단가 설정과 실행 ID를 문서/후보에 연결한다. 일반·거래·재질문·견적과 무역 경로 모두 구현돼 있다(#89·#107). 결과는 `awaiting_approval`·`followup_question`·`ignored`·`failed`로 구분한다.
 - 성찰은 규칙으로 환각·도구 선택 오류·필수값 누락·응답 불일치를 찾고, 문제가 있을 때만 `reflect_fix`를 호출한다. 유형별 한도는 환각 2·도구 1·누락 1·불일치 2, 전체 3회다. 한도 초과·성찰 자체 오류는 확인 필요 후보로 끝낸다(#91). 새 사용자 기본값 → 사용자 설정 → 실행 옵션 순으로 성찰 여부를 정한다.
-- 직접 AI 호출의 한도 오류는 자동 재시도 없이 기본 후보 1개·`needs_review`·`rate_limit` 안내로 저장하고, 통신/형식 오류는 호출 예산 소진 후 실패한다(`nodes/common.py`). PC 실패는 `save_pending`의 완료 확인과 `start_run`의 안전한 오류 안내로 후보 저장을 막는다(#162).
+- 직접 AI 호출의 한도 오류는 자동 재시도 없이 기본 후보 1개·`needs_review`·`rate_limit` 안내로 저장하고, 통신/형식 오류는 호출 예산 소진 후 실패한다(`master/common.py`). PC 실패는 `save_pending`의 완료 확인과 `start_run`의 안전한 오류 안내로 후보 저장을 막는다(#162).
 - Gmail 수신은 `app/services/gmail_push.py`의 사용자별 직렬화·메일 유일 제약으로 중복을 막고, 해당 수집의 모든 Gmail 조회가 성공한 뒤에만 history를 갱신한다. 프로세스 내 `BackgroundTasks` 방식이며 서버 재시작 중 작업 복구·공용 history 만료의 전체 재처리는 구현 범위 밖이다(#81). 로컬 history 만료는 전체 재처리 대신 재로그인을 안내한다(#160).
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-13 · HTTP 도메인 재배치·기존 UI 회귀 검증
+마지막 갱신: 2026-11-13 · 업무별 마스터·HTTP 도메인 회귀 검증
 
-- HTTP 도메인 재배치: `python3 .work/check.py`(경고 0개), 전체 `uv run pytest` **917 passed·2 skipped**, frontend lint/test(4개)/build를 통과했다. 이동 전후 등록 라우트 109개의 URL·메서드·이름과 OpenAPI 명세가 같다. 실제 Chromium·임시 PostgreSQL·가짜 Gmail로 공개/인증 경로, 받은메일·후보 승인 1회, 견적 단가 보완/PDF, 성찰 설정, 개인 키 CSRF/저장/삭제, 실행 기록/마스킹 내보내기와 390px 화면 렌더링을 확인했다. 구조도도 Mermaid로 렌더링했다. 운영 API 확인과 구분하며 위치·유지 조건은 [도메인 안내](domain-layout.md).
+- HTTP 도메인 재배치 당시 검증: `python3 .work/check.py`(경고 0개), 전체 `uv run pytest` **917 passed·2 skipped**, frontend lint/test(4개)/build를 통과했다. 이동 전후 등록 라우트 109개의 URL·메서드·이름과 OpenAPI 명세가 같다. 실제 Chromium·임시 PostgreSQL·가짜 Gmail로 공개/인증 경로, 받은메일·후보 승인 1회, 견적 단가 보완/PDF, 성찰 설정, 개인 키 CSRF/저장/삭제, 실행 기록/마스킹 내보내기와 390px 화면 렌더링을 확인했다. 구조도도 Mermaid로 렌더링했다. 운영 API 확인과 구분하며 위치·유지 조건은 [도메인 안내](domain-layout.md).
 
-- React PI: `frontend/`의 `npm test`는 원문 추출 후 빈칸만 질문·완료 단계 건너뛰기·미확인 상품군/0원 샘플 구분·십진수 입력 보존을 확인한다(4개 통과). 실제 FastAPI·임시 PostgreSQL·가짜 Storage/OpenAI의 브라우저 흐름으로 직접 작성/원문 누락 보완/품목 표 수정/재검토/승인, 발급 PDF·XLSX 해시 일치와 409 때 입력 보존을 확인했다. 1440·768·390px 화면에서 배치와 가로 넘침도 확인했다. 실제 OpenAI·운영 Supabase DB/Storage 연결 검증과 구분한다. 기존 전환 범위·제한은 [전환 진행 현황](plans/react-supabase/PROGRESS.md).
+- 업무별 마스터·최신 main(`0cafd0d`) 통합: `python3 .work/check.py` 경고 0개, 전체 `uv run pytest` **967 passed·2 skipped**. 신규 44개 사례는 실제 StateGraph/interrupt/체크포인트, 승인/취소/소유권/불명 실행의 조회 복구, 일정 조건/충돌/미연결, 기존 서비스의 PI/PO/CI/PL 발급과 메일 발송을 검증한다. 문서 발급 → 실제 file_ids 바인딩 → 메일 MIME 첨부의 bytes 해시 일치 → 독립 일정 조회도 확인했다. 가짜 Calendar/Gmail/Storage와 실제 임시 PostgreSQL을 사용하며 실제 외부 API·운영 saver·새 UI 연결 검증과 구분한다.
+
+- React PI: `frontend/`의 `npm test`는 원문 추출 후 빈칸만 질문·완료 단계 건너뛰기·미확인 상품군/0원 샘플 구분·십진수 입력 보존을 확인한다(4개 통과). 해당 화면의 lint/build 검증을 통과했다. 실제 FastAPI·임시 PostgreSQL·가짜 Storage/OpenAI의 브라우저 흐름으로 직접 작성/원문 누락 보완/품목 표 수정/재검토/승인, 발급 PDF·XLSX 해시 일치와 409 때 입력 보존을 확인했다. 1440·768·390px 화면에서 배치와 가로 넘침도 확인했다. 실제 OpenAI·운영 Supabase DB/Storage 연결 검증과 구분한다. 기존 전환 범위·제한은 [전환 진행 현황](plans/react-supabase/PROGRESS.md).
 
 - 기준 코드 `c6b1600`의 최근 병합 PR #163은 Linux 전체 **829 passed·4 skipped**를 기록했다(선택 PostgreSQL 모듈 2개·Windows 전용 검사 2개 제외). GitHub [CI 실행 43167274015](https://github.com/encore-ai-campus/aio-03-p2-team3/actions/runs/43167274015)의 `rules-check`·`tests`·`pr-check`·`windows-worker` 모두 성공을 직접 확인했다. Windows 작업은 자격증명·실행기·실제 HTTPS 프로세스 시험을 실행한다. 자동/모의 검증 통과와 실제 API/운영 검증은 별개다.
 
 | 작업 영역 | 확인할 시험·근거 |
 |---|---|
+| 업무별 마스터·일정·승인/복구·문서/메일 어댑터 | `tests/test_domain_graph.py`, `tests/test_domain_graph_adapters.py` (Calendar 미연결/가짜 공급자, 실제 임시 DB·가짜 Gmail/Storage) |
 | 메일·승인·견적·성찰·기억 | `tests/test_{auth,gmail_push,mail_analysis,deal,approval,quote,reflect,memory}.py`, `test_graph.py` |
 | OpenAI·로컬·PC·Windows | `test_llm.py`, `test_openai_keys.py`, `test_local_openai.py`, `test_local_gmail.py`, `test_worker_{queue,execution,process,credentials}.py` |
 | 무역 계산·발급·버전·회귀 | `tests/test_trade_*.py`, `test_pi_*.py`, [무역 검증 기록](test-records/20261111_trade_domain_api.md) |
@@ -135,11 +142,12 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-13 · 도메인 구조도·배포 선행 작업·후속 검증 분리
+마지막 갱신: 2026-11-13 · 도메인 구조도·업무별 그래프 계약·배포 후속 검증
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
 | 과제 요구사항 정리(R-ID·D-ID) | `docs/REQUIREMENTS.md` | 있음(2026-11-09) |
+| 업무별 마스터·메일·문서·일정의 현재 계약 | `docs/CONTRACT.md` 2.1·3.0·17절 | 구현과 연결 경계·정상/실패 시험 명시 |
 | 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 초안 있음(최종 코드와 맞춰 20에서 고침) |
 | 팀원용 도메인 구조도·파일 이동표 | `docs/domain-layout.md` | LLM/Google 역할 비교, HTTP 도메인 위치, web 자산 유지 근거·대체 조건 |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 틀 있음(2026-11-10, 시나리오·판정 기준·시험 환경. 결과는 18·19) |

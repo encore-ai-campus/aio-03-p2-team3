@@ -1,6 +1,6 @@
 # 팀원용 도메인 구조와 파일 이동 안내
 
-2026-11-13 기준. 관련 요구사항: R-01·R-02(기존 에이전트/도구 연결 유지), D-01·D-03(구조 설명과 코드 위치 안내). 이 변경은 파일 배치 정리이며 API·DB·그래프 상태·발송 규칙을 바꾸지 않는다.
+2026-11-13 기준. 관련 요구사항: R-01·R-02(기존 에이전트/도구 연결 유지), D-01·D-03(구조 설명과 코드 위치 안내). HTTP 도메인 이동은 파일 배치 정리이며 기존 API·DB·Gmail 공개 상태·발송 규칙을 유지한다. 업무별 마스터 그래프의 추가 상태·승인/복구 계약은 [공통 계약](CONTRACT.md) 2.1·3.0·17절을 따른다.
 
 ## 1. 먼저 알아둘 점
 
@@ -43,14 +43,14 @@ flowchart TB
     S --> W
     E --> V["services/<br/>수집 · 발송 · 기억 · 사용자 키"]
     S --> V
-    V --> Q["graph/ → nodes/ → tools/<br/>메일 분석 · 도구 선택 · 성찰 · 저장"]
+    V --> Q["graph/ → master·mail·documents·calendar<br/>작업 계획 · 준비 · 성찰 · 승인 · 결과 갱신"]
     Q --> L["llm/<br/>OpenAI 구조화 실행<br/>재시도 · PC 위임"]
     T --> L
     A --> C["clients/gmail.py<br/>Google 통신"]
     V --> C
 ```
 
-`auth`·`mail`·`settings`·`quote`·`runlog`의 HTML 응답은 같은 Jinja 템플릿을 사용한다. 조회·승인·키 관리 등의 처리는 해당 도메인에 두고, `web`은 렌더링 자산만 제공한다. 실제 수집·발송·기억 서비스의 기존 위치는 유지했다.
+`auth`·`mail`·`settings`·`quote`·`runlog`의 HTML 응답은 같은 Jinja 템플릿을 사용한다. 조회·승인·키 관리 등의 처리는 해당 도메인에 두고, `web`은 렌더링 자산만 제공한다. 실제 수집·발송·기억 서비스의 기존 위치는 유지했다. 범용 마스터는 Python 진입점이며 기존 Gmail 수신은 호환 준비 작업으로 연결한다. 새 범용 HTTP/UI·실제 캘린더·운영 체크포인터 연결은 후속 작업이다.
 
 ## 4. 파일을 어디서 찾으면 되나?
 
@@ -68,6 +68,7 @@ flowchart TB
 | 무역 회사·거래처·계좌·단가·이미지 설정 API | `app/trade/settings/` | `/api/trade/settings/*` |
 | 개인 PC 연결·실행 모드 | `app/worker/router.py` | `/api/ai-execution/*`, `/settings/worker/*` |
 | 실행 기록 목록·상세·마스킹 내보내기 | `app/runlog/router.py` | `/runs`, `/runs/*` |
+| 업무별 마스터·메일·문서·일정 그래프 | `app/graph/{master,mail,documents,calendar}/`·`run.Workflow`·`wiring.make_workflow` | Python 진입점(범용 HTTP/UI 연결 후속) |
 | PI·PO·CI·PL 문서 | `app/trade/{pi,po,ci,pl}/` | `/api/trade/{pi,po,ci,pl}` |
 | 공개 안내·약관 | `app/web/pages.py` | `/about`, `/privacy`, `/terms` |
 | 기존 HTML 모양·공통 조각 | `app/web/templates/`, `static/` | `/static/*` |

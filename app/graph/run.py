@@ -10,6 +10,9 @@ from app.graph.build import build_graph
 from app.graph.state import EmailMessage, initial_state
 from app.runlog.logger import log_event, recording
 from app.services.openai_keys import user_openai
+from app.graph.master.runtime import Workflow  # 범용 시작/조회/재개 진입점
+
+__all__ = ["Workflow", "start_run", "get_graph"]
 
 
 def start_run(*, user_id: int, email: EmailMessage, mode="live", reflection_enabled=None,

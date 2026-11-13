@@ -1,6 +1,6 @@
 """draft_followup: 빠진 필수 항목을 묻는 재질문 후보를 만든다(계획 10절)."""
 
-from app.graph.nodes.common import call_tool, failure_update, preferences_of, retry_feedback
+from app.graph.master.common import call_tool, failure_update, preferences_of, retry_feedback
 from app.graph.state import AgentState
 from app.quote.required_fields import FIELD_LABELS
 from app.services.memory import context_for_model

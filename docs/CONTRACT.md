@@ -41,22 +41,40 @@ app/
   settings/
     router.py              개인 키·성찰·국내 견적 기본 설정(무역 설정 API는 trade/settings/)
   graph/
-    state.py               AgentState와 자료 형식 — 2절, 4.3절 (공통 부분)
-    build.py               build_graph(): 노드·엣지 연결 — 3절 (공통 부분, 2 뒤로는 고치지 않음)
-    routing.py             조건부 엣지 함수 — 3.2절 (공통 부분)
-    run.py                 start_run(): 그래프 실행 시작, 실행 기록 묶기
+    schemas.py             Task/Plan/Evidence/Question/PreparedAction/WorkResult/ExecutionResult
+    state.py               Gmail v1 AgentState·도구/PC 공개 자료형(호환 경계)
+    build.py               build_workflow(): 업무별 마스터 StateGraph 조립
+    run.py                 Workflow 공개 경계, 기존 start_run/get_graph
+    wiring.py              기존 서비스·사용자 LLM·필수 checkpointer 조립
+    routing.py             Gmail v1 준비 작업의 순수 전이 함수
+    master/
+      state.py             WorkflowState: 작업·근거·결과·질문·승인·시도 기록
+      context.py           WorkContext/Dependencies/DomainHandler와 호출 동안만 유효한 실행 권한
+      nodes.py             계획 검증·의존성 선택·질문·성찰·승인·실행/복구·종합
+      runtime.py           인증된 소유자의 start/inspect/resume/recover
+      inbound.py           Gmail v1 준비 어댑터(별도 StateGraph 없음)
+      context_adapter.py   기존 단기/장기 기억 연결
+      review.py            기존 메일 성찰 감지·수정·재검증
+      common.py            기존 ToolResult·오류·재시도·실행 기록 변환
+      failure.py           Gmail 실패 상태 변환
+    mail/
+      nodes.py             조회·후보 준비·발송 제안/재검사/실행·영수증 조회
+      schemas.py           ThreadInput/SendInput
+      adapters.py          기존 SQL/Gmail/승인 서비스 연결
+      inbound.py           기존 Gmail 입력/출력 ↔ 새 마스터 변환
+      *_adapter.py         분류·답장·추가 질문·후보 저장 연결
+    documents/
+      nodes.py             문서 조회·작성·PL 합계 승인·발급 흐름
+      schemas.py           PI/PO/CI/PL DocumentInput
+      adapters.py          기존 trade operations/repository/review/rendering 연결
+      *_adapter.py         기존 Gmail 거래 추출·필수 항목·국내/무역 견적 연결
+    calendar/
+      schemas.py           시간대 있는 일정 조건·구간·전체 조회 스냅샷
+      ports.py             CalendarPort/UnavailableCalendar(연결 없음을 명시)
+      nodes.py             조건 검사·조회·후보 계산·제안·재검사·등록
     nodes/
-      load_memory.py       기억 불러오기
-      analyze_email.py     메일 분석
-      draft_replies.py     답장 후보 만들기 노드
-      extract_deal.py      거래 항목 추출 노드
-      check_required.py    필수 항목 검토 노드
-      draft_followup.py    재질문 후보 만들기 노드
-      make_quote.py        견적서 만들기 노드
-      reflect.py           성찰
-      save_pending.py      승인 대기 저장
-      finish_failed.py     실패 종료
-      common.py            업무 노드 공통: failure_update()(한도 오류 → 대체 후보, 그 밖 → 실패, 8에서 더함), call_tool()(tool_call·tool_result 기록, ToolResult → 상태)·retry_feedback()(10에서 더함)
+      analyze_email.py     개인 PC 프로토콜 v1 EmailAnalysis 재수출만 유지
+      reflect.py           개인 PC 프로토콜 v1 ReflectAnalysis 재수출만 유지
   tools/
     base.py                ToolResult(공통 결과 형식) — 4.1절 (공통 부분)
     registry.py            도구 등록 목록 — 4.2절 (공통 부분)
@@ -103,8 +121,32 @@ tests/
 - 위 폴더와 파일 이름은 [Claude proposal], 폴더 경계(서버 하나·도구 함수·DB)는 [Request]. 파일을 더하면 그 하위 작업이 `.work/TASK.md` 파일 지도를 고친다.
 - 서버 실행 명령(2에서 README에 더함): `uv run uvicorn app.main:app --reload`(로컬), Render 시작 명령 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. [Claude proposal]
 
-## 2. 그래프 상태 (`app/graph/state.py`의 `AgentState`)
-- `TypedDict`로 둔다. 자료형의 `X | None`은 값이 없을 수 있다는 뜻이다. '쌓기'는 LangGraph 리듀서 `operator.add`로 노드가 돌려준 값을 뒤에 덧붙이는 필드다. 나머지는 노드가 돌려준 값으로 바꾼다. [Claude proposal]
+## 2. 그래프 상태
+
+### 2.1 업무별 마스터 (`master/state.py`, `schemas.py`)
+
+- `WorkflowState`가 공통 실행 상태다. `AgentState`는 Gmail 수신기·평가·도구·PC 프로토콜을 위한 별도 호환 자료형이다. 서버 객체·DB 세션·LLM 클라이언트·실행 승인 권한은 체크포인트에 넣지 않는다.
+
+| 필드 | 의미·갱신 계약 |
+|---|---|
+| `actor_id`, `thread_id`, `request` | 인증 경계가 지정한 소유자·실행 식별자·원 요청. 모델은 소유자를 지정하지 못한다 |
+| `memory` | 같은 소유자의 저장 선호·같은 스레드 요약/확인 조건. 업무 조회 근거와 구분 |
+| `tasks` | `Plan`의 최대 16개 `Task`. ID·업무·허용 작업·입력·명시 의존성·결과 바인딩·확정 조건 |
+| `results` | task ID별 `completed/cancelled/needs_review/failed/blocked/unknown`와 실제 산출물 |
+| `current`, `work` | 현재 task ID와 `WorkResult`. 준비 완료와 실제 외부 실행 성공을 구분 |
+| `rounds`, `repairs` | 작업별 준비 횟수·성찰 횟수. 자동 성찰은 전체 최대 3회 |
+| `evidence` | task ID별 최신 조회 회차의 source/reference/version/observed_at 목록. 재조회 때 교체 |
+| `actions`, `attempts` | 준비된 action 스냅샷, 실행 직전 확정한 action ID → 내용 해시 |
+| `next`, `error`, `summary`, `reflection_enabled` | 코드가 정한 다음 노드·계획/맥락 오류·실제 결과 종합·성찰 옵션 |
+
+- `Plan`은 중복 task ID·없는 선행 작업·순환·선행 작업에 없는 결과 바인딩을 거절한다. `bindings`는 선행 작업의 **실제** `TaskResult.data` 필드만 연결한다. 실패·취소·불명·검토 필요 결과에 의존하는 작업은 `blocked`이며 독립 작업은 계속한다.
+- 마스터는 순차 스케줄러다. 병렬 쓰기를 도입하지 않았으며 map 필드는 키로 교체한다. 조회 결과를 append해서 이전 회차의 근거와 섞지 않는다.
+- `WorkResult`: `completed`, `needs_input`(+Question), `needs_review`, `needs_approval`(+PreparedAction), `failed`. `resume_inputs`는 문서 ID/revision 등 서버의 준비 결과를 다음 보완에 연결하며 확정 조건을 덮지 못한다.
+- `PreparedAction`: id/task_id/actor_id/domain/operation/version/payload. 전체 canonical JSON의 SHA-256으로 승인 대상을 고정한다. `ExecutionResult`: `succeeded/failed/unknown`, action_id/content_hash/receipt/code. 성공에는 비어 있지 않은 실제 영수증이 필요하다.
+
+### 2.2 Gmail v1 상태 (`app/graph/state.py`의 `AgentState`)
+
+- `TypedDict`로 둔다. 자료형의 `X | None`은 값이 없을 수 있다는 뜻이다. '쌓기'는 기존 공개 자료형의 `operator.add` 계약이며 현재 `master/inbound.py` 준비 어댑터가 같은 누적 규칙을 적용한다. 나머지는 반환한 값으로 바꾼다. [Claude proposal]
 - 시작 입력(7의 `start_run()`이 넣음): `run_id`·`user_id`·`mode`·`message_id`·`thread_id`·`email`·`reflection_enabled`. 나머지는 초기값으로 시작한다. [Claude proposal]
 
 | 이름 | 의미 | 자료형 | 초기값 | 읽는 노드 | 고치는 노드 |
@@ -143,7 +185,34 @@ tests/
 - 통신 실패 재시도(`call_retries`)와 성찰 재실행(`reflection_retries`)은 따로 센다(R-11, `docs/REQUIREMENTS.md` 2절 추가 조건). [Request]
 
 ## 3. 노드와 전이
-### 3.1 노드
+
+### 3.0 업무별 마스터 StateGraph (R-01·R-02·R-03·R-05·R-10·R-11)
+
+| 실제 노드 | 입력 → 출력 | 전이 조건 |
+|---|---|---|
+| `load_context` | 소유자·스레드 → memory 또는 안전한 오류 코드 | `plan` |
+| `plan` | 원 요청·memory 또는 명시적 Plan → tasks | `validate_plan`; 구조화 실패를 사용자 질문으로 바꾸지 않음 |
+| `validate_plan` | tasks → DAG/업무/허용 작업/확정 조건 검사 | 유효 → select_task, 오류 → finish |
+| `select_task` | tasks/results → 실행 가능 task·실제 결과 바인딩 | 해당 업무 prepare, 없으면 finish. 실패 의존성은 blocked |
+| `mail_prepare`, `documents_prepare`, `calendar_prepare` | Task/WorkContext → WorkResult·최신 근거 | inspect_result |
+| `inspect_result` | WorkResult → 다음 경로 | completed/failed → record_result, needs_input → ask_user, needs_approval → await_approval, needs_review → 한도 내 reflect 또는 record_result |
+| `reflect` | 검토 사유·허용 수정 필드·확정 조건 → 입력 변경 | 실제 변경이며 허용 필드만 변경 → 같은 업무 prepare, 변경 없음/거절/실패 → record_result |
+| `ask_user` | task ID·질문 필드·사유 → interrupt/Answer | 같은 소유자·질문 필드의 답만 반영 → 같은 업무 prepare |
+| `await_approval` | action·내용 해시 → interrupt/Approval | 일치한 approve → 업무 recheck, modify → 새 준비/새 승인, cancel → cancel_action |
+| `cancel_action` | 승인 전 action → 준비 제안 취소 | 정상 → cancelled/다음 task; 취소 확인 실패 → needs_review. 외부 발송/등록 없음 |
+| `*_recheck` | 고정 action·현재 근거 → 최신 WorkResult | 동일 해시 → mark_execution, 변경 → 질문/새 승인/검토, 오류 → record_result |
+| `mark_execution` | action → attempts/actions 체크포인트 | 해당 업무 execute (실제 쓰기와 별도 superstep) |
+| `*_execute` | action·이번 호출의 검증된 실행 권한 → ExecutionResult | 권한 있음 → 서비스 1회 호출, 복구/재생 → 영수증 조회만. 결과 기록 후 select_task |
+| `record_result` | 준비 완료/검토 필요/실패 → task ID별 결과 | select_task |
+| `finish` | 실제 task 결과·계획 오류 → summary | END |
+
+- 조립은 `build_workflow(dependencies=..., checkpointer=...)`, 인증/소유권 경계는 `Workflow.start/inspect/resume/recover`다. 실제 서비스 조립은 `wiring.make_workflow`다. checkpointer 미주입은 오류이며 운영용 saver/추가 테이블을 이번 작업에서 만들지 않는다.
+- 승인 권한은 호출 동안만 유효한 ContextVar에 있으며 한 번 소비된다. 체크포인트의 승인 여부만으로 새 쓰기를 허용하지 않는다. 동일 승인 재전송은 기존 결과를 반환하고 해시 불일치는 거절한다. 불명 결과의 복구는 같은 action/hash 영수증만 읽고 자동 재발송/등록하지 않는다.
+- `InMemorySaver`는 테스트/수신 준비 호환용이다. 프로세스 재시작 보존을 보장하지 않는다. 같은 saver를 주입한 새 runtime에서 대기 재개를 검증했다. 프로세스 간 직렬화와 공급자의 action key/hash 중복 방지는 별도 연결 구현의 책임이다.
+- 업무별 I/O·미연결 경계·정상/실패 시나리오는 17절을 따른다.
+
+### 3.1 Gmail v1 준비 단계 (기존 수신기/평가 호환)
+
 | 노드 이름 | 뜻 | 하는 일 | 부르는 도구 | 채우는 하위 작업 |
 |---|---|---|---|---|
 | `load_memory` | 기억 불러오기 | 단기·장기 기억과 긴 스레드 요약을 읽어 `thread_context`·`long_term`을 채운다. 기준을 넘으면 요약을 만든다(3.4절) | 없음(LLM 요약 1회 가능) | 13 |
@@ -157,9 +226,9 @@ tests/
 | `save_pending` | 승인 대기 저장 | 후보·견적서·처리 상태를 DB에 저장하고 `end_reason`을 정한다 | 없음 | 2(틀), 8·9 |
 | `finish_failed` | 실패 종료 | 오류를 처리 상태에 저장하고 `end_reason="failed"` | 없음 | 2 |
 
-- 승인은 그래프 밖에서 받는다. 화면의 승인 요청이 `app/services/approval.py`의 `send_approved_candidate(user_id, candidate_id)` 또는 `send_approved_quote(user_id, quote_id, candidate_id)`를 부르고, 그 안에서 `send_email` 도구를 부른다. 이 경로도 같은 `run_id`로 실행 기록을 남긴다. [Request · Claude proposal]
+- 기존 Gmail 수신 경계는 후보 준비까지만 실행한다. 기존 화면의 승인 요청이 `app/services/approval.py`의 `send_approved_candidate(user_id, candidate_id)` 또는 `send_approved_quote(user_id, quote_id, candidate_id)`를 부르고, 그 안에서 `send_email` 도구를 부른다. 이 경로도 같은 `run_id`로 실행 기록을 남긴다. [Request · Claude proposal]
 
-### 3.2 전이 (`app/graph/routing.py`)
+### 3.2 Gmail v1 준비 어댑터 전이 (`master/inbound.py`, `routing.py`)
 ```text
 START → load_memory → analyze_email
 analyze_email   --route_after_analyze-->  draft_replies   (intent=general, reply_mode=general)
@@ -182,7 +251,7 @@ reflect         --route_after_reflect-->  save_pending    (통과, 또는 한도
 save_pending → END
 finish_failed → END
 ```
-- 라우팅 함수는 `step_status`·`intent`·`missing_fields`·`reflection_enabled`·`reflection`만 읽고 상태를 고치지 않는다. 2에서 모두 만들고, 뒤 하위 작업은 `build.py`·`routing.py`를 고치지 않는다. 고쳐야 하면 공통 부분 변경으로 조율한다. [Request · Claude proposal]
+- 라우팅 함수는 `step_status`·`intent`·`missing_fields`·`reflection_enabled`·`reflection`만 읽고 상태를 고치지 않는다. 새 마스터는 3.0절의 전이를 사용하고, 이 함수는 수신 준비/평가의 v1 계약에만 적용한다. 변경은 공통 부분 변경으로 조율한다. [Request · Claude proposal]
 - 한도 오류(`rate_limit`)가 난 노드는 `fallback_candidates(email, *, kind, asks_fields, preferences) -> list[ReplyCandidate]`(`app/tools/fallback.py`, LLM 없이 고정 문구. 재질문 노드는 `kind="followup"`, `asks_fields`=빠진 항목)로 기본 답장 틀 후보 1개를 `candidates`에 넣고 `needs_review=True`, `notice="rate_limit"`, `step_status="rate_limit"`을 돌려준다. 이 경로는 성찰을 건너뛴다(성찰도 LLM을 부를 수 있어서). [Request · Claude proposal]
 
 ### 3.3 종료 조건 (R-11)
@@ -665,7 +734,7 @@ class AgentError(TypedDict):
 | `inconsistent` | 응답 불일치 | 후보가 2~3개가 아님, 재질문에 빠진 항목이 다 없음, 받는 사람·스레드 불일치 | `reprompt` |
 
 - 감지는 규칙 검사(LLM 없음)로 하고, 문제가 있을 때만 `reflect_fix` 프롬프트로 원인을 적는다. 재실행 뒤 같은 기준으로 다시 검사해 `verified`를 남긴다. 한도는 3.4절. [Request]
-  - 12 구현(`app/graph/nodes/reflect.py`): 감지 규칙 — `hallucination`: 후보 본문의 금액(`원`·`만원`·`₩` 등)·수량(숫자+`개`·`박스`·`EA` 등 단위)·날짜(`YYYY-MM-DD`·`M월 D일`·`M/D`)가 원문·스레드 기억·`deal_terms`·`quote_draft`·단가표·회사 정보·선호에 없음(상대방 과거 거래 기록은 근거로 보지 않음, 단위 없는 숫자는 보지 않음). `wrong_tool`: 견적서 경로인데 `missing_fields`가 있음 → `followup`(`draft_followup`, `reply_mode="followup"`), 견적서 경로인데 거래 항목을 다시 검사하면 빠진 항목이 있음 → `reroute`(`extract_deal`), 일반 답장인데 메일에 거래 표현(견적·발주·주문·구매·납품·단가)과 수량이 함께 있음 → `reroute`(`extract_deal`, `intent="deal"`). `missing_param`: 견적서·재질문 경로인데 `deal_terms`(견적서는 품목 포함)가 빔 → `extract_deal`, 견적서 경로인데 `quote_draft`가 빔 → `make_quote`. `inconsistent`: 후보 수가 2~3개가 아님, 후보 종류·제목(`Re: 원래 제목`)이 맞지 않음, 본문에 원문·기억에 없는 메일 주소, 재질문 후보의 `asks_fields`나 본문에 빠진 항목 이름이 없음 → 후보 노드 재실행. 실행 스레드와 메일 스레드가 다르면 고칠 길이 없어 바로 대체 경로. [Claude proposal]
+  - 12 구현(`app/graph/master/review.py`): 감지 규칙 — `hallucination`: 후보 본문의 금액(`원`·`만원`·`₩` 등)·수량(숫자+`개`·`박스`·`EA` 등 단위)·날짜(`YYYY-MM-DD`·`M월 D일`·`M/D`)가 원문·스레드 기억·`deal_terms`·`quote_draft`·단가표·회사 정보·선호에 없음(상대방 과거 거래 기록은 근거로 보지 않음, 단위 없는 숫자는 보지 않음). `wrong_tool`: 견적서 경로인데 `missing_fields`가 있음 → `followup`(`draft_followup`, `reply_mode="followup"`), 견적서 경로인데 거래 항목을 다시 검사하면 빠진 항목이 있음 → `reroute`(`extract_deal`), 일반 답장인데 메일에 거래 표현(견적·발주·주문·구매·납품·단가)과 수량이 함께 있음 → `reroute`(`extract_deal`, `intent="deal"`). `missing_param`: 견적서·재질문 경로인데 `deal_terms`(견적서는 품목 포함)가 빔 → `extract_deal`, 견적서 경로인데 `quote_draft`가 빔 → `make_quote`. `inconsistent`: 후보 수가 2~3개가 아님, 후보 종류·제목(`Re: 원래 제목`)이 맞지 않음, 본문에 원문·기억에 없는 메일 주소, 재질문 후보의 `asks_fields`나 본문에 빠진 항목 이름이 없음 → 후보 노드 재실행. 실행 스레드와 메일 스레드가 다르면 고칠 길이 없어 바로 대체 경로. [Claude proposal]
   - 여러 유형이 함께 나오면 `wrong_tool` → `missing_param` → `inconsistent` → `hallucination` 순으로 앞 유형을 먼저 고친다. 전체 한도나 그 유형 한도를 이미 다 썼으면 LLM을 부르지 않고 대체 경로로 끝낸다(마지막 후보 최대 3개에 `needs_review`·`reflection_limit`, 후보가 없으면 기본 답장 틀). `reflect_fix`가 실패하면(한도·통신 등) 규칙 검사 결과로 원인·수정 지시를 대신 쓰고 재실행한다. 재실행 노드에 넘기는 `feedback`은 LLM 지시와 규칙 검사로 찾은 문제를 함께 담는다. 성찰 노드 자체 오류는 `errors`에 `internal`로 남기고 대체 경로로 끝낸다. [Claude proposal]
   - 실행 기록(8.1절 `reflection`): `detect`(`issues`: 유형·설명·근거, `rechecking`) → 재실행 뒤면 `verify`(`verified`, `after_strategy`, `retried`) → 문제가 있으면 `analyze`(`cause`, `llm`·`llm_ok`·`error_kind`) → `strategy`(`strategy`, `retry_target`, `issue_type`, 누적 횟수, 대체 경로면 `reason`=`limit`/`no_fix`). 경로를 바꾸면 `tool_select`(`by: reflection`)도 남긴다. 본문은 남기지 않고, 근거에는 찾은 값 조각만 적는다. [Claude proposal]
 ### 12.2 단가 채우기 순서 (11)
@@ -955,3 +1024,54 @@ TradeDocDraft(TypedDict, total=False):
   4. 업로드·렌더·SQL 확정 전 실패는 `ready`/`pending`을 유지하고, SQL에 기록되지 않은 객체는 발급 파일로 노출하지 않는다.
   5. 동시 승인·응답 유실 재요청도 같은 제안의 기존 파일을 돌려준다. 같은 key에 서로 다른 bytes가 있으면 실패시킨다. 파일 저장 성공을 메일 발송 성공으로 처리하지 않는다.
 - 불변성·백업: 검토·승인 파일 경로는 덮어쓰지 않고 새 설정·수정본은 새 객체로 저장한다. 읽을 때 소유자·승인 상태·해시를 확인한다. DB 백업과 Storage 객체 백업은 별개로 보관한다.
+
+
+## 17. 업무별 그래프 입출력·실행 경계 (2026-11-13)
+
+이 절은 업무 폴더 재작성의 현재 코드 계약이다. 바꾼 범위는 `app/graph/`, 관련 테스트와 이 계약/최신 흐름 문서이며 업무 서비스·인증·DB·React는 바꾸지 않는다. 수업 자료의 계획/실행 구분, 근거 버전, 승인/재개, 불명 결과 보존을 반영했다. 새 외부 API·벡터 DB·MCP 서버는 추가하지 않는다.
+
+### 17.1 업무별 책임과 입력/결과
+
+| 업무 | 허용 작업 / 입력 | 준비 결과 / 외부 실행 |
+|---|---|---|
+| 마스터 | 자연어 요청 또는 검증된 Plan, 인증된 actor_id, 서버가 부여한 thread_id | 작업 의존성/실제 산출물 연결, 질문/승인 interrupt, 검토/실행 결과 종합. 업무 계산을 하지 않음 |
+| 메일 | `query/draft`: thread_id; `send`: 본인 candidate_id, 선택적 file_ids | 본인 저장 스레드 조회 / 기존 수신 준비로 후보 IDs / 수신·참조 헤더·본문·문서/버전을 고정한 발송 제안. 사용자 후보 선택 후 기존 승인 서비스만 호출 |
+| 문서 | `get/draft/issue`: kind=PI/PO/CI/PL, document_id/revision, values 또는 text, formats; `approve_packing`: PL ID/revision | 기존 operations의 계산/원본 검증 결과. 보완 때 같은 문서의 새 revision. PL 합계와 최종 발급은 별도 승인. 발급 receipt는 기존 파일 ID 목록(file_ids)·해시·다운로드 URL |
+| 일정 | `find_slots/create`: offset 있는 start/end, IANA timezone, duration_minutes, calendar_ids, participants; 등록은 title/selected_start와 대상 target_calendar_id(조회 대상이 하나면 그 대상) | 모든 대상의 busy 스냅샷 확인, 코드로 교집합 가용 후보 최대 3개. 선택된 구간·참가자·제목·버전을 고정한 등록 제안. 재조회 충돌이면 재선택/재승인 |
+
+- 국내 견적과 Gmail 거래 추출은 기존 계산·도구를 `documents/*_adapter.py`에서 연결한다. 독립 문서 입력 계약은 PI/PO/CI/PL이다. 기존 수신 4개 종료 이유와 PC v1 스키마는 유지한다. `nodes/`에는 PC가 import하는 두 스키마의 재수출만 남긴다.
+- 메일 후보는 모델이 선택하지 않는다. `draft`의 candidate_ids 중 사용자가 선택한 ID가 `send`의 입력이다. 다른 사용자 후보/문서/발급 파일은 조회부터 거절한다. 발급 작업의 실제 file_ids를 일반/후속 질문 후보의 send에 바인딩할 수 있다. 발송 직전 내용을 다시 비교하고 승인한 Reply-To/참조 헤더를 사용한다. 발급 첨부는 기존 Storage 검증기로 불변 파일의 해시를 확인하고 Gmail 어댑터가 MIME에 추가하며 기존 서비스의 원자적 후보 claim과 발송 1회 규칙을 그대로 사용한다. 기존 quote 후보에는 별도 file_ids를 섞지 않고 원래 문서 발송 서비스를 사용한다.
+- 문서 내용을 바꾸려면 `draft`에 document_id/revision/values를 보내고 그 결과의 ID/revision으로 새로운 `issue` 작업을 준비한다. issue 입력에 values/text를 끼워 넣어 수정한 것처럼 처리하지 않는다. CI 원문 추출의 source PI 선택은 기존 업무 경계를 유지하며 새 독립 draft는 명시적인 source_pi_id/source_revision이 담긴 values를 받는다.
+- 일정 `find_slots`의 가용 후보 0개는 정상 `completed/outcome=no_slots`다. 공급자 실패·필수 캘린더 누락은 `failed`이며 빈 일정으로 대체하지 않는다. 현재 요청의 preferred_hours가 저장 선호보다 우선하며 저장 선호는 가용성을 무시하지 못한다.
+- 날짜 형식/순서/시간대/길이/참가자 형식이 잘못되면 공급자를 호출하지 않는다. 조건이 빠졌으면 질문한다. 조회 범위는 최대 31일, 대상 최대 32개, 참가자 최대 64명이다. 일정 공급자는 권한과 생성의 원자적 중복 방지를 검증해야 한다. 여러 캘린더를 조회했다면 등록 대상을 명시적으로 선택해야 하며 승인 대기 중 선택 시각이 지나면 다시 질문한다.
+
+### 17.2 어댑터와 미구현 연결
+
+- 노드 파일은 SQL/HTTP를 import하지 않는다. `mail/adapters.py`는 기존 Gmail 승인 서비스, `documents/adapters.py`는 기존 `app/trade` operations/repository/review/rendering을 연결한다. 계산·가격·PL 합계·CI 원본 정책을 그래프에 복사하지 않는다.
+- `CalendarPort.read_busy/create/lookup`은 실제 공급자 경계다. 기본 `UnavailableCalendar`는 `calendar_not_connected`를 반환하며 가짜 조회/등록 성공을 만들지 않는다. 실제 Google Calendar 권한·API·OAuth 범위 추가는 하지 않았다. 가짜 공급자는 테스트에만 있다.
+- `wiring.make_workflow`의 planner/repair는 기존 `user_openai/call_structured`를 사용한다. 전송 재시도와 성찰 재실행은 별도다. 신규 planner/repair 스키마는 현재 PC v1 registry에 없으므로 local_worker 자연어 계획 호출은 명시적으로 실패하며 서버 키로 대체하지 않는다. 명시적 Plan과 기존 Gmail/문서 AI 경계는 기존 실행 방식을 사용한다.
+- 새 범용 흐름은 Python 진입점이다. 기존 HTTP/UI는 그대로이며 새 start/resume API·React 연결·운영 durable saver는 후속 연결 작업이다. 새 DB migration이나 라이브러리 추가는 없다.
+- `Workflow` 잠금은 같은 runtime 객체의 단일 프로세스 동시 재개를 막는다. 운영에 여러 runtime/프로세스를 두려면 공유 실행 잠금도 연결해야 한다. 메일은 기존 단일 서버 서비스 claim, 문서는 기존 revision/제안 claim으로 보호한다.
+- 메일 성공 복구에는 실제 Approval의 sent_message_id와 동일 action/hash의 workflow_receipt 실행 기록이 함께 필요하다. 발송 완료와 영수증 기록 사이 장애는 보수적으로 unknown을 유지한다. 체크포인트나 영수증 부재를 미실행 증거로 해석하지 않는다.
+
+### 17.3 정상/실패 검증
+
+| 시나리오 | 기대 결과 | 근거 |
+|---|---|---|
+| 정보 부족 → 보완 | 허용한 질문 필드만 변경, 기존 제목/조건 보존, 다시 준비 | test_domain_graph 질문 재개 |
+| 의존 작업 순서가 뒤섞임 | 실제 선행 결과 바인딩, 취소/실패 의존성은 blocked | test_domain_graph 의존성 검사 |
+| 일정 정상 승인·중복 승인 | 승인 전 등록 0회, 승인 후 1회, 재전송 때 추가 등록 없음 | test_domain_graph 승인 검사 |
+| 일정 조회 실패/일부 누락/후보 없음 | 실패와 정상 no_slots 구분 | test_domain_graph 조회 검사 |
+| 승인 후 일정 버전 변경/충돌 | 새 승인 또는 새 시간 질문, 기존 승인으로 등록 없음 | test_domain_graph 재검사 |
+| 외부 응답 유실/실행 중 장애 | attempts 기록 보존, 복구는 영수증 조회만, 자동 재등록 없음 | test_domain_graph 복구 검사 |
+| 다른 사용자 조회/재개/복구 | workflow_not_found, 외부 쓰기 없음 | test_domain_graph 소유자 검사 |
+| 확정 조건 변경 성찰/한도 | 수정 거절, 전체 3회 이내, 성찰 꺼도 필수 검증 유지 | test_domain_graph 성찰 검사 |
+| Gmail 정상/Reply-To 변경 | 기존 claim으로 한 번 발송/변경되면 발송 거절 | test_domain_graph_adapters |
+| PI/PO/CI/PL 발급 | 실제 임시 DB·가짜 Storage에서 파일 2개, 다운로드 해시 일치 | test_domain_graph_adapters |
+| 문서 누락 보완/버전 변경/취소 | 같은 문서 revision 갱신/이전 승인 거절/저장된 제안 취소 | test_domain_graph_adapters |
+| 문서 발급 → 메일 첨부 → 독립 일정 조회 | 실제 발급 file_ids 바인딩, MIME 첨부 bytes 해시 일치. Storage 손상 때 발송 0회, 독립 일정 조회는 계속 | test_domain_graph_adapters |
+| PL 합계 승인 → 최종 발급 | 독립 승인 2개, 승인 뒤 실제 revision을 다음 작업에 연결 | test_domain_graph_adapters |
+
+수업의 모든 구성요소를 새 인프라로 옮기지는 않았다. 기존 메일 기억/요약/오류 감지는 보존하고, 별도 RAG/문서 검색 공급자·캘린더·운영 체크포인터의 실제 연동은 준비된 경계를 통해 추가한다. 관련 요구사항은 R-01~R-11이며 라이브 API 검증(R-12)·성능 비교(R-13)·새 UI 배포(R-14)의 완료를 이 모의 검증으로 주장하지 않는다.
+
+LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 승인 대기 노드 앞에 비멱등 발송을 두지 않는다. 체크포인터와 장기 기억도 구분한다([공식 interrupt 문서](https://docs.langchain.com/oss/python/langgraph/interrupts), [공식 persistence 문서](https://docs.langchain.com/oss/python/langgraph/persistence)).
