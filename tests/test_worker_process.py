@@ -38,6 +38,11 @@ from tests.test_pi_domain import pi_input
 from tests.test_trade_flow import seal_png
 
 
+# 서버 큐의 전체 120초 기한과 응답 여유 5초를 기다린다. 연결 실패는 5초로 제한한다.
+# PC의 SDK 호출 제한(20초)·서버 재시도 예산은 바꾸지 않는다.
+SERVICE_TIMEOUT = httpx.Timeout(125, connect=5)
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -117,7 +122,7 @@ def system(tmp_path, database_url):
     env["SSL_CERT_FILE"] = str(cert)
     with process(["server", "--env", str(envfile), "--port", str(ports[0]), "--cert", str(cert), "--key", str(key)], env), \
          process(["openai", "--port", str(ports[1]), "--cert", str(cert), "--key", str(key)], env), \
-         httpx.Client(base_url=service, verify=ssl.create_default_context(cafile=str(cert)), timeout=15) as http, \
+         httpx.Client(base_url=service, verify=ssl.create_default_context(cafile=str(cert)), timeout=SERVICE_TIMEOUT) as http, \
          httpx.Client(base_url=mock, verify=ssl.create_default_context(cafile=str(cert)), timeout=5) as openai:
         until(lambda: http.get("/healthz").status_code == 200)
         until(lambda: openai.get("/test/state").status_code == 200)
@@ -184,7 +189,7 @@ def test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow(s
             for kind in ("pi", "po", "pl"):
                 response = http.post(f"/api/trade/{kind}/extract", json={"text": "가상 문서"})
                 assert response.status_code == 201, response.text
-        with httpx.Client(base_url=system["service"], verify=ssl.create_default_context(cafile=str(system["cert"])), timeout=15) as second:
+        with httpx.Client(base_url=system["service"], verify=ssl.create_default_context(cafile=str(system["cert"])), timeout=SERVICE_TIMEOUT) as second:
             login({**system, "http": second}, 2)
             login(system, 1)
             with ThreadPoolExecutor() as pool:
@@ -228,15 +233,25 @@ def test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow(s
             assert all(secret not in body for secret in ("fake-pc-one", "fake-pc-two", one["device_token"], two["device_token"]))
 
 
-@pytest.mark.parametrize("code,expected,attempts", [(401, "WORKER_KEY_REQUIRED", 1), (429, "WORKER_RATE_LIMIT", 1), (503, "WORKER_NETWORK", 3)])
-def test_real_pc_http_errors_do_not_create_documents(system, code, expected, attempts):
+@pytest.mark.parametrize("code,expected,attempts,marker", [
+    (401, "WORKER_KEY_REQUIRED", 1, ""),
+    (429, "WORKER_RATE_LIMIT", 1, ""),
+    (503, "WORKER_NETWORK", 3, ""),
+    (503, "WORKER_NETWORK", 3, "SLOW503"),
+])
+def test_real_pc_http_errors_do_not_create_documents(system, code, expected, attempts, marker):
     device, envfile, credentials = connect(system, 1)
     with process(command(system, envfile, credentials), system["env"]):
-        response = system["http"].post("/api/trade/pi/extract", json={"text": f"API{code}"})
+        response = system["http"].post("/api/trade/pi/extract", json={"text": f"API{code} {marker}"})
+        assert response.status_code == {401: 409, 429: 429, 503: 503}[code], response.text
         assert response.json()["error"]["code"] == expected, response.text
         assert len(system["openai"].get("/test/state").json()) == attempts
         with system["database"].session() as session:
             assert not list(session.scalars(select(TradeDocument)))
+            job = session.scalar(select(WorkerJob))
+            assert job.status == "failed"
+            assert job.error_kind == {401: "key_required", 429: "rate_limit", 503: "network"}[code]
+            assert job.payload is None and job.result_enc is None
 
 
 def test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_results(system):
