@@ -1,6 +1,6 @@
 """load_memory: 단기·장기 기억을 읽고 긴 스레드를 요약한다(계획 13절)."""
 
-from app.graph.nodes.common import failure_update
+from app.graph.master.common import failure_update
 from app.graph.state import AgentState
 from app.runlog.logger import current_database
 from app.services.memory import SummaryFailed, load_memories

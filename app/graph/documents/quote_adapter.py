@@ -8,7 +8,7 @@
 from sqlalchemy import select
 
 from app.db.models import CompanyBankAccount, CompanyProfile, DealTerms, PriceListItem, Quote, TradeDocument
-from app.graph.nodes.common import call_tool, failure_update
+from app.graph.master.common import call_tool, failure_update
 from app.graph.state import AgentState
 from app.runlog.logger import current_database
 from app.trade.settings.repository import trade_price_rows

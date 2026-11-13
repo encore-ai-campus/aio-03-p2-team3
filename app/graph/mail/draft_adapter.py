@@ -1,6 +1,6 @@
 """draft_replies: 답장 후보 도구를 불러 후보 2~3개를 상태에 둔다(계획 8절 general, 11절 quote)."""
 
-from app.graph.nodes.common import failure_update, preferences_of
+from app.graph.master.common import failure_update, preferences_of
 from app.graph.state import AgentState, ToolCallRecord
 from app.runlog.logger import current_event
 from app.tools.registry import TOOLS

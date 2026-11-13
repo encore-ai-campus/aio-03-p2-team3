@@ -8,7 +8,7 @@
 from sqlalchemy import select
 
 from app.db.models import Counterparty
-from app.graph.nodes.common import call_tool, retry_feedback
+from app.graph.master.common import call_tool, retry_feedback
 from app.graph.state import AgentState
 from app.runlog.logger import current_database
 from app.services.memory import context_for_model
