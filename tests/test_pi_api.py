@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from app.config import Settings
 from app.db.models import TradeArtifact, TradeDocument, TradeDocumentVersion, TradeProposal, User
 from app.main import create_app
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 from tests.fakes.storage import FakeStorage
 from tests.test_pi_domain import pi_input
 from tests.test_trade_flow import seal_png

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from app.runlog.export import export_jsonl, list_runs, load_run, run_records
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 
 router = APIRouter()
 KST = timezone(timedelta(hours=9), "KST")

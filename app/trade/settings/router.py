@@ -6,7 +6,7 @@ from app.trade.common.api import require_write
 from app.trade.settings import operations
 from app.trade.settings.models import BankInput, CompanyInput, CounterpartyInput, PriceInput
 from app.trade.settings.repository import SQLSettings
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 
 router = APIRouter(prefix="/api/trade/settings", tags=["trade-settings"])
 

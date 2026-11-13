@@ -8,7 +8,7 @@ from pypdf import PdfReader
 
 from app.llm.client import use_backend
 from app.trade.pl.models import PLInput
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 from tests.fakes.llm import FakeLLM
 from tests.test_pi_api import pi_client, create_pi, propose, decide
 from tests.test_pi_domain import pi_input

@@ -29,7 +29,7 @@ from app.services.approval import send_approved_candidate
 from app.services.auth import save_login
 from app.services.watch import register_watch
 from app.tools.registry import TOOLS
-from app.web.routes.candidates import APPROVAL_NOTICES
+from app.mail.candidates import APPROVAL_NOTICES
 from tests.fakes.gmail import FakeGmailGoogle, message
 from tests.fakes.google import fake_login
 from tests.fakes.llm import FakeLLM

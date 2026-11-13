@@ -49,7 +49,7 @@ class _DocumentChanged(Exception):
 
 @dataclass(frozen=True)
 class ApprovalResult:
-    """`outcome`은 화면 안내 키(`app/web/routes/candidates.py`의 `APPROVAL_NOTICES`)."""
+    """`outcome`은 화면 안내 키(`app/mail/candidates.py`의 `APPROVAL_NOTICES`)."""
 
     outcome: str
     thread_id: str | None = None

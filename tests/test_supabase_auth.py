@@ -189,7 +189,7 @@ def test_missing_or_malformed_authorization_header(auth_pair):
 def test_bearer_failure_never_falls_back_to_cookie_session(auth_pair):
     """세션 쿠키가 유효해도 Bearer 헤더가 있으면 Bearer 검증만 한다(CONTRACT 9.1)."""
     client, jwks = auth_pair
-    from app.web.deps import current_user_id
+    from app.auth.deps import current_user_id
 
     def request_with(headers, session=None):
         scope = {"type": "http", "app": client.app,

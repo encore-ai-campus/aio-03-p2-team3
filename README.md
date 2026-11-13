@@ -10,6 +10,8 @@
 
 자세한 것과 막힐 때(PR 링크가 없을 때, 충돌)는 `docs/CHATGPT_GUIDE.md` 4·5절.
 
+코드 위치를 찾을 때는 [팀원용 도메인 구조도와 이동표](docs/domain-layout.md)를 먼저 본다. `llm`은 AI 실행, `clients`는 Google 통신이며, 화면의 업무 처리는 `auth`·`mail`·`settings`·`quote`·`runlog`·`trade`에 둔다. `web`에는 현재 쓰는 HTML/정적 자산과 공개 페이지만 남겼다. React 받은메일·실행기록 및 같은 출처 배포가 아직 연결되지 않아 기존 HTML 화면은 함께 유지한다.
+
 - 공통 규칙: `.work/RULES.md` (이 레포가 관리)
 - 이 레포의 규칙과 파일 지도: `.work/TASK.md`
 - 진행기록: `.work/STATUS.md`
@@ -54,6 +56,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 | 무엇 | 위치 | 상태 |
 |---|---|---|
 | 에이전트 아키텍처 설계서 | `docs/ARCHITECTURE.md` | 아직 없음(11/13 초안) |
+| 팀원용 도메인 구조도·파일 이동표 | `docs/domain-layout.md` | 있음(LLM/Google 구분, web 정리와 기존 화면 유지 조건) |
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 아직 없음 |
 | 시험 실행 기록(실행마다 한 파일) | `docs/test-records/` | 아직 없음 |
 | 큰 작업의 계획 파일 | `docs/plans/` | 형식만 있음 |

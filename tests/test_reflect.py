@@ -23,7 +23,7 @@ from app.main import create_app
 from app.quote.calc import build_draft
 from app.quote.required_fields import get_required_fields
 from app.tools.fallback import NOTICE_MESSAGES
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 from tests.fakes.llm import FakeLLM, openai_error
 
 GENERAL = {"intent": "general", "reason": "일반 문의"}

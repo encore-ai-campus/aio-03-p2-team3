@@ -7,7 +7,7 @@ from app.trade.common.router import document_router
 from app.trade.pl import agent, operations
 from app.trade.pl.models import PLInput, PackingDecision
 from app.trade.pl.repository import pl_repository
-from app.web.deps import current_user_id
+from app.auth.deps import current_user_id
 
 router = document_router("PL", PLInput, operations, pl_repository, agent.extract_pl, render_approved_files)
 
