@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AuthContext } from "./AuthContext"
 import { apiFetch, fetchMe } from "./api"
 import { supabase } from "./supabase"
@@ -63,6 +63,14 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // 연동 화면은 회사 설정과 독립적으로 조회한다. 이전 계정/토큰의 늦은 응답은 반영하지 않는다.
+  const refreshMe = useCallback(async (token, signal) => {
+    const me = await fetchMe(token, signal)
+    if (!signal?.aborted) setState((previous) => previous.accessToken === token
+      ? { ...previous, me } : previous)
+    return me
+  }, [])
+
   async function signInWithGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -96,7 +104,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ state, signInWithGoogle, signOut, retry }}>
+    <AuthContext.Provider value={{ state, signInWithGoogle, signOut, retry, refreshMe }}>
       {children}
     </AuthContext.Provider>
   )
