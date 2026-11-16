@@ -1,11 +1,15 @@
 """CI: 승인된 PI 버전의 거래 사실과 금액을 보존하고 선적 정보만 보완한다."""
 from copy import deepcopy
 
-from app.trade.ci.models import CIInput, CIRepository
-from app.trade.ci.imports import ci_import_issues, is_pi_import, prepare_ci_import
+from app.trade.ci.models import CIInput, CIRepository, StandaloneCIInput
+from app.trade.ci.imports import _PAYMENT, ci_import_issues, is_pi_import, prepare_ci_import
 from app.trade.common.models import DocumentError
-from app.trade.common.operations import calculate, check_revision
-from app.trade.common.results import document_result
+from app.trade.common.operations import calculate, check_revision, revision_context, revision_values
+from app.trade.common.counterparties import apply_company_profiles
+from app.trade.common.postprocess import apply_issuer_defaults, synchronize_quantities
+from app.trade.common.pricing import apply_verified_catalog_prices, build_trade_catalog
+from app.trade.common.results import document_result, editable_values
+from app.trade.common.models import PricedItem
 
 
 def prepare_ci(command: CIInput, source, conflicts=()):
@@ -32,7 +36,32 @@ def prepare_ci(command: CIInput, source, conflicts=()):
     return document
 
 
+def prepare_standalone(command, context, values=None):
+    draft = deepcopy(values if values is not None else command.model_dump(mode="json"))
+    draft.pop("mode", None)
+    draft.update(document_type="PI", doc_kind="PI", issuer=deepcopy(context.issuer), bank=None)
+    apply_issuer_defaults(draft, "PI", context.issuer)
+    apply_company_profiles(draft, context.counterparties)
+    for item in draft.get("items", []):
+        confirmed = item.pop("confirm_price_override", False)
+        # 단독 CI는 직접 입력이므로 원문 근거로 단가 확인을 대신할 수 없다.
+        item["source"] = None
+        item["price_override_confirmed"] = confirmed is True
+        if item.get("unit_price") is not None:
+            item["price_source"] = "User-confirmed transaction-specific override" if confirmed else "Entered document value"
+    synchronize_quantities(draft)
+    apply_verified_catalog_prices(draft, build_trade_catalog(context.price_rows))
+    draft.update(document_type="CI", doc_kind="CI", _ci_standalone=True, payment_terms="N/A")
+    if _PAYMENT.search(str(draft.get("remarks") or "")):
+        draft["remarks"] = "N/A"
+    return calculate(draft)
+
+
 def result(document):
+    if document.get("_ci_standalone") is True:
+        values = editable_values(document, StandaloneCIInput.model_fields, PricedItem.model_fields)
+        values["mode"] = "standalone"
+        return document_result(document, StandaloneCIInput.model_validate(values).model_dump(mode="json"))
     values = {key: document.get(key) for key in CIInput.model_fields}
     if not values.get("source_pi_id") or not values.get("source_revision"):
         # 이전 메일 경로는 PI 원문만 보관했다. 조회를 막지 않고 새 API의 원본 선택을 요구한다.
@@ -43,22 +72,44 @@ def result(document):
     return document_result(document, CIInput.model_validate(values).model_dump(mode="json"))
 
 
-def create(command: CIInput, *, repository: CIRepository):
+def create(command: CIInput | StandaloneCIInput, *, repository: CIRepository):
+    if isinstance(command, StandaloneCIInput):
+        return result(repository.create(prepare_standalone(command, repository.context(command.currency))))
     source = repository.source_pi(command.source_pi_id, command.source_revision)
     return result(repository.create(prepare_ci(command, source)))
 
 
+def extract_standalone(text, *, repository: CIRepository, extractor):
+    extracted = extractor(text)
+    command = StandaloneCIInput.model_validate({key: value for key, value in extracted.items()
+                                                if key in StandaloneCIInput.model_fields})
+    values = command.model_dump(mode="json")
+    values["conflicts"] = extracted.get("conflicts", [])
+    values["missing_fields"] = extracted.get("missing_fields", [])
+    return result(repository.create(prepare_standalone(command, repository.context(command.currency), values)))
+
+
 def extract(text, *, repository: CIRepository, extractor, source_pi_id, source_revision):
+    source = repository.source_pi(source_pi_id, source_revision)
     values = extractor(text)
     command = CIInput.model_validate({**{key: value for key, value in values.items() if key in CIInput.model_fields},
                                       "source_pi_id": source_pi_id, "source_revision": source_revision})
-    document = prepare_ci(command, repository.source_pi(source_pi_id, source_revision), values.get("conflicts", []))
+    document = prepare_ci(command, source, values.get("conflicts", []))
     return result(repository.create(document))
 
 
-def revise(document_id, revision, command: CIInput, *, repository: CIRepository, review_reference=None):
+def revise(document_id, revision, command: CIInput | StandaloneCIInput, *, repository: CIRepository, review_reference=None):
     previous = repository.get(document_id)
     check_revision(previous, revision)
+    if previous.get("_ci_standalone") is True:
+        if not isinstance(command, StandaloneCIInput):
+            raise DocumentError("CI_MODE_CHANGE_REQUIRES_NEW_CI", "다른 작성 방식은 새 CI로 작성하세요")
+        values = revision_values(previous, command)
+        context = revision_context(previous, repository.context(command.currency), command.currency)
+        document = prepare_standalone(command, context, values)
+        return result(repository.replace(document_id, revision, document, review_reference))
+    if isinstance(command, StandaloneCIInput):
+        raise DocumentError("CI_MODE_CHANGE_REQUIRES_NEW_CI", "다른 작성 방식은 새 CI로 작성하세요")
     if previous.get("source_pi_id") and (previous["source_pi_id"], previous["source_revision"]) != (command.source_pi_id, command.source_revision):
         raise DocumentError("SOURCE_PI_CHANGE_REQUIRES_NEW_CI", "다른 PI 버전은 새 CI로 작성하세요")
     document = prepare_ci(command, repository.source_pi(command.source_pi_id, command.source_revision))
@@ -66,5 +117,7 @@ def revise(document_id, revision, command: CIInput, *, repository: CIRepository,
 
 
 def check(document):
+    if document.get("_ci_standalone") is True:
+        return
     if not is_pi_import(document) or not document.get("source_pi_id") or ci_import_issues(document):
         raise DocumentError("CI_SOURCE_INVALID", "원본 PI 버전과 거래 금액을 확인하세요")

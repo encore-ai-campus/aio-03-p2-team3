@@ -5,6 +5,7 @@ from dataclasses import replace
 import json
 import re
 from threading import Barrier
+from uuid import uuid4
 
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
@@ -17,7 +18,7 @@ from sqlalchemy import select
 from app.config import Settings
 from app.db.engine import Database
 from app.db.migrations import upgrade_database
-from app.db.models import ProcessedMessage, RunEvent, User, UserOpenAIKey
+from app.db.models import ProcessedMessage, RunEvent, TradeProposal, User, UserOpenAIKey
 from app.graph.run import start_run
 from app.llm import client as llm
 from app.main import create_app
@@ -25,7 +26,20 @@ from app.services.auth import TokenCipher
 from app.services.openai_keys import delete_key, key_registered, save_key, user_openai
 from tests.fakes.gmail import FakeGmailGoogle
 from tests.test_gmail_push import setup_user, push_payload
-from tests.test_pi_domain import pi_input
+from app.trade.pi.operations import create_pi
+from app.trade.pi.repository import pi_repository
+from tests.test_pi_domain import MemoryPIRepository, pi_input
+
+
+def approved_pi_source(database, user_id):
+    """키 경계 검사는 CI의 원본 선행 검증을 통과한 뒤 SDK 호출을 확인한다."""
+    snapshot = create_pi(pi_input(), repository=MemoryPIRepository()).document
+    saved = pi_repository(database, user_id).create(snapshot)
+    with database.session() as session:
+        session.add(TradeProposal(id=uuid4().hex, user_id=user_id,
+            document_id=saved["trade_doc_id"], revision=1, payload={"document": saved},
+            content_hash="0" * 64, status="approved", decision="approve"))
+    return {"source_pi_id": saved["trade_doc_id"], "source_revision": 1}
 
 
 @pytest.fixture
@@ -152,18 +166,18 @@ def test_document_ai_requires_owner_key_and_never_uses_server_key(web, sdk, kind
     for user_id in (1, 2):
         save_key(database, user_id, f"fake-user-{user_id}", client.app.state.google_access.cipher)
     payload = {"text": "가상 문서"}
-    if kind == "ci":
-        payload.update(source_pi_id=1, source_revision=1)
     for user_id in (1, 2, 3):
         login(client, settings, user_id)
         client.headers["X-CSRF-Token"] = client.get("/api/session").json()["csrf_token"]
+        if kind == "ci":
+            payload.update(approved_pi_source(database, user_id))
         before = len(sdk)
         response = client.post(f"/api/trade/{kind}/extract", json=payload)
         if user_id == 3:
             assert response.status_code == 409 and response.json()["error"]["code"] == "OPENAI_KEY_REQUIRED"
             assert len(sdk) == before
             # 수동 작성은 AI 키 없이도 계속 가능하다.
-            assert client.post("/api/trade/pi", json=pi_input().model_dump(mode="json")).status_code == 201
+            assert client.post("/api/trade/pi", json=pi_input(document_number="PI-MANUAL").model_dump(mode="json")).status_code == 201
         else:
             assert len(sdk) > before, response.text
             assert all(auth == f"Bearer fake-user-{user_id}" for auth, _ in sdk[before:])

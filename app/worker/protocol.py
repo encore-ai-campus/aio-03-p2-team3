@@ -56,7 +56,7 @@ class Capability(StrictModel):
 
 class Capabilities(StrictModel):
     protocol_version: Literal[1]
-    definitions: list[Capability] = Field(min_length=1, max_length=12)
+    definitions: list[Capability] = Field(min_length=1, max_length=13)
     models: list[str] = Field(min_length=1, max_length=10)
 
 
@@ -169,6 +169,7 @@ def definitions():
         (pi.PROMPT, wire_schema(pi.PIExtraction), "text"),
         (po.PROMPT, wire_schema(po.POExtraction), "text"),
         (ci.PROMPT, wire_schema(ci.CIExtraction), "text"),
+        (ci.STANDALONE_PROMPT, wire_schema(ci.StandaloneCIExtraction), "text"),
         (pl.PROMPT, wire_schema(pl.PLExtraction), "text"),
     ]
     return [Definition(prompt, schema, tuple(keys.split())) for prompt, schema, keys in rows]

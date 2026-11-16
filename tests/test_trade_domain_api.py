@@ -1,5 +1,6 @@
 """도메인별 실제 HTTP 업무와 공통 승인 경로. 외부 모델·메일·운영 DB를 호출하지 않는다."""
 from copy import deepcopy
+from hashlib import sha256
 from io import BytesIO
 from zipfile import ZipFile
 
@@ -93,6 +94,7 @@ def test_each_domain_cancel_modify_approve_download_and_version_history(pi_clien
     for file in approved.json()["files"]:
         download = client.get(file["download_url"])
         assert download.status_code == 200
+        assert sha256(download.content).hexdigest() == file["content_hash"]
         if file["file_format"] == "pdf":
             text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(download.content)).pages)
         else:
@@ -121,6 +123,65 @@ def test_po_uses_purchase_price_and_zero_quantity_without_pi_bank(pi_client):
     response = pi_client.put(f"/api/trade/po/{po['document_id']}", json={"revision": 1, "document": values})
     assert response.status_code == 200 and response.json()["document"]["total"] == "0.00"
     assert pi_client.get(f"/api/trade/pi/{po['document_id']}").status_code == 404
+
+
+def test_standalone_ci_uses_sale_price_and_is_issued_without_pi(pi_client):
+    values = pi_input().model_dump(mode="json")
+    values.pop("payment_terms")
+    values["items"][0].pop("is_sample")
+    values["items"][0]["promotion"] = "2+1"
+    values.update(mode="standalone", document_number="CI-SELF", shipment_reference="SHIP", country_of_origin="Korea")
+    unconfirmed = deepcopy(values)
+    unconfirmed["items"][0].update(unit_price="9", source="unverified input")
+    rejected_price = post(pi_client, "/api/trade/ci", unconfirmed)
+    assert rejected_price["status"] == "needs_input"
+    assert pi_client.post(f"/api/trade/ci/{rejected_price['document_id']}/reviews", json={"revision": 1}).status_code == 409
+    document = post(pi_client, "/api/trade/ci", values)
+    assert document["status"] == "ready", document
+    assert document["document"]["total"] == "80.00"
+    assert document["document"]["items"][0]["free_quantity"] == "5"
+    assert document["document"]["bank"] is None
+    assert document["input"]["mode"] == "standalone"
+    changed = deepcopy(document["input"])
+    changed["items"][0].update(unit_price="9", confirm_price_override=True)
+    response = pi_client.put(f"/api/trade/ci/{document['document_id']}", json={"revision": 1, "document": changed})
+    assert response.status_code == 200, response.text
+    revised = response.json()
+    assert revised["document"]["total"] == "90.00" and revised["status"] == "ready"
+    assert pi_client.put(f"/api/trade/ci/{document['document_id']}", json={"revision": 2,
+        "document": {"source_pi_id": 1, "source_revision": 1}}).status_code == 409
+    issued = choice(pi_client, "ci", review(pi_client, "ci", revised), "approve")
+    assert issued.status_code == 200, issued.text
+    for file in issued.json()["files"]:
+        download = pi_client.get(file["download_url"])
+        assert download.status_code == 200 and sha256(download.content).hexdigest() == file["content_hash"]
+        if file["file_format"] == "pdf":
+            text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(download.content)).pages)
+            assert "10 + 5 FOC" in text and "15 + 5 FOC" not in text
+    pi_client.app.dependency_overrides[current_user_id] = lambda: 2
+    assert pi_client.get(f"/api/trade/ci/{document['document_id']}").status_code == 404
+
+
+def test_standalone_ci_extracts_without_pi_and_requires_price_confirmation(pi_client):
+    values = pi_input().model_dump(mode="json")
+    values.pop("payment_terms")
+    values["items"][0].pop("is_sample")
+    values["items"][0].update(unit_price="9", confirm_price_override=True,
+                               source="Virtual Serum 50ml 10 PCS USD 9 discount 0")
+    values.update(mode="standalone", document_type="CI", document_number="CI-SELF-AI",
+                  shipment_reference="SHIP", country_of_origin="Korea")
+    fake = FakeLLM([values])
+    with use_backend(fake):
+        document = post(pi_client, "/api/trade/ci/extract-standalone", {"text":
+            "CI-SELF-AI Acme Trading 1 Fiction Ave, Seoul FOB Busan SHIP Korea Virtual Serum 50ml 10 PCS USD 9 discount 0"})
+    assert len(fake.calls) == 1 and document["input"]["mode"] == "standalone"
+    assert not document["input"]["items"][0]["confirm_price_override"]
+    assert document["status"] == "needs_input"
+    assert pi_client.post(f"/api/trade/ci/{document['document_id']}/reviews", json={"revision": 1}).status_code == 409
+    confirmed = deepcopy(document["input"])
+    confirmed["items"][0]["confirm_price_override"] = True
+    response = pi_client.put(f"/api/trade/ci/{document['document_id']}", json={"revision": 1, "document": confirmed})
+    assert response.status_code == 200 and response.json()["document"]["total"] == "90.00"
 
 
 def test_ci_is_bound_to_approved_pi_version_and_ignores_new_catalog_price(pi_client):

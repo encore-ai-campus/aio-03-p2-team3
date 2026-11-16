@@ -147,6 +147,54 @@ def test_edit_invalidates_previous_proposal_and_stale_input(pi_client):
     assert decide(pi_client, old, "approve").status_code == 409
 
 
+def test_pi_number_is_unique_for_owner_on_create_and_rename(pi_client):
+    first = create_pi(pi_client)
+    values = pi_input().model_dump(mode="json")
+    values["document_number"] = "  PI-100  "
+    duplicate = pi_client.post("/api/trade/pi", json=values)
+    assert duplicate.status_code == 409 and duplicate.json()["error"]["code"] == "PI_NUMBER_DUPLICATE"
+    renamed = pi_input(document_number="PI-RENAMED").model_dump(mode="json")
+    assert pi_client.put(f"/api/trade/pi/{first['document_id']}", json={"revision": 1, "document": renamed}).status_code == 200
+    assert pi_client.post("/api/trade/pi", json=values).status_code == 409
+    second = create_pi(pi_client, pi_input(document_number="PI-OTHER").model_dump(mode="json"))
+    values["document_number"] = "PI-100"
+    response = pi_client.put(f"/api/trade/pi/{second['document_id']}", json={"revision": 1, "document": values})
+    assert response.status_code == 409
+    values["document_number"] = "PI-OTHER"
+    assert pi_client.put(f"/api/trade/pi/{second['document_id']}", json={"revision": 1, "document": values}).status_code == 200
+    values["document_number"] = None
+    assert all(pi_client.post("/api/trade/pi", json=values).status_code == 201 for _ in range(2))
+    pi_client.app.dependency_overrides[current_user_id] = lambda: 2
+    assert pi_client.post("/api/trade/pi", json=pi_input().model_dump(mode="json")).status_code == 201
+    assert first["document_id"] != second["document_id"]
+
+
+def test_pi_number_cannot_be_created_simultaneously_through_separate_connections(pi_client):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from app.db.engine import Database
+    from app.trade.common.models import DocumentError
+    from app.trade.pi.repository import pi_repository
+    original = pi_client.app.state.database
+    other = Database(original.engine.url.render_as_string(hide_password=False))
+    barrier = Barrier(2)
+
+    def create(database):
+        barrier.wait()
+        try:
+            pi_repository(database, 1).create({"document_type": "PI", "document_number": "PI-RACE", "status": "needs_input"})
+            return "created"
+        except DocumentError as error:
+            return error.code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(create, (original, other)))
+        assert sorted(results) == ["PI_NUMBER_DUPLICATE", "created"]
+    finally:
+        other.engine.dispose()
+
+
 def test_tampered_approval_content_and_server_fields_are_rejected(pi_client):
     created = create_pi(pi_client)
     proposal = propose(pi_client, created)
@@ -236,6 +284,15 @@ def test_ai_http_extraction_uses_pi_agent_without_mail_graph(pi_client):
     assert response.status_code == 201, response.text
     assert response.json()["status"] == "ready" and response.json()["document"]["total"] == "80.00"
     assert len(fake.calls) == 1
+
+
+def test_ai_extraction_rejects_existing_pi_number(pi_client):
+    from app.llm.client import use_backend
+    from tests.fakes.llm import FakeLLM
+    create_pi(pi_client)
+    with use_backend(FakeLLM([pi_input().model_dump(mode="json")])):
+        response = pi_client.post("/api/trade/pi/extract", json={"text": "PI-100"})
+    assert response.status_code == 409 and response.json()["error"]["code"] == "PI_NUMBER_DUPLICATE"
 
 
 def test_reload_after_new_database_connection_keeps_approved_files(pi_client):

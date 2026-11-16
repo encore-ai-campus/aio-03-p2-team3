@@ -13,7 +13,7 @@ function DocumentField({ label, value, onChange, multiline = false, error, ...pr
   </div>
 }
 
-export default function PIForm({ draft, setDraft, step, fields = null, settings, missing = [], disabled = false, onDirty, onShowAll }) {
+export default function PIForm({ draft, setDraft, step, fields = null, settings, missing = [], disabled = false, onDirty, onShowAll, kind = "pi" }) {
   const wanted = (path) => fields === null || fields.includes(path)
   const invalid = (path) => missing.includes(path) || fields?.includes(path)
   function change(key, value) {
@@ -59,7 +59,7 @@ export default function PIForm({ draft, setDraft, step, fields = null, settings,
         {[["contact","담당자"],["phone","전화"],["email","이메일"],["registration_details","등록 정보"]].map(([key,label]) =>
           <DocumentField key={key} label={label} value={draft[step]?.[key]} onChange={(value) => party(step,key,value)} />)}
       </div></details>}
-      {step === "seller" && <p className="section-note">발행 회사와 지급 계좌는 <Link to="/settings">회사 설정</Link>에서 관리합니다. 원문에서 가져온 판매자도 수정할 수 있어요.</p>}
+      {step === "seller" && <p className="section-note">발행 회사{kind === "pi" ? "와 지급 계좌는" : "는"} <Link to="/settings">회사 설정</Link>에서 관리합니다.{kind === "pi" && " 원문에서 가져온 판매자도 수정할 수 있어요."}</p>}
     </>}
     {step === "terms" && <><div className="settings-fields">
       {wanted("product_family") &&
@@ -67,7 +67,7 @@ export default function PIForm({ draft, setDraft, step, fields = null, settings,
         <option value="" disabled>상품군을 선택해 주세요</option>
         {[["other","기타"],["cosmetics","화장품"],["polysilicon","폴리실리콘"],["wafer","웨이퍼"],["solar_cell","태양전지"],["solar_module","태양광 모듈"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}
       </select></div>}
-      {wanted("document_number") && <DocumentField label="PI 문서번호" value={draft.document_number} onChange={(value) => change("document_number", value)} placeholder="미확정이면 DRAFT" />}
+      {wanted("document_number") && <DocumentField label="PI 문서번호" value={draft.document_number} onChange={(value) => change("document_number", value)} placeholder="미확정이면 비워 두세요" />}
       {wanted("currency") && <DocumentField label="통화" value={draft.currency} maxLength={3} pattern="[A-Z]{3}" onChange={(value) => change("currency", value.toUpperCase())} />}
       {wanted("incoterms") && <DocumentField label="납품 조건 (Incoterms·장소)" value={draft.incoterms} onChange={(value) => change("incoterms", value)} placeholder="예: FOB Busan" />}
       {wanted("payment_terms") && <DocumentField label="지급 조건" value={draft.payment_terms} onChange={(value) => change("payment_terms", value)} />}
@@ -78,7 +78,7 @@ export default function PIForm({ draft, setDraft, step, fields = null, settings,
       <DocumentField label="비고" value={draft.remarks} multiline rows={3} onChange={(value) => change("remarks",value)} />
     </div></details>}</>}
     {step === "items" && <>
-      <div className="pi-item-table"><table><caption className="sr-only">PI 품목 편집 · {draft.currency || "통화 미선택"}</caption>
+      <div className="pi-item-table"><table><caption className="sr-only">{kind === "ci" ? "CI" : "PI"} 품목 편집 · {draft.currency || "통화 미선택"}</caption>
         <thead><tr>{["품목명 (영문)","유상 수량","단위",`단가 (${draft.currency || "통화 미선택"})`,"가격 기준", ""].map((label,index) => <th key={index} scope="col">{label}</th>)}</tr></thead>
         <tbody>{draft.items.map((row,index) => <Fragment key={row.rowId}>
           <tr className="pi-item-main" aria-label={`품목 ${index+1}`}>
@@ -92,7 +92,7 @@ export default function PIForm({ draft, setDraft, step, fields = null, settings,
           <tr className="pi-item-detail"><td colSpan={6}>
             <label className="pi-price-check"><input type="checkbox" aria-label={`품목 ${index+1} · 단가표 대신 입력한 단가 사용`} checked={row.confirm_price_override ?? false} onChange={(event) => item(index,"confirm_price_override",event.target.checked)} /> 단가표 대신 입력한 단가 사용</label>
             <details open={fields?.some((path) => path === `items.${index}.discount_percent`)}>
-            <summary>품목 {index+1} 상세 · 규격·할인·샘플</summary>
+            <summary>품목 {index+1} 상세 · 규격·할인{kind === "pi" && "·샘플"}</summary>
             <div className="settings-fields">
               {[["product_code","상품 코드"],["capacity","용량·규격"],["discount_percent","할인율 (%)"],["free_quantity","무상 수량"],["promotion","프로모션"]].filter(([key]) => wanted(`items.${index}.${key}`) || fields?.includes("items")).map(([key,label]) =>
                 <DocumentField key={key} label={`${label} · 품목 ${index+1}`} value={row[key]} onChange={(value) => item(index,key,value)}
@@ -100,15 +100,15 @@ export default function PIForm({ draft, setDraft, step, fields = null, settings,
                   placeholder={key === "promotion" ? "예: 2+1" : key === "price_basis" ? "예: PCS" : undefined}
                   inputMode={["free_quantity","discount_percent"].includes(key) ? "decimal" : undefined} />)}
             </div>
-            <div className="editor-checks">
+            {kind === "pi" && <div className="editor-checks">
               <label><input type="checkbox" checked={row.is_sample ?? false} onChange={(event) => item(index,"is_sample",event.target.checked)} /> 샘플 품목 (0원 포함)</label>
-            </div>
+            </div>}
           </details></td></tr>
         </Fragment>)}</tbody>
       </table></div>
       {!draft.items.length && <p className="pi-context">품목을 하나 이상 추가해 주세요.</p>}
       <button type="button" className="btn pi-add-item" disabled={draft.items.length >= 500} onClick={() => { onShowAll(); change("items", [...draft.items,newPIItem()]) }}>품목 추가</button>
-      <p className="section-note">가격 기준은 PCS·KG처럼 단가의 기준 단위입니다. 상품·통화·거래처·단위를 바꾸면 단가 확인이 해제됩니다. 무상 수량과 금액은 저장할 때 계산해요. 샘플에는 할인·무상 수량·프로모션을 적용하지 않습니다.</p>
+      <p className="section-note">가격 기준은 PCS·KG처럼 단가의 기준 단위입니다. 상품·통화·거래처·단위를 바꾸면 단가 확인이 해제됩니다. 무상 수량과 금액은 저장할 때 계산해요.{kind === "pi" && " 샘플에는 할인·무상 수량·프로모션을 적용하지 않습니다."}</p>
     </>}
   </fieldset>
 }
