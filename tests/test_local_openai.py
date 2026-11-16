@@ -23,7 +23,7 @@ from app.services.openai_keys import delete_key, key_registered, save_key, user_
 from tests.fakes.google import FakeGoogle, fake_login
 from tests.fakes.llm import FakeLLM
 from tests.test_auth import sign_in
-from tests.test_openai_keys import sdk  # 실제 LangChain/OpenAI SDK와 MockTransport fixture
+from tests.test_openai_keys import approved_pi_source, sdk  # 실제 LangChain/OpenAI SDK와 MockTransport fixture
 
 
 @contextmanager
@@ -168,13 +168,15 @@ def test_four_document_http_paths_use_local_owner_key_only(local_web, sdk, kind)
     client, settings = local_web
     payload = {"text": "가상 문서"}
     if kind == "ci":
-        payload.update(source_pi_id=1, source_revision=1)
+        payload.update(approved_pi_source(client.app.state.database, 1))
     client.headers["X-CSRF-Token"] = client.get("/api/session").json()["csrf_token"]
     response = client.post(f"/api/trade/{kind}/extract", json=payload)
     assert sdk and all(auth == "Bearer fake-local-private-key" for auth, _ in sdk), response.text
     assert "fake-local-private-key" not in response.text
     before = len(sdk)
     login(client, settings, 2)
+    if kind == "ci":
+        payload.update(approved_pi_source(client.app.state.database, 2))
     client.headers["X-CSRF-Token"] = client.get("/api/session").json()["csrf_token"]
     response = client.post(f"/api/trade/{kind}/extract", json=payload)
     assert response.status_code == 403 and response.json()["error"]["code"] == "LOCAL_OWNER_MISMATCH"

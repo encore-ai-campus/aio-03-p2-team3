@@ -34,11 +34,13 @@ export default function DashboardPage() {
           <div className="panel-head">
             <div>
               <h2 className="section-title">새 문서 만들기</h2>
-              <div className="section-note">PI 작성 화면을 이용할 수 있습니다.</div>
+              <div className="section-note">PI·PO·CI·PL 작성 화면을 이용할 수 있습니다.</div>
             </div>
           </div>
-          <Link className="btn blue" to="/trade/pi">PI 작성하기</Link>
-          <p className="section-note">PO·CI·PL은 후속 단계에서 연결합니다.</p>
+          <div className="form-actions"><Link className="btn blue" to="/trade/pi">PI 작성하기</Link>
+          <Link className="btn" to="/trade/po">PO 작성하기</Link>
+          <Link className="btn" to="/trade/ci">CI 작성하기</Link>
+          <Link className="btn" to="/trade/pl">PL 작성하기</Link></div>
         </div>
       </div>
     </>

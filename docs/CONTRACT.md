@@ -529,6 +529,7 @@ class AgentError(TypedDict):
 | `pi_extract` / `v1` | `PIExtractionWire` / `v1` | `text` |
 | `po_extract` / `v1` | `POExtractionWire` / `v1` | `text` |
 | `ci_extract` / `v1` | `CIExtractionWire` / `v1` | `text` |
+| `ci_standalone_extract` / `v1` | `StandaloneCIExtractionWire` / `v1` | `text` |
 | `pl_extract` / `v1` | `PLExtractionWire` / `v1` | `text` |
 
 - `variables`는 표의 문자열 값만 허용하고 `candidate_min=2`, `candidate_max=3`만 정수로 허용한다. 문서 `text`는 기존 HTTP와 같이 최대 20,000자, 변수별 UTF-8 최대 128 KiB, 전체 요청·응답 JSON은 각각 최대 256 KiB다. `document_type`은 PI/PO/CI/PL, CI만 `ExtractedTradeCIDoc`를 사용하며 `ci_rules`는 설치된 상수와 일치해야 한다. `requested_model`은 서버의 `model_name()` 결과여야 하고 장치에서 동의한 모델 목록과 일치해야 한다. 임의 모델로 자동 대체하지 않는다.
@@ -538,7 +539,7 @@ class AgentError(TypedDict):
 - 상태는 `queued → leased → succeeded|failed|expired|cancelled`다. 임대된 장치·현재 attempt만 결과를 확정하는 조건부 갱신을 통과할 수 있다. 중복 완료는 같은 확정 결과만 반환하고, 이전 attempt·다른 사용자/장치·만료/폐기 뒤 늦은 응답은 적용하지 않는다. 임대 만료 때 같은 attempt를 재실행하지 않고 서버 예산 안에서만 새 attempt를 만든다. OpenAI에 이미 전송된 요청 자체의 취소는 보장하지 않는다.
 - 작업 변수·결과는 민감 데이터다. 서버의 본인 작업 저장소와 PC 메모리에서만 처리하고 확정/만료 뒤 요청 payload를 삭제한다. 완료와 업무 호출자가 다른 서버 프로세스일 수 있으므로 `20261112_worker_delivery`의 `result_enc`에 검증된 성공 envelope만 기존 토큰 암호화 키로 잠시 보관한다. 본인 호출자가 소비할 때 사용자·장치 활성 상태·attempt·원래 기한을 다시 확인하고 같은 트랜잭션에서 암호문을 삭제한다. 연결 해제/모드 변경과 원래 120초 기한에도 삭제하며, 재시작/주기 정리에서도 처리한다. 이 전달용 암호문은 업무 기록이나 조회 API에 반환하지 않는다. 일반 로그·실행 기록에는 식별 ID·허용 버전·모델·크기·시간·안전 오류만 남기며 payload·인증값을 기록하지 않는다. 문서·메일 본문은 기존 사용자별 업무 저장 규칙을 따른다.
 
-- 서버 구현은 `app/worker/protocol.py`(12개 설치 조합·해시·엄격 검증), `service.py`(DB 상태 전이), `router.py`(HTTPS/권한/CSRF/크기 제한)다. 기존 프롬프트·출력 스키마를 수정하지 않고 참조하며 성공 결과도 같은 스키마로 엄격히 재검증한다. 중첩 모델의 미정의 필드·숫자 대신 문자열을 요구하는 문서 wire 형식도 검사한다.
+- 서버 구현은 `app/worker/protocol.py`(13개 설치 조합·해시·엄격 검증), `service.py`(DB 상태 전이), `router.py`(HTTPS/권한/CSRF/크기 제한)다. 기존 프롬프트·출력 스키마를 수정하지 않고 참조하며 성공 결과도 같은 스키마로 엄격히 재검증한다. 중첩 모델의 미정의 필드·숫자 대신 문자열을 요구하는 문서 wire 형식도 검사한다.
 - `enqueue(database, user_id, ..., model=...)`는 서버 내부 전용이며 작업 생성 HTTP API는 제공하지 않는다. 온라인인 승인 장치와 설치 조합/모델을 확인하고 서버가 UUID·120초 기한을 만든다. 사용자별 미완료 작업은 32개까지다. `app/worker/adapter.py`가 트랜잭션 밖에서 결과를 기다리고 기존 network 2회·invalid_output 1회 예산만 관리한다. 재시도는 같은 job ID·원래 생성/만료 시각을 유지하고 새 attempt ID로 조건부 갱신한다. PC는 시도당 한 번만 OpenAI를 호출한다. 임대가 끊긴 시도·429·키 오류는 자동 재시도하지 않으며 전체 기한은 연장하지 않는다.
 - 장치 Bearer API는 `POST /api/worker/devices/{device_id}/claim`(`wait_seconds`: 0~25, 기본 0), `/jobs/{job_id}/heartbeat`(`attempt_id`), `/jobs/{job_id}/complete`(성공/실패 envelope)다. 모두 `device_id`에 속한 토큰을 요구한다. claim은 `job` 또는 `null`을 반환하며 장치당 실행 중 시도는 하나다. `POST /api/ai-execution/jobs/{job_id}/cancel`은 본인 세션+CSRF만 허용한다.
 - 사용자 행 잠금(Postgres와 SQLite의 UPDATE 잠금)과 조건부 UPDATE가 claim/complete/교체/취소를 직렬화한다. 임대 만료는 같은 시도를 재배포하지 않고 `expired`로 끝낸다. 재시작과 서버의 5초 주기 정리에서 만료를 확정하며, 요청은 정리 주기 전에도 기한을 검사한다. 대기 중 DB 세션은 닫혀 있다. 외부 OpenAI 호출·메일 발송의 exactly-once를 보장하지 않는다.
@@ -983,7 +984,10 @@ TradeDocDraft(TypedDict, total=False):
 ### 16.1. 도메인별 조건
 
 - PO는 발행사가 buyer이며 매입 단가를 사용한다. PI는 발행사가 seller이고 판매 단가·통화별 계좌를 쓴다. PI 샘플은 사용자 지정 수량/가격(0원 포함)을 보존하고 AI의 샘플 표시는 원문 근거를 검사한다. 계산·반올림·가격 조회 구현은 재사용한다.
-- CI API는 `source_pi_id`·`source_revision`으로 본인이 승인한 PI 버전을 선택한다. 해당 버전의 품목·당사자·통화·단가·할인·증정/무상 금액을 복사하고 현재 카탈로그로 대체하지 않는다. 결제/계좌 정보는 제외하며 PDF의 FOC는 한 번만 표시한다. 원본 변경은 새 CI를 요구한다. 과거 메일 경로의 원문 기반 CI는 기존 동작을 유지하며, 새 API 조회에서 원본 선택 필요를 안내한다.
+- PI 연결 CI API는 `source_pi_id`·`source_revision`으로 본인이 승인한 PI 버전을 선택한다. 해당 버전의 품목·당사자·통화·단가·할인·증정/무상 금액을 복사하고 현재 카탈로그로 대체하지 않는다. 결제/계좌 정보는 제외하며 PDF의 FOC는 한 번만 표시한다. 원본 변경은 새 CI를 요구한다. 과거 메일 경로의 원문 기반 CI는 기존 동작을 유지하며, 새 API 조회에서 원본 선택 필요를 안내한다.
+- 독립 문서 API에서 `mode: "standalone"`은 PI 없이 거래 정보와 선적 정보를 직접 입력한다. 기존 PI 판매 단가표와 명시적 단가 확인·검토·승인·파일 발급을 사용한다. PI 연결과 단독 모드 간 변경은 새 CI로 작성한다. 기존 메일 경로는 변경하지 않는다.
+- CI 화면은 미승인 PI도 선택해 브라우저 작성 준비만 허용한다. 남은 PI 작업을 화면 안에 안내하고 별도 PI 탭에서 보완·승인 후 정확한 버전을 재확인한다. revision 변경은 명시적 재선택이며 입력은 보존한다. 승인 전 서버 생성/추출/검토/발급·자동 저장은 없다. `POST /ci`·`/ci/extract`의 소유권/승인 검증은 유지하며 추출의 검증을 AI 호출보다 먼저 한다.
+- `GET /api/trade/ci/source-pis`는 본인 PI마다 현재 저장 버전 한 건을 승인 여부와 무관하게 문서 ID 내림차순 50개씩 `{items,next_cursor}`로 반환한다. 항목은 `source_pi_id/source_revision/document_number/currency/total/approved/current_revision/missing_fields/issues`다. 거래값은 버전 snapshot, 승인은 같은 버전의 approved 제안 존재, 누락/오류는 기존 `document_result` 기준이며 중복 제안으로 버전을 중복 표시하지 않는다. 다음 페이지는 `cursor=ID:revision`, 정확한 재확인은 `source_pi_id`·`source_revision` 쌍으로 조회한다(기존 CI에 연결된 과거 버전 재조회 지원). 양의 32비트 정수 검증/쌍 누락·cursor 동시 지정 오류는 422, 정확한 조회의 없는/타인 PI는 404다. 문서·버전 양쪽의 소유자와 PI 종류를 검사하고 private/no-store로 반환하며 DB/승인/파일을 변경하지 않는다.
 - PL API는 원본 합계를 보존해 `/packing-review`에서 행 계산과 비교한다. 합계 선택은 revision·전체 문서 해시에 묶이고 `approve`는 계산 가능한 합계만 적용, `cancel`은 원본 복귀다. 각각 새 문서 버전과 이력을 남기며 대기 최종 제안을 무효화한다. 문서 수정은 합계를 재확인하게 한다. 단위별 수량을 섞지 않고 컨테이너 개수와 FT 규격을 곱하지 않는다. 합계 승인을 거친 ready 문서만 최종 검토할 수 있다.
 - `models/operations/agent/repository/router`는 각 도메인에 두며 역할/필수 조건은 각 `rules.py`에서 검사한다. common에는 실제 같은 HTTP·조회·입력 숫자·가격 준비·SQL 저장·출력 흐름만 둔다. 상세 요청은 `docs/trade-api.md`와 OpenAPI를 따른다.
 

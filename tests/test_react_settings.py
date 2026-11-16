@@ -79,7 +79,7 @@ def test_saved_settings_apply_to_new_documents_and_preserve_existing_issue(datab
             "beneficiary", "bank_name", "branch", "swift", "account_number", "bank_address")})
         client.put("/api/trade/settings/prices", headers=headers, json={"item_name": "Virtual Serum", "capacity": "50ml",
             "role": "sale", "currency": "USD", "unit_price": "9", "price_basis": "PCS"})
-        fresh = client.post("/api/trade/pi", headers=headers, json=pi_input().model_dump(mode="json"))
+        fresh = client.post("/api/trade/pi", headers=headers, json=pi_input(document_number="PI-NEW-SETTINGS").model_dump(mode="json"))
         assert fresh.status_code == 201
         assert fresh.json()["document"]["issuer"]["legal_name_en"] == "New Example Company"
         assert fresh.json()["document"]["bank"]["BANK_NAME"] == "Updated bank value"
