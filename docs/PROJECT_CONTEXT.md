@@ -104,15 +104,17 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-16 · PO·CI·PL 검증과 PC 503 시험 대기
+마지막 갱신: 2026-11-16 · PO 반응형·키보드·보완 경로 확인
 
-- 최신 main `f046d24` 통합 뒤 Linux·임시 PostgreSQL 전체 `uv run pytest`는 **979 passed·2 skipped**다. Windows 전용 2건만 건너뛰었고, PO·CI·PL·단독 CI·PI 번호 중복·XLSX 재시도·PC 프로세스 회귀를 포함한다. `uv run python -X utf8 .work/check.py` 경고 0개, frontend lint·11개 입력 검사·build도 통과했다. 실제 계정·운영 연결과 새 화면의 모바일/추가 오류 경로는 별도 확인이 필요하다.
+- 병합된 PR #189의 PO 화면을 가상 데이터 Edge에서 1440·768·390px로 확인했다. 주소 누락·상품/단가 불일치·EUR 매입 단가 부재의 화면 안내, 수정 후 USD 매입 단가 3과 할인/무상 반영 합계 27, 검토 취소의 키보드 실행, ID 재개를 확인했다. 재현 결함은 없어 화면·업무 코드는 바꾸지 않았다. 이번 브랜치의 Linux·임시 PostgreSQL 전체 `uv run pytest`는 **979 passed·2 skipped**, 규칙 검사는 경고 0개, frontend test/lint/build도 통과했다. Windows 전체 실행은 DB 복사 파일 잠금·심볼릭 링크 권한·로컬 Gmail 종료 실패로 중단했으며 PO 작업과 분리한다. 이전 가상 PO의 추출·검토·발급 해시·409 입력 보존 근거와 이번 확인 범위는 [검증 기록](test-records/20261113_po_ci_pl_screens.md)에 구분해 적었다. 실제 계정·운영 연결은 확인하지 않았다.
+
+- 당시 main `f046d24` 통합 뒤 Linux·임시 PostgreSQL 전체 `uv run pytest`는 **979 passed·2 skipped**다. Windows 전용 2건만 건너뛰었고, PO·CI·PL·단독 CI·PI 번호 중복·XLSX 재시도·PC 프로세스 회귀를 포함한다. `uv run python -X utf8 .work/check.py` 경고 0개, frontend lint·11개 입력 검사·build도 통과했다. 실제 계정·운영 연결과 CI/PL 화면의 모바일/추가 오류 경로는 별도 확인이 필요하다.
 
 - XLSX 발급 재시도 검사에서 같은 내용의 ZIP 생성 시각이 달라 저장소 객체 재사용에 실패했다. ZIP 내부 시각만 고정하는 이전 승인 수정과 직인 유무별 재발 방지 검사로 보완했다. 발행일·셀·이미지·압축 방식과 이미 발급된 파일은 바꾸지 않는다. 실패한 PostgreSQL 검사와 렌더러 검사 11건을 다시 실행해 통과했다.
 
 - PI 번호 중복 검사 추가 뒤 Linux·임시 PostgreSQL 전체 `uv run pytest`는 **930 passed·2 skipped**다. 직접 생성·원문 추출·기존 버전 번호·동시 생성·사용자 분리와 미입력 초안은 별도 검사했다. 중복 안내의 실제 브라우저 확인은 진행하지 못했다.
 
-- PO·CI·PL 로컬 구현: 전체 `uv run pytest`는 Linux·임시 PostgreSQL에서 **926 passed·2 skipped**, 입력 helper 10개·frontend lint/build·규칙 검사(경고 0개)와 React 서버 렌더 검사를 통과했다. CI 목록의 세 상태·버전 고정·중복/페이지/소유권·AI 전 선행 검증, 무역 API 회귀와 발급 파일 해시를 확인했다. 세부 근거는 [검증 기록](test-records/20261113_po_ci_pl_screens.md)에 둔다. 브라우저 재개 후 PO·CI·PL의 주요 발급 흐름과 PO의 409 입력 보존을 확인했다. 1440/768/390px·키보드와 CI/PL 추가 오류·수정 경로는 미확인이다. API/서버 렌더 통과를 브라우저 완료로 표시하지 않는다.
+- PO·CI·PL 로컬 구현: 전체 `uv run pytest`는 Linux·임시 PostgreSQL에서 **926 passed·2 skipped**, 입력 helper 10개·frontend lint/build·규칙 검사(경고 0개)와 React 서버 렌더 검사를 통과했다. CI 목록의 세 상태·버전 고정·중복/페이지/소유권·AI 전 선행 검증, 무역 API 회귀와 발급 파일 해시를 확인했다. 세부 근거는 [검증 기록](test-records/20261113_po_ci_pl_screens.md)에 둔다. 브라우저 재개 후 PO·CI·PL의 주요 발급 흐름과 PO의 409 입력 보존을 확인했다. CI/PL의 1440/768/390px·키보드와 추가 오류·수정 경로는 미확인이다. API/서버 렌더 통과를 브라우저 완료로 표시하지 않는다.
 - 이후 사용자 결정에 따라 PI 목록을 최신 버전으로 제한하고 단독 CI를 추가했다. Linux·임시 PostgreSQL 전체 검사는 **927 passed·2 skipped**였고, 마지막 단가 확인 보강은 별도 Windows API 검사로 통과했다. 브라우저의 가상 데이터로 판매 단가 8·합계 80을 확인하고 PI 없이 검토·발급까지 진행했다. PDF의 유상/FOC 분리와 다운로드 파일 해시도 API 검사로 확인했다. 운영 환경 검증은 아니다.
 
 - HTTP 도메인 재배치 당시 검증: `python3 .work/check.py`(경고 0개), 전체 `uv run pytest` **917 passed·2 skipped**, frontend lint/test(4개)/build를 통과했다. 이동 전후 등록 라우트 109개의 URL·메서드·이름과 OpenAPI 명세가 같다. 실제 Chromium·임시 PostgreSQL·가짜 Gmail로 공개/인증 경로, 받은메일·후보 승인 1회, 견적 단가 보완/PDF, 성찰 설정, 개인 키 CSRF/저장/삭제, 실행 기록/마스킹 내보내기와 390px 화면 렌더링을 확인했다. 구조도도 Mermaid로 렌더링했다. 운영 API 확인과 구분하며 위치·유지 조건은 [도메인 안내](domain-layout.md).
