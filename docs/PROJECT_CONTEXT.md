@@ -106,13 +106,17 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-16 · 로컬 실행 정리 통합·Chromium 오류/복구 검사
+마지막 갱신: 2026-11-16 · 문서함 통합·Windows 테스트 환경 수정 통합
 
 - 로컬 실행 정리: 전체 `uv run pytest` **1051 passed·2 skipped**, 규칙 검사 경고 0개, 프론트 lint/test(11개)/build/공개 환경 검사를 통과했다. 실제 임시 PostgreSQL과 가짜 Google/OpenAI/Storage로 Gmail 미연결 Supabase 사용자 2명의 문서 저장·소유권 분리, 키/리스너 누락의 저장 전 차단, 다계정 동일 message ID·실패 격리·중지/해제/재연결 세대 차단을 확인했다. Chromium에서 키 누락→저장 완료→재처리 거부/실패→이전 인덱스 보존→복구와 실패 시 접수 안내 제거·업로드 목록 상태 갱신을 확인했다. 기존 원문 수정/409 입력 보존·모바일 검증도 유지한다. PC·서버 푸시·승인 발송 회귀를 포함하며 실제 계정/과금·운영 확인은 #157·#178에 남는다.
 
 - 지식 문서·PO·CI·PL 통합: 최신 main `d124e31`과 화면 경로/문서를 합친 전체 `uv run pytest`는 **1006 passed·2 skipped**, 규칙 검사 경고 0개, 프론트 lint/test(11개)/build/공개 환경 검사 통과다. `test_knowledge.py` 26개와 실제 Chromium의 `test_knowledge_browser.py`는 합성 파일·실제 pgvector/FastAPI/React와 가짜 비전/임베딩/Storage로 업로드→원본 대조→수정/확정→부모/자식/벡터 저장을 확인한다. 누락 페이지 검토 대기·409 수정문 보존·소유자 분리·모델/차원 교체·SQL 교체 실패/부분 배치 실패의 이전 결과 보존·임대/늦은 시도 차단을 검증했다. Word/Excel/TXT 한글 렌더 결과와 1440/390px 화면도 직접 확인했다. 실제 AI 정확도·비용·운영 DB/Storage/Render 확인은 #178에 남는다.
 
 - 병합된 PR #189의 PO 화면을 가상 데이터 Edge에서 1440·768·390px로 확인했다. 주소 누락·상품/단가 불일치·EUR 매입 단가 부재의 화면 안내, 수정 후 USD 매입 단가 3과 할인/무상 반영 합계 27, 검토 취소의 키보드 실행, ID 재개를 확인했다. 재현 결함은 없어 화면·업무 코드는 바꾸지 않았다. 이번 브랜치의 Linux·임시 PostgreSQL 전체 `uv run pytest`는 **979 passed·2 skipped**, 규칙 검사는 경고 0개, frontend test/lint/build도 통과했다. Windows 전체 실행은 DB 복사 파일 잠금·심볼릭 링크 권한·로컬 Gmail 종료 실패로 중단했으며 PO 작업과 분리한다. 이전 가상 PO의 추출·검토·발급 해시·409 입력 보존 근거와 이번 확인 범위는 [검증 기록](test-records/20261113_po_ci_pl_screens.md)에 구분해 적었다. 실제 계정·운영 연결은 확인하지 않았다.
+
+- PR #190 병합 커밋 d124e31 기준 CI 프런트 helper 검사 11건과 서버 검사 28건이 통과했다. 가상 CI 화면을 1440·768·390px에서 확인했다. 390px에서 PI 목록 네트워크 실패와 목록 다시 읽기, 네트워크 복구 뒤 목록 재표시를 확인했다. 선적 입력칸에서 Tab 이동 후 문서번호와 선적 참조 값이 유지됐고 런타임 오류 표시는 0이었다. 768px에서 PI-MISSING은 구매자 주소 보완과 PI 승인·파일 발급을 남은 작업으로 안내하고 CI 생성을 막았다. 단독 CI 초안 8은 품목 수량 누락 경고로 최종 검토 생성이 막혔다. 이는 필수값 차단의 정상 동작이었다. 단독 CI 문서 6은 추출 근거 충돌로 발급 경로에 쓰지 않았다. 별도 가상 단독 CI 초안 8에서는 검토 생성 뒤 수정 경로와 동시 편집 409를 확인했다. 오래된 탭에서 저장한 `3 Fiction Ave, Seoul`은 화면에 남았고 최신 문서를 다시 확인하라는 안내가 나타났다. 오프라인에서 발급 PDF/XLSX 다운로드 실패 안내를 확인한 뒤 온라인 복구 후 재시도해 HTTP 200과 각 파일의 브라우저 다운로드 완료를 확인했다. 코드 수정은 없었다. 상세는 [검증 기록](test-records/20261113_po_ci_pl_screens.md)에 있다.
+
+- Windows 테스트 환경 오류를 최소 수정했다. SQLite 임시 복사본의 migration 엔진을 즉시 닫고, Windows `npm.cmd` 빌드와 강제 종료 동작을 테스트에 반영했다. symlink 검사는 권한이 비활성화된 Windows에서만 건너뛴다. LibreOffice·Playwright Chromium·frontend 의존성을 준비한 뒤 전체 `uv run pytest`는 **1037 passed·3 skipped**, frontend test 11개·lint·build·환경 검사와 규칙 검사는 통과했다. Linux 컨테이너에서는 워커 6개와 Gmail 종료 1개를 분리 재검증해 통과했다. 첫 전체 컨테이너 실행은 Node 미설치 등 준비 부족으로 실패했으며 최신 전체 Linux 결과는 PR 필수 검사에서 확인한다. 상세는 [검증 기록](test-records/20261113_po_ci_pl_screens.md)에 있다.
 
 - 당시 main `f046d24` 통합 뒤 Linux·임시 PostgreSQL 전체 `uv run pytest`는 **979 passed·2 skipped**다. Windows 전용 2건만 건너뛰었고, PO·CI·PL·단독 CI·PI 번호 중복·XLSX 재시도·PC 프로세스 회귀를 포함한다. `uv run python -X utf8 .work/check.py` 경고 0개, frontend lint·11개 입력 검사·build도 통과했다. 실제 계정·운영 연결과 CI/PL 화면의 모바일/추가 오류 경로는 별도 확인이 필요하다.
 
