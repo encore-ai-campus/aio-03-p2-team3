@@ -1,5 +1,6 @@
 """별도 실제 프로세스 시험 전용. 운영 실행기의 목적지/인증 검증 옵션은 추가하지 않는다."""
 import argparse
+import asyncio
 import json
 import os
 import sys
@@ -66,6 +67,9 @@ def serve():
                           "owner_marker": "one" if "OWNER1" in source else "two" if "OWNER2" in source else None})
             code = next((code for code in (401, 429, 503) if f"API{code}" in source), None)
             if code:
+                # 세 번의 합법적인 재시도가 시험 클라이언트의 옛 15초 한도를 넘게 한다.
+                if "SLOW503" in source and code == 503:
+                    await asyncio.sleep(6)
                 return JSONResponse({"error": {"message": "fake-sensitive-sdk-error", "type": "fake_error"}}, status_code=code)
             values = {
                 "EmailAnalysis": {"intent": "general", "reason": "가상 문의"},

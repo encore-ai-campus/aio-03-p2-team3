@@ -100,7 +100,7 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-13 · 업무별 마스터·HTTP 도메인 회귀 검증
+마지막 갱신: 2026-11-13 · PC 503 시험 대기와 업무별 마스터·HTTP 도메인 회귀 검증
 
 - HTTP 도메인 재배치 당시 검증: `python3 .work/check.py`(경고 0개), 전체 `uv run pytest` **917 passed·2 skipped**, frontend lint/test(4개)/build를 통과했다. 이동 전후 등록 라우트 109개의 URL·메서드·이름과 OpenAPI 명세가 같다. 실제 Chromium·임시 PostgreSQL·가짜 Gmail로 공개/인증 경로, 받은메일·후보 승인 1회, 견적 단가 보완/PDF, 성찰 설정, 개인 키 CSRF/저장/삭제, 실행 기록/마스킹 내보내기와 390px 화면 렌더링을 확인했다. 구조도도 Mermaid로 렌더링했다. 운영 API 확인과 구분하며 위치·유지 조건은 [도메인 안내](domain-layout.md).
 
@@ -120,6 +120,7 @@
 
 - 시험 실행기 `app/evaluation/`는 정상 일반/견적·정보 부족·Gmail 오류·OpenAI 한도·도구 오판·환각의 7개 시나리오를 성찰 끔/켬으로 비교한다. 지표는 완료율·도구 선택 정확도·응답 일관성·평균 재시행 횟수다. 고의 주입은 `detail.injected`로 표시하고 실제 API 결과와 구분한다(#92·#93). 실행 조건·명령은 [TEST_REPORT](TEST_REPORT.md) 2~5절, 실제 측정/보고서는 gmail-quote-mvp 18·19절이다.
 - 실제 API 확인 이력은 [2026-11-10 일반 문의 기록](test-records/20261110_live_general_result.md)(#97)에 있다. 당시 Gmail·Gemini로 일반 문의의 후보 생성→승인 발송을 확인한 결과이며, OpenAI 성능이나 모든 시나리오 검증 결과로 쓰지 않는다. 현재 OpenAI 전환 후 지표·최종 보고서 완료는 이 근거만으로 확인되지 않는다.
+- PC 프로세스 시험의 서비스 HTTP 대기는 큐 전체 120초 기한에 응답 여유를 더한 125초(연결 5초)다. 지연된 모의 503도 세 번 재시도한 뒤 `WORKER_NETWORK`를 반환하며 문서 미생성·payload/result 삭제를 검증한다. SDK/서버의 운영 한도는 유지한다([원인·재현 기록](test-records/20261113_worker_process_readtimeout.md)).
 - 개인 PC 실제 연결·키 교체/삭제·두 사용자 과금 프로젝트·Render 종단 간 확인은 [#157](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/157)(조회 시 open), 로컬 실행 계획 5절에서 미확인이다. 코드/모의 HTTP/브라우저/Windows CI 통과를 이 완료로 표시하지 않는다.
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
