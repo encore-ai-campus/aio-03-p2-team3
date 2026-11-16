@@ -33,6 +33,7 @@ from app.quote import router as quotes
 from app.runlog import router as runs
 from app.services.auth import GoogleAccess, make_cipher
 from app.services.local_gmail import LocalGmailCollector
+from app.db.local_gmail import SqlMailboxStore
 from app.settings import router as settings_routes
 from app.trade.common.models import DocumentError
 from app.trade.common import api as trade_api
@@ -86,9 +87,12 @@ def create_app(settings: Settings | None = None, google=None,
         # 서버의 OPENAI_API_KEY는 사용하지 않는다. 사용자 키는 호출 시에만 읽는다.
         app.state.llm = None
         app.state.knowledge_repository = SqlRepository(database)
+        app.state.knowledge_adapters = knowledge_adapters or (
+            lambda owner, profile: knowledge_routes.make_adapters(database, config, owner, profile)
+        )
         ingestion = IngestionWorker(
             app.state.knowledge_repository, app.state.storage,
-            knowledge_adapters or (lambda owner, profile: knowledge_routes.make_adapters(database, config, owner, profile)),
+            app.state.knowledge_adapters,
         )
         app.state.knowledge_worker = ingestion
         ingestion_task = asyncio.create_task(ingestion.run()) if app.state.storage is not None else None
@@ -97,7 +101,7 @@ def create_app(settings: Settings | None = None, google=None,
             database, app.state.google, make_cipher(config), config.gmail_pubsub_topic,
             settings=config,
         )
-        collector = LocalGmailCollector(app.state.google_access) if config.ai_runtime == "local" else None
+        collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database)) if config.ai_runtime == "local" else None
         app.state.local_gmail = collector
         task = asyncio.create_task(collector.run()) if collector else None
         worker_stop = asyncio.Event()

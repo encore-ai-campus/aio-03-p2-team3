@@ -36,8 +36,9 @@ def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = No
     now = now or utcnow()
     if access.local_mode:
         from app.services.local_gmail import connect_local
+        from app.db.local_gmail import SqlMailboxStore
 
-        return connect_local(access, user_id, now)
+        return connect_local(access, user_id, SqlMailboxStore(access.database), now)
     try:
         token = get_access_token(access, user_id, now)
         response = access.google.watch(token, access.topic)

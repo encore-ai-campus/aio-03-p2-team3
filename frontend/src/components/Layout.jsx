@@ -9,12 +9,12 @@ const WORKSPACE_NAV = [
   { to: "/documents", label: "문서함", icon: "▤" },
   { to: "/activity", label: "실행 기록", icon: "◷" },
 ]
-const MANAGE_NAV = [{ to: "/knowledge", label: "지식 문서", icon: "▧" }, { to: "/settings", label: "설정", icon: "⚙" }]
+const MANAGE_NAV = [{ to: "/settings", label: "설정", icon: "⚙" }]
 const BOTTOM_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
   { to: "/status", label: "작업현황", icon: "▦" },
   { to: "/inbox", label: "업무함", icon: "✉" },
-  { to: "/documents", label: "문서", icon: "▤" },
+  { to: "/documents", label: "문서함", icon: "▤" },
   { to: "/settings", label: "설정", icon: "⚙" },
 ]
 const PAGE_LABELS = {
@@ -24,7 +24,6 @@ const PAGE_LABELS = {
   "/documents": "문서함",
   "/activity": "실행 기록",
   "/settings": "설정",
-  "/knowledge": "지식 문서",
 }
 
 function navClass({ isActive }) {
@@ -45,13 +44,13 @@ export default function Layout() {
         <div className="nav-label">WORKSPACE</div>
         {WORKSPACE_NAV.map((item) => (
           <NavLink key={item.to} className={navClass} end={item.end} to={item.to}>
-            <i>{item.icon}</i>{item.label}
+            <i aria-hidden="true">{item.icon}</i>{item.label}
           </NavLink>
         ))}
         <div className="nav-label">MANAGE</div>
         {MANAGE_NAV.map((item) => (
           <NavLink key={item.to} className={navClass} to={item.to}>
-            <i>{item.icon}</i>{item.label}
+            <i aria-hidden="true">{item.icon}</i>{item.label}
           </NavLink>
         ))}
         <div className="side-user">
@@ -68,7 +67,6 @@ export default function Layout() {
         </header>
         <header className="mobile-head">
           <div className="logo"><span className="logo-mark">↗</span> TradeMate</div>
-          <NavLink className="link-button" to="/knowledge">지식 문서</NavLink>
           <button className="link-button" type="button" onClick={signOut}>로그아웃</button>
         </header>
         <div className="content">
@@ -79,7 +77,7 @@ export default function Layout() {
       <nav className="bottom-nav">
         {BOTTOM_NAV.map((item) => (
           <NavLink key={item.to} end={item.end} to={item.to}>
-            <b>{item.icon}</b>{item.label}
+            <b aria-hidden="true">{item.icon}</b>{item.label}
           </NavLink>
         ))}
       </nav>

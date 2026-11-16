@@ -31,6 +31,7 @@ def make_adapters(database, settings, owner, snapshot):
         except OpenAIKeyError as error:
             raise KnowledgeError(error.code, error.message, error.status_code) from None
 
+    read_key()  # 접수 전과 worker 실행 전에 같은 설정 경계를 확인한다. API 호출은 하지 않는다.
     vision = snapshot.get("extraction", {}).get("model") or settings.knowledge_vision_model.strip() or settings.openai_model.strip() or DEFAULT_MODEL
     embedding = snapshot.get("embedding", {})
     model = embedding.get("model") or settings.knowledge_embedding_model.strip() or "text-embedding-3-small"
@@ -58,6 +59,7 @@ def storage(request: Request):
 @router.post("", status_code=202)
 async def upload(request: Request, owner: int = Depends(bearer_user_id)):
     target_storage = storage(request)
+    await run_in_threadpool(request.app.state.knowledge_adapters, owner, {})
     form = await request.form(max_files=1, max_fields=0)
     files = [value for _, value in form.multi_items() if isinstance(value, UploadFile)]
     if len(files) != 1:
@@ -108,14 +110,18 @@ def preview(document_id: str, number: int, request: Request, owner: int = Depend
         raise KnowledgeError("page_not_found", "해당 페이지가 없습니다.", 404)
     file = operations.original(repository(request), storage(request), owner, document_id)
     # ponytail: 페이지 미리보기는 원본에서 다시 렌더링한다. 조회량이 커지면 참조 관리되는 캐시를 추가한다.
-    page = PageRenderer(request.app.state.settings.knowledge_office_command).render(
-        file["content"], file["filename"], number).pages[0]
+    rendered = PageRenderer(request.app.state.settings.knowledge_office_command).render(
+        file["content"], file["filename"], number)
+    page = rendered.pages[0]
     return Response(page.png, media_type="image/png", headers={"Cache-Control": "private, no-store",
-                                                              "X-Content-Type-Options": "nosniff"})
+                                                              "X-Content-Type-Options": "nosniff",
+                                                              "X-Page-Count": str(rendered.page_count)})
 
 
 @router.post("/{document_id}/retry", status_code=202)
 def retry(document_id: str, body: AttemptRequest, request: Request, owner: int = Depends(bearer_user_id)):
+    operations.detail(repository(request), owner, document_id)
+    request.app.state.knowledge_adapters(owner, {})
     return operations.retry(repository(request), owner, document_id, body.attempt_id)
 
 

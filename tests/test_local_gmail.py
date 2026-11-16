@@ -25,6 +25,7 @@ import pytest
 
 from app.clients.gmail import GoogleClient, GoogleUnavailable, TokenExpired
 from app.config import get_settings
+from app.db.local_gmail import SqlMailboxStore
 from app.db.models import GmailWatch, GoogleToken, ProcessedMessage, ReplyCandidate, Run, RunEvent, User, UserOpenAIKey
 from app.main import create_app
 from app.services.auth import missing_login_settings, save_login, utcnow
@@ -42,7 +43,7 @@ from tests.test_openai_keys import sdk
 def env_file(tmp_path, database_url):
     path = tmp_path / ".env"
     path.write_text("\n".join([
-        "AI_RUNTIME=local", "LOCAL_OWNER_GOOGLE_SUB=fake-sub-1", "OPENAI_API_KEY=fake-local-private-key",
+        "AI_RUNTIME=local", "OPENAI_API_KEY=fake-local-private-key",
         f"DATABASE_URL={database_url}", "SESSION_SECRET=fake-local-session",
         f"TOKEN_ENCRYPTION_KEY={Fernet.generate_key().decode()}",
         "GOOGLE_OAUTH_CLIENT_ID=fake-client", "GOOGLE_OAUTH_CLIENT_SECRET=fake-secret",
@@ -242,30 +243,44 @@ def test_logout_during_read_does_not_start_more_runs_or_revive_cursor(local, mon
     assert not rows(access.database, Run) and not rows(access.database, ProcessedMessage)
 
 
-def test_only_verified_owner_is_polled_and_push_cannot_start_local_work(local, sdk):
+@pytest.mark.parametrize("first_fails", [False, True])
+def test_connected_users_are_polled_separately_with_same_message_id(local, sdk, monkeypatch, first_fails):
+    from tests.fakes.gmail import Mailbox
     client, fake, access = local
-    other_id = save_login(access, fake_login(sub="fake-other", email="other@example.invalid"))
+    other_id = save_login(access, fake_login(sub="fake-other", email="other@example.invalid", access_token="fake-access-2"))
     register_watch(access, other_id)
-    process_notification(access, "other@example.invalid", "2000")
-    poll(local)
-    assert {r.user_id for r in rows(access.database, Run)} == {1}
-    assert watch(access, other_id).history_id == "1001"
-    before = len(fake.calls), len(sdk)
+    other = Mailbox()
+    other.pages[None] = history_page("fake-message", history_id="2000")
+    first = fake.mailbox
+    if first_fails:
+        first.pages[None] = http_error(503)
+    monkeypatch.setattr(fake, "gmail", lambda token: other if token == "fake-access-2" else first)
     with access.database.session() as session:
         session.get(User, 1).last_login_at = None
+        session.get(User, other_id).last_login_at = None
+    client.cookies.clear()  # 브라우저 세션 없이 저장된 연결로 수집한다.
+    process_notification(access, "other@example.invalid", "3000")
+    assert not rows(access.database, Run)  # Pub/Sub는 로컬 작업을 시작하지 않는다.
     poll(local)
-    assert before == (len(fake.calls), len(sdk))
-    assert client.get("/threads/fake-thread").status_code == 200
+    expected = {other_id} if first_fails else {1, other_id}
+    assert {r.user_id for r in rows(access.database, Run)} == expected
+    assert {r.user_id for r in rows(access.database, ProcessedMessage)} == expected
+    assert {r.user_id for r in rows(access.database, ReplyCandidate)} == expected
+    assert watch(access, other_id).history_id == "2000"
+    assert watch(access).history_id == ("1000" if first_fails else "1001")
+    assert len(sdk) == len(expected) * 2 and all(auth == "Bearer fake-local-private-key" for auth, _ in sdk)
+    LocalGmailCollector(access, SqlMailboxStore(access.database)).poll_once()  # 재시작·중복 조회
+    assert len(rows(access.database, Run)) == len(expected)
+    assert not fake.called("watch") and not fake.called("stop")
 
 
 @pytest.mark.parametrize("owner", ["", "fake-other"])
-def test_unconfigured_or_wrong_owner_never_reads_mail(local, owner):
-    client, fake, access = local
-    collector = LocalGmailCollector(replace(access, settings=replace(access.settings, local_owner_google_sub=owner)))
-    before = len(fake.calls), len(fake.mailbox.calls)
+def test_owner_configuration_does_not_change_collection(local, owner, monkeypatch):
+    _, _, access = local
+    monkeypatch.setenv("LOCAL_OWNER_GOOGLE_SUB", owner)
+    collector = LocalGmailCollector(access, SqlMailboxStore(access.database))
     collector.poll_once()
-    assert before == (len(fake.calls), len(fake.mailbox.calls))
-    assert not rows(access.database, Run)
+    assert len(rows(access.database, Run)) == 1
 
 
 @pytest.mark.parametrize("sender,labels,reason", [
@@ -322,7 +337,7 @@ def test_new_collector_resumes_persisted_cursor_after_process_restart(local, sdk
     poll(local)
     fake.mailbox.pages[None] = history_page("fake-message", "second", history_id="1002")
     fake.mailbox.raw_messages["second"] = message("second", "second-thread")
-    LocalGmailCollector(access).poll_once()
+    LocalGmailCollector(access, SqlMailboxStore(access.database)).poll_once()
     assert fake.mailbox.called("history")[-1][1]["startHistoryId"] == "1001"
     assert watch(access).history_id == "1002" and len(sdk) == 4
     assert len(rows(access.database, Run)) == 2
@@ -421,3 +436,111 @@ def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_p
             assert "fake-local-private-key" not in logs and "fake-refresh-1" not in logs
             if os.name != "nt":
                 assert "Application shutdown complete" in logs
+
+
+def test_sql_store_selects_only_connected_local_retryable_users(local):
+    _, _, access = local
+    store = SqlMailboxStore(access.database)
+    cases = [
+        ('no_token', 'active', None, LOCAL_TOPIC),
+        ('empty_token', 'active', None, LOCAL_TOPIC),
+        ('no_watch', 'active', None, LOCAL_TOPIC),
+        ('stopped', 'stopped', None, LOCAL_TOPIC),
+        ('expired_token', 'error', 'token_expired', LOCAL_TOPIC),
+        ('expired_history', 'error', 'history_expired', LOCAL_TOPIC),
+        ('public', 'active', None, 'projects/fake/topics/server'),
+        ('unknown_status', 'unknown', None, LOCAL_TOPIC),
+        ('retryable', 'error', 'local_poll: google_unavailable', LOCAL_TOPIC),
+        ('initial_cursor', 'error', 'local_connect', LOCAL_TOPIC),
+    ]
+    included = [1]
+    with access.database.session() as session:
+        for index, (name, status, error, topic) in enumerate(cases, 2):
+            session.add(User(id=index, email=f'{name}@example.invalid'))
+            session.flush()
+            if name != 'no_token':
+                session.add(GoogleToken(user_id=index, refresh_token_enc='' if name == 'empty_token' else 'fake-ciphertext'))
+            if name != 'no_watch':
+                session.add(GmailWatch(user_id=index, topic=topic, status=status, last_error=error,
+                                       history_id=None if name == 'initial_cursor' else '1000', last_renewed_at=utcnow()))
+            if name in {'retryable', 'initial_cursor'}:
+                included.append(index)
+    assert [m.id for m in store.list()] == included
+    for index in range(1, len(cases) + 2):
+        assert (store.current(index) is not None) == (index in included)
+
+
+@pytest.mark.parametrize('change', ['disconnect', 'stop', 'reconnect', 'public', 'terminal'])
+def test_sql_store_rejects_old_generation_or_ineligible_results(local, change):
+    _, _, access = local
+    store = SqlMailboxStore(access.database)
+    old = store.current(1)
+    with access.database.session() as session:
+        current = session.get(GmailWatch, 1)
+        if change == 'disconnect': session.delete(session.get(GoogleToken, 1))
+        if change == 'stop': current.status = 'stopped'
+        if change == 'reconnect': current.last_renewed_at = utcnow() + timedelta(seconds=1)
+        if change == 'public': current.topic = 'projects/fake/topics/server'
+        if change == 'terminal': current.status, current.last_error = 'error', 'history_expired'
+    assert not store.advance(old, '99999')
+    assert not store.fail(old, 'local_poll: fake')
+    assert watch(access).history_id == old.cursor
+
+
+@pytest.mark.parametrize('change', ['disconnect', 'reconnect', 'process_stop'])
+def test_connection_change_during_page_prevents_message_reads_and_late_cursor(local, monkeypatch, change):
+    client, fake, access = local
+    original = fake.list_history
+    def changed(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if change == 'disconnect':
+            with access.database.session() as session:
+                session.delete(session.get(GoogleToken, 1))
+        elif change == 'reconnect':
+            with access.database.session() as session:
+                watch_row = session.get(GmailWatch, 1)
+                watch_row.last_renewed_at = utcnow() + timedelta(seconds=1)
+                watch_row.history_id = '8000'
+        else:
+            client.app.state.local_gmail.stop()
+        return result
+    monkeypatch.setattr(fake, 'list_history', changed)
+    poll(local)
+    assert not fake.mailbox.called('message') and not rows(access.database, Run)
+    assert watch(access).history_id == ('8000' if change == 'reconnect' else '1000')
+
+
+def test_stop_between_separate_body_attachments_prevents_next_read(local, monkeypatch):
+    from tests.fakes.gmail import encoded
+    _, fake, access = local
+    raw = fake.mailbox.raw_messages['fake-message']
+    raw['payload']['mimeType'] = 'multipart/alternative'
+    raw['payload']['body'] = {}
+    raw['payload']['parts'] = [dict(mimeType='text/plain', body={'attachmentId': value}) for value in ['a', 'b']]
+    read = []
+    def attachment(*args):
+        read.append(args[-1])
+        stop_watch(access, 1)
+        return encoded('가상 본문')
+    monkeypatch.setattr(fake, 'get_attachment', attachment)
+    poll(local)
+    assert read == ['a'] and not rows(access.database, Run)
+    assert watch(access).status == 'stopped' and watch(access).history_id == '1000'
+
+
+def test_collector_continues_after_one_store_read_fails():
+    from app.config import Settings
+    from app.services.local_gmail import Mailbox
+    class DummyDatabase: pass
+    access = SimpleNamespace(local_mode=True, settings=Settings(ai_runtime='local'), database=DummyDatabase())
+    mailboxes = [Mailbox(1, 'a@example.invalid', '1000', utcnow()), Mailbox(2, 'b@example.invalid', '1000', utcnow())]
+    class Store:
+        def list(self): return mailboxes
+        def current(self, user_id):
+            if user_id == 1: raise RuntimeError('fake-private-data')
+            return mailboxes[1]
+    collector = LocalGmailCollector(access, Store())
+    seen = []
+    collector._poll_user = lambda mailbox: seen.append(mailbox.id)
+    with listener(): collector.poll_once()
+    assert seen == [2]

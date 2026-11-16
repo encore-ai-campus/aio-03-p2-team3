@@ -53,15 +53,15 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - React 화면(react-supabase 계획 6절, 2026-11-13): `cd frontend && npm ci && npm run dev`로 Vite 개발 서버를 띄우고 `http://localhost:5174/app/`(슬래시 포함)로 접속한다. 포트는 루트 `.env`의 `FRONTEND_PORT`로 바꾸며 비우면 5174다. 예를 들어 `FRONTEND_PORT=3000`이면 `http://localhost:3000/app/`로 접속한다. 지정한 포트가 사용 중이면 다른 포트로 바꾸지 않고 종료한다. Supabase Redirect URLs도 실제 주소의 `/app/login`과 맞춘다. `/api` 요청은 `frontend/vite.config.js` 프록시가 로컬 FastAPI(`127.0.0.1:8000`)로 보낸다. Supabase 설정은 루트 `.env` 한 곳에 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY`를 입력한다(틀: 루트 `.env.example`). Vite가 URL과 공개 키만 브라우저에 전달하고 서버 비밀 키는 제외한다. 버킷은 기본 `trade-files`이며 다른 이름일 때만 `SUPABASE_STORAGE_BUCKET`을 지정한다. 별도의 `frontend/.env`는 사용하지 않는다. 실제 Google 로그인은 계획 2절 콘솔 설정(비대칭 signing key·Google 공급자·redirect 허용)이 먼저다. 검사는 `frontend/`에서 `npm run lint`, `npm test`, `npm run build`. PI는 단계별 입력·원문 누락 보완·품목 표 편집 후 전체 확인으로 진행한다. 로그인·사이드바/하단탐색·인증 경계와 `/app/settings`의 회사/거래 기준 설정, `/app/trade/pi`의 PI 직접 입력/AI 추출/검토/승인/다운로드를 연결했다(계획 11·12절). 문서 ID가 포함된 주소로 재개할 수 있다. PO·CI·PL 등은 13절 이후 작업이다.
 - 패키지 추가: `uv add <패키지>==<버전>`(개발용은 `uv add --dev …`). 버전은 `pip index versions <패키지>`로 확인하고, 바뀐 `pyproject.toml`·`uv.lock`을 함께 PR에 올린다.
 
-### 지식 문서 업로드·비전 추출·pgvector 저장
+### 문서함 업로드·원본 보기·비전 추출·pgvector 저장
 
-로그인 후 `/app/knowledge`에서 문서를 올린다. 원본은 기존 private Storage에, 문서·확정 원문·부모 조항·자식 벡터는 기존 PostgreSQL에 둔다. 비전 추출기는 모든 입력을 페이지 이미지로 읽고 임베딩 공급자와 독립적으로 주입한다. 초기에 사용자가 선택한 조합은 기존 사용자 OpenAI 키/현재 모델 + `text-embedding-3-small` 1536차원이다. 검색·LangGraph·메일 연결은 후속 범위다.
+로그인 후 **문서함**(`/app/documents`)에서 **문서 업로드**로 파일을 올리고, 업로드한 문서 목록에서 파일을 선택해 원본과 처리 결과를 확인한다. 지식 문서는 문서함의 같은 업로드 문서이며 별도 메뉴를 두지 않는다. 기존 `/app/knowledge` 링크는 문서 선택 query/hash를 유지해 문서함으로 이동한다. **원본 보기**는 기존 서버 렌더러로 PDF/이미지·Office/TXT의 원본 또는 변환 페이지를 표시하며 이전/다음으로 페이지를 넘길 수 있다. 전체 원본은 다운로드할 수 있으며 추출 실패 상태에서도 열람 가능하다. 원본은 기존 private Storage에, 문서·확정 원문·부모 조항·자식 벡터는 기존 PostgreSQL에 둔다. 비전 추출기는 모든 입력을 페이지 이미지로 읽고 임베딩 공급자와 독립적으로 주입한다. 초기에 사용자가 선택한 조합은 기존 사용자 OpenAI 키/현재 모델 + `text-embedding-3-small` 1536차원이다. 검색·LangGraph·메일 연결은 후속 범위다.
 
 - 형식/한도: PDF·DOCX·XLSX·UTF-8 TXT·PNG·JPEG, 파일 20MiB·변환 후 50페이지·이미지 2천만 픽셀·압축 해제/페이지 이미지 합계 100MiB·추출문 100만 자. 기존 `/api/files` 첨부 5MiB 정책은 유지한다. HWP는 PDF로 변환한다.
 - 실행 준비: PDF/이미지 렌더러는 고정한 `pypdfium2`와 기존 Pillow를 사용한다. DOCX/XLSX/TXT는 **LibreOffice**가 필요하다. macOS는 `brew install --cask libreoffice`, Ubuntu는 `sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer libreoffice-calc fonts-noto-cjk`로 준비하고, 필요하면 `KNOWLEDGE_OFFICE_COMMAND`에 실제 실행 파일 경로를 지정한다. 운영 Render의 설치·메모리/비용은 별도 확인 사항이며 이 PR에서 배포 방식을 바꾸거나 운영 설치를 실행하지 않는다. 미설치 문서는 실패 상태와 PDF 업로드 대안을 안내한다.
 - DB 준비: 기존 DB를 백업하고 설치된 PostgreSQL에 pgvector가 있는지 확인한다. 앱 시작은 vector 확장을 먼저 준비한 뒤 `20261113_knowledge_ingestion` 리비전을 적용한다. 기존 `extensions` 스키마의 vector 설치를 존중하며 새 설치는 `public`에 둔다. DB 접속 역할에 확장 설치/스키마 갱신 권한이 필요하다. 새 세 표는 RLS를 켜고 anon/authenticated 직접 접근을 차단하며 본인 Bearer API로만 접근한다.
 - 모델 설정: `KNOWLEDGE_VISION_MODEL`은 비우면 `OPENAI_MODEL`/기존 기본값, `KNOWLEDGE_EMBEDDING_MODEL`은 비우면 `text-embedding-3-small`, `KNOWLEDGE_EMBEDDING_DIMENSIONS`는 비우면 1536이다. 모델 권한/비전 입력 지원·실제 정확도는 본인 프로젝트에서 확인한다. 공급자 교체는 `DocumentExtractor`/`Embedder` 구현을 조립 지점에 주입하며 첫 실제 구현은 OpenAI 하나다. 임의 endpoint를 업로드 요청으로 받지 않는다.
-- 키: 기존 사용자 키/전용 로컬 소유자 정책을 재사용하고 서버 공용 키로 대체하지 않는다. `local_worker`는 이미지·임베딩 미지원으로 명시적으로 실패한다. 비전 요청은 `store=False`, SDK 자동 재시도는 0이다. 업로드한 페이지/텍스트가 선택한 OpenAI API로 전송되며 실제 과금/보관 정책은 본인 계정에서 확인한다.
+- 키: 기존 사용자 키/전용 로컬 실행 검증을 재사용하고 서버 공용 키로 대체하지 않는다. `local_worker`는 이미지·임베딩 미지원으로 명시적으로 실패한다. 비전 요청은 `store=False`, 요청당 180초 제한·SDK 자동 재시도 최대 3회(최초 포함 최대 4번 호출)다. 임베딩은 기존 30초·재시도 0회를 유지한다. 재시도로 처리 시간과 API 비용이 늘 수 있으며 전체 작업의 기존 1시간 임대는 유지한다. 업로드한 페이지/텍스트가 선택한 OpenAI API로 전송되며 실제 과금/보관 정책은 본인 계정에서 확인한다.
 - 확인/복구: 의심 전사·누락 페이지·Office 변환은 `needs_review`에서 원본과 대조·수정/확정한 뒤 임베딩한다. 숨김 시트·수식 캐시 누락 등 읽지 못한 내용을 성공으로 표시하지 않는다. 수정문 저장과 확정은 구분하며 오래된 revision/시도는 409다. 재처리는 명시적으로 요청하고, 실패해도 이전 성공 인덱스는 보존한다. 처리 임대는 1시간이며 재시작 후 만료 작업은 자동 유료 재실행 없이 실패로 표시한다.
 - Parent-child: 조항 경계를 우선한 부모 원문(최대 8000자)과 1000자/겹침 150자의 자식을 연결한다. 크기는 문자 기준이며 최적 검색 성능을 주장하지 않는다. 자식만 임베딩하고 부모의 원본 페이지/원문 범위·처리 버전·모델 프로필을 보존한다. 모델/차원을 바꿔도 기존 벡터가 자동 변환되지는 않으며 본인 문서를 재처리해야 한다.
 - 검증: `uv run pytest tests/test_knowledge.py tests/test_knowledge_browser.py`는 실제 pgvector·페이지 렌더링·React/FastAPI와 가짜 AI/Storage로 시험한다. `npm ci --prefix frontend`, LibreOffice, `uv run playwright install chromium`을 먼저 준비한다. 외부 AI 호출/실제 문서 일괄 적재/운영 배포/검색 품질 평가는 수행하지 않는다. API·상태/오류·저장 불변식은 [계약 18절](docs/CONTRACT.md#18-지식-문서-수집과-벡터-저장)에 있다.
@@ -95,13 +95,15 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 ## LLM·외부 API와 키 발급
 
-모든 LLM 호출은 OpenAI Responses API를 사용한다. 공용 서버(기본 `AI_RUNTIME=server`)에서는 각 사용자가 Google 로그인 후 `/settings`의 **내 OpenAI API 키**에서 등록·교체·삭제한다. `stored_key`의 Gmail 자동 처리(분석·답장·요약·성찰)와 PI·PO·CI·PL AI 추출은 해당 사용자의 DB 키만 쓰며, 키가 없거나 암호문을 읽지 못하면 API 호출 전에 차단한다. 공용 `.env`·Render의 `OPENAI_API_KEY`로 대체하지 않는다. 개인 PC의 전용 로컬 앱과 HTTPS 서버에 연결한 개인 실행기는 지정 소유자의 `.env` 키만 사용한다. 근거는 `.work/design/api-choice.md`, 실행 계약은 `docs/CONTRACT.md` 6절·11절·`.env.example`이다. Codex 검증은 가짜 응답만 사용한다.
+모든 LLM 호출은 OpenAI Responses API를 사용한다. 공용 서버(기본 `AI_RUNTIME=server`)에서는 각 사용자가 Google 로그인 후 `/settings`의 **내 OpenAI API 키**에서 등록·교체·삭제한다. `stored_key`의 Gmail 자동 처리(분석·답장·요약·성찰)와 PI·PO·CI·PL AI 추출은 해당 사용자의 DB 키만 쓰며, 키가 없거나 암호문을 읽지 못하면 API 호출 전에 차단한다. 공용 `.env`·Render의 `OPENAI_API_KEY`로 대체하지 않는다. 전용 로컬 앱은 Google 연결 없이 PC `.env` 키를 사용한다. HTTPS 서버에 연결한 개인 실행기는 지정 소유자·장치 정책과 개인 파일 키를 사용한다. 근거는 `.work/design/api-choice.md`, 실행 계약은 `docs/CONTRACT.md` 6절·11절·`.env.example`이다. Codex 검증은 가짜 응답만 사용한다.
 
 ### 개인 PC의 .env 키로 실행
 
-1. 레포 루트의 개인 `.env`에 `AI_RUNTIME=local`을 지정한다. 처음에는 `LOCAL_OWNER_GOOGLE_SUB`와 `OPENAI_API_KEY`를 비워도 화면을 열 수 있다. 아래 절차로 본인 Google OAuth 앱과 로컬 콜백을 준비하고 `.env.example`의 명령으로 개인 `SESSION_SECRET`·`TOKEN_ENCRYPTION_KEY`를 만든다. `DATABASE_URL`은 공용 Render DB를 가리키지 않게 한다. 비우면 PC의 `app/db/local.sqlite3`를 쓴다.
-2. `uv run python -m app.local`을 실행하고 `http://127.0.0.1:8000`에서 본인 Google 계정으로 로그인한다. `/settings`의 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 개인 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정한다. 최초 로그인 사용자를 자동 소유자로 지정하지 않는다.
-3. 개인 `.env`의 `OPENAI_API_KEY`에 본인 키를 넣고 앱을 다시 시작한다. `/settings`에서 **로컬 .env 키 사용 가능**을 확인한다. 다른 계정·소유자 미지정·키 누락이면 AI를 차단한다. DB 사용자 키는 읽거나 저장하지 않으며 키·해시·일부 문자열도 화면에 표시하지 않는다. 키 변경도 `.env` 수정 후 재시작한다.
+1. 레포 루트의 개인 `.env`에 `AI_RUNTIME=local`, `OPENAI_API_KEY`, PostgreSQL `DATABASE_URL`을 지정한다. DB 주소가 비었거나 PostgreSQL이 아니면 시작하지 않는다. 앱 로그인·private Storage의 Supabase 설정은 위 실행 방법과 `.env.example`을 따른다.
+2. `uv run python -m app.local`을 실행하고 React 앱에서 로그인한다. 문서 AI는 Google 식별자·Gmail 연결 없이 PC 환경 키를 사용한다. `LOCAL_OWNER_GOOGLE_SUB`는 HTTPS 서버에 연결하는 `app.worker.pc` 전용이며 로컬 앱에서는 읽지 않는다.
+3. 키를 바꾸면 `.env` 수정 후 앱을 다시 시작한다. 로컬 앱이 처리하는 여러 사용자의 AI 요청도 그 PC 키를 사용하며 문서·메일 소유권은 로그인한 user_id로 분리한다. 서버에 저장된 사용자 키로 대체하지 않고 키 원문·해시·일부 문자열도 화면에 표시하지 않는다. 키 누락은 문서 원본 저장/작업 등록 전에 안내한다.
+
+Gmail 수집은 선택 기능이다. 사용할 때만 아래 개인 OAuth 설정과 `SESSION_SECRET`·`TOKEN_ENCRYPTION_KEY`가 필요하며, 사용자 접근/갱신 토큰은 로그인으로 받아 암호화 DB에 저장한다. 사용자 토큰을 `.env`에 입력하지 않는다.
 
 전용 명령은 `127.0.0.1`에만 바인딩하며 `--port`만 지원한다(포트를 바꾸면 OAuth 콜백도 맞춘다). 공개 바인딩·리로드 옵션은 없다. 일반 Uvicorn 명령이나 Render·`PORT`가 지정된 공용 실행에서 `AI_RUNTIME=local`이면 시작을 거부한다. Host·`APP_BASE_URL`을 로컬 주소로 바꿔도 허용하지 않는다. 로컬 서비스를 외부 프록시·터널로 공개하지 않는다.
 
@@ -110,13 +112,13 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 1. [Google Cloud 콘솔](https://console.cloud.google.com/)에서 본인 프로젝트를 만들고 **Gmail API**를 사용 설정한다. **Google Auth Platform**의 브랜딩·잠재고객을 설정하고 테스트 중인 외부 앱이면 본인 테스트용 Gmail을 테스트 사용자로 등록한다. 데이터 액세스 범위는 `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.send`다.
 2. **Clients → 클라이언트 만들기 → 웹 애플리케이션**에서 개인 OAuth 클라이언트를 만든다. 승인된 리디렉션 URI에 `http://127.0.0.1:8000/auth/google/callback`을 등록한다. 다른 포트를 쓰면 콘솔과 `.env`의 콜백 포트를 함께 바꾼다. 운영 OAuth 클라이언트 비밀값을 팀원에게 배포하거나 복사하지 않는다.
 3. 본인 PC의 `.env`에 개인 클라이언트 ID·비밀값을 `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`으로 넣고, `GOOGLE_OAUTH_REDIRECT_URI`를 위 URI와 일치시킨다. `APP_BASE_URL`은 `http://127.0.0.1:8000`으로 지정하고 브라우저도 같은 주소를 쓴다. 로컬의 `GMAIL_PUBSUB_TOPIC`과 `PUBSUB_PUSH_*`는 비워도 된다. 공용 Render의 OAuth·토픽·구독·푸시 주소는 변경하지 않는다.
-4. `uv run python -m app.local` 실행 → Google 로그인·Gmail 읽기/보내기 권한 동의 → 위 절차대로 본인 sub·OpenAI 키 지정 후 재시작 → `/inbox`의 **로컬 새 메일 수집 켜짐**과 `/settings`의 **로컬 .env 키 사용 가능**을 확인한다. 소유자 미지정·다른 계정이면 수집을 대기한다. 처음 연결할 때 `users.getProfile`의 현재 historyId만 저장하므로 연결 전에 있던 메일함 전체를 처리하지 않는다.
+4. 로컬 앱에서 앱 로그인 후 `/app/settings`의 **연동하기 → Gmail**로 연결하고 읽기/보내기 권한에 동의한다. 기존 Google 로그인 화면도 유지한다. `/inbox`의 **로컬 새 메일 수집 켜짐**과 `/settings`의 **로컬 .env 키 사용 가능**을 확인한다. Google 식별자를 환경 파일에 복사하는 단계는 없다. 처음 연결할 때 `users.getProfile`의 현재 historyId만 저장하므로 연결 전에 있던 메일함 전체를 처리하지 않는다.
 
-앱이 켜져 있으면 본인 Google 토큰으로 30초 간격으로 `history.list`를 조회한다. 화면을 닫아도 앱이 켜져 있으면 수집하며 수신 포트·공개 터널·Pub/Sub가 필요 없다. 기존 MIME 변환·필터·중복 방지·AI 후보 생성과 사용자 승인 후 발송을 사용한다. 화면 목록은 별도로 90초마다 갱신된다. 로컬에서는 Google `users.watch`·`users.stop`을 호출하지 않아 같은 계정의 공용 감시를 덮어쓰지 않는다.
+앱이 켜져 있으면 갱신 토큰과 `local:history` 활성/재시도 상태가 있는 user_id들을 30초 간격으로 순차 조회한다. 미연결·수집 중지·토큰/history 만료·공용 Pub/Sub 계정은 제외하고 한 계정이 실패해도 다음 계정은 계속한다. 화면을 닫아도 앱이 켜져 있으면 수집하며 수신 포트·공개 터널·Pub/Sub가 필요 없다. 기존 MIME 변환·필터·중복 방지·AI 후보 생성과 사용자 승인 후 발송을 사용한다. 화면 목록은 별도로 90초마다 갱신된다. 로컬에서는 Google `users.watch`·`users.stop`을 호출하지 않아 같은 계정의 공용 감시를 덮어쓰지 않는다.
 
 로그아웃·재연결 동의 취소·Google 연결 만료/취소·앱/PC 종료 시 추가 수집을 멈춘다. 정상 접근 토큰 만료는 저장된 갱신 토큰으로 갱신한다. 통신 실패는 마지막 커서를 보존하고 다음 주기에 중복 메일을 건너뛰며 이어 읽는다. historyId가 만료(404)되면 자동 전체 동기화 없이 **다시 로그인**을 안내한다. 명시적으로 다시 로그인하면 현재 위치로 재설정하므로 로그아웃/만료 기간의 과거 메일은 처리하지 않는다. 프로그램만 재시작하면 같은 로컬 DB의 마지막 커서부터 이어 읽되, 커서가 만료됐으면 재로그인이 필요하다. Google 외부 앱 테스트 상태의 갱신 토큰은 7일 만료 등 Google 정책에 따라 재동의를 요구할 수 있다.
 
-**현재 구현 범위:** 로컬 키·소유자 제한과 Gmail 연결·새 메일 수집, 서버의 장치 연결·사용자별 작업 큐까지다. 개인 실행 프로그램과 기존 AI 호출 연결은 아직 없다(계획 4절). 실제 키·Google 식별자는 채팅·Codex·Issue·PR·레포에 넣지 않는다.
+**현재 구현 범위:** 로컬 환경 키와 연결된 user_id별 Gmail 수집, 서버 사용자별 저장 키/개인 PC 위임, 장치 연결·작업 큐·Windows/macOS/Linux 실행기를 제공한다. 지식 문서 비전/임베딩은 stored_key/local을 지원하며 local_worker는 미지원이다. 실제 키·Google 식별자는 채팅·Codex·Issue·PR·레포에 넣지 않는다.
 
 ### 개인 PC AI 실행 — HTTPS 서버와 연결
 
@@ -166,7 +168,7 @@ DB 마이그레이션은 기존 사용자·키·메일·승인을 보존한다. 
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|
-| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 서버: 사용자별 `/settings` 등록. 전용 로컬: `AI_RUNTIME=local`·`LOCAL_OWNER_GOOGLE_SUB`·`OPENAI_API_KEY`. 모델은 `OPENAI_MODEL`(비우면 `gpt-6-luna`) |
+| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 서버: 사용자별 `/settings` 등록. 전용 로컬: `AI_RUNTIME=local`·`OPENAI_API_KEY`. `LOCAL_OWNER_GOOGLE_SUB`는 HTTPS 서버에 연결하는 개인 PC 실행기 전용. 모델은 `OPENAI_MODEL`(비우면 `gpt-6-luna`) |
 | Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
 | Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
 | Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | Calendar API와 사용자별 Google OAuth를 사용. 일정 도구 작업 때 연결 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |

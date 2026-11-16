@@ -61,7 +61,7 @@ class PageRenderer:
                                      manifest.get("status", 422))
             pages = [PageImage(p["number"], p["source"], (directory / p["file"]).read_bytes())
                      for p in manifest["pages"]]
-            return RenderedDocument(pages, manifest["warnings"])
+            return RenderedDocument(pages, manifest["warnings"], manifest["page_count"])
 
 
 def _office_pdf(source: Path, directory: Path, office_command: str):
@@ -97,6 +97,7 @@ def _render_child(source: Path, directory: Path, office_command: str, page_numbe
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS
     warnings.simplefilter("error", Image.DecompressionBombWarning)
     notices, pages = [], []
+    page_count = 1
     converted = source.suffix not in {".pdf", ".png", ".jpg", ".jpeg"}
     if converted:
         source = _office_pdf(source, directory, office_command)
@@ -115,6 +116,7 @@ def _render_child(source: Path, directory: Path, office_command: str, page_numbe
     if source.suffix == ".pdf":
         import pypdfium2 as pdfium
         with pdfium.PdfDocument(source) as pdf:
+            page_count = len(pdf)
             if len(pdf) < 1 or len(pdf) > MAX_PAGES:
                 raise KnowledgeError("page_limit", "변환 후 총 1~50페이지 문서만 지원합니다.")
             if page_number > len(pdf):
@@ -143,7 +145,7 @@ def _render_child(source: Path, directory: Path, office_command: str, page_numbe
             if image.width * image.height > MAX_PIXELS:
                 raise KnowledgeError("image_limit", "이미지는 2천만 픽셀 이하여야 합니다.")
             save(ImageOps.exif_transpose(image), 1, "원본 이미지 1")
-    return {"pages": pages, "warnings": list(dict.fromkeys(notices))}
+    return {"pages": pages, "warnings": list(dict.fromkeys(notices)), "page_count": page_count}
 
 
 def main():

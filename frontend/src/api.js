@@ -28,6 +28,7 @@ export async function apiFetch(path, { method = "GET", token, body, signal, resp
     if (error.name === "AbortError") throw error
     throw new ApiError(0, "network", "서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.")
   }
+  if (response.ok && responseType === "response") return response
   if (response.ok && responseType === "blob") return response.blob()
   const data = await response.json().catch((error) => {
     if (error.name === "AbortError") throw error

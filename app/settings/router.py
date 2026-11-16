@@ -29,7 +29,6 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
         ).order_by(PriceListItem.item_name)).all()
         reflection_enabled = session.scalar(select(User.reflection_enabled).where(User.id == user_id))
         user = session.get(User, user_id)
-        local_sub = user.google_sub if local_mode and user and user.last_login_at is not None else None
     local_error = None
     from app.worker.service import status as worker_status
     from app.worker.adapter import ERRORS
@@ -42,7 +41,7 @@ def settings(request: Request, user_id: int = Depends(current_user_id)):
     return request.app.state.templates.TemplateResponse(
         request=request, name="pages/settings.html",
         context={"company": company, "prices": prices, "reflection_enabled": bool(reflection_enabled),
-                 "local_mode": local_mode, "local_google_sub": local_sub, "local_key_error": local_error,
+                 "local_mode": local_mode, "local_key_error": local_error,
                  "openai_registered": (local_error is None) if local_mode else key_registered(request.app.state.database, user_id, settings=config),
                  "openai_storage_ready": request.app.state.google_access.cipher is not None,
                  "csrf_token": csrf_token,
