@@ -98,6 +98,8 @@ def _table_counts(engine: Engine) -> tuple[dict[str, int], list[str]]:
 
 
 def _normalized(value):
+    if hasattr(value, "tolist"):
+        return value.tolist()  # pgvector가 반환하는 배열도 값으로 비교한다.
     if isinstance(value, datetime):
         moment = value.replace(tzinfo=UTC) if value.tzinfo is None else value
         return moment.astimezone(UTC).isoformat()
@@ -110,6 +112,8 @@ def _normalized(value):
 
 def _rows(engine: Engine, table) -> list[tuple]:
     """PK 순서로 모든 행을 비교 가능한 값으로 정규해 돌려준다."""
+    if not inspect(engine).has_table(table.name):
+        return []  # PostgreSQL 전용 신규 표가 없는 과거 SQLite 원본은 0행이다.
     primary_key = list(table.primary_key.columns)
     statement = select(table).order_by(*primary_key) if primary_key else select(table)
     with engine.connect() as connection:
@@ -189,6 +193,8 @@ def _copy(source: Engine, target: Engine) -> None:
     """대상 한 트랜잭션으로 전체를 복사한다. 실패하면 전부 롤백된다(중단 지점)."""
     with target.begin() as connection:
         for table in Base.metadata.sorted_tables:
+            if not inspect(source).has_table(table.name):
+                continue
             with source.connect() as source_connection:
                 rows = [{column.name: row[column] for column in table.columns}
                         for row in source_connection.execute(table.select()).mappings()]

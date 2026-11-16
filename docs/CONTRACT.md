@@ -1079,3 +1079,51 @@ TradeDocDraft(TypedDict, total=False):
 수업의 모든 구성요소를 새 인프라로 옮기지는 않았다. 기존 메일 기억/요약/오류 감지는 보존하고, 별도 RAG/문서 검색 공급자·캘린더·운영 체크포인터의 실제 연동은 준비된 경계를 통해 추가한다. 관련 요구사항은 R-01~R-11이며 라이브 API 검증(R-12)·성능 비교(R-13)·새 UI 배포(R-14)의 완료를 이 모의 검증으로 주장하지 않는다.
 
 LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 승인 대기 노드 앞에 비멱등 발송을 두지 않는다. 체크포인터와 장기 기억도 구분한다([공식 interrupt 문서](https://docs.langchain.com/oss/python/langgraph/interrupts), [공식 persistence 문서](https://docs.langchain.com/oss/python/langgraph/persistence)).
+
+## 18. 지식 문서 수집과 벡터 저장
+
+2026-11-16 구현. R-07·R-08의 문서 컨텍스트 기반 준비, R-11 실패/복구, R-14 화면에 해당한다. 이번 완료 지점은 업로드·전량 비전 추출·수정/확정·조항 parent-child·임베딩 저장이며 검색·LangGraph·이메일 작성/발송 연결은 포함하지 않는다. 계획은 `docs/plans/document-ingestion.md`, 실제 코드는 `app/knowledge/`·`frontend/src/knowledge/`다.
+
+### 18.1. 경계와 값
+
+- `router → operations → Repository Protocol → SqlRepository`로 의존한다. 라우터는 HTTP와 실제 의존성 조립, operations는 처리 흐름/검증, repository는 SQL/ORM·원자적 상태 갱신을 소유한다. operations는 FastAPI·SQLAlchemy·외부 SDK를 import하지 않는다.
+- `DocumentExtractor.extract(list[PageImage]) → ExtractionResult`와 `Embedder.embed_documents(list[str]) → EmbeddingBatch`는 독립 Protocol이다. 생성 시 주입하며 실제 OpenAI 구현 하나와 두 종류의 가짜 공급자로 교체를 검증한다. 공급자 자동 탐색/범용 CRUD/새 에이전트 서버는 없다.
+- PageImage는 서버가 지정한 number·source(원본/변환 페이지 구분)·PNG bytes다. PageText는 number·source·text·blank·complete·uncertain, ExtractionResult는 페이지 목록·ModelProfile·warnings다. 페이지 ID와 출처는 서버의 렌더 결과로 대조하고 없는 원본 셀 주소나 페이지를 AI에게 생성시키지 않는다.
+- ModelProfile은 provider·model·revision·dimensions·normalization이고 정렬한 JSON의 SHA-256으로 profile_id를 만든다. 비전은 차원 0, 임베딩은 양수다. EmbeddingBatch는 입력 순서의 vectors와 profile이다. 응답 개수·인덱스·차원·유한 숫자·고정 프로필을 검증한다. 같은 차원이어도 다른 모델/전처리는 다른 의미 공간이다.
+- 사용자 선택(11/13 후속 답변): 기존 본인 OpenAI 키/현재 모델을 비전 기본값으로, `text-embedding-3-small` 1536차원을 임베딩 기본값으로 사용하고 parent-child를 채택한다. 설정은 `KNOWLEDGE_VISION_MODEL`·`KNOWLEDGE_EMBEDDING_MODEL`·`KNOWLEDGE_EMBEDDING_DIMENSIONS`·`KNOWLEDGE_OFFICE_COMMAND`이며 `.env.example`/README에 뜻을 적었다. 실제 모델 권한/정확도·비용/보관은 사람 확인 전 미확인이다.
+
+### 18.2. 업로드와 페이지 변환
+
+- 입력은 PDF·DOCX·XLSX·UTF-8 TXT·PNG·JPEG. 파일 20MiB·변환 후 50페이지·이미지 2천만 픽셀·압축 해제와 페이지 PNG 합계 각각 100MiB·추출 텍스트 100만 자다. 이름/시그니처·OOXML 주 부분·압축 한도·암호화를 검사한다. 매크로/외부 자원 연결 문서는 PDF 변환을 안내한다. HWP는 PDF로 변환 후 업로드한다. 기존 `/api/files` 5MiB 정책은 그대로다.
+- 원본은 기존 private Storage의 서버 생성 `{user_id}/attachments/{uuid}` 키, 메타데이터는 file_assets에 둔다. knowledge_documents가 제한 외래 키로 참조하며 참조 중 직접 파일 삭제는 409다. Storage 업로드 뒤 SQL 실패로 남은 객체는 기존 수동 cleanup 절차가 재확인한다. 동일 소유자+SHA-256은 문서/큐 하나로 수렴하며 사용자 사이에 중복 여부를 공개하지 않는다.
+- PDF와 이미지도 모두 시각 입력으로 읽는다. PDFium으로 PDF를 렌더링하고 Office/TXT는 LibreOffice로 PDF 변환 후 같은 경로를 쓴다. 별도 자식 프로세스·120초 timeout·제한된 환경/임시 디렉터리·리눅스 CPU/메모리/파일 제한을 사용하고 timeout 시 자식 프로세스 그룹을 정리한다. 일반 텍스트 파서/Tesseract로 추출하는 분기는 없다.
+- Office 변환/큰 페이지는 원문 대조를 요구한다. 숨김 시트·캐시 결과 없는 수식은 실패시켜 PDF 내보내기를 안내한다. 변환 페이지는 원본의 인쇄 페이지/셀 주소와 구분한다. 비전에는 요약·판단 대신 제목/조항/표/각주/예외를 포함한 원문 전사를 요청한다. confidence나 JSON 성공을 정확도 보장으로 쓰지 않는다.
+
+### 18.3. HTTP 계약
+
+모두 9.1절 Bearer 전용이다. 서버가 검증한 정수 소유자로 조회/수정/다운로드/재처리를 제한하고 타인 또는 없는 문서는 404, 미인증은 401이다. 응답은 private/no-store이며 키·임의 endpoint·실행 명령을 입력받지 않는다.
+
+| 경로 | 입력·출력 |
+|---|---|
+| POST `/api/knowledge/documents` | multipart file 한 개. 원본/대기 행 확정 후 202 문서 요약+duplicate. 변환/AI 완료를 기다리지 않음 |
+| GET `/api/knowledge/documents?offset=0` | 본인 문서 요약 20개. id·file_id·filename·size·hash·status·attempt_id·revision·오류·현재/성공 프로필 |
+| GET `…/{id}` | 요약+AI 초안 raw_pages·현재 수정문 pages·approved·warnings·published_pages·부모/자식 개수 |
+| GET `…/{id}/download` | 해시 대조한 원본 bytes, 안전한 attachment 이름 |
+| GET `…/{id}/pages/{number}` | 본인 원본을 다시 렌더링한 해당 PNG. 변환 페이지 미리보기는 서버 파일/설정에 따른 렌더 결과 |
+| GET `…/{id}/chunks?offset=0` | 마지막 성공 시도의 자식 50개와 해당 부모 원문·출처. 자식은 차원/profile_id/원문 범위를 제공하고 벡터 배열 자체는 UI로 보내지 않음 |
+| PUT `…/{id}/extraction` | `{attempt_id, revision, pages:[{number,text}], confirm}`. 전체 페이지·순서·버전을 검사. 저장만 하면 needs_review, 확정하면 queued |
+| POST `…/{id}/retry` | `{attempt_id}`. 터미널/검토 상태에서만 새 시도로 전량 재추출·임베딩 요청(202). 이전 성공 인덱스는 보존 |
+
+형식/시그니처 415, 크기 413, 빈/손상/한도·페이지 검사 422, multipart 파싱 실패 400, 오래된 revision/처리 시도·진행 중 수정/재요청은 409다. 저장소 장애/미설정은 503이다. 처리 실패는 문서의 안전한 error_code/error_stage에 남긴다. 실제 AI 오류 응답·문서 원문·키를 로그로 복사하지 않는다.
+
+### 18.4. 상태·원자성·부모/자식 불변식
+
+- 흐름은 queued → extracting → chunking → embedding → ready. 판독 불가/누락/출력 중단/변환 검토는 needs_review, 실행 실패는 failed다. 검토에서 모든 페이지를 대조·수정/확정해야 다음 청크를 만든다. 검사 통과한 전사는 자동으로 다음 단계로 진행하며 필요하면 ready 이후에도 수정/확정할 수 있다.
+- 문서 행이 대기 큐다. 프로세스당 한 개, SQL FOR UPDATE SKIP LOCKED로 claim하고 1시간 임대·attempt_id를 고정한다. 만료는 failed/processing_interrupted이며 자동 유료 재배포 없이 명시적 재시도를 기다린다. 조회 폴링은 처리 중에만 하고 업로드 성공을 ready로 표시하지 않는다.
+- 외부 API 대기 중 DB 트랜잭션을 유지하지 않는다. 단계/배치/마지막 확정마다 현재 시도·임대·상태를 검사한다. 모든 새 부모/자식/벡터와 성공 프로필을 같은 트랜잭션에서 교체하고 일부 배치/재처리 실패 시 이전 성공 결과를 보존한다. 확정 뒤 모델 설정이 바뀌어도 진행 중 시도의 프로필은 섞지 않는다.
+- knowledge_documents는 소유자·file_id·hash·상태·attempt/lease·수정 revision·AI 초안/확정문·현재/마지막 성공 프로필을 저장한다. knowledge_parents는 같은 문서/소유자/시도의 원문·순번·정규 원문/페이지 범위를 저장한다. knowledge_chunks는 parent_id·동일 범위·순번·원문·부모 안 시작/끝·vector·차원·profile_id를 저장한다.
+- 부모는 AI 요약이 아닌 확정 원문이다. 조항 경계를 우선하고 너무 긴 조항은 최대 8000자로 나눈다. 자식은 최대 1000자/겹침 150자이며 **문자 기준**이다. 자식만 임베딩하고 부모는 같은 PostgreSQL에서 읽는다. 이 크기가 최적 토큰/검색 품질이라는 주장은 하지 않는다.
+- 부모/자식의 문서·소유자·시도를 복합 외래 키로 묶고 자식 원문이 부모 범위와 같은지 검증한다. vector는 차원을 고정하지 않은 열이며 vector_dims=dimensions를 DB에서도 검사한다. 새 모델/차원은 명시적 재처리 대상이고 나중의 검색은 소유자/대상 문서/성공 시도/동일 프로필로 범위를 제한해야 한다. 이번에는 검색 인덱스/API를 만들지 않는다.
+- 기존 사용자 키/전용 로컬 제한을 재사용하고 공용 환경 키로 대체하지 않는다. local_worker의 이미지/임베딩 미지원은 명시적으로 실패한다. OpenAI 비전 요청은 store=False, 자동 SDK 재시도는 0이다. 이미 외부에 전달한 요청의 취소/exactly-once는 보장하지 않는다.
+
+검증 근거는 `tests/test_knowledge.py`·`tests/test_knowledge_browser.py`다. 실제 pgvector, 두 가짜 비전/임베딩 공급자·다른 차원, PDF/Office 변환, 원문 수정·충돌·이전 결과 보존, 실제 React/FastAPI 브라우저 흐름을 확인한다. 실제 계약서/외부 API의 정확도·비용과 운영 배포 완료는 이 시험으로 주장하지 않는다.

@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db.models import CompanyBranding, FileAsset, TradeDocumentSource, TradeProposal
 from app.files.storage import StorageClient, StorageError
 from app.files.validation import MAX_ATTACHMENT_BYTES, detect_content_type, extension_content_type
+from app.knowledge.repository import KnowledgeDocument
 from app.services.locks import user_lock
 
 
@@ -111,6 +112,7 @@ def download_file(database, storage: StorageClient, user_id: int, file_id: int) 
 def _file_in_use(session, file_id: int) -> bool:
     """문서 출처·회사 설정(로고/직인)·검토 제안이 가리키는 파일은 사용 중이다(계획 9절)."""
     return any(session.scalar(select(column).where(condition).limit(1)) is not None for column, condition in (
+        (KnowledgeDocument.id, KnowledgeDocument.file_id == file_id),
         (TradeDocumentSource.id, TradeDocumentSource.file_id == file_id),
         (CompanyBranding.user_id, or_(CompanyBranding.logo_file_id == file_id,
                                       CompanyBranding.seal_file_id == file_id)),

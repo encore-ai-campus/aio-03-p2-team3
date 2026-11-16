@@ -7,6 +7,7 @@ import LoginPage from "./pages/LoginPage"
 import PlaceholderPage from "./pages/PlaceholderPage"
 import SettingsPage from "./pages/SettingsPage"
 import PIPage from "./pages/PIPage"
+import KnowledgePage from "./knowledge/KnowledgePage"
 import POPage from "./pages/POPage"
 import CIPage from "./pages/CIPage"
 import CIStandalonePage from "./pages/CIStandalonePage"
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="documents" element={<PlaceholderPage sub="문서 작성과 발급 상태를 관리하세요." title="문서함" />} />
               <Route path="activity" element={<PlaceholderPage sub="처리 단계와 오류를 확인하는 작업 이력입니다." title="실행 기록" />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="knowledge" element={<KnowledgePage />} />
               <Route path="trade/pi" element={<PIPage />} />
               <Route path="trade/pi/:documentId" element={<PIPage />} />
               <Route path="trade/po" element={<POPage />} />
