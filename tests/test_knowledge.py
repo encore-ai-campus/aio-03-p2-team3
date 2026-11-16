@@ -256,7 +256,7 @@ def test_provider_adapters_preserve_mapping_and_request_options():
     assert request["store"] is False and request["input"][0]["content"][1]["type"] == "input_image"
     embedder = OpenAIEmbedder(lambda: "fake-key", "text-embedding-3-small", 2, client_factory=FakeClient)
     assert embedder.embed_documents(["a", "b"]).vectors == [[0.4, 0.5], [0.2, 0.3]]
-    assert all(c["max_retries"] == 0 for c in calls if "api_key" in c)
+    assert [(c["timeout"], c["max_retries"]) for c in calls if "api_key" in c] == [(180, 3), (30, 0)]
 
 
 def test_upload_review_ready_and_owner_isolation_over_http(database_url):
@@ -448,3 +448,32 @@ def test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_ke
         assert response.status_code == 409 and response.json()['error']['code'] == 'LOCAL_KEY_REQUIRED'
         detail = client.get(path, headers=headers).json()
         assert detail['attempt_id'] == previous['attempt_id'] and detail['status'] == 'ready'
+
+
+@pytest.mark.parametrize('failures', [3, 4])
+def test_vision_sdk_retries_timeout_three_times_with_long_read_budget(monkeypatch, failures):
+    import httpx
+    import json
+    from openai import OpenAI
+    monkeypatch.setattr('openai._base_client.time.sleep', lambda _: None)
+    requests = []
+    def respond(request):
+        requests.append(request)
+        assert request.extensions['timeout']['read'] == 180
+        if len(requests) <= failures:
+            raise httpx.ReadTimeout('synthetic timeout', request=request)
+        return httpx.Response(200, json={
+            'id': 'resp_fake', 'created_at': 0, 'model': 'fake-vision', 'object': 'response', 'status': 'completed',
+            'output': [{'id': 'msg_fake', 'type': 'message', 'role': 'assistant', 'status': 'completed',
+                        'content': [{'type': 'output_text', 'annotations': [], 'text': json.dumps({
+                            'text': TEXT, 'blank': False, 'complete': True, 'uncertain': []})}]}]})
+    def client(**options):
+        return OpenAI(**options, http_client=httpx.Client(transport=httpx.MockTransport(respond)))
+    extractor = OpenAIDocumentExtractor(lambda: 'fake-key', 'fake-vision', client_factory=client)
+    if failures == 3:
+        assert extractor.extract([PageImage(1, 'synthetic', png())]).pages[0].text == TEXT
+    else:
+        with pytest.raises(KnowledgeError) as failure:
+            extractor.extract([PageImage(1, 'synthetic', png())])
+        assert failure.value.code == 'provider_unavailable'
+    assert len(requests) == 4
