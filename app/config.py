@@ -78,6 +78,10 @@ class Settings:
     database_url: str = field(default="", repr=False)
     openai_api_key: str = field(default="", repr=False)
     openai_model: str = ""
+    knowledge_vision_model: str = ""  # 비우면 기존 OPENAI_MODEL/기본 모델을 사용한다.
+    knowledge_embedding_model: str = ""  # 비우면 사용자 선택 text-embedding-3-small.
+    knowledge_embedding_dimensions: str = ""  # 비우면 1536, 모델/차원별 프로필을 분리한다.
+    knowledge_office_command: str = ""  # 비우면 PATH의 soffice/libreoffice, 사용자 입력 명령은 받지 않는다.
     ai_runtime: str = "server"
     local_owner_google_sub: str = field(default="", repr=False)
     google_oauth_client_id: str = ""

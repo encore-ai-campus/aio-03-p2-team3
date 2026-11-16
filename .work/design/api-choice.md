@@ -3,6 +3,15 @@
 세팅 3-2-1(LLM)·3-2-2(외부 API)의 선택과, 요청자가 2026-11-09에 정한 Gmail 견적 MVP의 API 변경을 기록한다(`docs/plans/gmail-quote-mvp.md#3`, R-04·D-03). 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`·README에 반영한다. [Request]
 나중에 기능을 더하며 다른 LLM·API를 더하거나 바꾸면 요청자에게 묻고 이 파일을 고친다(`.work/TASK.md` 이 레포의 규칙). [Request]
 
+## 지식 문서 비전 AI 추출 방식 (2026-11-16 구현, 11/13 사용자 선택)
+
+- 사용자 선택: 지식 문서는 전부 비전 AI로 읽는다. 후속 구현 요청에서 기존 사용자 OpenAI 키/현재 설정 모델 + `text-embedding-3-small` 1536차원과 조항 parent-child를 선택했다. `app/knowledge/`에 구현하며 기존 메일/무역 추출 코드와 그래프는 유지한다.
+- 경계: `DocumentExtractor`와 `Embedder`를 독립 Protocol로 주입한다. 첫 실제 어댑터는 OpenAI Responses 비전 전사와 Embeddings API이며 두 가짜 공급자/다른 차원으로 교체를 시험한다. 기존 구조화 AI/PC 프로토콜로 가장하지 않으며 local_worker는 명시적으로 미지원이다. 서버 공용 키로 대체하지 않는다.
+- 입력: PDF/이미지는 PDFium/Pillow, DOCX/XLSX/TXT는 LibreOffice→PDFium으로 전 페이지를 시각 입력으로 만든다. 한글/표 합성 문서로 변환을 확인했다. 변환/누락 의심은 원본 대조·수정/확정 후 임베딩하고 숨김 시트·수식 결과 누락은 실패시킨다. HWP는 PDF 변환 후 업로드한다. Tesseract 설치는 필요 없다.
+- 설정: `KNOWLEDGE_VISION_MODEL`(빈 값은 OPENAI_MODEL/기존 기본값)·`KNOWLEDGE_EMBEDDING_MODEL`(빈 값은 text-embedding-3-small)·`KNOWLEDGE_EMBEDDING_DIMENSIONS`(빈 값은 1536)·`KNOWLEDGE_OFFICE_COMMAND`(빈 값은 PATH)를 `.env.example`/README에 반영했다. 모델 변경은 새 시도에 적용하고 기존 벡터는 명시적으로 재처리한다.
+- 검증/제한: 실제 pgvector·페이지 변환·React/FastAPI와 가짜 AI/Storage를 시험했다. 실제 문서 전송·외부 모델 호출·정확도/비용 측정·운영 배포는 하지 않았다. 선택 모델의 실제 비전 지원/권한과 운영 LibreOffice/Storage 제한은 #178 사람 확인 전 미확인이다. 비전 API는 store=False지만 보관/과금 정책은 본인 프로젝트에서 확인한다.
+- 출처: [OpenAI 파일 입력](https://developers.openai.com/api/docs/guides/file-inputs), [비전의 한계](https://developers.openai.com/api/docs/guides/images-vision#limitations). API의 PDF·일반 문서 처리 차이와 작은 글씨/한국어/정확도 제한을 확인했다. 특정 공급자 채택의 근거로 바꾸지 않는다.
+
 ## LLM
 ### 전용 로컬 .env 키 모드 (2026-11-12, Issue #153)
 - 요청: 개인 PC에서 본인 `.env` 키를 사용하고 공용 서버의 환경 키 사용 금지를 유지한다. `AI_RUNTIME` 기본은 `server`이며, 전용 `uv run python -m app.local`의 실제 루프백 리스너가 있는 `local` 실행에서만 환경 키를 선택한다. Render·공용 실행은 로컬 모드로 시작할 수 없다.

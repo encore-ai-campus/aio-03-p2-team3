@@ -26,12 +26,15 @@ dependencies = [
     "langchain-openai==1.7.4",
     "openai==3.49.0",
     "pyjwt==2.15.1",
+    "pgvector==0.5.1",
+    "pypdfium2==5.15.2",
 ]
 
 [dependency-groups]
 dev = [
     "pgserver==0.1.4",
     "pgserver==0.1.4 ; sys_platform != 'win32'",
+    "playwright==1.65.2",
     "pypdf==7.0.0",
     "pytest==9.2.0",
 ]

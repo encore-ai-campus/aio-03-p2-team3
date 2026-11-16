@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-13 · 업무별 마스터와 PO·CI·PL 화면
+마지막 갱신: 2026-11-16 · 지식 문서 수집과 PO·CI·PL 화면
 
 - CI 시작 화면은 원문 붙여넣기·직접 작성·PI 문서 불러오기 세 선택지를 같은 카드로 제공한다. 앞의 두 방식은 PI 없이 CI를 작성하고, 원문 추출은 별도 스키마로 근거를 검증한 뒤 기존 단독 CI 가격 확인·검토 흐름에 연결한다. PI 불러오기는 본인 PI의 최신 버전과 기존 승인 규칙을 사용한다.
 
@@ -59,6 +59,7 @@
 
 - 화면: `/inbox`는 본인 메일의 처리 중·승인 대기·발송·오류를, `/threads/{thread_id}`는 원문·후보·처리 상태와 실행 기록 링크를 제공한다. 받은 메일 목록은 90초 간격 갱신, 스레드는 처리 중일 때만 자동 갱신한다(#85·#105). 메일 HTTP 진입점은 `app/mail/`에 있고 템플릿은 `app/web/`에서 공유한다. `/about`·`/privacy`·`/terms`는 비로그인 공개 페이지다(`app/web/pages.py`).
 - 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. React 로그인·설정·PI에 이어 PO·CI·PL 화면을 구현했다. CI의 PI 목록은 본인 PI마다 최신 버전 한 건만 표시한다. PI 연결 CI의 서버 생성/추출은 선택 버전 승인 후에 가능하다. PI 없이 직접 작성하는 CI는 거래 정보와 선적 정보를 입력하고 기존 판매 단가표·단가 직접 확인 규칙으로 계산해 검토·발급한다. 브라우저에서 가상 데이터로 두 경로를 확인했으며 실제 운영 연결은 확인하지 않았다. PL은 합계 승인과 최종 발급 승인을 따로 수행한다(7절·[API 안내](trade-api.md)). 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
+- 지식 문서 `/app/knowledge`·`/api/knowledge/documents`는 PDF/DOCX/XLSX/TXT/PNG/JPEG 업로드 → 전량 비전 전사 → 의심 원문 대조/수정·확정 → 조항 parent-child → 자식 임베딩/pgvector 저장을 제공한다. 원본은 기존 private Storage, 본문·부모·벡터는 기존 PostgreSQL이며 두 모델은 독립 주입/설정이다. 본인만 조회/처리하고 재처리 실패는 이전 성공 인덱스를 보존한다. 이 기능은 저장까지이며 검색·그래프·메일에는 아직 연결하지 않았다(계약 18절).
 - 메일 그래프는 `make_quote` → `create_trade_document`로 네 무역 문서 초안을 저장한다. 그러나 기존 스레드 화면의 `thread_view()`는 후보의 `trade_doc_id`를 전달하지 않고 국내 `quote_id`만 링크로 표시한다. 따라서 무역 후보가 생성돼도 기존 화면에서 문서 검토·발송 승인으로 갈 수 없다. 임시 PostgreSQL·가짜 LLM으로 PI 후보 2개 생성과 링크/승인 폼 0개를 재현했다. 화면/JSON 연결은 전환 계획 19절(#147)에서 보완·검증해야 하며, 백엔드 발송 서비스 시험 통과를 사용자 화면 완주로 표시하지 않는다.
 - 과제 R-01·R-02·R-09·R-10의 기존 실행 근거는 Gmail 수신 경로이며, 현재 코드는 업무별 마스터 StateGraph에서 호환 준비 단계를 실행한다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
 - Google 로그인·암호화 토큰 저장·감시 갱신과 푸시 수신은 구현됐다(#79·#81). 로컬 Gmail 수집은 Pub/Sub·watch/stop 없이 동작한다(#160). 실제 운영 연동의 확인 범위는 6·7절과 #157에서 구분한다.
@@ -77,10 +78,11 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-13 · 업무 어댑터·LLM/Google 역할과 HTTP 도메인 경계
+마지막 갱신: 2026-11-16 · 지식 문서 비전/임베딩의 별도 교체 경계
 
 - 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`·`local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
+- 지식 문서 `DocumentExtractor`/`Embedder`는 위 구조화 호출로 가장하지 않고 OpenAI Responses 시각 입력/Embeddings API를 각각 감싼다. `UserKeyAccess`의 본인/실행 모드 검증은 재사용하며 미지원 local_worker·키 누락은 공용 키 대체 없이 실패한다. 비전 기본값은 현재 OpenAI 모델, 임베딩은 사용자 선택 text-embedding-3-small/1536이며 KNOWLEDGE_*로 따로 바꾼다. 비전 store=False·SDK 재시도 0, 진행 시도 프로필 고정과 명시적 재처리를 적용한다. 기존 그래프 도구는 추가/변경하지 않았다.
 - `app/llm/`은 AI 구조화 실행·재시도·PC 위임, `app/clients/gmail.py`는 Google OAuth/Gmail 통신으로 구현이 겹치지 않아 분리 유지한다. 상세 비교와 호출 관계는 [도메인 구조도](domain-layout.md).
 - 호출 예산: SDK 자동 재시도 0, 호출 제한 20초. 429는 재시도 없이 한도 안내, 통신/5xx는 최대 3회(1·2초 대기), 형식 오류는 별도 1회 재시도다. PC 방식의 재시도는 서버 `app/worker/adapter.py` 한 곳에서 기존 예산과 전체 120초 기한으로 관리한다. 짧은 HTTP/예외 코드는 실행 기록에 남기고 키·원문은 남기지 않는다(#98).
 - 등록 도구 7개: `draft_replies`, `extract_deal_terms`, `check_required_fields`, `draft_followup_replies`, `create_quote`, `create_trade_document`, `send_email`(`app/tools/registry.py`). 필수 항목은 `get_required_fields()` 한 곳에서 받고, 답장 후보는 금액·문서번호를 복사하지 않고 첨부 문서를 안내한다. `send_email`은 승인 경로에서만 호출한다. 프롬프트 버전 원본은 `app/prompts/VERSIONS.md`다.
@@ -104,7 +106,9 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-16 · PO 반응형·키보드·보완 경로 확인
+마지막 갱신: 2026-11-16 · 지식 문서·PO·CI·PL 통합 회귀 검증
+
+- 지식 문서·PO·CI·PL 통합: 최신 main `d124e31`과 화면 경로/문서를 합친 전체 `uv run pytest`는 **1006 passed·2 skipped**, 규칙 검사 경고 0개, 프론트 lint/test(11개)/build/공개 환경 검사 통과다. `test_knowledge.py` 26개와 실제 Chromium의 `test_knowledge_browser.py`는 합성 파일·실제 pgvector/FastAPI/React와 가짜 비전/임베딩/Storage로 업로드→원본 대조→수정/확정→부모/자식/벡터 저장을 확인한다. 누락 페이지 검토 대기·409 수정문 보존·소유자 분리·모델/차원 교체·SQL 교체 실패/부분 배치 실패의 이전 결과 보존·임대/늦은 시도 차단을 검증했다. Word/Excel/TXT 한글 렌더 결과와 1440/390px 화면도 직접 확인했다. 실제 AI 정확도·비용·운영 DB/Storage/Render 확인은 #178에 남는다.
 
 - 병합된 PR #189의 PO 화면을 가상 데이터 Edge에서 1440·768·390px로 확인했다. 주소 누락·상품/단가 불일치·EUR 매입 단가 부재의 화면 안내, 수정 후 USD 매입 단가 3과 할인/무상 반영 합계 27, 검토 취소의 키보드 실행, ID 재개를 확인했다. 재현 결함은 없어 화면·업무 코드는 바꾸지 않았다. 이번 브랜치의 Linux·임시 PostgreSQL 전체 `uv run pytest`는 **979 passed·2 skipped**, 규칙 검사는 경고 0개, frontend test/lint/build도 통과했다. Windows 전체 실행은 DB 복사 파일 잠금·심볼릭 링크 권한·로컬 Gmail 종료 실패로 중단했으며 PO 작업과 분리한다. 이전 가상 PO의 추출·검토·발급 해시·409 입력 보존 근거와 이번 확인 범위는 [검증 기록](test-records/20261113_po_ci_pl_screens.md)에 구분해 적었다. 실제 계정·운영 연결은 확인하지 않았다.
 
@@ -140,13 +144,14 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-16 · PO·CI·PL 로컬 진입 경로·XLSX 재시도
+마지막 갱신: 2026-11-16 · pgvector·문서 변환 조건과 PO·CI·PL 진입 경로
 
 - 단독 CI 작성은 `/app/trade/ci/standalone`과 `/app/trade/ci/standalone/{id}`를 사용한다. 기존 PI 연결 CI는 기존 주소를 사용한다. 실제 운영 연결은 확인하지 않았다.
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
 - 계획 21.1절(#149)은 6·7절을 선행으로 UI 개발과 병행한다. `render.yaml`·`scripts/render-build.sh`가 `uv sync --locked` → `npm ci --include=dev` → `npm run build`와 기존 서버 시작을 연결한다. FastAPI는 `frontend/dist`만 `/app/`에서 제공하며 상세 주소는 `index.html`로 복구하고 누락 자산은 404로 반환한다. `/api`·Google callback·Gmail Pub/Sub·공개 약관·기존 `/static`과 `/`→`/inbox`는 유지한다. 빌드가 없는 개발 환경에서도 서버는 동작하고 UI만 503이다. `frontend/` 파일은 수정하지 않았다. Dashboard 관리 서비스에는 README 절차대로 Build Command/Node 버전을 적용해야 하며 실제 Render 설정·배포 커밋·운영 응답은 미확인이다. 전체 UI 통합 검증/진입 전환은 20절 뒤 21.2절, 실제 운영 전환은 사람의 22절이다. #149는 후속 검증까지 열어 둔다.
 - 배포 기반 검증은 전체 PostgreSQL `uv run pytest` 923 passed·2 skipped, 규칙 검사 경고 0개, 프론트 lint/test/공개값 검사·실제 빌드와 Chromium smoke를 통과했다. 상세 주소/자산·콜백/알림 경로와 서버 비밀값 제외 근거는 [진행 현황](plans/react-supabase/PROGRESS.md)의 21.1절에 있다. 전체 UI 완주·실제 운영 성공과 구분한다.
 - 앱 DB는 PostgreSQL 전용이다. `DATABASE_URL`이 비었거나 비PostgreSQL이면 시작을 거부하며 SQLite 자동 생성은 없다. Alembic 대상은 `public`으로 고정해 Supabase `auth`·`storage`를 건드리지 않는다. `20261112_react_worker_merge`가 Supabase 전환/기존 worker 분기를 합친다. 운영 반영 전 DB 백업과 기존 `TOKEN_ENCRYPTION_KEY` 유지가 필요하다. SQLite 등 기존 원본은 `app.db.copy_data`, 회사 이미지/발급 바이너리는 backfill 명령으로 복사·해시 검증하며 원본·바이너리 열은 아직 삭제하지 않았다([전환 계획](plans/react-supabase/PLAN.md) 4·9·10·22절).
+- `20261113_knowledge_ingestion`은 문서·부모·자식 vector 표를 더하고 RLS/직접 공개 권한을 제한한다. vector 확장을 create_all보다 먼저 준비하며 기존 확장 스키마를 존중한다. CI PostgreSQL 16은 고정한 pgvector 이미지, Windows는 고정 소스 빌드를 사용한다. Office/TXT에는 LibreOffice가 필요하고 PDF/이미지는 고정 PDFium/Pillow로 읽는다. 설치/시험 명령·KNOWLEDGE_* 설정은 README/`.env.example`, 실제 운영 vector/버킷 제한·LibreOffice·모델 권한/정확도/과금 확인은 문서 수집 계획 2절/#178에 남아 있다. 운영 DB/배포·실제 문서 API 호출은 이번 구현에서 실행하지 않았다.
 - 무료 서버는 15분 미사용 시 잠들 수 있고 재시작/배포 때 로컬 파일을 잃으므로 운영 데이터는 Postgres에 둔다. 2026-11-10 생성한 무료 Postgres는 당시 안내상 12/10경 만료·14일 유예 후 삭제 예정이었다. 현재 요금제·보존 상태는 운영 담당자가 확인한다.
 - 서버 `stored_key`는 본인 로그인 후 `/settings`에서 키를 등록한다. 서버 `OPENAI_API_KEY` 대체는 차단돼 있다. `local_worker`는 개인 PC가 켜져 있고 같은 모델/설치 정의로 연결돼 있어야 한다. 메일·문서 입력과 AI 결과는 서버를 거치지만 PC 키는 서버에 전송/저장하지 않는다. 키를 지우거나 PC를 중지해도 이미 외부 API에 전송한 요청의 취소를 보장하지 않는다.
 - 로컬 전체 실행은 `AI_RUNTIME=local`·본인 `LOCAL_OWNER_GOOGLE_SUB`·`.env` 키와 `uv run python -m app.local`을 쓴다. 실제 리스너는 `127.0.0.1` 전용이고 공용 Uvicorn/Render 시작은 거부한다. 개인 Google OAuth·루프백 콜백과 별도 로컬 DB를 쓰며 Pub/Sub 토픽 없이 연결한다. 운영 DB·암호화 키·OAuth 비밀값을 개인 PC로 복사하지 않는다(#159·#160·#157).
@@ -159,7 +164,7 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-16 · 설정의 Gmail·Google 캘린더 연동 계획
+마지막 갱신: 2026-11-16 · 지식 문서·무역 화면 검증과 Google 연동 계획
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -170,6 +175,7 @@
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 틀 있음(2026-11-10, 시나리오·판정 기준·시험 환경. 결과는 18·19) |
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
+| 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 검색·LangGraph·메일 연결 제외 |
 | 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 계획만 작성. 로고·직인 아래 연동 메뉴/기존 Gmail 연결 → Calendar OAuth/카드 활성화 → 사람의 콘솔·Render 검증 순서. 화면·Calendar API 구현과 실제 연결은 미완료 |
 | 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1~4절 로컬 키·Gmail 수집·장치/큐·PC 실행기/기존 AI 연결 구현. 실제 키·Render 연동은 사람의 5절에서 미확인 |
 | KE KOREA 무역서류 로직 이식 계획 이력 | `docs/plans/kekorea-port.md` | 1~6절 완료, 참고 이력 |
@@ -184,7 +190,7 @@
 - 설계 결정·오류 사례·수정 이유·버전·재실행 결과는 Issue, PR('오류·재실행 기록' 칸), 팀 노션에도 남긴다.
 
 ## 9. 레포 세팅·작업 방식
-마지막 갱신: 2026-11-16 · 문서·PR 설명 수정의 CI 반복 실행 제거
+마지막 갱신: 2026-11-16 · 지식 문서 CI 준비와 문서·PR 설명 검사 분리 통합
 
 - KE KOREA 이식 1~6절 완료에 따라 `.work/TASK.md`의 이식 전용 규칙을 삭제했다. 이식 계획과 원본 사본은 참고 이력으로 보관한다(2026-11-12, 요청자 지시).
 - 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜 둠). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
@@ -198,4 +204,4 @@
 - 담당(2026-11-10): 공통 기반(공통 계약, 서버·DB·배포, Google 로그인·Gmail 알림 수신)과 검토 기능은 김민성, 캘린더 연결 기능은 정원철, 이미지→견적서 기능은 임석원. 김진혁은 Assignees가 비어 있는 Issue에서 배정받는다. 담당은 Issue Assignees로 보고, 프로젝트를 마친 뒤 PR 내역으로 README에 정리한다(`.work/TASK.md`). [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다. 자세한 것은 README '실행 방법'.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
-- CI: `.github/workflows/rules-check.yml`은 PR 생성/코드 갱신/재개와 `main` push에서 규칙 검사 후 `scripts/ci_scope.py`로 변경 경로를 판별한다. 코드·설정·미분류 경로가 있거나 비교가 실패하면 기존 전체 Python/PostgreSQL·Windows worker 검사를 실행한다. README·지정 문서 폴더의 Markdown·작업 규칙·PR 양식만 바뀌면 설치/DB/무거운 테스트를 생략한다(테스트가 직접 읽는 `docs/TEST_REPORT.md`는 제외). 필수 검사 이름 `rules-check`·`tests`는 유지하고 범위 확인 실패는 `tests` 성공으로 처리하지 않는다. `.github/workflows/pr-check.yml`은 PR 본문/읽음 코드/최신 흐름 기재를 독립적으로 검사해 설명 수정이 이전 테스트 실패를 덮거나 테스트를 다시 시작하지 않는다. 동일 브랜치의 새 커밋은 이전 실행을 취소하며 본문/코드 워크플로는 서로 취소하지 않는다. GitHub의 병합 충돌 판정과 기존 필수 검사 Ruleset은 유지한다.
+- CI: `.github/workflows/rules-check.yml`은 PR 생성/코드 갱신/재개와 `main` push에서 규칙 검사 후 `scripts/ci_scope.py`로 변경 경로를 판별한다. 코드·설정·미분류 경로가 있거나 비교가 실패하면 전체 Python/pgvector PostgreSQL·Windows worker 검사를 실행한다. Linux는 지식 문서용 Office·한글 폰트·Chromium/프론트 준비와 15분 한도, Windows는 고정 pgvector 설치를 유지한다. README·지정 문서 폴더의 Markdown·작업 규칙·PR 양식만 바뀌면 이 설치/DB/무거운 테스트를 모두 생략한다(테스트가 직접 읽는 `docs/TEST_REPORT.md`는 제외). 필수 검사 이름 `rules-check`·`tests`는 유지하고 범위 확인 실패는 `tests` 성공으로 처리하지 않는다. `.github/workflows/pr-check.yml`은 PR 본문/읽음 코드/최신 흐름 기재를 독립적으로 검사해 설명 수정이 이전 테스트 실패를 덮거나 테스트를 다시 시작하지 않는다. 동일 브랜치의 새 커밋은 이전 실행을 취소하며 본문/코드 워크플로는 서로 취소하지 않는다. GitHub의 병합 충돌 판정과 기존 필수 검사 Ruleset은 유지한다.

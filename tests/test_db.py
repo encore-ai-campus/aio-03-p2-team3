@@ -19,6 +19,7 @@ def test_contract_tables_and_postgres_jsonb(database):
         "trade_document_versions", "trade_proposals", "trade_artifacts",
         "file_assets", "trade_document_sources",
         "worker_pairings", "worker_devices", "worker_jobs", "worker_rate_limits",
+        "knowledge_documents", "knowledge_parents", "knowledge_chunks",
     }
     ddl = str(CreateTable(RunEvent.__table__).compile(dialect=postgresql.dialect()))
     assert "JSONB" in ddl
