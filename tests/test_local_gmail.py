@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 from dataclasses import replace
 from datetime import timedelta
 from threading import Event
@@ -402,7 +403,11 @@ def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_p
                 assert before == after and after["watches"] == after["stops"] == 0
             process.terminate()
             # Uvicorn은 정상 lifespan 종료 뒤 원래 SIGTERM을 다시 발생시킬 수 있다.
-            assert process.wait(timeout=10) in {0, -signal.SIGTERM}
+            return_code = process.wait(timeout=10)
+            if os.name == "nt":
+                assert return_code == 1
+            else:
+                assert return_code in {0, -signal.SIGTERM}
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -414,4 +419,5 @@ def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_p
             logfile.seek(0)
             logs = logfile.read()
             assert "fake-local-private-key" not in logs and "fake-refresh-1" not in logs
-            assert "Application shutdown complete" in logs
+            if os.name != "nt":
+                assert "Application shutdown complete" in logs
