@@ -118,7 +118,7 @@ def test_gmail_settings_browser_callbacks_failures_and_mobile(database_url, tmp_
     subprocess.run(["npm", "run", "build", "--", "--outDir", str(output)], cwd=root / "frontend",
                    env={**os.environ, "SUPABASE_URL": SUPABASE_URL,
                         "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_fake_for_browser_test"},
-                   check=True, capture_output=True, timeout=120)
+                   check=True, capture_output=True, timeout=120, shell=os.name == "nt")
     monkeypatch.setattr(frontend, "DIST", output)
     jwks, google = FakeJwks(), FakeGoogle()
     subject = uuid4()

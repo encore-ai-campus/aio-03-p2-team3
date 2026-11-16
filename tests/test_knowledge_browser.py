@@ -50,7 +50,7 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
                    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_fake_for_browser_test", "FRONTEND_PORT": "5174"}
     output = tmp_path / "frontend-dist"
     subprocess.run(["npm", "run", "build", "--", "--outDir", str(output)], cwd=root / "frontend",
-                   env=environment, check=True, capture_output=True, timeout=120)
+                   env=environment, check=True, capture_output=True, timeout=120, shell=os.name == "nt")
     monkeypatch.setattr(frontend, "DIST", output)
     jwks, extractor, embedder = FakeJwks(), FakeExtractor(uncertain=True), FakeEmbedder()
     subject = uuid4()

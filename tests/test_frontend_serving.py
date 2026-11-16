@@ -2,6 +2,7 @@
 
 from base64 import b64encode
 import json
+import os
 from urllib.parse import parse_qs, urlsplit
 
 from cryptography.fernet import Fernet
@@ -71,7 +72,12 @@ def test_assets_have_correct_types_and_conditional_cache(ui_client):
 def test_missing_assets_and_private_files_never_receive_spa(ui_client, built_ui):
     outside = built_ui.parent / "server-secret.txt"
     outside.write_text("fake-outside-secret")
-    (built_ui / "leak.txt").symlink_to(outside)
+    try:
+        (built_ui / "leak.txt").symlink_to(outside)
+    except OSError as error:
+        if os.name == "nt" and getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege is disabled")
+        raise
     for path in (
         "/app/assets/missing.js", "/app/assets/missing.css", "/app/assets/no-extension",
         "/app/missing.png", "/app/.env", "/app/leak.txt", "/app/%2e%2e/server-secret.txt",
