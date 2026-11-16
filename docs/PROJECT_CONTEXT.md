@@ -164,7 +164,7 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-16 · 지식 문서 구현과 PO·CI·PL 검증 기록 위치
+마지막 갱신: 2026-11-16 · 지식 문서·무역 화면 검증과 Google 연동 계획
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -176,6 +176,7 @@
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 검색·LangGraph·메일 연결 제외 |
+| 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 계획만 작성. 로고·직인 아래 연동 메뉴/기존 Gmail 연결 → Calendar OAuth/카드 활성화 → 사람의 콘솔·Render 검증 순서. 화면·Calendar API 구현과 실제 연결은 미완료 |
 | 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1~4절 로컬 키·Gmail 수집·장치/큐·PC 실행기/기존 AI 연결 구현. 실제 키·Render 연동은 사람의 5절에서 미확인 |
 | KE KOREA 무역서류 로직 이식 계획 이력 | `docs/plans/kekorea-port.md` | 1~6절 완료, 참고 이력 |
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |
