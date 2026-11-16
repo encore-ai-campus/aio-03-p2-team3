@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from app.auth import gmail as gmail_connection
+from app.auth import calendar as calendar_connection
 from app.clients.gmail import GoogleError, missing_scopes
 from app.db.models import GmailWatch, User
 from app.services.auth import has_refresh_token, missing_login_settings, save_login, stored_scopes
@@ -110,6 +111,8 @@ def google_callback(
     request: Request, code: str | None = None, state: str | None = None, error: str | None = None,
 ):
     pending = request.session.pop("oauth", None)
+    if isinstance(pending, dict) and pending.get("service") == "calendar":
+        return calendar_connection.complete_callback(request, pending, state, code, error)
     if isinstance(pending, dict) and "user_id" in pending:
         # 계획 7절: Bearer 연결 시작(/api/gmail/connect)이 만든 대기 값이다.
         return gmail_connection.complete_callback(request, pending, state, code, error)

@@ -109,6 +109,8 @@ def test_gmail_settings_browser_callbacks_failures_and_mobile(database_url, tmp_
     from app.main import create_app
     from app.web import frontend
     from tests.fakes.google import FakeGoogle, fake_login
+    from tests.test_calendar_connect import FakeCalendar
+    from app.clients.calendar import CalendarDisabled
     from tests.test_gmail_connect import settings_of
     from tests.test_knowledge_browser import serve
     from tests.test_supabase_auth import SUPABASE_URL
@@ -120,12 +122,12 @@ def test_gmail_settings_browser_callbacks_failures_and_mobile(database_url, tmp_
                         "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_fake_for_browser_test"},
                    check=True, capture_output=True, timeout=120, shell=os.name == "nt")
     monkeypatch.setattr(frontend, "DIST", output)
-    jwks, google = FakeJwks(), FakeGoogle()
+    jwks, google, calendar_google = FakeJwks(), FakeGoogle(), FakeCalendar()
     subject = uuid4()
     jwks.with_google_identity(subject, "fake-sub-1")
     token = jwks.token(sub=subject)
     settings = settings_of(database_url)
-    app = create_app(settings, google=google, supabase_auth=TokenVerifier(
+    app = create_app(settings, google=google, calendar=calendar_google, supabase_auth=TokenVerifier(
         SUPABASE_URL, fetch_jwks=jwks.serve, secret_key="fake-server-secret", fetch_admin_user=jwks.admin_serve))
     session = {"access_token": token, "refresh_token": "fake-refresh", "token_type": "bearer",
                "expires_at": int(time.time()) + 3600, "expires_in": 3600,
@@ -165,7 +167,7 @@ def test_gmail_settings_browser_callbacks_failures_and_mobile(database_url, tmp_
         gmail = page.get_by_role("region", name="Gmail 연동", exact=True)
         calendar = page.get_by_role("region", name="Google 캘린더 연동", exact=True)
         expect(gmail.get_by_text("연결 안 됨", exact=True)).to_be_visible()
-        expect(calendar.get_by_role("button")).to_be_disabled()
+        expect(calendar.get_by_role("button", name="Google 캘린더 연결", exact=True)).to_be_enabled()
 
         def double_connect():
             # 같은 JS 작업 안의 연속 클릭으로 React 렌더 전 중복 요청도 검증한다.
@@ -255,6 +257,52 @@ def test_gmail_settings_browser_callbacks_failures_and_mobile(database_url, tmp_
         expect(gmail.get_by_text("연결됨", exact=True)).to_be_visible()
         gmail.get_by_role("button", name="해제 확인", exact=True).click()
         expect(gmail.get_by_text("연결 안 됨", exact=True)).to_be_visible()
+
+        # Calendar만 연결 → 새로고침 → 해제 → 취소/오류 복구 → 두 서비스 동시 연결.
+        calendar.get_by_role("button", name="Google 캘린더 연결", exact=True).evaluate("button => { button.click(); button.click() }")
+        expect(calendar.get_by_text("연결됨", exact=True)).to_be_visible()
+        expect(gmail.get_by_text("연결 안 됨", exact=True)).to_be_visible()
+        assert len(calendar_google.called("exchange")) == 1
+        expect(page).to_have_url(base + "/app/settings")
+        page.reload()
+        nav.get_by_role("button", name="연동하기", exact=True).click()
+        expect(calendar.get_by_text("연결됨", exact=True)).to_be_visible()
+        calendar.get_by_role("button", name="Google 캘린더 연결 해제", exact=True).click()
+        calendar.get_by_role("button", name="해제 확인", exact=True).evaluate("button => { button.click(); button.click() }")
+        expect(calendar.get_by_text("연결 안 됨", exact=True)).to_be_visible()
+        assert not calendar_google.called("revoke")
+        result["cancel"] = True
+        calendar.get_by_role("button", name="Google 캘린더 연결", exact=True).click()
+        expect(page.get_by_text("Google 캘린더 연결을 취소했습니다.", exact=False)).to_be_visible()
+        result["cancel"] = False
+        calendar_google.check_error = CalendarDisabled("disabled")
+        calendar.get_by_role("button", name="Google 캘린더 연결", exact=True).click()
+        expect(page.get_by_text("Google Calendar API가 활성화되지 않았습니다.", exact=False)).to_be_visible()
+        expect(calendar.get_by_text("연결 안 됨", exact=True)).to_be_visible()
+        calendar_google.check_error = None
+        calendar.get_by_role("button", name="Google 캘린더 연결", exact=True).click()
+        expect(calendar.get_by_text("연결됨", exact=True)).to_be_visible()
+        double_connect()
+        expect(gmail.get_by_text("연결됨", exact=True)).to_be_visible()
+        expect(calendar.get_by_text("연결됨", exact=True)).to_be_visible()
+        calendar_google.check_error = GoogleUnavailable("outage")
+        calendar.get_by_role("button", name="상태 다시 확인", exact=True).click()
+        expect(calendar.get_by_text("연결 상태 미확인", exact=True)).to_be_visible()
+        expect(calendar.get_by_role("alert")).to_contain_text("잠시 후 상태를 다시 확인")
+        expect(gmail.get_by_text("연결됨", exact=True)).to_be_visible()
+        calendar_google.check_error = None
+        calendar.get_by_role("button", name="상태 다시 확인", exact=True).click()
+        expect(calendar.get_by_text("연결됨", exact=True)).to_be_visible()
+        calendar.get_by_role("button", name="Google 캘린더 연결 해제", exact=True).click()
+        calendar.get_by_role("button", name="해제 확인", exact=True).click()
+        expect(calendar.get_by_text("연결 안 됨", exact=True)).to_be_visible()
+        expect(gmail.get_by_text("연결됨", exact=True)).to_be_visible()
+        gmail.get_by_role("button", name="Gmail 연결 해제", exact=True).click()
+        gmail.get_by_role("button", name="해제 확인", exact=True).click()
+        expect(gmail.get_by_text("연결 안 됨", exact=True)).to_be_visible()
+        page.goto(base + "/app/settings?calendar=connected&keep=1")
+        expect(calendar.get_by_text("연결 안 됨", exact=True)).to_be_visible()
+        expect(page).to_have_url(base + "/app/settings?keep=1")
 
         # 위조 성공 쿼리는 상태를 바꾸지 않는다. 상태 조회 실패에도 Calendar 카드는 남는다.
         page.goto(base + "/app/settings?gmail=connected&keep=1")

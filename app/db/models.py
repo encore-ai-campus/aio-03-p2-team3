@@ -50,7 +50,7 @@ class Updated:
 
 
 class User(Base, Created):
-    """google_sub는 Google 메일 연결 사용자만 쓰고 Supabase 로그인 사용자는 supabase_uid로
+    """google_sub는 Gmail/Calendar 연결 사용자가 쓰고 Supabase 로그인 사용자는 supabase_uid로
     구분한다(CONTRACT 7.1절, 계획 5절). 두 값 모두 유일하고 아직 연결 전이면 NULL이다."""
     __tablename__ = "users"
     __table_args__ = (Index("uq_users_supabase_uid", "supabase_uid", unique=True),)
@@ -76,6 +76,28 @@ class GoogleToken(Base, Updated):
     access_token_enc: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     scopes: Mapped[list] = mapped_column(JSON_VALUE, default=list)
+
+
+class CalendarToken(Base, Updated):
+    __tablename__ = "calendar_tokens"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    google_sub: Mapped[str] = mapped_column(String)
+    refresh_token_enc: Mapped[str] = mapped_column(Text)
+    access_token_enc: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    scopes: Mapped[list] = mapped_column(JSON_VALUE, default=list)
+
+
+class CalendarOAuthAttempt(Base):
+    """서명 쿠키를 복원해도 재사용하지 못하는 일회성 서버 state·암호화 PKCE."""
+    __tablename__ = "calendar_oauth_attempts"
+    state_hash: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    google_sub: Mapped[str] = mapped_column(String)
+    verifier_enc: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    consent: Mapped[bool] = mapped_column(Boolean)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class UserOpenAIKey(Base, Updated):

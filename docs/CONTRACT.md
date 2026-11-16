@@ -581,6 +581,8 @@ class AgentError(TypedDict):
 - 로컬 수집(계획 local-openai-execution 2절): 같은 `gmail_watches` 표를 개인 DB에서 사용하며 `topic="local:history"`는 로컬 표시자이지 Pub/Sub 토픽이 아니다. 명시적 로그인 때 `users.getProfile`의 현재 historyId로 시작하고 `expiration=NULL`, `last_renewed_at`은 연결 시각(세대)을 기록한다. `active`는 수집 가능, `stopped`는 로그아웃/동의 취소, `error`는 `token_expired`·`history_expired`(재로그인 전 중단) 또는 `local_connect: <안전 코드>`·`local_poll: <안전 코드>`(다음 주기 재시도)다. 모든 페이지/메일 조회 성공 뒤에만 커서를 갱신하고 중지·다른 연결 세대의 늦은 결과는 적용하지 않는다. 스키마는 추가하지 않는다.
 - 처리 상태와 화면 표시: `processing` 처리 중 · `awaiting_approval` 승인 대기 · `sent` 보냄 · `error` 오류(`notice=rate_limit`이면 '한도 초과' 표시) · `ignored`는 목록에 보이지 않는다. [Request · Claude proposal]
 
+- Calendar OAuth(#192, `20261116_calendar_oauth`): `calendar_tokens`는 `user_id` PK/FK·`google_sub`·Fernet 암호화 access/refresh token·UTC `expires_at`·실제 `scopes`·`updated_at`를 별도 저장한다. 기존 `google_tokens`는 Gmail 전용으로 유지한다. `calendar_oauth_attempts`는 state SHA-256 PK·사용자 FK·기대 Google subject·암호화 PKCE verifier·만료·재동의 여부·원자적 소비 여부를 보관한다. 10분·한 번만 코드 교환하며 다음 연결/해제 때 대기 행을 지운다. 소비된 쿠키 복원도 재교환하지 못하고 처리 도중 해제/새 연결되면 최종 저장을 거부한다. 새 표는 RLS 활성화·PUBLIC/anon/authenticated 권한 제거로 서버만 접근한다. 기존 사용자·Gmail 토큰은 복사/변경하지 않는다.
+
 ### 7.1. Supabase 전환 DB 목표 (2026-11-12, 계획 1절 확정)
 
 - 아래는 전환 계약이다. 3절(테스트 PostgreSQL)·4절(PostgreSQL 전용 설정·이전 도구)·5절(Supabase 인증·사용자 매핑)·8절(Storage 첨부 API)·9절(회사 이미지 Storage 전환)을 적용했고(2026-11-12), 10절은 [목표]로 남는다. 구현은 `docs/plans/react-supabase/PLAN.md` 순서대로 진행하며 각 PR에서 이 절과 코드를 함께 고친다. [Request · Claude proposal]
@@ -669,6 +671,9 @@ class AgentError(TypedDict):
 | React JSON API: `GET /api/me`, `/api/gmail/*`(연결·해제·로그아웃), `/api/files*`(16.3절), 계획 5~8절이 Bearer로 연결하는 무역·설정·메일·실행 기록 API | `Authorization: Bearer`만. 쿠키를 보내지 않아도 동작해야 한다 | [적용 2026-11-12, 계획 5·7절] `/api/me`·`/api/gmail/*`·`/api/trade/*`(문서·설정)는 `Authorization` 헤더가 있으면 Bearer만 검증하고(쿠키 우회 금지, Bearer 변경 요청은 CSRF 토큰 불필요) 헤더가 없으면 legacy 쿠키+CSRF를 그대로 쓴다. CORS의 `Authorization` 헤더를 허용했다. `/api/files*`는 Bearer 전용으로 구현했다(계획 8절, 2026-11-12 — 쿠키 경로 없음). 메일·실행 기록 Bearer 연결은 계획 19·20절 |
 
 - Gmail 연결 API(적용 2026-11-12, 계획 7절, `app/auth/gmail.py`): 앱 로그인(legacy 로그인)과 흐름을 분리한 Bearer 전용 경로다. `POST /api/gmail/connect`가 state·PKCE 검증값·연결할 내부 사용자·기대 Google subject를 서명된 세션 쿠키(`gq_session`, 10분·일회용)에 담아 Google 동의 화면 주소를 JSON으로 돌려주면, `GET /auth/google/callback`이 대기 값의 내부 사용자가 있을 때만 이 흐름으로 완성해 React 앱(`/app/settings?gmail=<결과>`)으로 안내한다. 결과 키: `connected`·`cancelled`·`login_failed`·`scope_missing`·`config_missing`·`expired`·`different_account`·`account_conflict`. 대기 값에 내부 사용자가 없으면 기존 legacy 로그인 콜백 그대로다(같은 redirect URI를 공유한다). 연결은 기존 `store_login`(토큰 암호화 저장)·`register_watch`(감시 등록)·`get_access_token`(갱신)을 그대로 재사용하고, `POST /api/gmail/logout`은 앱 로그아웃 때 감시만 멈추며, `POST /api/gmail/disconnect`는 Google 토큰 폐기(`GoogleClient.revoke`)까지 하는 연결 해제다(해제 후에도 `google_sub`는 남겨 같은 계정만 다시 연결한다). `GET /api/me`의 `gmail` 객체가 연결 상태이며, 그 요청 뒤 감시 갱신(`renew_watch_if_due`)을 건다(legacy HTML 방문뿐 아니라 알림 수신·API 경로에서도 갱신).
+- Calendar 연결(#192): Bearer 전용 `POST /api/calendar/connect` → `{authorization_url}`·`POST /api/calendar/disconnect` → `{connected:false}`. 같은 `/auth/google/callback`에서 쿠키의 `service=calendar`를 먼저 분기한다. DB의 일회성 state·PKCE·10분 만료·Supabase 공급자 subject 일치·필수 범위·갱신 토큰·캘린더 목록 접근을 확인한 뒤만 암호화 저장한다. 다른 사용자/legacy 행과 충돌하면 `account_conflict`로 거부하며 자료를 자동 병합하지 않는다. 갱신 토큰 누락은 같은 사용자/서비스에 한 번만 `prompt=consent`로 재요청한다. 결과는 `/app/settings?calendar=<결과>`로 안내하며 Gmail/legacy callback은 유지한다. Calendar 결과 키는 Gmail과 같은 실패 키 외에 `refresh_missing`·`token_expired`·`api_disabled`·`google_unavailable`이 있다.
+- `/api/me.calendar`는 보통 `{connected:boolean}`이다. 매번 목록 조회로 권한을 확인하며 만료 60초 전부터 Calendar 갱신 토큰만 사용한다. 취소/만료·권한 부족이면 Calendar 토큰을 지우고 false, API 비활성화/통신·쿼터 장애면 토큰을 보존하고 `{connected:false,error:api_disabled|google_unavailable|config_missing}`로 표시한다. `error`는 선택적 상태 조회 실패 코드이며 Gmail 연결/감시를 덮어쓰지 않는다. 연결 여부를 URL 결과로 추측하지 않는다. Google 토큰·캘린더 목록/원문은 브라우저로 반환하지 않는다.
+- 서비스별 해제: Calendar는 저장 토큰/대기 연결만 삭제하고 Google revoke를 호출하지 않는다. Gmail의 기존 revoke 의미는 유지하며 해제 후 Calendar도 공급자로 재검증한다. Google 전체 grant 철회는 양쪽 토큰을 무효화할 수 있으므로 두 카드에 재연결 가능성을 안내한다. Gmail 감시 중지/로그아웃은 Calendar 토큰을 삭제하지 않는다. 앱 로그인·두 서비스 동의는 별개다.
 - 계정 연결 규칙(적용 2026-11-12, 계획 7절): 연결 시작 때 서버가 `SUPABASE_SECRET_KEY`로 Supabase Auth의 사용자 조회(admin)를 불러 공급자 identity의 Google subject를 구한다(사용자가 고칠 수 있는 `user_metadata`는 근거로 안 씀). 콜백의 Google subject가 이 값이나 이미 연결된 `google_sub`와 다르면 `different_account`, 같은 Google 계정의 기존 행이 이미 다른 Supabase 로그인에 연결됐거나 확인 근거가 없으면 `account_conflict`로 거부한다. 확인 근거가 있을 때만 기존 정수 ID(자료)를 보존해 연결한다(빈 껍데기 사용자 행 삭제, 양쪽에 자료가 있으면 외래 키가 삭제를 막아 `account_conflict`). 서버 비밀 키가 없으면 연결 시작이 503 `auth_not_configured`, 계정 조회 장애는 503 `auth_unavailable`, Google 로그인 설정 누락은 503 `config_missing`이다.
 
 - `GET /api/me`(Bearer 전용, 적용 2026-11-12): 인증 상태·내부 `user_id`·프로필(표시 이름·이메일)·Gmail 연결 상태(`gmail.connected`·`gmail.watch`)를 하나의 JSON으로 돌려준다. React 로그인·새로고침 복구가 이 경로부터 시작한다. 토큰이 없거나 검증에 실패하면 401.
@@ -682,6 +687,8 @@ class AgentError(TypedDict):
 - 만료·실패: 401이면 화면은 로그인 복구를 안내한다. 유효한 access token의 남은 수명 동안 로그아웃 즉시 폐기가 보장되는 것은 아니다(안내 문구에 명시).
 
 ## 10. Google
+
+- Calendar 전용 `app/clients/calendar.py`의 `CalendarClient`는 기존 Google 코드 교환/ID 토큰 검증/PKCE/갱신을 재사용하고 요청 범위만 `openid`·`email`·`calendar.readonly`로 분리한다(`include_granted_scopes=false`). `check_calendars()`는 Calendar API `calendarList.list(maxResults=1, fields=items(id))` 성공만 확인하고 목록·일정 원문을 저장/노출하지 않는다. 401·403·API 비활성화·쿼터/5xx·통신 오류는 허용된 짧은 코드로만 분류한다(15초 timeout). `app.state.calendar_access`에 독립 주입하며 실제 시험에는 `create_app(calendar=가짜)`를 사용한다. 일정 포트·그래프·도구와는 연결하지 않는다.
 - OAuth 범위는 `app/config.py`의 `GOOGLE_SCOPES` 한 곳에서만 읽는다. 후보: `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.send`. 이 범위로 감시 등록·기록 조회·메일 읽기·발송이 되는지와 민감·제한 범위 구분은 5에서 공식 문서로 확인하고, 다르면 5의 결과대로 이 줄과 코드를 고친다. [Request]
 - 동의 요청은 `access_type=offline`(갱신 토큰), `include_granted_scopes=true`로 한다. 나중에 캘린더 범위(`register_calendar_event` 도구)를 더하면 기존 사용자는 다시 동의해야 한다: 로그인 때 저장된 `scopes`에 `GOOGLE_SCOPES`가 다 없으면 `prompt=consent`로 다시 동의를 받는다. [Request · Claude proposal]
 - 알림 수신 경로: `POST /gmail/push`. 요청을 확인한 뒤 본문의 `emailAddress`·`historyId`만 읽고 바로 204로 응답한다. 처리는 백그라운드에서 한다. [Request]
@@ -703,10 +710,10 @@ class AgentError(TypedDict):
 | `LOCAL_OWNER_GOOGLE_SUB` | HTTPS 서버에 연결하는 app.worker.pc의 --env 파일 전용 Google sub. 앱 공통 Settings·app.local은 읽지 않음 | local-openai-execution 4 |
 | `OPENAI_API_KEY` | local 앱의 PC 환경 키 또는 개인 PC 실행기 키. 서버 앱은 읽거나 대체 키로 사용하지 않음 | local-openai-execution 1·4 |
 | `OPENAI_MODEL` | 쓸 OpenAI 모델 이름(비우면 `gpt-6-luna`) | 모든 LLM 호출 |
-| `GOOGLE_OAUTH_CLIENT_ID` | OAuth 클라이언트 ID | 6 |
+| `GOOGLE_OAUTH_CLIENT_ID` | Gmail·Calendar 공용 OAuth 클라이언트 ID(서비스별 범위·토큰 분리) | 6, #192 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 클라이언트 비밀번호 | 6 |
 | `GOOGLE_OAUTH_REDIRECT_URI` | OAuth 리디렉션 주소(로컬·Render 각각) | 6 |
-| `GMAIL_PUBSUB_TOPIC` | 감시 등록 토픽 전체 이름 | 6 |
+| `GMAIL_PUBSUB_TOPIC` | Gmail 감시 등록 토픽 전체 이름. Calendar만 연결할 때 필요 없음 | 6 |
 | `PUBSUB_PUSH_AUDIENCE` | 푸시 OIDC 토큰의 대상(추천 방식) | 7 |
 | `PUBSUB_PUSH_SERVICE_ACCOUNT` | 푸시 OIDC 토큰의 서비스 계정 이메일(추천 방식) | 7 |
 | `PUBSUB_PUSH_TOKEN` | 대체 방식의 비밀 토큰(대체 방식을 쓸 때만) | 7 |

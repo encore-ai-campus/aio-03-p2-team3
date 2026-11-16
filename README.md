@@ -171,7 +171,19 @@ DB 마이그레이션은 기존 사용자·키·메일·승인을 보존한다. 
 | OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 서버: 사용자별 `/settings` 등록. 전용 로컬: `AI_RUNTIME=local`·`OPENAI_API_KEY`. `LOCAL_OWNER_GOOGLE_SUB`는 HTTPS 서버에 연결하는 개인 PC 실행기 전용. 모델은 `OPENAI_MODEL`(비우면 `gpt-6-luna`) |
 | Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
 | Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
-| Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | Calendar API와 사용자별 Google OAuth를 사용. 일정 도구 작업 때 연결 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
+| Google Calendar API | 설정에서 읽기 전용 계정 연결·캘린더 목록 접근 확인 | Calendar API 사용 설정과 사용자별 Google OAuth 동의. 아래 연동 안내 참고 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
+
+### 설정의 Gmail·Google 캘린더 연결 (#192)
+
+`/app/settings` → 로고·직인 아래 **연동하기**에서 각 서비스를 연결·다시 연결·해제한다. 앱에 로그인한 Google 계정과 같은 계정만 연결할 수 있다. 앱 로그인만으로 서비스 권한이 생기지는 않는다. Calendar는 읽기 전용 연결이며 일정 등록·추천은 제공하지 않는다.
+
+1. 기존 OAuth 클라이언트가 속한 Google Cloud 프로젝트에서 **Google Calendar API**를 사용 설정한다. Google Auth Platform → Data Access에 `openid`, `email`, `https://www.googleapis.com/auth/calendar.readonly`를 준비한다. Gmail 연결 요청에는 Calendar 범위를 추가하지 않는다. 게시/테스트 사용자·미검증 앱 제한도 확인한다.
+2. Clients의 웹 애플리케이션 허용 redirect URI와 서버 `GOOGLE_OAUTH_REDIRECT_URI`를 기존 `/auth/google/callback` 주소로 맞춘다. Supabase Google 로그인 callback은 별개다. 로컬 개발은 같은 출처 `/api`·`/auth` 프록시와 실제 로그인 반환 주소를 확인한다.
+3. 기존 `GOOGLE_OAUTH_CLIENT_ID/SECRET`, `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET`, `SUPABASE_URL/SECRET_KEY`, PostgreSQL 설정을 사용한다. Calendar만 연결할 때 Gmail Pub/Sub 토픽은 필요 없다. 새 비밀값/환경변수는 없다. 배포 전 DB 백업·기존 암호화 키를 유지하고 서버 시작의 `20261116_calendar_oauth` migration을 적용한다. 새 두 표는 서버 전용이며 RLS·공개 역할 접근 차단을 적용한다.
+4. 테스트용 본인 계정으로 동의한 뒤 서버의 캘린더 목록 접근 확인까지 성공해야 연결됨으로 표시한다. 상태 다시 확인은 토큰 갱신/목록 조회를 수행한다. API 비활성화·장애는 미확인, 만료/철회·권한 부족은 재연결 대상으로 표시한다. 갱신 토큰 누락은 동의를 한 번만 다시 요청한다.
+5. Calendar 해제는 앱 사용 중단과 Calendar 토큰 삭제다. **Gmail 해제는 기존대로 Google 권한을 철회**하므로 같은 클라이언트의 Calendar도 재연결이 필요할 수 있다. Google 계정의 앱 권한 전체 철회도 양쪽에 영향을 준다. 해제 후 두 카드에서 상태를 다시 확인한다. 앱 로그아웃은 기존 Gmail 감시만 중지하고 서비스 토큰은 보존한다.
+
+자동 검증은 가짜 Google/JWKS·실제 임시 PostgreSQL·Chromium을 사용한다. 실제 Google 동의·API 활성화·Render 배포·메일 수집/승인 발송 확인은 사람의 [#193](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/193)이며 미확인이다. 실제 토큰·계정 식별자·일정 원문은 시험 기록에 남기지 않는다.
 
 API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`·Render에만 넣는다.
 
