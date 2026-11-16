@@ -1,0 +1,31 @@
+# PR 본문 수정은 이 워크플로만 다시 실행한다. 실패한 코드 테스트를 skip 결과로 덮지 않는다.
+name: pr-check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-check:
+    name: pr-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: PR 본문 검사(읽은 파일·최신 흐름 갱신)
+        run: python .work/check.py --pr
