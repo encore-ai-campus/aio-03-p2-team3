@@ -64,7 +64,11 @@ def _resolve_source(source: str, workdir: Path) -> tuple[str, bool]:
         raise ValueError(f"원본 파일이 없습니다: {source}")
     copied = workdir / path.name
     copy2(path, copied)
-    upgrade_database(Database(f"sqlite:///{copied}").engine)
+    database = Database(f"sqlite:///{copied}")
+    try:
+        upgrade_database(database.engine)
+    finally:
+        database.close()
     return f"sqlite:///{copied}", True
 
 

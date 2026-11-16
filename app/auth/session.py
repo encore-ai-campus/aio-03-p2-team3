@@ -71,10 +71,6 @@ def connection_status(request: Request, user: User) -> dict:
         watch = session.get(GmailWatch, user.id)
         status = watch.status if watch else "stopped"
         code = (watch.last_error or "").split(":", 1)[0] if watch and status == "error" else ""
-    if request.app.state.google_access.local_mode:
-        owner = request.app.state.settings.local_owner_google_sub.strip()
-        if not owner or user.google_sub != owner or user.last_login_at is None:
-            return {"label": "로컬 수집 대기", "notice": "설정에서 본인 Google 식별자를 확인하고 .env의 소유자 설정으로 다시 시작해 주세요.", "relogin": False}
     return {
         "label": (LOCAL_LABELS if request.app.state.google_access.local_mode else WATCH_LABELS).get(status, status),
         "notice": CONNECTION_NOTICES.get(code),

@@ -58,7 +58,7 @@ def clean_environment(monkeypatch):
 def local_web(tmp_path, database_url, sdk):
     env = tmp_path / ".env"
     env.write_text("\n".join([
-        "AI_RUNTIME=local", "LOCAL_OWNER_GOOGLE_SUB=fake-sub-1", "OPENAI_API_KEY=fake-local-private-key",
+        "AI_RUNTIME=local", "OPENAI_API_KEY=fake-local-private-key",
         f"DATABASE_URL={database_url}", "SESSION_SECRET=fake-session-secret",
         f"TOKEN_ENCRYPTION_KEY={Fernet.generate_key().decode()}",
         "GOOGLE_OAUTH_CLIENT_ID=fake-client", "GOOGLE_OAUTH_CLIENT_SECRET=fake-secret",
@@ -86,7 +86,7 @@ def test_real_dotenv_loader_defaults_server_and_does_not_load_environment_key(tm
     get_settings.cache_clear()
     settings = get_settings(str(env))
     assert settings.ai_runtime == "local" and settings.openai_api_key == "fake-local"
-    assert settings.local_owner_google_sub == "fake-owner"
+    assert not hasattr(settings, "local_owner_google_sub")
     assert "fake-local" not in repr(settings) and "fake-owner" not in repr(settings)
 
 
@@ -138,7 +138,7 @@ def test_launcher_passes_actual_loopback_socket_to_uvicorn(monkeypatch, database
         validate_runtime(Settings(ai_runtime="local"))
 
 
-def test_verified_owner_uses_dotenv_key_for_mail_without_db_key_access(local_web, sdk, email):
+def test_local_app_uses_dotenv_key_for_mail_without_db_key_access(local_web, sdk, email):
     client, settings = local_web
     database = client.app.state.database
     statements = []
@@ -164,7 +164,7 @@ def test_verified_owner_uses_dotenv_key_for_mail_without_db_key_access(local_web
 
 
 @pytest.mark.parametrize("kind", ["pi", "po", "ci", "pl"])
-def test_four_document_http_paths_use_local_owner_key_only(local_web, sdk, kind):
+def test_four_document_http_paths_use_local_key_for_both_users(local_web, sdk, kind):
     client, settings = local_web
     payload = {"text": "가상 문서"}
     if kind == "ci":
@@ -173,53 +173,49 @@ def test_four_document_http_paths_use_local_owner_key_only(local_web, sdk, kind)
     response = client.post(f"/api/trade/{kind}/extract", json=payload)
     assert sdk and all(auth == "Bearer fake-local-private-key" for auth, _ in sdk), response.text
     assert "fake-local-private-key" not in response.text
-    before = len(sdk)
     login(client, settings, 2)
     if kind == "ci":
         payload.update(approved_pi_source(client.app.state.database, 2))
     client.headers["X-CSRF-Token"] = client.get("/api/session").json()["csrf_token"]
     response = client.post(f"/api/trade/{kind}/extract", json=payload)
-    assert response.status_code == 403 and response.json()["error"]["code"] == "LOCAL_OWNER_MISMATCH"
-    assert len(sdk) == before
+    assert response.status_code == 201, response.text
+    assert all(auth == "Bearer fake-local-private-key" for auth, _ in sdk)
 
 
-@pytest.mark.parametrize("changes,user_id,code", [
-    ({"local_owner_google_sub": ""}, 1, "LOCAL_OWNER_REQUIRED"),
-    ({"openai_api_key": ""}, 1, "LOCAL_KEY_REQUIRED"),
-    ({}, 2, "LOCAL_OWNER_MISMATCH"),
-    ({}, 9999, "LOCAL_OWNER_MISMATCH"),
-])
-def test_missing_owner_key_or_wrong_user_blocks_without_db_fallback(local_web, sdk, changes, user_id, code):
+def test_missing_local_key_blocks_without_db_fallback(local_web, sdk):
     client, settings = local_web
     database = client.app.state.database
-    # 이전 서버 모드 DB 키가 있더라도 로컬 모드에서는 절대로 대체하지 않는다.
     with database.session() as session:
         session.add(UserOpenAIKey(user_id=1, api_key_enc="fake-unreadable-db-key"))
-    with user_openai(database, user_id, settings=replace(settings, **changes)) as access:
+    with user_openai(database, 1, settings=replace(settings, openai_api_key="")) as access:
         with pytest.raises(llm.OpenAIKeyError) as error:
             llm.get_backend()
-        assert error.value.code == code and access.issue is error.value
+        assert error.value.code == "LOCAL_KEY_REQUIRED" and access.issue is error.value
     assert sdk == []
 
 
-def test_unverified_subject_and_scope_outside_owner_are_denied(local_web, sdk):
+def test_local_key_needs_no_google_identity_or_database_lookup(local_web, sdk):
+    from app.services.openai_keys import UserKeyAccess
     client, settings = local_web
-    database = client.app.state.database
     with pytest.raises(llm.OpenAIKeyError):
-        llm.get_backend(settings)
-    with database.session() as session:
-        session.get(User, 1).last_login_at = None
-    with user_openai(database, 1, settings=settings):
-        with pytest.raises(llm.OpenAIKeyError, match="본인 Google"):
-            llm.get_backend()
-    assert not key_registered(database, 1, settings=settings) and sdk == []
+        llm.get_backend(settings)  # 기존 인증된 호출 범위는 필요하다.
+    with client.app.state.database.session() as session:
+        user = session.get(User, 1)
+        user.last_login_at = None
+        user.google_sub = None
+    assert key_registered(client.app.state.database, 1, settings=settings)
+    # 키 소스는 DB와 무관하다. 사용자/자료 소유권은 HTTP와 업무 진입점에서 검사한다.
+    assert UserKeyAccess(None, 1, None, settings).read() == "fake-local-private-key"
+    with user_openai(client.app.state.database, 1, settings=settings):
+        assert llm.get_backend() is not None
+    assert sdk == []
 
 
 def test_local_settings_show_env_state_without_key_fingerprint_or_db_mutations(local_web, sdk):
     client, settings = local_web
     csrf = login(client, settings, 1)
     page = client.get("/settings")
-    assert "로컬 .env 키 사용 가능" in page.text and "fake-sub-1" in page.text
+    assert "로컬 .env 키 사용 가능" in page.text and "fake-sub-1" not in page.text
     assert 'name="api_key"' not in page.text
     assert page.headers["cache-control"] == "private, no-store"
     key = settings.openai_api_key
@@ -232,24 +228,24 @@ def test_local_settings_show_env_state_without_key_fingerprint_or_db_mutations(l
         assert list(session.scalars(select(UserOpenAIKey))) == []
     login(client, settings, 2)
     page = client.get("/settings")
-    assert "로컬 AI 사용 불가" in page.text and "fake-sub-2" in page.text and "fake-sub-1" not in page.text
+    assert "로컬 .env 키 사용 가능" in page.text and "fake-sub-2" not in page.text and "fake-sub-1" not in page.text
     inbox = client.get("/inbox")
-    assert "본인 .env 키와 Google 소유자 설정" in inbox.text and "내 OpenAI API 키 등록하기" not in inbox.text
+    assert "로컬 AI를 사용할 수 없습니다" not in inbox.text and "내 OpenAI API 키 등록하기" not in inbox.text
     assert sdk == []
 
 
-def test_first_login_only_displays_own_subject_never_claims_owner(local_web, sdk):
+def test_local_key_works_without_configured_google_owner(local_web, sdk):
     client, settings = local_web
-    unclaimed = replace(settings, local_owner_google_sub="")
+    unclaimed = settings
     with TestClient(create_app(unclaimed, google=FakeGoogle()), base_url="http://127.0.0.1") as fresh:
         assert sign_in(fresh).status_code == 303
         page = fresh.get("/settings")
-        assert "LOCAL_OWNER_GOOGLE_SUB" in page.text and "fake-sub-1" in page.text
-        assert "로컬 AI 사용 불가" in page.text and unclaimed.local_owner_google_sub == ""
+        assert "LOCAL_OWNER_GOOGLE_SUB" not in page.text and "fake-sub-1" not in page.text
+        assert "로컬 .env 키 사용 가능" in page.text and not hasattr(unclaimed, "local_owner_google_sub")
         fresh.headers["X-CSRF-Token"] = fresh.get("/api/session").json()["csrf_token"]
         response = fresh.post("/api/trade/pi/extract", json={"text": "가상 문서"})
-        assert response.status_code == 409 and response.json()["error"]["code"] == "LOCAL_OWNER_REQUIRED"
-    assert sdk == []
+        assert response.status_code == 201, response.text
+    assert sdk and all(auth == "Bearer fake-local-private-key" for auth, _ in sdk)
 
 
 def test_key_service_refuses_storage_and_disallows_local_key_without_listener(local_web, sdk):
@@ -285,9 +281,9 @@ def test_server_mode_still_refuses_env_key_for_any_user(local_web, sdk):
     assert sdk == []
 
 
-def test_explicit_fake_backend_still_works_with_unconfigured_local_owner(local_web, email, sdk):
+def test_explicit_fake_backend_still_works_without_local_key(local_web, email, sdk):
     client, settings = local_web
-    client.app.state.settings = replace(settings, local_owner_google_sub="")
+    client.app.state.settings = replace(settings, openai_api_key="")
     # HTTP 추출 경로의 대역 주입은 키/소유자 설정과 독립적이다.
     with llm.use_backend(FakeLLM([{}])):
         client.headers["X-CSRF-Token"] = client.get("/api/session").json()["csrf_token"]

@@ -40,7 +40,7 @@ class OpenAIDocumentExtractor:
 
     def extract(self, pages: list[PageImage]) -> ExtractionResult:
         output = []
-        with self.client_factory(api_key=self.read_key(), timeout=30, max_retries=0) as client:
+        with self.client_factory(api_key=self.read_key(), timeout=180, max_retries=3) as client:
             for page in pages:
                 try:
                     response = client.responses.parse(

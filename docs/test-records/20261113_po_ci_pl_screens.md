@@ -87,3 +87,26 @@
 - PO의 가짜 AI 추출→누락 보완, 제안 취소/수정/승인, PDF/XLSX 발급 해시, ID 재개와 409 미저장 입력 보존은 위 `브라우저 검증 재개`에서 별도의 가상 문서로 이미 확인했다. 이 추가 확인에서는 실제 계정·운영 연결이나 파일을 다시 발급하지 않았다.
 - 이번 브랜치의 `uv run python -X utf8 .work/check.py`는 경고 0개, `git diff --check`는 통과했다. `frontend`의 `npm test`는 11 passed, `npm run lint`와 `npm run build`도 통과했다. 추적·비무시 소스만 복사한 Linux·임시 PostgreSQL의 전체 `uv run pytest`는 **979 passed·2 skipped, 1281.69초**, 종료 코드 0이었다. skip은 Windows 전용 검사 2건이다.
 - Windows의 전체 `uv run pytest`는 42%에서 PO 범위 밖의 실패가 나타나 중단했으므로 전체 성공으로 기록하지 않는다. 분리 재실행에서 DB 이전 검사는 임시 SQLite 복사본 삭제 `WinError 32`로 1 failed·6 passed, 정적 파일 검사는 테스트용 심볼릭 링크 권한 `WinError 1314`로 1 failed·2 passed, 로컬 Gmail 실행기 검사는 종료 코드 1과 종료 로그 누락으로 1 failed·30 passed였다. 이 세 Windows 문제는 이번 PO 화면 검증에서 수정하지 않았다.
+
+## Issue #142 CI 오류 경로 추가 확인(2026-11-16)
+
+- 기준: PR #190 병합 커밋 `d124e31`의 새 작업 브랜치. 운영 데이터·계정은 사용하지 않았다.
+- 프런트엔드 `npm test`: **11 passed**. CI helper에서 미승인 PI의 서버 생성 차단, 승인된 정확한 ID/revision만 허용, PI 보완·추출 뒤 선적 사전 입력 보존을 확인했다.
+- 서버 `uv run pytest tests/test_ci_source_pis.py tests/test_trade_domain_api.py tests/test_trade_renderers.py -q`: **28 passed**. 목록·페이지네이션·정확한 revision·소유권/승인·409 및 발급 렌더링 회귀 검사를 포함한다.
+- 전체 `uv run pytest`: **974 passed·5 failed·2 skipped**, Windows에서 1200.28초. 실패 5건은 범위 밖 기존 환경 문제인 `tests/test_db_copy.py` 3건의 SQLite 파일 잠금 `WinError 32`, `tests/test_frontend_serving.py` 1건의 심볼릭 링크 권한, `tests/test_local_gmail.py` 1건의 graceful shutdown 로그 누락이다. 관련 소스는 이번 작업에서 수정하지 않았다.
+- `python3 .work/check.py`는 Windows에서 Python Store 별칭 오류로 시작하지 못했다. 동등한 `uv run python -X utf8 .work/check.py`는 통과·경고 0개다. frontend `npm test`는 11 passed다.
+- 가상 데이터 브라우저에서 390px CI 원본 선택 화면의 오류 복구를 확인했다. DevTools 네트워크를 Offline으로 설정하자 `/api/trade/ci/source-pis` 요청이 실패했고 화면에 네트워크 오류와 `목록 다시 읽기` 버튼이 나타났다. `Disabled: No throttling`으로 복구한 뒤 버튼을 누르자 목록이 다시 로드되어 `PI-APPROVED`, `PI-READY-UNAPPROVED`, `PI-MISSING`, `PI-HISTORY-55`가 표시됐다. CI 앱 런타임 오류 표시는 계속 0이었다.
+- CI 화면을 1440·768·390px로 확인했다. 1440px은 데스크톱 화면, 768px은 사이드바가 숨고 하단 메뉴가 보이는 좁은 화면, 390px은 세로 PI 목록과 선적 입력 화면을 확인했다. 세 크기 모두 화면 전체가 가로로 밀리는 현상은 관찰하지 않았다(정량 DOM 측정은 하지 않음). 390px CI 선적 정보 입력에서 Tab 키로 문서번호 → 선적 참조 → 원산지 입력칸으로 이동하고, 입력한 CI-QA-KB-390 및 SHIP-KB-1 값이 유지됐다.
+- 저장된 가상 단독 CI 문서 6(`/app/trade/ci/standalone/6`)을 열어 거래·선적 조건 수정 단계와 기존 문서번호·선적 참조·원산지·납품 조건을 확인했다. 문서에 저장하지 않았다. 문서 7 경로는 `문서를 찾을 수 없습니다`를 표시했으므로 이를 편집/409 증거로 사용하지 않았다.
+- 문서 6을 새 탭에서 다시 열어 전체 확인 화면도 확인했다. `Item 1 has no verifiable exact quote from the prompt` 경고 때문에 `최종 검토 만들기`가 비활성화되어 있었다. 이는 테스트 문서의 추출 근거 충돌이므로 이를 해소하지 않은 채 최종 발급·다운로드 실패 경로를 시험하지 않았다.
+- 768px에서 PI-MISSING을 선택하고 선적 정보를 입력했다. 화면은 구매자 주소 누락과 PI의 승인하고 파일 발급 완료를 남은 작업으로 안내했고, CI 생성은 비활성 상태였다. 화면의 PI 보완·승인하기 경로와 상태 다시 확인 버튼도 보였다. PI를 보완하거나 승인하지 않았고 서버 CI 생성도 시도하지 않았다.
+- 가상 단독 CI 초안 8을 만들어 구매자·품목·선적 정보를 입력했다. 전체 확인에서 유상/무상 수량이 비어 있다는 검증 오류가 표시되고 최종 검토 만들기가 비활성화됐다. 이는 필수값 차단의 정상 동작이었다. 초안은 임시 검증 DB에만 생성됐고 파일 발급은 하지 않았다.
+- 가상 단독 CI 초안 8의 전체 확인에서 `최종 검토 만들기`를 눌러 승인 대기 제안을 생성했다. 제안의 `수정`이 거래처 입력 단계로 돌아가는 것을 확인했다. 승인하거나 파일을 발급하지 않았다.
+- 두 탭을 같은 버전 2로 연 뒤 한 탭에서 거래처 주소를 `2 Fiction Ave, Seoul`로 수정해 저장하고 버전 3 검토를 만들었다. 이전 버전 2 화면에서 `3 Fiction Ave, Seoul`을 입력해 저장하자 409 충돌 안내 `최신 문서를 다시 확인하세요`가 표시됐다. 최신본 다시 읽기가 현재 입력을 교체할 수 있다는 경고와 입력값 `3 Fiction Ave, Seoul`이 화면에 남은 것도 확인했다. `최신본 다시 읽기`는 누르지 않았다.
+- 발급 완료된 별도 가상 단독 CI(`/app/trade/ci/standalone/8`, 문서번호 `CI-QA-STALE-409`)에서 PDF와 XLSX 다운로드를 각각 오프라인으로 요청해 네트워크 오류 안내와 실패한 fetch를 확인했다. 네트워크를 `Disabled: No throttling`으로 복구하고 두 파일을 다시 요청하자 각 요청이 HTTP 200으로 완료됐다. `CI-20261116-001-r3.pdf`와 `CI-20261116-001-r3.xlsx`(3.4 KB)가 브라우저 다운로드 목록에 나타났다.
+- 이 화면 경로에서 재현된 제품 결함이 없어 코드 수정은 하지 않았다. 가상 CI는 임시 검증 DB를 사용했으며 이 확인에서는 새 승인·파일 발급을 하지 않고 이미 발급된 파일 다운로드만 재시도했다. 메일은 발송하지 않았다. 테스트 결과와 실제 화면 관찰 범위를 구분한다.
+
+
+- The first Linux container full run reported 1033 passed, 2 failed, 2 errors, and 2 skipped. Node/npm was missing, so the browser build test could not run. Linux isolated reruns passed: worker process tests 6/6 and the local Gmail shutdown test 1/1. The full Linux suite is left to PR CI with the workflow prerequisites.
+- Minimal test fixes: `app/db/copy_data.py` now closes the temporary SQLite migration engine, preventing Windows `WinError 32`. The symlink test skips only on Windows `WinError 1314`. Two browser tests invoke `npm.cmd` through the Windows shell. The Gmail shutdown test expects Windows forced termination semantics while retaining the graceful shutdown assertion on POSIX.
+- Windows full `uv run pytest`: 1037 passed, 3 skipped, 1476.57s. LibreOffice, Playwright Chromium, and `npm ci` were installed for the run. The skips were 2 Windows-only worker tests and the unavailable Windows symlink privilege. Frontend `npm test` passed 11, and lint, build, `check:env`, `uv run python -X utf8 .work/check.py` (0 warnings), and `git diff --check` passed. Direct `python3 .work/check.py` hit the Microsoft Store alias.

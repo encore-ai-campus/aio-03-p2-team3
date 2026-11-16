@@ -38,3 +38,7 @@ npm 기본 캐시 경로 쓰기 오류는 작업 폴더 캐시로 `npm ci`를 �
 ## 실제 운영 확인
 
 Google Calendar API/Data Access 활성화, 게시/검증 제한, 실제 본인 Google 동의, Render 배포/DB migration, 실제 두 서비스의 grant 철회 영향·기존 메일 수집/승인 발송은 **미확인**이다. 사람이 계획 3절 #193에서 확인한다. 자동/가짜 공급자 검사 통과를 운영 성공으로 간주하지 않는다.
+
+## 최신 main 충돌 해결 후 재검증
+
+main `ab01eda`의 로컬 Gmail 저장소 주입·문서함/지식 문서 변경과 Calendar 초기화를 함께 유지했다. `.env.example`·`app/main.py`·`docs/PROJECT_CONTEXT.md` 충돌을 양쪽 변경대로 합쳤다. 전체 pytest **1082 passed·2 skipped**(420.73초), frontend lint/test(11개)/build, 규칙 검사 경고 0개. 그래프·도구·노드 변경 없음.
