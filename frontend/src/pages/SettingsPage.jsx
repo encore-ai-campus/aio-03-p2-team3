@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { apiFetch } from "../api"
 import { useAuth } from "../useAuth"
 import BankSettings from "../settings/BankSettings"
@@ -6,6 +7,7 @@ import BrandingSettings from "../settings/BrandingSettings"
 import CompanySettings from "../settings/CompanySettings"
 import CounterpartySettings from "../settings/CounterpartySettings"
 import PriceSettings from "../settings/PriceSettings"
+import IntegrationSettings from "../settings/IntegrationSettings"
 
 const SECTIONS = [
   ["company", "회사 정보", "문서에 표시할 발행자 정보를 입력하세요."],
@@ -14,17 +16,31 @@ const SECTIONS = [
   ["purchase", "구매 단가표", "PO에 사용할 매입 단가를 관리합니다."],
   ["banks", "은행 계좌", "문서 통화에 맞는 수취 계좌를 등록합니다."],
   ["branding", "로고·직인", "비공개 저장소에 회사 이미지를 보관합니다."],
+  ["integrations", "연동하기", "앱에 로그인한 Google 계정의 서비스를 연결합니다."],
 ]
 
 export default function SettingsPage() {
   const { state } = useAuth()
   const token = state.accessToken
-  const [section, setSection] = useState("company")
+  const [search, setSearch] = useSearchParams()
+  const [callback, setCallback] = useState(() => search.get("gmail"))
+  const [section, setSection] = useState(() => search.has("gmail") ? "integrations" : "company")
   const [read, setRead] = useState({ phase: "loading", data: null, error: "" })
   const [reload, setReload] = useState(0)
   const [saveState, setSaveState] = useState({ saving: false, error: "", notice: "" })
   const mutation = useRef(null)
   const savedVersion = useRef(0)
+
+  useEffect(() => {
+    if (!search.has("gmail")) return
+    setCallback(search.get("gmail"))
+    setSection("integrations")
+    setSearch((previous) => {
+      const next = new URLSearchParams(previous)
+      next.delete("gmail")
+      return next
+    }, { replace: true })
+  }, [search, setSearch])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -68,28 +84,32 @@ export default function SettingsPage() {
   return (
     <>
       <div className="page-head"><div><h1 className="page-title">설정</h1><p className="page-sub">회사와 거래에 필요한 기준 정보를 관리합니다.</p></div></div>
-      {read.error && <div className="settings-load-error" role="alert"><p>{read.error}</p>
-        <button className="btn" type="button" onClick={() => setReload((value) => value + 1)}>다시 읽기</button>
-      </div>}
-      {!read.data ? (read.phase === "loading" && <p role="status">설정을 불러오는 중입니다…</p>) : (
-        <div className="settings-layout">
-          <nav className="settings-nav" aria-label="설정 항목">
-            {SECTIONS.map(([key, label]) => <button key={key} type="button" className={key === section ? "active" : ""}
-              aria-pressed={key === section} disabled={saveState.saving} onClick={() => {
-                setSection(key)
-                setSaveState({ saving: false, error: "", notice: "" })
-              }}>{label}</button>)}
-          </nav>
-          <section className="card settings-panel" aria-label={title}>
-            <div className="panel-head"><div><h2 className="section-title">{title}</h2><p className="section-note">{note}</p></div></div>
-            {section === "company" && <CompanySettings {...props} />}
-            {section === "counterparties" && <CounterpartySettings {...props} />}
-            {(section === "sale" || section === "purchase") && <PriceSettings key={section} role={section} {...props} />}
-            {section === "banks" && <BankSettings {...props} />}
-            {section === "branding" && <BrandingSettings token={token} {...props} />}
-          </section>
-        </div>
-      )}
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="설정 항목">
+          {SECTIONS.map(([key, label]) => <button key={key} type="button" className={key === section ? "active" : ""}
+            aria-pressed={key === section} disabled={saveState.saving} onClick={() => {
+              setSection(key)
+              if (key !== "integrations") setCallback(null)
+              setSaveState({ saving: false, error: "", notice: "" })
+            }}>{label}</button>)}
+        </nav>
+        <section className="card settings-panel" aria-label={title}>
+          <div className="panel-head"><div><h2 className="section-title">{title}</h2><p className="section-note">{note}</p></div></div>
+          {section === "integrations" ? <IntegrationSettings callback={callback} /> : <>
+            {read.error && <div className="settings-load-error" role="alert"><p>{read.error}</p>
+              <button className="btn" type="button" onClick={() => setReload((value) => value + 1)}>다시 읽기</button>
+            </div>}
+            {!read.data && read.phase === "loading" && <p role="status">설정을 불러오는 중입니다…</p>}
+            {read.data && <>
+              {section === "company" && <CompanySettings {...props} />}
+              {section === "counterparties" && <CounterpartySettings {...props} />}
+              {(section === "sale" || section === "purchase") && <PriceSettings key={section} role={section} {...props} />}
+              {section === "banks" && <BankSettings {...props} />}
+              {section === "branding" && <BrandingSettings token={token} {...props} />}
+            </>}
+          </>}
+        </section>
+      </div>
     </>
   )
 }
