@@ -51,11 +51,11 @@ jobs:
   tests:
     name: tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     # 테스트 DB는 전부 PostgreSQL이다(3절). service 컨테이너를 띄워 TEST_DATABASE_URL로 쓴다.
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:0.8.7-pg16@sha256:484e838076e04939d27d3e176e91c86eea96236126023be8d3059761122e579f
         env:
           POSTGRES_PASSWORD: postgres
         ports:
@@ -73,6 +73,12 @@ jobs:
 
       - name: 패키지 설치
         run: uv sync --locked
+
+      - name: Office 페이지 변환기 설치
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer libreoffice-calc fonts-noto-cjk
+
+      - name: 프론트·브라우저 시험 준비
+        run: npm ci --prefix frontend && uv run playwright install --with-deps chromium
 
       - name: 테스트
         run: uv run pytest
@@ -100,6 +106,10 @@ jobs:
           $pgService = Get-Service -Name 'postgresql-x64-*' | Select-Object -First 1
           Set-Service -Name $pgService.Name -StartupType Manual
           Start-Service -Name $pgService.Name
+
+      - name: Windows PostgreSQL pgvector 설치
+        shell: pwsh
+        run: ./scripts/install-pgvector-windows.ps1
 
       - name: Windows 개인 실행기·DPAPI·DACL·HTTPS 프로세스 검사
         run: uv run pytest tests/test_worker_credentials.py tests/test_worker_execution.py tests/test_worker_process.py -q
