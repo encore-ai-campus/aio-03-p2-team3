@@ -6,18 +6,21 @@ function Details({ title, values, labels }) {
     <div key={key}><dt>{label}</dt><dd>{values[key]}</dd></div>)}</dl></section>
 }
 
-export default function DocumentSnapshot({ document }) {
+export default function DocumentSnapshot({ document, kind = "pi" }) {
+  if (kind === "pl") return <PLSnapshot document={document} />
   return <div className="document-snapshot">
     <div className="snapshot-total"><span>{document.document_number || document.doc_no || "문서번호 미입력"}</span><b>{document.currency || ""} {document.total ?? "합계 확인 필요"}</b></div>
     <div className="snapshot-parties"><Details title="발행 회사" values={document.issuer} labels={PARTY_LABELS} />
-      <Details title="판매자" values={document.seller} labels={PARTY_LABELS} /><Details title="구매자" values={document.buyer} labels={PARTY_LABELS} /></div>
+      <Details title={kind === "po" ? "판매자 · 공급처" : "판매자"} values={document.seller} labels={PARTY_LABELS} /><Details title={kind === "po" ? "구매자 · 우리 회사" : "구매자"} values={document.buyer} labels={PARTY_LABELS} /></div>
     <div className="table-scroll"><table className="document-table"><thead><tr><th>품목</th><th>유상/무상 수량</th><th>단가</th><th>할인율</th><th>금액</th></tr></thead><tbody>
       {(document.items ?? []).map((item,index) => <tr key={index}><td>{item.product_name || "미입력"}<small>{[item.product_code,item.capacity,item.is_sample ? "샘플" : null].filter(Boolean).join(" · ")}</small></td>
         <td>{item.paid_quantity ?? item.quantity ?? "—"} / {item.free_quantity ?? "—"} {item.unit || ""}</td>
         <td>{item.unit_price ?? "—"}</td><td>{item.discount_percent ?? "—"}%</td><td>{item.line_total ?? "—"}</td></tr>)}
     </tbody></table></div>
-    <dl className="snapshot-terms">{[['incoterms','납품 조건'],['payment_terms','지급 조건'],['ship_to','배송지'],['bill_to','청구지'],['remarks','비고']].map(([key,label]) =>
+    {kind === "ci" && document.source_pi_id && <p className="section-note">원본 PI {document.source_pi_id} · 승인 버전 {document.source_revision}</p>}
+    <dl className="snapshot-terms">{[['incoterms','납품 조건'],...(kind === "ci" ? [['shipment_reference','선적 참조'],['country_of_origin','원산지']] : [['payment_terms','지급 조건']]),['ship_to','배송지'],['bill_to','청구지'],['remarks','비고']].map(([key,label]) =>
       document[key] ? <div key={key}><dt>{label}</dt><dd>{document[key]}</dd></div> : null)}</dl>
-    {document.bank && <Details title="지급 계좌" values={document.bank} labels={BANK_LABELS} />}
+    {kind === "pi" && document.bank && <Details title="지급 계좌" values={document.bank} labels={BANK_LABELS} />}
   </div>
 }
+import PLSnapshot from "./PLSnapshot"

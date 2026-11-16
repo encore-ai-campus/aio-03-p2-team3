@@ -136,3 +136,16 @@ def test_pl_totals_come_from_packing_totals_input():
     with zipfile.ZipFile(BytesIO(_xlsx_bytes(data))) as workbook:
         sheet = workbook.read("xl/worksheets/sheet1.xml").decode()
         assert "Total net weight (kg)" in sheet and "1.5" in sheet
+
+
+@pytest.mark.parametrize("include_seal", [False, True])
+def test_xlsx_bytes_are_stable_across_render_times(monkeypatch, include_seal):
+    data = sample_trade()
+    seal = seal_png() if include_seal else None
+    outputs = []
+    for second in (0, 4):
+        stamp = (2026, 11, 13, 12, 0, second, 4, 317, 0)
+        with monkeypatch.context() as clock:
+            clock.setattr(zipfile.time, "localtime", lambda *_args: stamp)
+            outputs.append(_xlsx_bytes(data, seal=seal))
+    assert outputs[0] == outputs[1]

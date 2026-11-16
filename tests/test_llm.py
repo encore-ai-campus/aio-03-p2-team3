@@ -354,7 +354,7 @@ def _production_schemas():
     from app.trade.common.extraction import wire_schema
     from app.trade.pi.models import PIExtraction
     from app.trade.po.models import POExtraction
-    from app.trade.ci.models import CIExtraction
+    from app.trade.ci.models import CIExtraction, StandaloneCIExtraction
     from app.trade.pl.models import PLExtraction
 
     candidates = [{"label": "간단 안내", "body": "가상 답장"}, {"label": "상세 안내", "body": "가상 안내"}]
@@ -367,7 +367,7 @@ def _production_schemas():
         (ExtractedDealTerms, {"customer_name": "가상상사"}),
         (ExtractedTradeDoc, {"currency": "USD"}),
         (ExtractedTradeCIDoc, {"source_document_type": "PI"}),
-        *[(wire_schema(schema), {}) for schema in (PIExtraction, POExtraction, CIExtraction, PLExtraction)],
+        *[(wire_schema(schema), {}) for schema in (PIExtraction, POExtraction, CIExtraction, StandaloneCIExtraction, PLExtraction)],
     ]
 
 

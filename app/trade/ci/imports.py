@@ -188,9 +188,11 @@ def ci_import_issues(result):
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/ci_import.py ci_render_data
 def ci_render_data(result):
-    if not is_pi_import(result):
+    if not is_pi_import(result) and result.get('_ci_standalone') is not True:
         return result
-    result = _sanitize_import(deepcopy(result))
+    result = deepcopy(result)
+    if is_pi_import(result):
+        result = _sanitize_import(result)
     for item in result.get('items', []):
         free = _amount(item.get('free_quantity'))
         if free is not None and free > 0:
