@@ -473,10 +473,10 @@ class AgentError(TypedDict):
 | `AI_RUNTIME=server`(기본, 빈 값 포함) | 기존 앱 실행·Render | 현재 사용자의 `user_openai_keys`만 조회. 어떤 사용자 키 오류에도 환경 키 대체 금지 |
 | `AI_RUNTIME=local` | `uv run python -m app.local [--port 8000]` | `.env`의 `OPENAI_API_KEY`만 사용. DB 사용자 키 조회·저장·교체·삭제 금지 |
 
-- 로더는 `local`일 때만 `OPENAI_API_KEY`를 Settings에 읽는다. 키·소유자 식별자는 Settings의 repr에서 제외한다. `.env` 변경은 재시작 후 적용한다. `local`과 서버 등록 키 사이의 자동 전환은 없다.
+- 로더는 `local`일 때만 `OPENAI_API_KEY`를 Settings에 읽는다. 키는 Settings의 repr에서 제외한다. `.env` 변경은 재시작 후 적용한다. `local`과 서버 등록 키 사이의 자동 전환은 없다.
 - 로컬 실행기는 `127.0.0.1`에 실제 소켓을 열고 검증한 소켓 자체를 Uvicorn에 전달한다. 공개 바인딩·리로드·다중 워커 옵션은 제공하지 않는다. 앱 생성과 키 조회 시 현재 실행 범위의 살아 있는 루프백 리스너를 확인한다. 일반 `uvicorn app.main:app` 실행에서는 `local` 설정을 거부한다. `RENDER`·`RENDER_SERVICE_ID`·`RENDER_EXTERNAL_URL`·`PORT` 중 값이 있는 공용 환경에서도 시작을 거부한다. Host·`APP_BASE_URL`은 실행 허가의 근거가 아니며, 허가 후에도 로컬 Host만 허용한다.
 - 로컬 AI 키 조회는 전용 실행 검증과 비어 있지 않은 `OPENAI_API_KEY`만 요구한다. Google 식별자·Gmail 연결·last_login_at과 독립적이다. 앱 인증과 자료 소유권은 검증된 내부 user_id로 검사한다. 여러 로컬 사용자의 작업도 이 PC의 키를 사용하며 데이터는 user_id별로 분리한다.
-- `LOCAL_OWNER_GOOGLE_SUB`는 로컬 AI·Gmail 선정에 사용하지 않는다. 개인 PC 실행기의 서비스·소유자·장치 정책(6.2절)은 유지한다. 남은 공통 설정 필드와 화면 안내는 정리 계획 3절에서 제거한다.
+- `LOCAL_OWNER_GOOGLE_SUB`는 개인 PC 실행기의 명시적 --env 파일과 LocalPolicy에서만 사용한다. 앱 공통 Settings·로컬 키·Gmail 대상 선정은 읽지 않는다. 개인 PC 실행기의 서비스·소유자·장치 정책(6.2절)은 유지한다.
 - 로컬 설정 화면은 `.env` 키 사용 가능/불가와 안전한 차단 이유만 표시하며 키 원문·해시·앞뒤 문자열·DB 키 등록 폼은 제공하지 않는다. 등록/삭제 POST를 직접 호출해도 `LOCAL_KEY_ENV_ONLY`(409)로 거부한다. 저장된 DB 사용자 키가 있어도 읽지 않는다.
 - 로컬 키 오류는 `LOCAL_KEY_REQUIRED`(409)·`LOCAL_RUNTIME_REQUIRED`(409)다. 문서 API는 해당 코드를 반환한다. 메일은 기존 `openai_key_required` 안내로 실패 종료한다. 키는 AgentState·세션·실행 기록에 넣지 않으며 노드·엣지는 유지한다.
 - 개인 PC Gmail 연결·수집은 계획 2절에서 구현했다(7·9·10절). 서버 장치 연결·작업 큐는 3절에서 구현했다. 개인 실행 프로그램과 기존 AI 호출의 큐 연결도 4절에서 구현했다. 공용 Gmail 감시·Pub/Sub 설정은 유지한다.
@@ -655,7 +655,7 @@ class AgentError(TypedDict):
   - 11 구현: 스레드의 견적 후보에서 확인 화면으로 연결한다. `needs_price`는 빠진 단가 입력 폼만 열며 승인 요청도 거부한다. `/prices`는 `price_<행 번호>`로 빠진 단가 전부를 받고 기존 단가는 바꾸지 않는다. 미리보기·승인 첨부는 같은 PDF 함수를 사용한다. 승인 결과는 일반 후보와 같은 `ApprovalResult.outcome` 안내 키(`needs_price` 추가)로 303 이동해 표시한다.
   - 설정(11): `/settings/company`는 `company_name`·`business_no`·`ceo_name`·`contact`, `/settings/prices`는 `item_name`·`unit`·`unit_price`를 받고 본인 행만 저장한다. 같은 품목명 저장은 단가·단위 갱신이다. 성찰 설정은 12가 구현한다.
 - 로그인 화면에 '테스트용 Gmail로 등록하세요'를 안내한다. [Request]
-- 로컬 모드 로그인은 `GMAIL_PUBSUB_TOPIC` 없이 허용하며 개인 PC에서 새 메일만 조회한다는 안내를 보인다. 연결 상태는 `로컬 새 메일 수집 켜짐`·`로컬 수집 확인 필요`·`로컬 수집 꺼짐`이며 본인 소유자 미지정/불일치면 `로컬 수집 대기`다. `history_expired`는 다시 로그인하면 현재 위치로 재설정되고 이전 메일을 자동 처리하지 않는다고 안내한다. 수집은 화면 요청과 독립적이며 받은 메일 목록의 기존 90초 갱신은 유지한다.
+- 로컬 모드 로그인은 `GMAIL_PUBSUB_TOPIC` 없이 허용하며 개인 PC에서 새 메일만 조회한다는 안내를 보인다. 연결 상태는 `로컬 새 메일 수집 켜짐`·`로컬 수집 확인 필요`·`로컬 수집 꺼짐`이며 사용자별 연결·감시 상태로 표시한다. Google 소유자 환경 설정은 확인하지 않는다. `history_expired`는 다시 로그인하면 현재 위치로 재설정되고 이전 메일을 자동 처리하지 않는다고 안내한다. 수집은 화면 요청과 독립적이며 받은 메일 목록의 기존 90초 갱신은 유지한다.
 - 본인 확인: 로그인(6)이 세션(`SESSION_SECRET`으로 서명한 쿠키 `gq_session`, 14일)에 `user_id`만 넣는다. 로그인이 필요한 경로는 둘 중 하나를 `Depends`로 받고, 로그인 안 했으면 둘 다 `/login`으로 보낸다(303). ① `app/auth/deps.py`의 `current_user_id`: id만 필요할 때(14가 씀). ② `app/auth/session.py`의 `require_user`(없으면 `/login`, HTMX면 `HX-Redirect`)·`current_user`(없으면 None): `User` 행이 필요하거나 화면 요청 때 감시 갱신까지 걸 때(응답 뒤, 받은 메일 화면이 씀). id로 행 하나를 열 때는 `app/services/auth.py`의 `get_owned(session, 표, id, user_id)`가 None이면 404로 답한다. 연결 상태 안내는 `connection_status()`. 라우터는 `request.app.state.templates`(`app.web`의 `templates`와 같은 객체)·`request.app.state.database`를 쓴다. [Claude proposal]
 
 ### 9.1. React·Supabase 전환 인증 목표 (2026-11-12, 계획 1절 확정)
@@ -700,8 +700,8 @@ class AgentError(TypedDict):
 | 이름 | 뜻 | 쓰는 하위 작업 |
 |---|---|---|
 | `AI_RUNTIME` | `server`(기본) 또는 `local`(전용 루프백 명령에서만 허용) | local-openai-execution 1 |
-| `LOCAL_OWNER_GOOGLE_SUB` | 본인 로그인으로 확인 후 로컬 .env에 지정하는 Google sub | local-openai-execution 1 |
-| `OPENAI_API_KEY` | `local`에서 지정 소유자만 사용. 서버에서는 읽거나 대체 키로 사용하지 않음 | local-openai-execution 1 |
+| `LOCAL_OWNER_GOOGLE_SUB` | HTTPS 서버에 연결하는 app.worker.pc의 --env 파일 전용 Google sub. 앱 공통 Settings·app.local은 읽지 않음 | local-openai-execution 4 |
+| `OPENAI_API_KEY` | local 앱의 PC 환경 키 또는 개인 PC 실행기 키. 서버 앱은 읽거나 대체 키로 사용하지 않음 | local-openai-execution 1·4 |
 | `OPENAI_MODEL` | 쓸 OpenAI 모델 이름(비우면 `gpt-6-luna`) | 모든 LLM 호출 |
 | `GOOGLE_OAUTH_CLIENT_ID` | OAuth 클라이언트 ID | 6 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 클라이언트 비밀번호 | 6 |
@@ -1117,7 +1117,7 @@ LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 �
 
 업로드와 명시적 재처리는 원본 저장/작업 등록 전에 worker와 같은 어댑터 생성 경계에서 키 설정을 검사한다. worker는 실행 전에 다시 검사하고 실제 호출도 키를 다시 읽는다. 키 유효성 확인용 외부 요청은 없다.
 
-형식/시그니처 415, 크기 413, 빈/손상/한도·페이지 검사 422, multipart 파싱 실패 400, 오래된 revision/처리 시도·진행 중 수정/재요청은 409다. 저장소 장애/미설정은 503이다. 처리 실패는 문서의 안전한 error_code/error_stage에 남긴다. 실제 AI 오류 응답·문서 원문·키를 로그로 복사하지 않는다.
+형식/시그니처 415, 크기 413, 빈/손상/한도·페이지 검사 422, multipart 파싱 실패 400, 오래된 revision/처리 시도·진행 중 수정/재요청은 409다. 저장소 장애/미설정은 503이다. 처리 실패는 문서의 안전한 error_code/error_stage에 남긴다. 화면은 LOCAL_KEY_REQUIRED/LOCAL_RUNTIME_REQUIRED를 설정 오류로 안내하고 원문 revision 충돌과 구분한다. 실패 상태에서 해당 시도의 이전 처리 요청 접수 안내는 숨긴다. 실제 AI 오류 응답·문서 원문·키를 로그로 복사하지 않는다.
 
 ### 18.4. 상태·원자성·부모/자식 불변식
 

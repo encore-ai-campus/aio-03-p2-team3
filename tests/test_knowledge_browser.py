@@ -15,7 +15,7 @@ from sqlalchemy import select
 import uvicorn
 
 from app.auth.supabase import TokenVerifier
-from app.config import Settings
+from app.config import Settings, local_listener
 from app.knowledge.repository import KnowledgeParent
 from app.main import create_app
 from app.web import frontend
@@ -29,7 +29,10 @@ def serve(app):
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     server = uvicorn.Server(uvicorn.Config(app, log_level="error", ws="none"))
-    thread = Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+    def run():
+        with local_listener(listener):
+            server.run(sockets=[listener])
+    thread = Thread(target=run, daemon=True)
     thread.start()
     deadline = time.monotonic() + 15
     while not server.started and thread.is_alive() and time.monotonic() < deadline:
@@ -118,3 +121,88 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
         assert not errors
         assert len(extractor.calls) == 1 and len(embedder.calls) == 1
         browser.close()
+
+
+def test_local_browser_missing_key_retry_failure_and_recovery_without_gmail(database_url, tmp_path, monkeypatch):
+    from dataclasses import replace
+    from threading import Event
+    from app.db.models import User
+    from app.knowledge.embeddings import OpenAIEmbedder
+    from app.knowledge.extract import OpenAIDocumentExtractor
+    from app.knowledge.router import make_adapters
+    from app.knowledge.schemas import EmbeddingBatch, ExtractionResult, KnowledgeError, PageText
+    from tests.test_local_openai import listener
+
+    root = Path(__file__).resolve().parents[1]
+    output = tmp_path / 'frontend-dist'
+    subprocess.run(['npm', 'run', 'build', '--', '--outDir', str(output)], cwd=root / 'frontend',
+                   env={**os.environ, 'SUPABASE_URL': SUPABASE_URL, 'SUPABASE_PUBLISHABLE_KEY': 'sb_publishable_fake_browser'},
+                   check=True, capture_output=True, timeout=120)
+    monkeypatch.setattr(frontend, 'DIST', output)
+    mode = {'key': '', 'fail': False}
+    release = Event()
+    def extract(self, pages):
+        assert self.read_key() == 'fake-local-browser-key'
+        if mode['fail']:
+            assert release.wait(10), '시험용 실패 응답 대기가 끝나지 않았습니다.'
+            raise KnowledgeError('provider_unavailable', '가상 연결 실패')
+        return ExtractionResult(profile=self.profile, pages=[PageText(number=p.number, source=p.source, text='제1조 가상 원문\n검수 후 지급한다.') for p in pages])
+    def embed(self, texts):
+        assert self.read_key() == 'fake-local-browser-key'
+        return EmbeddingBatch(profile=self.profile, vectors=[[.25] * self.profile.dimensions for _ in texts])
+    monkeypatch.setattr(OpenAIDocumentExtractor, 'extract', extract)
+    monkeypatch.setattr(OpenAIEmbedder, 'embed_documents', embed)
+    jwks, storage = FakeJwks(), FakeStorage()
+    subject = uuid4()
+    token = jwks.token(sub=subject)
+    session = {'access_token': token, 'refresh_token': 'fake-refresh', 'token_type': 'bearer',
+               'expires_at': int(time.time()) + 3600, 'expires_in': 3600,
+               'user': {'id': str(subject), 'aud': 'authenticated', 'email': 'browser@example.invalid'}}
+    settings = Settings(database_url=database_url, ai_runtime='local', knowledge_embedding_dimensions='3')
+    def adapters(owner, profile):
+        return make_adapters(app.state.database, replace(settings, openai_api_key=mode['key']), owner, profile)
+    with listener():
+        app = create_app(settings, supabase_auth=TokenVerifier(SUPABASE_URL, fetch_jwks=jwks.serve),
+                         storage=storage, knowledge_adapters=adapters)
+        with serve(app) as base, sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            context = browser.new_context(viewport={'width': 1440, 'height': 1000})
+            context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(base + '/') else route.abort())
+            context.add_init_script("localStorage.setItem('sb-test-project-auth-token', " + json.dumps(json.dumps(session)) + ')')
+            page = context.new_page()
+            page.goto(base + '/app/knowledge')
+            page.get_by_label('문서 선택').set_input_files({'name': 'local-fake.png', 'mimeType': 'image/png', 'buffer': png()})
+            page.get_by_role('button', name='선택 문서 업로드').click()
+            expect(page.get_by_text('로컬 .env에 OPENAI_API_KEY', exact=False)).to_be_visible()
+            assert not storage.objects
+            mode['key'] = 'fake-local-browser-key'
+            page.get_by_role('button', name='선택 문서 업로드').click()
+            detail = page.get_by_role('region', name='문서 상세')
+            expect(detail.get_by_text('저장 완료', exact=True)).to_be_visible(timeout=15000)
+            with app.state.database.session() as db:
+                users = list(db.scalars(select(User)))
+                assert len(users) == 1 and users[0].google_sub is None and users[0].last_login_at is None
+            mode['key'] = ''
+            detail.get_by_role('button', name='다시 추출·임베딩').click()
+            expect(detail.get_by_text('로컬 .env에 OPENAI_API_KEY', exact=False)).to_be_visible()
+            expect(detail.get_by_text('서버의 원문 또는 상태가 바뀌었습니다.', exact=False)).to_have_count(0)
+            expect(detail.get_by_text('저장 완료', exact=True)).to_be_visible()
+            mode.update(key='fake-local-browser-key', fail=True)
+            detail.get_by_role('button', name='다시 추출·임베딩').click()
+            expect(detail.get_by_text('처리를 요청했습니다.', exact=True)).to_be_visible()
+            release.set()
+            expect(detail.get_by_text('처리 실패', exact=True)).to_be_visible(timeout=15000)
+            expect(detail.get_by_text('처리를 요청했습니다.', exact=True)).to_have_count(0)
+            expect(page.locator('.knowledge-upload li')).to_have_text('local-fake.png — 처리 실패')
+            expect(detail.get_by_text('이전에 저장한 인덱스를 보존하고 있습니다.', exact=False)).to_be_visible()
+            screenshot_dir = Path(os.environ.get('KNOWLEDGE_SCREENSHOT_DIR', str(tmp_path)))
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(screenshot_dir / 'knowledge-local-failed.png'), full_page=True)
+            mode['fail'] = False
+            detail.get_by_role('button', name='다시 추출·임베딩').click()
+            expect(detail.get_by_text('저장 완료', exact=True)).to_be_visible(timeout=15000)
+            expect(detail.get_by_role('heading', name='저장한 청크')).to_be_visible()
+            expect(detail.get_by_text('이전에 저장한 인덱스를 보존하고 있습니다.', exact=False)).to_have_count(0)
+            page.screenshot(path=str(screenshot_dir / 'knowledge-local-recovered.png'), full_page=True)
+            assert 'fake-local-browser-key' not in page.content()
+            browser.close()

@@ -46,8 +46,7 @@
   <p><strong>{{ '로컬 .env 키 사용 가능' if openai_registered else '로컬 AI 사용 불가' }}</strong></p>
   <p class="muted">설정 확인 상태이며, 실제 키의 유효성과 모델 권한은 AI 요청 시 확인합니다.</p>
   {% if local_key_error %}<p role="alert">{{ local_key_error }}</p>{% endif %}
-  {% if local_google_sub %}<p>현재 로그인으로 검증된 본인 Google 식별자: <code>{{ local_google_sub }}</code></p>{% endif %}
-  <p class="muted">본인 계정인지 확인한 뒤 로컬 .env의 LOCAL_OWNER_GOOGLE_SUB에 위 식별자를 직접 지정하세요. 최초 방문자를 자동 등록하지 않습니다. 키는 OPENAI_API_KEY에 지정하고 앱을 다시 시작하세요. 키와 식별자는 채팅·Issue·PR에 올리지 마세요.</p>
+  <p class="muted">OPENAI_API_KEY는 PC의 .env에서 관리하고 변경 후 앱을 다시 시작하세요. Google 식별자나 Gmail 연결은 필요하지 않습니다. 이 앱이 처리하는 AI 요청은 해당 PC 키를 사용합니다.</p>
   <p class="muted">키는 화면에 표시하거나 DB에 저장하지 않습니다. 기존 DB 키는 사용하지 않습니다. 로컬 Gmail 수집은 앱이 켜져 있을 때 동작합니다.</p>
   {% else %}
   {% if worker.ai_execution_mode == 'local_worker' %}<p>현재 개인 PC 실행 방식에서는 아래에 등록된 서버 키를 사용하지 않습니다. 키 교체는 PC .env에서 하고 프로그램을 재시작하세요.</p>{% endif %}

@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-16 · 연결된 user_id별 로컬 Gmail 수집
+마지막 갱신: 2026-11-16 · 로컬 AI·Gmail·PC 실행기 책임 분리
 
 - CI 시작 화면은 원문 붙여넣기·직접 작성·PI 문서 불러오기 세 선택지를 같은 카드로 제공한다. 앞의 두 방식은 PI 없이 CI를 작성하고, 원문 추출은 별도 스키마로 근거를 검증한 뒤 기존 단독 CI 가격 확인·검토 흐름에 연결한다. PI 불러오기는 본인 PI의 최신 버전과 기존 승인 규칙을 사용한다.
 
@@ -106,11 +106,9 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-16 · 로컬 AI·다계정 Gmail 회귀 검사
+마지막 갱신: 2026-11-16 · 로컬 실행 정리 통합·Chromium 오류/복구 검사
 
-- 로컬 Gmail 다계정 수집은 실제 임시 PostgreSQL·가짜 Google/AI로 같은 message ID의 사용자별 분리, 한 계정 실패/다음 계정 계속, 대상 제외 조건과 중지/해제/재연결 뒤 늦은 갱신 차단을 검증했다. 관련 96건, 전체 `uv run pytest` **1050 passed·2 skipped**, 규칙 검사 경고 0개다. PC·공용 푸시·승인 발송 회귀를 포함하며 실제 계정 시험은 아니다.
-
-- 로컬 AI 계정 분리: Google/Gmail 미연결 Supabase 사용자 2명의 비전/임베딩 저장·소유권 분리, 키 누락/닫힌 실제 리스너의 업로드 전 차단, 재처리 거부 시 기존 인덱스 보존을 임시 PostgreSQL·가짜 외부 공급자로 확인했다. 전체 `uv run pytest` **1038 passed·2 skipped**, 규칙 검사 경고 0개다. 실제 키·운영 확인은 #157·#178에 남는다.
+- 로컬 실행 정리: 전체 `uv run pytest` **1051 passed·2 skipped**, 규칙 검사 경고 0개, 프론트 lint/test(11개)/build/공개 환경 검사를 통과했다. 실제 임시 PostgreSQL과 가짜 Google/OpenAI/Storage로 Gmail 미연결 Supabase 사용자 2명의 문서 저장·소유권 분리, 키/리스너 누락의 저장 전 차단, 다계정 동일 message ID·실패 격리·중지/해제/재연결 세대 차단을 확인했다. Chromium에서 키 누락→저장 완료→재처리 거부/실패→이전 인덱스 보존→복구와 실패 시 접수 안내 제거·업로드 목록 상태 갱신을 확인했다. 기존 원문 수정/409 입력 보존·모바일 검증도 유지한다. PC·서버 푸시·승인 발송 회귀를 포함하며 실제 계정/과금·운영 확인은 #157·#178에 남는다.
 
 - 지식 문서·PO·CI·PL 통합: 최신 main `d124e31`과 화면 경로/문서를 합친 전체 `uv run pytest`는 **1006 passed·2 skipped**, 규칙 검사 경고 0개, 프론트 lint/test(11개)/build/공개 환경 검사 통과다. `test_knowledge.py` 26개와 실제 Chromium의 `test_knowledge_browser.py`는 합성 파일·실제 pgvector/FastAPI/React와 가짜 비전/임베딩/Storage로 업로드→원본 대조→수정/확정→부모/자식/벡터 저장을 확인한다. 누락 페이지 검토 대기·409 수정문 보존·소유자 분리·모델/차원 교체·SQL 교체 실패/부분 배치 실패의 이전 결과 보존·임대/늦은 시도 차단을 검증했다. Word/Excel/TXT 한글 렌더 결과와 1440/390px 화면도 직접 확인했다. 실제 AI 정확도·비용·운영 DB/Storage/Render 확인은 #178에 남는다.
 
@@ -148,7 +146,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-16 · 로컬 Gmail 대상/갱신 SQL 분리
+마지막 갱신: 2026-11-16 · PC 전용 소유자 설정·로컬 문서 안내
 
 - 단독 CI 작성은 `/app/trade/ci/standalone`과 `/app/trade/ci/standalone/{id}`를 사용한다. 기존 PI 연결 CI는 기존 주소를 사용한다. 실제 운영 연결은 확인하지 않았다.
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
@@ -158,6 +156,7 @@
 - `20261113_knowledge_ingestion`은 문서·부모·자식 vector 표를 더하고 RLS/직접 공개 권한을 제한한다. vector 확장을 create_all보다 먼저 준비하며 기존 확장 스키마를 존중한다. CI PostgreSQL 16은 고정한 pgvector 이미지, Windows는 고정 소스 빌드를 사용한다. Office/TXT에는 LibreOffice가 필요하고 PDF/이미지는 고정 PDFium/Pillow로 읽는다. 설치/시험 명령·KNOWLEDGE_* 설정은 README/`.env.example`, 실제 운영 vector/버킷 제한·LibreOffice·모델 권한/정확도/과금 확인은 문서 수집 계획 2절/#178에 남아 있다. 운영 DB/배포·실제 문서 API 호출은 이번 구현에서 실행하지 않았다.
 - 무료 서버는 15분 미사용 시 잠들 수 있고 재시작/배포 때 로컬 파일을 잃으므로 운영 데이터는 Postgres에 둔다. 2026-11-10 생성한 무료 Postgres는 당시 안내상 12/10경 만료·14일 유예 후 삭제 예정이었다. 현재 요금제·보존 상태는 운영 담당자가 확인한다.
 - 서버 `stored_key`는 본인 로그인 후 `/settings`에서 키를 등록한다. 서버 `OPENAI_API_KEY` 대체는 차단돼 있다. `local_worker`는 개인 PC가 켜져 있고 같은 모델/설치 정의로 연결돼 있어야 한다. 메일·문서 입력과 AI 결과는 서버를 거치지만 PC 키는 서버에 전송/저장하지 않는다. 키를 지우거나 PC를 중지해도 이미 외부 API에 전송한 요청의 취소를 보장하지 않는다.
+- LOCAL_OWNER_GOOGLE_SUB는 app.worker.pc의 명시적 개인 파일/LocalPolicy에서만 읽는다. 앱 공통 Settings와 로컬 화면의 식별자 복사 안내는 제거했다. 서버 PC 연결 화면의 본인 Google 식별자 대조와 Gmail 연결 계정 일치 검사는 유지한다. 지식 문서는 로컬 키/리스너 설정 오류를 정확히 안내하고, 처리 실패 뒤 이전 접수 안내를 숨긴다.
 - 로컬 AI는 Google/Gmail 연결 없이 `AI_RUNTIME=local`·`.env` 키와 `uv run python -m app.local`을 쓴다. 실제 리스너는 `127.0.0.1` 전용이고 공용 Uvicorn/Render 시작은 거부한다. Gmail 수집은 개인 Google OAuth·루프백 콜백과 별도 로컬 DB에서 refresh 토큰·local:history·활성/재시도 상태가 있는 user_id들만 순차 처리하며 Pub/Sub 토픽 없이 연결한다. 운영 DB·암호화 키·OAuth 비밀값을 개인 PC로 복사하지 않는다(#159·#160·#157).
 - 서버+PC 방식은 `uv run python -m app.worker.pc pair`로 본인 HTTPS 서비스와 연결 승인 후 `run`으로 실행한다. 개인 환경 파일·서비스 주소·검증된 본인 Google 식별자를 지정하고, 키 교체 뒤 재시작한다. Windows PowerShell도 WSL 없이 지원한다(#163). 설치·`--env`/`--credentials`·중지·재연결·문제 해결은 [README](../README.md)의 개인 PC 실행 안내에 있다.
 - React 앱은 `frontend/`의 JavaScript/Vite이며 개발은 `npm ci` 후 `npm run dev`(`/app`, `/api` 프록시)다. 루트 `.env`의 `FRONTEND_PORT`가 개발 포트이며 비우면 5174, 지정하면 그 포트만 쓴다(사용 중이거나 올바르지 않으면 실패). 로그인 반환 주소는 실제 포트의 `/app/login`과 맞춘다. `/app/settings`에서 회사·거래처·판매/구매 단가·통화별 계좌·로고/직인을 저장한다. 기존 API를 재사용하고 거래처 저장만 추가했다. 실패 입력 보존·조회 취소·이미지 객체 URL 정리를 두며 새 설정은 기존 제안/발급 파일을 바꾸지 않는다. PI는 `/app/trade/pi`·`/app/trade/pi/{id}`에서 작성 방법 선택 → 거래처/판매자/품목/거래 조건 → 전체 확인 → 검토/승인/다운로드로 진행한다. 원문 추출 결과와 설정 기본값을 보존하고 필요한 빈칸만 질문하며, 채워진 내용도 단계별 전체 수정에서 바꿀 수 있다. 품목은 표로 편집하고 규격·할인·샘플은 접어 둔다. 오른쪽 작성 요약은 모바일에서 펼쳐 보고, 전체 문서는 마지막에 한 번만 표시한다. 금액·가격 확인·revision/해시 검토·발급은 기존 서버 API를 그대로 쓴다. 버전 충돌 때 입력을 보존하며 최신본 재조회와 재검토를 안내한다. 고정된 회사 이미지는 소유자·문서·제안 범위 읽기 API로 확인하고, 개인 키 관리는 기존 서비스를 Bearer API로 연결했다. PO·CI·PL은 13~15절대로 같은 작성 카드의 링크와 `/app/trade/{po|ci|pl}`·`/app/trade/{kind}/{id}` 경로를 로컬 연결했다. CI의 PI 선택/미승인 작성 준비와 PL의 별도 합계 확인을 포함하며 브라우저 완주 검증은 남았다. 실제 운영 연결과 전체 UI 통합 검증은 남아 있다. 문서함/메일/현황 등은 16~20절, 전체 UI 통합 검증은 21.2절 후속 작업이다.
@@ -168,7 +167,7 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-16 · 로컬 AI·다계정 Gmail 수집 구현
+마지막 갱신: 2026-11-16 · 로컬 실행 정리 1~3절 구현
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -182,7 +181,7 @@
 | 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 검색·LangGraph·메일 연결 제외 |
 | 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 1절의 연동 메뉴·기존 Gmail 연결/해제/재연결/상태 UI 구현. 회사 설정 장애 경계·서비스별 조회/해제 계약과 가짜 Google/실제 임시 PostgreSQL 브라우저 검증을 포함한다. Calendar는 준비 중이며 OAuth/카드 활성화는 #192, 사람의 콘솔·Render 확인은 #193에 남음 |
 | 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1~4절 로컬 키·Gmail 수집·장치/큐·PC 실행기/기존 AI 연결 구현. 실제 키·Render 연동은 사람의 5절에서 미확인 |
-| 로컬 AI·Gmail 계정 결합 정리 | `docs/plans/local-runtime-simplification.md` | 1·2절 로컬 AI 키 분리·접수 전 설정 검사·연결된 user_id별 Gmail 수집 구현. 수집 SQL/조건부 갱신은 작은 Store로 분리하며 3절 개인 PC 전용 설정/안내 정리는 남아 있다. 실제 API/운영 확인은 기존 #157·#178에서 별도 수행 |
+| 로컬 AI·Gmail 계정 결합 정리 | `docs/plans/local-runtime-simplification.md` | 1~3절 구현. 로컬 AI는 전용 루프백/환경 키, Gmail은 연결·활성 user_id 순차 수집, LOCAL_OWNER_GOOGLE_SUB는 개인 PC 실행기 전용이다. SQL/조건부 갱신은 작은 Store, 기존 인증·모델 Protocol·서버 키·승인 경계는 유지한다. 실제 API/운영 확인은 기존 #157·#178에서 별도 수행 |
 | KE KOREA 무역서류 로직 이식 계획 이력 | `docs/plans/kekorea-port.md` | 1~6절 완료, 참고 이력 |
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |

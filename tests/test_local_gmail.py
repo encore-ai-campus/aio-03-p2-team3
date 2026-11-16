@@ -42,7 +42,7 @@ from tests.test_openai_keys import sdk
 def env_file(tmp_path, database_url):
     path = tmp_path / ".env"
     path.write_text("\n".join([
-        "AI_RUNTIME=local", "LOCAL_OWNER_GOOGLE_SUB=fake-sub-1", "OPENAI_API_KEY=fake-local-private-key",
+        "AI_RUNTIME=local", "OPENAI_API_KEY=fake-local-private-key",
         f"DATABASE_URL={database_url}", "SESSION_SECRET=fake-local-session",
         f"TOKEN_ENCRYPTION_KEY={Fernet.generate_key().decode()}",
         "GOOGLE_OAUTH_CLIENT_ID=fake-client", "GOOGLE_OAUTH_CLIENT_SECRET=fake-secret",
@@ -274,10 +274,10 @@ def test_connected_users_are_polled_separately_with_same_message_id(local, sdk, 
 
 
 @pytest.mark.parametrize("owner", ["", "fake-other"])
-def test_owner_configuration_does_not_change_collection(local, owner):
+def test_owner_configuration_does_not_change_collection(local, owner, monkeypatch):
     _, _, access = local
-    collector = LocalGmailCollector(replace(access, settings=replace(access.settings, local_owner_google_sub=owner)),
-                                    SqlMailboxStore(access.database))
+    monkeypatch.setenv("LOCAL_OWNER_GOOGLE_SUB", owner)
+    collector = LocalGmailCollector(access, SqlMailboxStore(access.database))
     collector.poll_once()
     assert len(rows(access.database, Run)) == 1
 

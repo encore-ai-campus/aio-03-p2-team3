@@ -2,7 +2,7 @@
 
 - 목표: 로컬 AI는 PC의 `.env` 키를 사용하고, 로컬 Gmail은 연결·수집 상태가 유효한 `user_id`들을 처리한다. `LOCAL_OWNER_GOOGLE_SUB`는 HTTPS 서버에 연결하는 개인 PC 실행기(`app.worker.pc`) 전용으로 남긴다.
 - 요청 근거: 2026-11-16, 사용자가 수동 Google 식별자 설정을 제거하고 Ponytail·Python Clean Architecture 기준으로 최소한의 구조 정리를 요청했다.
-- 계획 기준: main `8ad74d9`. 각 절의 완료 표시는 해당 구현을 포함한 브랜치 기준이다. 1·2절에서 로컬 AI의 Google 계정 의존 제거와 연결된 user_id별 Gmail 수집을 구현했다. PC 전용 설정 정리는 3절에서 진행한다.
+- 계획 기준: main `8ad74d9`. 각 절의 완료 표시는 해당 구현을 포함한 브랜치 기준이다. 1~3절에서 로컬 AI 계정 분리·연결된 user_id별 Gmail 수집·개인 PC 전용 설정과 화면 안내 정리를 구현했다. 실제 계정/운영 확인은 기존 #157·#178에서 별도로 수행한다.
 - 관련 Issue: 1절 [#198](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/198), 2절 [#199](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/199), 3절 [#200](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/200). 기존 실제 운영 확인 #157·#178과 별개이며 이를 완료 처리하지 않는다.
 - 관련 요구사항: R-04·R-11·R-12·R-14. 새 그래프·검색 기능이나 외부 API를 추가하는 계획은 아니다.
 - 조율함: 해당 없음 — 그래프 상태·도구 스키마·노드/엣지는 수정하지 않는다. 기존 인증·수집·키 조회의 호출 계약을 보존한다.
@@ -77,7 +77,7 @@ flowchart TB
 - 선행 작업: 없음 — 이 계획 PR 병합 후 시작. 1절과 병행 가능하며 최종 다계정 AI 통합 검증은 1절 병합 후 확인한다.
 - 하는 사람: Codex
 
-## 3. 개인 PC 전용 설정·오류 안내와 문서 통합
+## 3. 개인 PC 전용 설정·오류 안내와 문서 통합 (완료)
 
 - 할 일:
   - 1·2절 완료 후 앱 공통 `Settings.local_owner_google_sub`와 로컬 키/수집/설정 화면의 남은 참조를 제거한다. 환경 이름은 개인 PC 실행기의 `load_policy()`와 `LocalPolicy`에서만 읽고 사용한다. worker 소유자 검증·장치 연결·자격증명 보호는 그대로 둔다.
