@@ -1,42 +1,31 @@
-# PR과 main 변경마다 규칙 검사(.work/check.py)와 테스트(uv run pytest)를 돌린다. 비밀값이 필요 없다.
+# PR과 main 변경의 규칙을 검사하고, 문서만 바뀐 경우 비용이 큰 테스트는 생략한다.
 # 원본: doomdiver100T/claude-github-setup 커밋 9c45959의 template/managed/common/.github/workflows/rules-check.yml을 복사해 고침 [Past work: setup]
 # check.py는 테스트를 부르지 않으므로 테스트 작업(tests)을 따로 둔다. 두 결과가 PR에 따로 보인다 [Claude proposal]
-# pr-check는 PR 본문의 '읽은 파일'·'최신 흐름 갱신' 칸을 본다(check.py --pr). 본문을 고치면 다시 돌도록 edited를 넣는다.
-# edited에서도 세 작업을 모두 돌린다(작업을 건너뛰면 건너뜀이 앞 실패를 덮어 필수 검사를 통과한 것처럼 보인다) [Claude proposal]
+# PR 본문 검사는 pr-check.yml로 분리한다. 본문 수정으로 코드 검사가 다시 실행/취소되지 않는다.
 name: rules-check
 
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: rules-check
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      run_tests: ${{ steps.scope.outputs.run_tests }}
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: 레포 규칙 검사
-        run: python .work/check.py
-
-  pr-check:
-    name: pr-check
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      # base와 비교(git diff base...HEAD)하려고 기록을 모두 가져온다
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -45,17 +34,25 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: PR 본문 검사(읽은 파일·최신 흐름 갱신)
-        run: python .work/check.py --pr
+      - name: 레포 규칙 검사
+        run: python .work/check.py
+
+      - name: 테스트 실행 범위 확인
+        id: scope
+        run: python scripts/ci_scope.py
 
   tests:
     name: tests
+    needs: check
+    # 필수 검사 이름을 유지하고, 범위 확인 실패를 성공/skip으로 숨기지 않는다.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # 테스트 DB는 전부 PostgreSQL이다(3절). service 컨테이너를 띄워 TEST_DATABASE_URL로 쓴다.
     services:
       postgres:
-        image: pgvector/pgvector:0.8.7-pg16@sha256:484e838076e04939d27d3e176e91c86eea96236126023be8d3059761122e579f
+        # 빈 image는 service를 시작하지 않는다. 문서 PR은 DB도 설치도 필요 없다.
+        image: ${{ needs.check.outputs.run_tests == 'true' && 'pgvector/pgvector:0.8.7-pg16@sha256:484e838076e04939d27d3e176e91c86eea96236126023be8d3059761122e579f' || '' }}
         env:
           POSTGRES_PASSWORD: postgres
         ports:
@@ -66,27 +63,47 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
+      - name: 범위 확인 결과 검증
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
+          RUN_TESTS: ${{ needs.check.outputs.run_tests }}
+        run: |
+          test "$CHECK_RESULT" = success
+          test "$RUN_TESTS" = true || test "$RUN_TESTS" = false
+
+      - name: 문서 변경 안내
+        if: needs.check.outputs.run_tests == 'false'
+        run: echo '문서만 변경되어 전체 테스트를 생략했습니다. 규칙·PR 본문 검사는 유지합니다.'
+
       - uses: actions/checkout@v7
+        if: needs.check.outputs.run_tests == 'true'
 
       # Python 버전은 .python-version(3.12)을 따른다
       - uses: astral-sh/setup-uv@v10.3.3
+        if: needs.check.outputs.run_tests == 'true'
 
       - name: 패키지 설치
+        if: needs.check.outputs.run_tests == 'true'
         run: uv sync --locked
 
       - name: Office 페이지 변환기 설치
+        if: needs.check.outputs.run_tests == 'true'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer libreoffice-calc fonts-noto-cjk
 
       - name: 프론트·브라우저 시험 준비
+        if: needs.check.outputs.run_tests == 'true'
         run: npm ci --prefix frontend && uv run playwright install --with-deps chromium
 
       - name: 테스트
+        if: needs.check.outputs.run_tests == 'true'
         run: uv run pytest
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
   windows-worker:
     name: windows-worker
+    needs: check
+    if: needs.check.outputs.run_tests == 'true'
     runs-on: windows-latest
     timeout-minutes: 10
     env:
