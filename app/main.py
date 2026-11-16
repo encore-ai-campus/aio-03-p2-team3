@@ -33,6 +33,7 @@ from app.quote import router as quotes
 from app.runlog import router as runs
 from app.services.auth import GoogleAccess, make_cipher
 from app.services.local_gmail import LocalGmailCollector
+from app.db.local_gmail import SqlMailboxStore
 from app.settings import router as settings_routes
 from app.trade.common.models import DocumentError
 from app.trade.common import api as trade_api
@@ -100,7 +101,7 @@ def create_app(settings: Settings | None = None, google=None,
             database, app.state.google, make_cipher(config), config.gmail_pubsub_topic,
             settings=config,
         )
-        collector = LocalGmailCollector(app.state.google_access) if config.ai_runtime == "local" else None
+        collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database)) if config.ai_runtime == "local" else None
         app.state.local_gmail = collector
         task = asyncio.create_task(collector.run()) if collector else None
         worker_stop = asyncio.Event()

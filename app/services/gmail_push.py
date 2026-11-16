@@ -28,7 +28,7 @@ def _mailbox_lock(database, user_id):
 
 def process_notification(access: GoogleAccess, email_address: str, history_id: str, *, graph=None):
     if access.local_mode:
-        return  # 로컬 수집은 검증된 소유자만 조회하며 Pub/Sub로 시작하지 않는다.
+        return  # 로컬 수집은 연결된 user_id만 조회하며 Pub/Sub로 시작하지 않는다.
     with access.database.session() as session:
         user = session.scalar(select(User).where(func.lower(User.email) == email_address.lower()))
     if user is None:
@@ -97,9 +97,12 @@ def collect_history(access, user, gmail, cursor, *, graph=None, should_continue=
                 raw = access.google.get_message(gmail, message_id)
                 if not should_continue():
                     return None
-                email = decode_message(raw, user.email, lambda attachment_id: access.google.get_attachment(
-                    gmail, message_id, attachment_id,
-                ))
+                def read_attachment(attachment_id):
+                    if not should_continue():
+                        raise InterruptedError("Gmail collection stopped")
+                    return access.google.get_attachment(gmail, message_id, attachment_id)
+
+                email = decode_message(raw, user.email, read_attachment)
                 reason = _skip_reason(email, raw.get("labelIds", []))
                 if not should_continue():
                     return None

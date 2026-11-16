@@ -2,7 +2,7 @@
 
 - 목표: 로컬 AI는 PC의 `.env` 키를 사용하고, 로컬 Gmail은 연결·수집 상태가 유효한 `user_id`들을 처리한다. `LOCAL_OWNER_GOOGLE_SUB`는 HTTPS 서버에 연결하는 개인 PC 실행기(`app.worker.pc`) 전용으로 남긴다.
 - 요청 근거: 2026-11-16, 사용자가 수동 Google 식별자 설정을 제거하고 Ponytail·Python Clean Architecture 기준으로 최소한의 구조 정리를 요청했다.
-- 계획 기준: main `8ad74d9`. 각 절의 완료 표시는 해당 구현을 포함한 브랜치 기준이다. 1절에서 로컬 AI의 Google 계정 의존을 제거했으며 Gmail 다계정 수집과 PC 전용 설정 정리는 2·3절에서 진행한다.
+- 계획 기준: main `8ad74d9`. 각 절의 완료 표시는 해당 구현을 포함한 브랜치 기준이다. 1·2절에서 로컬 AI의 Google 계정 의존 제거와 연결된 user_id별 Gmail 수집을 구현했다. PC 전용 설정 정리는 3절에서 진행한다.
 - 관련 Issue: 1절 [#198](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/198), 2절 [#199](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/199), 3절 [#200](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/200). 기존 실제 운영 확인 #157·#178과 별개이며 이를 완료 처리하지 않는다.
 - 관련 요구사항: R-04·R-11·R-12·R-14. 새 그래프·검색 기능이나 외부 API를 추가하는 계획은 아니다.
 - 조율함: 해당 없음 — 그래프 상태·도구 스키마·노드/엣지는 수정하지 않는다. 기존 인증·수집·키 조회의 호출 계약을 보존한다.
@@ -59,7 +59,7 @@ flowchart TB
 - 선행 작업: 없음 — 이 계획 PR 병합 후 시작. 2절과 독립적인 실행 코드이나 문서 충돌은 각 PR에서 통합한다.
 - 하는 사람: Codex
 
-## 2. 연결된 user_id 기준 로컬 Gmail 다계정 수집
+## 2. 연결된 user_id 기준 로컬 Gmail 다계정 수집 (완료)
 
 - 할 일:
   - `User`·`GoogleToken`·`GmailWatch`를 `user_id`로 연결해 수집 대상을 조회한다. 사용자 행 존재, 비어 있지 않은 갱신 토큰 암호문, `topic=local:history`, `status`가 `active` 또는 재시도 가능한 `error`인 계정을 대상으로 한다. `token_expired`·`history_expired` 등 기존 종료 오류, 미연결·중지·공용 Pub/Sub 행은 제외한다. 토큰이 실제 유효한지는 기존 갱신/Google 호출과 오류 처리에서 판단한다.

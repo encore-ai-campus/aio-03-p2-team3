@@ -44,6 +44,8 @@
 
 ## 2. 로컬 서비스의 Gmail 연결과 새 메일 수집 (완료)
 
+현재 대상 선정은 [정리 계획 2절](local-runtime-simplification.md#2-연결된-user_id-기준-로컬-gmail-다계정-수집)에서 연결된 user_id별 수집으로 변경했다. 아래는 초기 구현 범위이며 고정 Google 소유자 설정은 현재 수집 조건이 아니다.
+
 - 할 일:
   - 1절에서 확정한 `docs/CONTRACT.md` 6절을 읽고 로컬 모드를 따른다. 로컬 사용자가 본인 Google OAuth 앱과 localhost 콜백을 설정하는 절차를 문서화한다. 운영용 OAuth 클라이언트 비밀값을 팀원에게 배포하지 않는다.
   - 로컬 모드에서는 본인 Google 토큰으로 Gmail history를 주기적으로 조회하는 수집 실행기를 제공한다. 공용 Pub/Sub 설정은 변경하지 않고 개인 PC에 수신 포트·공개 터널을 요구하지 않는다.
