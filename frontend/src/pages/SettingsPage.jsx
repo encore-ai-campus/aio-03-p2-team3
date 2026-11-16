@@ -23,8 +23,8 @@ export default function SettingsPage() {
   const { state } = useAuth()
   const token = state.accessToken
   const [search, setSearch] = useSearchParams()
-  const [callback, setCallback] = useState(() => search.get("gmail"))
-  const [section, setSection] = useState(() => search.has("gmail") ? "integrations" : "company")
+  const [callback, setCallback] = useState(() => search.has("calendar") ? { service: "calendar", code: search.get("calendar") } : { service: "gmail", code: search.get("gmail") })
+  const [section, setSection] = useState(() => (search.has("gmail") || search.has("calendar")) ? "integrations" : "company")
   const [read, setRead] = useState({ phase: "loading", data: null, error: "" })
   const [reload, setReload] = useState(0)
   const [saveState, setSaveState] = useState({ saving: false, error: "", notice: "" })
@@ -32,12 +32,13 @@ export default function SettingsPage() {
   const savedVersion = useRef(0)
 
   useEffect(() => {
-    if (!search.has("gmail")) return
-    setCallback(search.get("gmail"))
+    if (!search.has("gmail") && !search.has("calendar")) return
+    setCallback(search.has("calendar") ? { service: "calendar", code: search.get("calendar") } : { service: "gmail", code: search.get("gmail") })
     setSection("integrations")
     setSearch((previous) => {
       const next = new URLSearchParams(previous)
       next.delete("gmail")
+      next.delete("calendar")
       return next
     }, { replace: true })
   }, [search, setSearch])

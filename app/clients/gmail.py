@@ -1,6 +1,7 @@
 """사용자별 Google OAuth·Gmail API 호출(CONTRACT 1·10절, 계획 6절).
 
-실제 Google을 부르는 곳은 이 파일의 `GoogleClient` 하나다. 서버가 뜰 때 한 번 만들어
+Gmail·공용 OAuth는 이 파일의 `GoogleClient`, Calendar는 별도 `CalendarClient`가 담당한다.
+서버가 뜰 때 한 번 만들어
 `app.state.google`에 두고, 테스트는 같은 메서드를 가진 가짜(`tests/fakes/google.py`)로 바꿔 끼운다.
 토큰을 DB에서 꺼내고 갱신하는 일은 `app/services/auth.py`의 `get_access_token()`이 한다.
 """
@@ -125,6 +126,8 @@ def _gmail_discovery() -> str:
 
 
 class GoogleClient:
+    scopes = GOOGLE_SCOPES
+
     def __init__(self, settings: Settings):
         self.settings = settings
 
@@ -138,7 +141,7 @@ class GoogleClient:
             "token_uri": TOKEN_URI,
         }}
         flow = Flow.from_client_config(
-            config, scopes=list(GOOGLE_SCOPES), state=state,
+            config, scopes=list(self.scopes), state=state,
             code_verifier=code_verifier, autogenerate_code_verifier=False,
         )
         flow.redirect_uri = self.settings.google_oauth_redirect_uri

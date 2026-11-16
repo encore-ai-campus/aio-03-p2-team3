@@ -106,7 +106,7 @@ def test_connect_registers_watch_and_me_reports_connected(database_url):
         assert user.id == before["user_id"] and user.google_sub == "fake-sub-1"
         assert me(client, token) == {
             "user_id": user.id, "email": "demo@example.invalid", "display_name": "데모 사용자",
-            "gmail": {"connected": True, "watch": "active"},
+            "gmail": {"connected": True, "watch": "active"}, "calendar": {"connected": False},
         }
         watch = watch_of(client, user.id)
         assert (watch.status, watch.history_id) == ("active", "1000")

@@ -106,7 +106,9 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-16 · 지식 문서·PO·CI·PL 통합 회귀 검증
+마지막 갱신: 2026-11-16 · Calendar OAuth·기존 기능 통합 회귀 검증
+
+- Calendar OAuth는 실제 임시 PostgreSQL·가짜 Google/JWKS로 state/PKCE·갱신/해제·계정/서비스 격리·실패를 검증하고, Chromium에서 단독/동시 연결·새로고침·390px·오류 복구를 확인했다. 전체 `uv run pytest`는 **1067 passed·2 skipped**(Windows 전용), frontend lint/test(11개)/build/공개 환경 검사와 규칙 검사(경고 0개)를 통과했다. 상세 실행 결과·변환기 환경 보완과 실제 운영 미확인은 [검증 기록](test-records/20261116_calendar_oauth.md)에 둔다.
 
 - 지식 문서·PO·CI·PL 통합: 최신 main `d124e31`과 화면 경로/문서를 합친 전체 `uv run pytest`는 **1006 passed·2 skipped**, 규칙 검사 경고 0개, 프론트 lint/test(11개)/build/공개 환경 검사 통과다. `test_knowledge.py` 26개와 실제 Chromium의 `test_knowledge_browser.py`는 합성 파일·실제 pgvector/FastAPI/React와 가짜 비전/임베딩/Storage로 업로드→원본 대조→수정/확정→부모/자식/벡터 저장을 확인한다. 누락 페이지 검토 대기·409 수정문 보존·소유자 분리·모델/차원 교체·SQL 교체 실패/부분 배치 실패의 이전 결과 보존·임대/늦은 시도 차단을 검증했다. Word/Excel/TXT 한글 렌더 결과와 1440/390px 화면도 직접 확인했다. 실제 AI 정확도·비용·운영 DB/Storage/Render 확인은 #178에 남는다.
 
@@ -144,7 +146,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-16 · 설정 연동 메뉴와 기존 Gmail 연결
+마지막 갱신: 2026-11-16 · Calendar OAuth·서비스별 토큰과 연동 카드 활성화
 
 - 단독 CI 작성은 `/app/trade/ci/standalone`과 `/app/trade/ci/standalone/{id}`를 사용한다. 기존 PI 연결 CI는 기존 주소를 사용한다. 실제 운영 연결은 확인하지 않았다.
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
@@ -157,14 +159,14 @@
 - 로컬 전체 실행은 `AI_RUNTIME=local`·본인 `LOCAL_OWNER_GOOGLE_SUB`·`.env` 키와 `uv run python -m app.local`을 쓴다. 실제 리스너는 `127.0.0.1` 전용이고 공용 Uvicorn/Render 시작은 거부한다. 개인 Google OAuth·루프백 콜백과 별도 로컬 DB를 쓰며 Pub/Sub 토픽 없이 연결한다. 운영 DB·암호화 키·OAuth 비밀값을 개인 PC로 복사하지 않는다(#159·#160·#157).
 - 서버+PC 방식은 `uv run python -m app.worker.pc pair`로 본인 HTTPS 서비스와 연결 승인 후 `run`으로 실행한다. 개인 환경 파일·서비스 주소·검증된 본인 Google 식별자를 지정하고, 키 교체 뒤 재시작한다. Windows PowerShell도 WSL 없이 지원한다(#163). 설치·`--env`/`--credentials`·중지·재연결·문제 해결은 [README](../README.md)의 개인 PC 실행 안내에 있다.
 - React 앱은 `frontend/`의 JavaScript/Vite이며 개발은 `npm ci` 후 `npm run dev`(`/app`, `/api` 프록시)다. 루트 `.env`의 `FRONTEND_PORT`가 개발 포트이며 비우면 5174, 지정하면 그 포트만 쓴다(사용 중이거나 올바르지 않으면 실패). 로그인 반환 주소는 실제 포트의 `/app/login`과 맞춘다. `/app/settings`에서 회사·거래처·판매/구매 단가·통화별 계좌·로고/직인을 저장한다. 기존 API를 재사용하고 거래처 저장만 추가했다. 실패 입력 보존·조회 취소·이미지 객체 URL 정리를 두며 새 설정은 기존 제안/발급 파일을 바꾸지 않는다. PI는 `/app/trade/pi`·`/app/trade/pi/{id}`에서 작성 방법 선택 → 거래처/판매자/품목/거래 조건 → 전체 확인 → 검토/승인/다운로드로 진행한다. 원문 추출 결과와 설정 기본값을 보존하고 필요한 빈칸만 질문하며, 채워진 내용도 단계별 전체 수정에서 바꿀 수 있다. 품목은 표로 편집하고 규격·할인·샘플은 접어 둔다. 오른쪽 작성 요약은 모바일에서 펼쳐 보고, 전체 문서는 마지막에 한 번만 표시한다. 금액·가격 확인·revision/해시 검토·발급은 기존 서버 API를 그대로 쓴다. 버전 충돌 때 입력을 보존하며 최신본 재조회와 재검토를 안내한다. 고정된 회사 이미지는 소유자·문서·제안 범위 읽기 API로 확인하고, 개인 키 관리는 기존 서비스를 Bearer API로 연결했다. PO·CI·PL은 13~15절대로 같은 작성 카드의 링크와 `/app/trade/{po|ci|pl}`·`/app/trade/{kind}/{id}` 경로를 로컬 연결했다. CI의 PI 선택/미승인 작성 준비와 PL의 별도 합계 확인을 포함하며 브라우저 완주 검증은 남았다. 실제 운영 연결과 전체 UI 통합 검증은 남아 있다. 문서함/메일/현황 등은 16~20절, 전체 UI 통합 검증은 21.2절 후속 작업이다.
-- Supabase 로그인은 `SUPABASE_URL`의 JWKS로 Bearer 서명·issuer/audience·만료·UUID를 검증해 기존 정수 사용자 ID에 매핑한다. `/api/me`·`/api/gmail/*`·`/api/files*`와 무역/설정 API를 연결했으며 잘못된 Bearer가 쿠키 세션으로 우회하지 않는다. legacy 로그인/CSRF는 전환 기간 유지한다. Gmail 연결은 state·PKCE·같은 Google 공급자 subject를 확인하고, 앱 로그아웃 때 감시를 중지한다(계약 9.1절). `/app/settings`의 로고·직인 아래 `연동하기`에서 Gmail 연결·재연결·확인 후 해제를 제공하고, Google 캘린더는 준비 중이다. 회사 설정 조회 실패에도 메뉴/카드를 열 수 있으며 콜백은 연동 항목을 자동 선택하고 `/api/me`를 재조회한다. URL 결과는 안내 뒤 소비하며 실제 연결·감시 상태는 서버 응답으로 구분한다. 401·설정 누락·취소·권한/계정 오류·감시/해제 실패에는 로그인 복구 또는 상태 재조회를 안내한다. 서비스별 인증 조회·오류·해제의 재사용 경계는 [연동 계획 1절](plans/settings-google-integrations.md#1절-구현-결과와-재사용-경계)에 있다. Calendar OAuth는 #192, 실제 Google/Render 연결 확인은 #193에 남는다.
+- Supabase 로그인은 `SUPABASE_URL`의 JWKS로 Bearer 서명·issuer/audience·만료·UUID를 검증해 기존 정수 사용자 ID에 매핑한다. `/api/me`·`/api/gmail/*`·`/api/files*`와 무역/설정 API를 연결했으며 잘못된 Bearer가 쿠키 세션으로 우회하지 않는다. legacy 로그인/CSRF는 전환 기간 유지한다. Gmail 연결은 state·PKCE·같은 Google 공급자 subject를 확인하고, 앱 로그아웃 때 감시를 중지한다(계약 9.1절). `/app/settings`의 로고·직인 아래 `연동하기`에서 Gmail 연결·재연결·확인 후 해제를 제공하고, Google 캘린더는 본인 계정의 별도 읽기 전용 OAuth와 목록 조회 검증 뒤 연결한다. `calendar_tokens`·일회성 DB state를 Gmail과 분리하며 Calendar만 연결할 때 Pub/Sub는 필요 없다. Calendar 해제는 앱 토큰만 삭제하고, Gmail 해제/Google 전체 권한 철회 뒤에는 공급자로 재검증한다. 회사 설정 조회 실패에도 메뉴/카드를 열 수 있으며 콜백은 연동 항목을 자동 선택하고 `/api/me`를 재조회한다. URL 결과는 안내 뒤 소비하며 실제 연결·감시 상태는 서버 응답으로 구분한다. 401·설정 누락·취소·권한/계정 오류·감시/해제 실패에는 로그인 복구 또는 상태 재조회를 안내한다. 서비스별 인증 조회·오류·해제의 재사용 경계는 [연동 계획 1절](plans/settings-google-integrations.md#1절-구현-결과와-재사용-경계)에 있다. Calendar의 만료 토큰은 갱신하고 철회·권한 부족은 재연결, 공급자 장애는 Gmail과 분리한 미확인으로 표시한다. 실제 Google/Render 연결 확인은 #193에 남는다.
 - `web/routes`와 `web/deps.py`는 제거하고 HTTP 진입점을 `auth`·`mail`·`settings`·`quote`·`runlog`로 옮겼다. `web`에는 공개 페이지·공유 템플릿·정적 자산만 둔다. 공통 인증/폼 CSRF는 `auth/deps.py`에서 제공해 무역 API·worker가 화면 모듈을 import하지 않는다. 기존 URL·세션/Bearer 우선순위·승인·DB 의미는 유지한다. React 메일/실행기록·전체 UI 통합 검증이 미완료라 기존 HTML 자산은 아직 필요하다([이동표·유지 조건](domain-layout.md)).
 - 첨부·회사 이미지·승인 PDF/XLSX의 bytes는 private Storage, 소유자/참조/해시는 PostgreSQL에 둔다. 모든 형식 업로드 뒤에만 문서 승인 SQL을 확정한다. 새 XLSX는 ZIP 내부 시각을 고정해 같은 검토 내용의 재시도에서 같은 해시·객체 key를 사용한다. 발행일과 기존 발급 파일은 유지한다. 발급 객체 재사용·backfill·수동 정리는 같은 객체별 PostgreSQL 트랜잭션 잠금으로 조율하고 삭제 전 참조를 다시 확인한다. 상세 파일 계약/제한/이전 명령은 계약 16.3절과 README다.
 - 공용 OAuth·Gmail Pub/Sub·OIDC/대체 토큰은 유지한다. 로컬은 watch/stop을 호출하지 않는다. 문서/설정 API는 Bearer 또는 기존 세션/CSRF로 소유자를 검사하고, 장치 승인과 장치 통신의 기존 CSRF·장치 토큰 계약은 유지한다. 환경변수 원본은 `.env.example`·계약 11절이다. Supabase는 루트 `.env`의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY` 세 값으로 설정하며 Vite는 URL과 공개 키만 브라우저에 제공한다. `frontend/.env`와 중복 URL은 제거했고 버킷은 기본 `trade-files`다. 실제 DB 연결용 `DATABASE_URL`은 별도로 필요하다. `frontend/`의 `npm run check:env`로 공개값 전달·비밀값 빌드 제외를 확인한다. 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인이며 로컬 Supabase URL/키와 개발 포트를 설정했다. Auth 설정 조회·Google 로그인 시작은 확인했고, 실제 계정 로그인·Gmail·운영 DB/파일 이전은 미확인이다. 현재 로컬 DB는 임시 PostgreSQL이며 실제 DATABASE_URL과 Google/암호화 설정은 별도로 확인해야 한다.
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-16 · 설정 연동 메뉴와 Gmail UI·후속 Calendar 경계
+마지막 갱신: 2026-11-16 · Calendar OAuth·연동 검증/운영 안내
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -176,7 +178,7 @@
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 검색·LangGraph·메일 연결 제외 |
-| 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 1절의 연동 메뉴·기존 Gmail 연결/해제/재연결/상태 UI 구현. 회사 설정 장애 경계·서비스별 조회/해제 계약과 가짜 Google/실제 임시 PostgreSQL 브라우저 검증을 포함한다. Calendar는 준비 중이며 OAuth/카드 활성화는 #192, 사람의 콘솔·Render 확인은 #193에 남음 |
+| 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 1절의 연동 메뉴·기존 Gmail 연결/해제/재연결/상태 UI 구현. 회사 설정 장애 경계·서비스별 조회/해제 계약과 가짜 Google/실제 임시 PostgreSQL 브라우저 검증을 포함한다. 2절 Calendar OAuth/카드 활성화 구현. 서버 일회성 state·별도 암호화 토큰·갱신/계정/실패 격리를 검증하며 사람의 콘솔·Render 확인은 #193에 남음 |
 | 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1~4절 로컬 키·Gmail 수집·장치/큐·PC 실행기/기존 AI 연결 구현. 실제 키·Render 연동은 사람의 5절에서 미확인 |
 | KE KOREA 무역서류 로직 이식 계획 이력 | `docs/plans/kekorea-port.md` | 1~6절 완료, 참고 이력 |
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |

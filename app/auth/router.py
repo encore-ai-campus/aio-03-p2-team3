@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import JSONResponse
 
 from app.auth.gmail import gmail_status
+from app.auth.calendar import calendar_status
 from app.auth.supabase import bearer_user_id
 from app.db.models import User
 from app.services.watch import renew_watch_if_due
@@ -25,6 +26,7 @@ def me(request: Request, background: BackgroundTasks, user_id: int = Depends(bea
         "email": user.email,
         "display_name": user.display_name,
         "gmail": gmail_status(request, user_id),
+        "calendar": calendar_status(request, user_id),
     }
 
 

@@ -81,7 +81,7 @@
 |---|---|---|
 | Gmail API | 사용자별 메일 읽기, 감시 등록, 승인한 답장·견적서 첨부 발송 | 사용자별 Google OAuth 로그인 |
 | Cloud Pub/Sub | Gmail의 메일함 변경 알림을 서비스로 푸시 전달 | Gmail 감시 토픽, 푸시 구독과 수신 요청 인증 |
-| Google Calendar API | 도구 2(구글캘린더 등록)용으로 유지 | 사용자별 Google OAuth 로그인. 일정 도구 구현 때 연결 |
+| Google Calendar API | 설정의 읽기 전용 연동·캘린더 목록 접근 확인(#192) | 본인 Google subject 검증·별도 Calendar 토큰. `openid`·`email`·`calendar.readonly`만 요청하며 등록/추천·그래프 연결은 제외 |
 
 - 2026-11-09에는 LLM을 Gemini `gemini-3.8-flash`로 유지했다(이후 변경은 위 LLM 절). Gmail API·Cloud Pub/Sub를 추가하고 Calendar를 유지하는 것은 요청자가 정한 변경이다. [Request]
 - 한국천문연구원 특일 정보·기상청 단기예보·네이버 지역 검색·네이버 길찾기는 MVP에서 뺀다. 아래 '일정 도구 추천 후보'에 보관하고, 현재 키 발급·환경변수 설정 대상에서는 제외한다. [Request]
@@ -89,11 +89,13 @@
 - OAuth 게시·권한 설정과 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 처리한다. 이 문서 갱신으로 콘솔 설정이나 연동이 완료된 것은 아니다.
 
 ### 설정 경로
-1. Google Cloud 콘솔의 프로젝트에서 Gmail API·Cloud Pub/Sub API를 사용 설정한다. Google Calendar API는 도구 2용으로 유지한다.
+1. Google Cloud 콘솔의 프로젝트에서 Gmail API·Cloud Pub/Sub API를 사용 설정한다. Calendar 연결에는 Google Calendar API도 사용 설정하고 Data Access에 `https://www.googleapis.com/auth/calendar.readonly`를 준비한다. 기존 Gmail 범위는 유지한다. Calendar만 쓸 때 Pub/Sub는 필요 없다.
 2. Google Auth Platform → Branding·Audience·Data Access에서 앱과 필요한 권한을 설정하고, Clients에서 OAuth 웹 애플리케이션 클라이언트를 만든다. `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`을 보관하고, 로컬·Render 각각의 콜백 주소를 등록해 `GOOGLE_OAUTH_REDIRECT_URI`에 맞춘다. 서비스 주소는 `APP_BASE_URL`이다.
 3. Pub/Sub에서 토픽과 푸시 구독을 설정한다. Gmail 감시 등록에 쓰는 토픽 전체 이름을 `GMAIL_PUBSUB_TOPIC`에 둔다. 추천하는 OIDC 확인 방식은 `PUBSUB_PUSH_AUDIENCE`·`PUBSUB_PUSH_SERVICE_ACCOUNT`를 쓰며, 대체 비밀 토큰 방식을 택할 때만 `PUBSUB_PUSH_TOKEN`을 쓴다.
-4. 앱 설정으로 Google 토큰 암호화 키 `TOKEN_ENCRYPTION_KEY`, 로그인 세션 쿠키 서명 키 `SESSION_SECRET`, Postgres 접속 주소 `DATABASE_URL`, 성찰 기본값 `REFLECTION_ENABLED_DEFAULT`를 준비한다. 로컬에서 `DATABASE_URL`을 비우면 SQLite 파일을 쓴다. 이름·뜻은 `docs/CONTRACT.md` 11절, 값 없는 설정 틀은 `.env.example`에 있다.
+4. 앱 설정으로 Google 토큰 암호화 키 `TOKEN_ENCRYPTION_KEY`, 로그인 세션 쿠키 서명 키 `SESSION_SECRET`, Postgres 접속 주소 `DATABASE_URL`, 성찰 기본값 `REFLECTION_ENABLED_DEFAULT`를 준비한다. `DATABASE_URL`은 PostgreSQL 전용이며 비우면 시작하지 않는다. 이름·뜻은 `docs/CONTRACT.md` 11절, 값 없는 설정 틀은 `.env.example`에 있다.
 - 키와 설정값은 각자 로컬 `.env`와 Render 환경변수에만 둔다. 콘솔·계정 설정은 계획의 별도 작업에서 진행한다.
+
+Calendar 연결은 Gmail과 같은 OAuth 클라이언트·callback을 공유하지만 서비스별 state/암호화 토큰을 사용한다. Calendar 해제는 앱 토큰만 삭제하며 Gmail 해제/Google 전체 grant 철회는 양쪽 토큰에 영향을 줄 수 있어 서버에서 재검증한다. 실제 콘솔·Render 확인은 #193에 남는다.
 
 ### 출처
 - Calendar 한도·범위: https://developers.google.com/workspace/calendar/api/guides/quota , .../guides/auth

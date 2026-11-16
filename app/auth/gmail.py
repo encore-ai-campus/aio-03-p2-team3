@@ -107,6 +107,9 @@ def disconnect(request: Request, user_id: int = Depends(bearer_user_id)):
                                        "Google 토큰 폐기에 실패했습니다. 잠시 후 다시 시도해 주세요.") from error
     stop_watch(access, user_id)
     delete_login_tokens(access, user_id)
+    # 기존 revoke 의미를 유지한다. 공유 grant가 폐기되면 Calendar도 서버에서 재검증한다.
+    from app.auth.calendar import calendar_status
+    calendar_status(request, user_id)
     return gmail_status(request, user_id)
 
 

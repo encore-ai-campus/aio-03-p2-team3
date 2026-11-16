@@ -12,6 +12,8 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.auth import gmail as gmail_connection
+from app.auth import calendar as calendar_connection
+from app.clients.calendar import CalendarClient
 from app.auth import router as supabase_me
 from app.auth import session as session_routes
 from app.auth.deps import LoginRequired
@@ -50,10 +52,11 @@ SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
 def create_app(settings: Settings | None = None, google=None,
                supabase_auth: TokenVerifier | None = None, storage=None,
-               knowledge_adapters=None) -> FastAPI:
+               knowledge_adapters=None, calendar=None) -> FastAPI:
     """google: Google 호출 객체. 비우면 실제 `GoogleClient`, 테스트는 가짜를 넣는다.
     supabase_auth: Supabase 토큰 검증기. 비우면 SUPABASE_URL로 만들고, 그것도 없으면 Bearer 인증 불가(503).
-    storage: Storage 호출 객체. 비우면 SUPABASE_URL·SUPABASE_SECRET_KEY로 만들고, 없으면 파일 API 503."""
+    storage: Storage 호출 객체. 비우면 SUPABASE_URL·SUPABASE_SECRET_KEY로 만들고, 없으면 파일 API 503.
+    calendar: 읽기 전용 Calendar 호출 객체. 비우면 CalendarClient, 테스트는 독립 가짜를 넣는다."""
     config = settings or get_settings()
     validate_runtime(config)
     same_site = config.session_same_site or "lax"
@@ -96,6 +99,9 @@ def create_app(settings: Settings | None = None, google=None,
         app.state.google_access = GoogleAccess(
             database, app.state.google, make_cipher(config), config.gmail_pubsub_topic,
             settings=config,
+        )
+        app.state.calendar_access = GoogleAccess(
+            database, calendar or CalendarClient(config), make_cipher(config), "", settings=config,
         )
         collector = LocalGmailCollector(app.state.google_access) if config.ai_runtime == "local" else None
         app.state.local_gmail = collector
@@ -152,6 +158,7 @@ def create_app(settings: Settings | None = None, google=None,
     app.include_router(settings_routes.router)
     app.include_router(supabase_me.router)
     app.include_router(gmail_connection.router)
+    app.include_router(calendar_connection.router)
     app.include_router(files_routes.router)
     app.include_router(knowledge_routes.router)
     app.include_router(worker_routes.router)

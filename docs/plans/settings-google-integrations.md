@@ -4,7 +4,7 @@
 - 관련 요구사항: R-04(외부 API), R-12(정상·오류 검증), R-14(사용자 화면·배포).
 - 관련 Issue: [1절 #191](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/191), [2절 #192](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/192), [3절 #193](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/193).
 - 조율함: 해당 없음 — 그래프 상태·도구 스키마·노드·엣지는 변경하지 않는다.
-- 현재 상태: Gmail은 `app/auth/gmail.py`의 `/api/gmail/connect`, `/disconnect`, `/logout`과 `/api/me.gmail`이 구현돼 있다. `frontend/src/pages/SettingsPage.jsx`의 로고·직인 아래 연동 메뉴와 `IntegrationSettings.jsx`가 기존 Gmail 연결·재연결·해제·상태 조회를 제공한다. Google 캘린더 카드는 준비 중이다. Google 캘린더 OAuth·연결 상태 API는 없으며 `app/graph/calendar/`의 포트는 실제 공급자와 연결되지 않았다. Supabase 앱 로그인 성공 자체를 Gmail·캘린더 권한 동의로 보지 않는다.
+- 현재 상태: Gmail은 `app/auth/gmail.py`의 `/api/gmail/connect`, `/disconnect`, `/logout`과 `/api/me.gmail`이 구현돼 있다. `frontend/src/pages/SettingsPage.jsx`의 로고·직인 아래 연동 메뉴와 `IntegrationSettings.jsx`가 기존 Gmail 연결·재연결·해제·상태 조회를 제공한다. Google 캘린더 카드는 `app/auth/calendar.py`의 Bearer 연결/해제·공용 콜백·`/api/me.calendar`에 연결하며, 별도 암호화 토큰과 DB 일회성 state·PKCE·캘린더 목록 조회를 검증한다. 실제 콘솔/Render 확인은 3절에 남으며 `app/graph/calendar/`의 포트는 실제 공급자와 연결되지 않았다. Supabase 앱 로그인 성공 자체를 Gmail·캘린더 권한 동의로 보지 않는다.
 - 진행 방식: 저장소 `.work/RULES.md` 7절에 따라 절마다 별도 작업·PR로 진행한다. 1절은 기존 Gmail API를 재사용하며 Calendar OAuth와 실제 운영 확인은 뒤 절에서 진행한다.
 
 ## 1. 연동 화면과 기존 Gmail 연결 (완료)
@@ -35,7 +35,7 @@
 - `operation` ref가 렌더 전 연속 클릭까지 막고, 시작/해제/상태 읽기 중 버튼을 비활성화한다. Google 이동 직전까지 잠금을 유지하며 오류 뒤에는 풀고, 토큰 변경·언마운트 시 취소/초기화한다. Calendar 카드는 별도 region에 비활성 버튼과 `준비 중`을 표시한다. 2절은 이 컴포넌트의 Calendar 카드에 서비스별 읽기/오류/진행 상태를 더하고 기존 Gmail 상태·감시를 덮어쓰지 않아야 한다.
 - 검증 위치: `tests/test_react_settings.py::test_gmail_settings_browser_callbacks_failures_and_mobile`(실제 React/FastAPI/임시 PostgreSQL, 가짜 Google/JWKS, 1440px·390px)와 기존 `tests/test_gmail_connect.py`(암호화 토큰·계정·state/만료·해제·감시 회귀). 실제 Google 동의·Render 운영 연결은 확인하지 않았다. 최종 전체 `uv run pytest -q`는 **1038 passed·2 skipped**(Windows 전용)이며 frontend lint/test(11개)/build와 규칙 검사(경고 0개)를 통과했다. 브라우저는 설치된 Chromium 155, 문서 변환은 작업 폴더의 Debian LibreOffice 25.2.3을 사용했고 서버·렌더러 제한·기존 시험은 변경하지 않았다.
 
-## 2. Google 캘린더 OAuth와 연동 카드 활성화
+## 2. Google 캘린더 OAuth와 연동 카드 활성화 (완료)
 
 - 할 일: 1절의 연동 계약과 구현 결과를 읽고 `/api/calendar/*`·콜백·`/api/me.calendar`를 구현한다. 기존 Gmail 토큰을 덮어쓰지 않도록 서비스별 암호화 토큰/동의 범위를 저장하고 필요한 Alembic 마이그레이션을 추가한다. state·PKCE·10분 유효 기간·콜백 1회 소비·같은 Google 계정을 검증하고, 갱신 토큰 누락 시 동의를 한 번만 재요청한다. 캘린더 목록 조회로 연결을 확인하고 만료·취소·권한 부족·API 미활성화·통신 실패는 연결 성공으로 처리하지 않는다. 캘린더 카드를 실제 연결·상태 조회·해제·재연결에 연결한다. 기존 Gmail callback과 legacy 로그인 분기를 유지하고 연결 흐름 간 state 혼동을 거절한다. 계약의 인증/DB/환경 절, `.work/design/api-choice.md`의 Calendar 사용 범위와 README의 콘솔·운영 안내를 실제 구현대로 갱신한다. 새 설정이 필요하면 `.env.example`에는 이름·설명만 적는다.
 - 완료 기준: 가짜 Google과 실제 임시 PostgreSQL로 정상 연결·갱신·해제·재연결 및 다른 계정·잘못된/재사용/만료 state·PKCE 오류·부분 동의·갱신 토큰 누락·Google 장애·취소를 검증한다. 사용자 A/B의 토큰·상태가 섞이지 않는다. Gmail만 연결/캘린더만 연결/둘 다 연결과 한쪽 해제·grant 폐기의 영향을 검증하고, 기존 메일 수집·발송·로그아웃 회귀 검사를 통과한다. 브라우저에서 콜백 복귀·새로고침·오류 복구를 확인하고 frontend lint/test/build, 규칙 검사와 전체 pytest를 통과한다.
@@ -43,6 +43,8 @@
 - 섞지 않을 것: 일정 생성/수정/삭제, 자연어 일정 추천, 마스터 그래프·CalendarPort 연결, 보조 일정 API, 실제 개인 토큰/일정의 테스트 기록 저장.
 - 선행 작업: 1절 병합.
 - 하는 사람: Codex.
+
+- 구현 결과: 서비스별 암호화 토큰·DB 일회성 state와 PKCE·10분 만료·본인 계정/권한/갱신 토큰·캘린더 목록 접근을 확인하고 카드/콜백/재조회를 연결했다. Calendar 해제는 앱 토큰만 삭제하고 Gmail revoke 뒤 Calendar를 재검증한다. 전체 pytest **1067 passed·2 skipped**(Windows 전용), Calendar 전용 29개·가짜 공급자 Chromium 흐름·frontend lint/test(11개)/build/공개 환경 검사와 규칙 검사(경고 0개)를 통과했다. 환경 보완·정상/실패 근거·운영 미확인은 [검증 기록](../test-records/20261116_calendar_oauth.md)에 있다. 실제 운영 확인은 3절 #193에 남는다.
 
 ## 3. Google 콘솔 설정과 Render 실제 연결 확인
 
