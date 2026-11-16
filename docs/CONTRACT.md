@@ -1081,9 +1081,11 @@ TradeDocDraft(TypedDict, total=False):
 
 LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 승인 대기 노드 앞에 비멱등 발송을 두지 않는다. 체크포인터와 장기 기억도 구분한다([공식 interrupt 문서](https://docs.langchain.com/oss/python/langgraph/interrupts), [공식 persistence 문서](https://docs.langchain.com/oss/python/langgraph/persistence)).
 
-## 18. 지식 문서 수집과 벡터 저장
+## 18. 문서함(지식 문서) 수집과 벡터 저장
 
 2026-11-16 구현. R-07·R-08의 문서 컨텍스트 기반 준비, R-11 실패/복구, R-14 화면에 해당한다. 이번 완료 지점은 업로드·전량 비전 추출·수정/확정·조항 parent-child·임베딩 저장이며 검색·LangGraph·이메일 작성/발송 연결은 포함하지 않는다. 계획은 `docs/plans/document-ingestion.md`, 실제 코드는 `app/knowledge/`·`frontend/src/knowledge/`다.
+
+화면의 문서함과 지식 문서는 같은 업로드 문서를 가리킨다. 정식 화면 주소는 `/app/documents`, 메뉴/제목은 문서함이다. 기존 `/app/knowledge`는 query/hash(선택 문서 포함)를 유지해 replace 이동한다. 기존 지식 문서 API·소유권·저장 구조를 재사용하며 작성/발급한 무역 문서의 목록 API로 대체하지 않는다. 원본 보기는 기존 인증 페이지 미리보기로 PDF/이미지·Office/TXT의 원본 또는 변환 페이지를 표시하고 이전/다음으로 탐색한다. 페이지 응답의 X-Page-Count는 AI 추출과 독립적으로 렌더러가 센 전체 페이지 수다. 추출 완료와 무관하며 원본은 다운로드할 수 있다. 미리보기 닫기/문서 전환 때 요청을 취소하고 Blob URL을 해제한다.
 
 ### 18.1. 경계와 값
 
@@ -1110,7 +1112,7 @@ LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 �
 | GET `/api/knowledge/documents?offset=0` | 본인 문서 요약 20개. id·file_id·filename·size·hash·status·attempt_id·revision·오류·현재/성공 프로필 |
 | GET `…/{id}` | 요약+AI 초안 raw_pages·현재 수정문 pages·approved·warnings·published_pages·부모/자식 개수 |
 | GET `…/{id}/download` | 해시 대조한 원본 bytes, 안전한 attachment 이름 |
-| GET `…/{id}/pages/{number}` | 본인 원본을 다시 렌더링한 해당 PNG. 변환 페이지 미리보기는 서버 파일/설정에 따른 렌더 결과 |
+| GET `…/{id}/pages/{number}` | X-Page-Count 헤더로 전체 페이지 수 제공. 본인 원본을 다시 렌더링한 해당 PNG. 변환 페이지 미리보기는 서버 파일/설정에 따른 렌더 결과 |
 | GET `…/{id}/chunks?offset=0` | 마지막 성공 시도의 자식 50개와 해당 부모 원문·출처. 자식은 차원/profile_id/원문 범위를 제공하고 벡터 배열 자체는 UI로 보내지 않음 |
 | PUT `…/{id}/extraction` | `{attempt_id, revision, pages:[{number,text}], confirm}`. 전체 페이지·순서·버전을 검사. 저장만 하면 needs_review, 확정하면 queued |
 | POST `…/{id}/retry` | `{attempt_id}`. 터미널/검토 상태에서만 새 시도로 전량 재추출·임베딩 요청(202). 이전 성공 인덱스는 보존 |

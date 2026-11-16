@@ -32,3 +32,5 @@
 .knowledge-empty { color: #566478; }
 @media (max-width: 1200px) { .knowledge-layout { grid-template-columns: 220px minmax(0, 1fr); } .knowledge-compare { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 800px) { .knowledge-layout { grid-template-columns: minmax(0, 1fr); } .knowledge-workspace .card { padding: 18px; } .knowledge-list ul { max-height: 260px; overflow: auto; } .knowledge-workspace textarea { font-size: 16px; min-height: 320px; } }
+
+.knowledge-original-image { display: block; max-width: 100%; height: auto; margin: 16px auto; }

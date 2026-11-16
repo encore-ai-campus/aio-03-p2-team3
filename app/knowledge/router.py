@@ -110,10 +110,12 @@ def preview(document_id: str, number: int, request: Request, owner: int = Depend
         raise KnowledgeError("page_not_found", "해당 페이지가 없습니다.", 404)
     file = operations.original(repository(request), storage(request), owner, document_id)
     # ponytail: 페이지 미리보기는 원본에서 다시 렌더링한다. 조회량이 커지면 참조 관리되는 캐시를 추가한다.
-    page = PageRenderer(request.app.state.settings.knowledge_office_command).render(
-        file["content"], file["filename"], number).pages[0]
+    rendered = PageRenderer(request.app.state.settings.knowledge_office_command).render(
+        file["content"], file["filename"], number)
+    page = rendered.pages[0]
     return Response(page.png, media_type="image/png", headers={"Cache-Control": "private, no-store",
-                                                              "X-Content-Type-Options": "nosniff"})
+                                                              "X-Content-Type-Options": "nosniff",
+                                                              "X-Page-Count": str(rendered.page_count)})
 
 
 @router.post("/{document_id}/retry", status_code=202)

@@ -48,6 +48,7 @@ class PageImage:
 class RenderedDocument:
     pages: list[PageImage]
     warnings: list[str]
+    page_count: int = 0
 
 
 class PageText(Value):
