@@ -475,10 +475,10 @@ class AgentError(TypedDict):
 
 - 로더는 `local`일 때만 `OPENAI_API_KEY`를 Settings에 읽는다. 키·소유자 식별자는 Settings의 repr에서 제외한다. `.env` 변경은 재시작 후 적용한다. `local`과 서버 등록 키 사이의 자동 전환은 없다.
 - 로컬 실행기는 `127.0.0.1`에 실제 소켓을 열고 검증한 소켓 자체를 Uvicorn에 전달한다. 공개 바인딩·리로드·다중 워커 옵션은 제공하지 않는다. 앱 생성과 키 조회 시 현재 실행 범위의 살아 있는 루프백 리스너를 확인한다. 일반 `uvicorn app.main:app` 실행에서는 `local` 설정을 거부한다. `RENDER`·`RENDER_SERVICE_ID`·`RENDER_EXTERNAL_URL`·`PORT` 중 값이 있는 공용 환경에서도 시작을 거부한다. Host·`APP_BASE_URL`은 실행 허가의 근거가 아니며, 허가 후에도 로컬 Host만 허용한다.
-- `LOCAL_OWNER_GOOGLE_SUB`는 본인이 명시한다. 기존 Google OAuth의 서명·발급자·대상 검증을 통과해 저장된 `User.google_sub`와 `last_login_at`을 사용하며, 로그인 사용자 또는 백그라운드 실행의 사용자 행이 지정 식별자와 일치해야 한다. 이메일·요청 user_id·최초 방문자를 소유자 판정에 사용하지 않는다.
-- 최초 설정: 소유자/키가 비어 있어도 전용 로컬 앱과 로그인 화면은 열 수 있다. Google 로그인 후 본인 `/settings`에 표시된 **현재 로그인으로 검증된 본인 Google 식별자**를 확인해 로컬 `.env`의 `LOCAL_OWNER_GOOGLE_SUB`에 직접 지정하고 `OPENAI_API_KEY`를 채운 뒤 재시작한다. 식별자는 인증된 본인 설정 화면에만 표시하며 응답은 `private, no-store`다. 서버에서도 개인 PC 연결 대상 확인을 위해 본인 설정에서만 제공한다(6.2절). 실제 계정·키를 채팅·레포에 옮기지 않는다.
+- 로컬 AI 키 조회는 전용 실행 검증과 비어 있지 않은 `OPENAI_API_KEY`만 요구한다. Google 식별자·Gmail 연결·last_login_at과 독립적이다. 앱 인증과 자료 소유권은 검증된 내부 user_id로 검사한다. 여러 로컬 사용자의 작업도 이 PC의 키를 사용하며 데이터는 user_id별로 분리한다.
+- `LOCAL_OWNER_GOOGLE_SUB`는 아직 로컬 Gmail 대상 선정에 사용한다(10절). 개인 PC 실행기의 서비스·소유자·장치 정책(6.2절)은 유지한다. 설정 화면 안내와 공통 설정 필드는 정리 계획 3절에서 제거한다.
 - 로컬 설정 화면은 `.env` 키 사용 가능/불가와 안전한 차단 이유만 표시하며 키 원문·해시·앞뒤 문자열·DB 키 등록 폼은 제공하지 않는다. 등록/삭제 POST를 직접 호출해도 `LOCAL_KEY_ENV_ONLY`(409)로 거부한다. 저장된 DB 사용자 키가 있어도 읽지 않는다.
-- 로컬 오류: `LOCAL_OWNER_REQUIRED`(409), `LOCAL_OWNER_MISMATCH`(403, 검증 로그인 없음/다른 사용자/없는 사용자 포함), `LOCAL_KEY_REQUIRED`(409), `LOCAL_RUNTIME_REQUIRED`(409). 문서 API는 해당 코드를 반환한다. 메일은 기존 `openai_key_required` 안내로 실패 종료한다. 키는 AgentState·세션·실행 기록에 넣지 않으며 노드·엣지는 유지한다.
+- 로컬 키 오류는 `LOCAL_KEY_REQUIRED`(409)·`LOCAL_RUNTIME_REQUIRED`(409)다. 문서 API는 해당 코드를 반환한다. 메일은 기존 `openai_key_required` 안내로 실패 종료한다. 키는 AgentState·세션·실행 기록에 넣지 않으며 노드·엣지는 유지한다.
 - 개인 PC Gmail 연결·수집은 계획 2절에서 구현했다(7·9·10절). 서버 장치 연결·작업 큐는 3절에서 구현했다. 개인 실행 프로그램과 기존 AI 호출의 큐 연결도 4절에서 구현했다. 공용 Gmail 감시·Pub/Sub 설정은 유지한다.
 
 ### 6.2 서버의 사용자별 실행 방식 (3·4절 구현)
@@ -1113,6 +1113,8 @@ LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 �
 | GET `…/{id}/chunks?offset=0` | 마지막 성공 시도의 자식 50개와 해당 부모 원문·출처. 자식은 차원/profile_id/원문 범위를 제공하고 벡터 배열 자체는 UI로 보내지 않음 |
 | PUT `…/{id}/extraction` | `{attempt_id, revision, pages:[{number,text}], confirm}`. 전체 페이지·순서·버전을 검사. 저장만 하면 needs_review, 확정하면 queued |
 | POST `…/{id}/retry` | `{attempt_id}`. 터미널/검토 상태에서만 새 시도로 전량 재추출·임베딩 요청(202). 이전 성공 인덱스는 보존 |
+
+업로드와 명시적 재처리는 원본 저장/작업 등록 전에 worker와 같은 어댑터 생성 경계에서 키 설정을 검사한다. worker는 실행 전에 다시 검사하고 실제 호출도 키를 다시 읽는다. 키 유효성 확인용 외부 요청은 없다.
 
 형식/시그니처 415, 크기 413, 빈/손상/한도·페이지 검사 422, multipart 파싱 실패 400, 오래된 revision/처리 시도·진행 중 수정/재요청은 409다. 저장소 장애/미설정은 503이다. 처리 실패는 문서의 안전한 error_code/error_stage에 남긴다. 실제 AI 오류 응답·문서 원문·키를 로그로 복사하지 않는다.
 

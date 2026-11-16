@@ -12,6 +12,18 @@ from app.llm.client import OpenAIKeyError, use_user_key, use_worker_call
 from app.services.auth import TokenCipher, make_cipher
 
 
+def local_key(settings: Settings) -> str:
+    """인증된 앱 작업이 사용하는 PC 키. 사용자/자료 권한은 각 진입점이 검증한다."""
+    try:
+        validate_runtime(settings)
+    except ValueError:
+        raise OpenAIKeyError("LOCAL_RUNTIME_REQUIRED", "전용 로컬 실행 명령으로 다시 시작해 주세요.") from None
+    value = settings.openai_api_key.strip()
+    if not value:
+        raise OpenAIKeyError("LOCAL_KEY_REQUIRED", "로컬 .env에 OPENAI_API_KEY를 지정하고 다시 시작하세요.")
+    return value
+
+
 def key_registered(database: Database, user_id: int, *, settings: Settings | None = None) -> bool:
     configured = settings or get_settings()
     if configured.ai_runtime == "local":
@@ -68,7 +80,7 @@ class UserKeyAccess:
     def read(self) -> str:
         try:
             if self.settings.ai_runtime == "local":
-                return self._read_local()
+                return local_key(self.settings)
             with self.database.session() as session:
                 user = session.get(User, self.user_id)
                 if user is not None and user.ai_execution_mode == "local_worker":
@@ -89,25 +101,6 @@ class UserKeyAccess:
         except OpenAIKeyError as error:
             self.issue = error
             raise
-
-    def _read_local(self) -> str:
-        try:
-            validate_runtime(self.settings)
-        except ValueError:
-            raise OpenAIKeyError("LOCAL_RUNTIME_REQUIRED", "전용 로컬 실행 명령으로 다시 시작해 주세요.") from None
-        owner = self.settings.local_owner_google_sub.strip()
-        if not owner:
-            raise OpenAIKeyError("LOCAL_OWNER_REQUIRED", "본인 Google 식별자를 확인하고 .env의 LOCAL_OWNER_GOOGLE_SUB를 지정하세요.")
-        with self.database.session() as session:
-            user = session.get(User, self.user_id)
-            verified_owner = user is not None and user.last_login_at is not None and user.google_sub == owner
-        if not verified_owner:
-            raise OpenAIKeyError("LOCAL_OWNER_MISMATCH", "로컬 AI는 지정한 본인 Google 계정으로만 사용할 수 있습니다.", 403)
-        value = self.settings.openai_api_key.strip()
-        if not value:
-            raise OpenAIKeyError("LOCAL_KEY_REQUIRED", "로컬 .env에 OPENAI_API_KEY를 지정하고 다시 시작하세요.")
-        return value
-
 
 @contextmanager
 def user_openai(database: Database, user_id: int, *, settings: Settings | None = None,

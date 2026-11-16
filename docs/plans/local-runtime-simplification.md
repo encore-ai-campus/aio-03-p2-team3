@@ -2,7 +2,7 @@
 
 - 목표: 로컬 AI는 PC의 `.env` 키를 사용하고, 로컬 Gmail은 연결·수집 상태가 유효한 `user_id`들을 처리한다. `LOCAL_OWNER_GOOGLE_SUB`는 HTTPS 서버에 연결하는 개인 PC 실행기(`app.worker.pc`) 전용으로 남긴다.
 - 요청 근거: 2026-11-16, 사용자가 수동 Google 식별자 설정을 제거하고 Ponytail·Python Clean Architecture 기준으로 최소한의 구조 정리를 요청했다.
-- 현재 기준: main `8ad74d9`. 이 PR은 계획만 추가한다. 현재 로컬 AI와 Gmail의 Google 소유자 검사, 단일 계정 수집 동작은 아직 바뀌지 않았다.
+- 계획 기준: main `8ad74d9`. 각 절의 완료 표시는 해당 구현을 포함한 브랜치 기준이다. 1절에서 로컬 AI의 Google 계정 의존을 제거했으며 Gmail 다계정 수집과 PC 전용 설정 정리는 2·3절에서 진행한다.
 - 관련 Issue: 1절 [#198](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/198), 2절 [#199](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/199), 3절 [#200](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/200). 기존 실제 운영 확인 #157·#178과 별개이며 이를 완료 처리하지 않는다.
 - 관련 요구사항: R-04·R-11·R-12·R-14. 새 그래프·검색 기능이나 외부 API를 추가하는 계획은 아니다.
 - 조율함: 해당 없음 — 그래프 상태·도구 스키마·노드/엣지는 수정하지 않는다. 기존 인증·수집·키 조회의 호출 계약을 보존한다.
@@ -43,7 +43,7 @@ flowchart TB
 - 새 테이블·마이그레이션·라이브러리·설정 스위치·자동 계정 등록·키 사용 승인 화면을 추가하지 않는다. 모델 교체 Protocol, 토큰 암호화, 데이터 소유권, 수집 중단/중복 방지는 유지한다.
 - 기존 쿠키 로그인 제거, Supabase와 Gmail OAuth 통합, Gmail 연결의 중복 JWT 검증 정리는 이번 필수 범위에서 제외한다. React 메일 화면 전환이나 별도 인증 작업과 묶지 않는다.
 
-## 1. 로컬 AI 키에서 Google 계정 의존 제거
+## 1. 로컬 AI 키에서 Google 계정 의존 제거 (완료)
 
 - 할 일:
   - `app/services/openai_keys.py`의 로컬 분기에서 `LOCAL_OWNER_GOOGLE_SUB`, `User.google_sub`, `last_login_at` 비교를 제거한다. 설정을 읽는 로컬 키 함수를 기존 코드 안에 두고, `UserKeyAccess`/`user_openai`의 외부 호출 계약을 유지한다. 서버 저장 키·PC 위임 분기를 별도로 새로 구현하지 않는다.

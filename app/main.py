@@ -86,9 +86,12 @@ def create_app(settings: Settings | None = None, google=None,
         # 서버의 OPENAI_API_KEY는 사용하지 않는다. 사용자 키는 호출 시에만 읽는다.
         app.state.llm = None
         app.state.knowledge_repository = SqlRepository(database)
+        app.state.knowledge_adapters = knowledge_adapters or (
+            lambda owner, profile: knowledge_routes.make_adapters(database, config, owner, profile)
+        )
         ingestion = IngestionWorker(
             app.state.knowledge_repository, app.state.storage,
-            knowledge_adapters or (lambda owner, profile: knowledge_routes.make_adapters(database, config, owner, profile)),
+            app.state.knowledge_adapters,
         )
         app.state.knowledge_worker = ingestion
         ingestion_task = asyncio.create_task(ingestion.run()) if app.state.storage is not None else None

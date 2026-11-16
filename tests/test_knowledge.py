@@ -346,14 +346,13 @@ def test_render_page_limit_encrypted_or_broken_pdf_and_timeout():
 
 def test_missing_key_and_pc_mode_cannot_fall_back_to_server_key(database):
     settings = Settings(openai_api_key="not-a-permitted-server-fallback")
-    _, extractor, _ = make_adapters(database, settings, 1, {})
     with pytest.raises(KnowledgeError) as missing:
-        extractor.read_key()
+        make_adapters(database, settings, 1, {})
     assert missing.value.code == "OPENAI_KEY_REQUIRED"
     with database.session() as session:
         session.get(User, 1).ai_execution_mode = "local_worker"
     with pytest.raises(KnowledgeError) as forbidden:
-        extractor.read_key()
+        make_adapters(database, settings, 1, {})
     assert forbidden.value.code == "LOCAL_WORKER_KEY_FORBIDDEN"
 
 
@@ -387,3 +386,65 @@ def test_invalid_uploads_do_not_create_storage_or_document(database, name, data,
         upload(repository, storage, 1, name, data)
     assert failure.value.code == code
     assert not storage.calls and not repository.list(1)
+
+@pytest.mark.parametrize('failure', ['missing_key', 'closed_listener'])
+def test_local_upload_preflight_stores_nothing_without_key_or_listener(database_url, failure):
+    from tests.test_local_openai import listener
+    jwks, target = FakeJwks(), FakeStorage()
+    settings = Settings(database_url=database_url, ai_runtime='local',
+                        openai_api_key='' if failure == 'missing_key' else 'fake-local-key')
+    with listener() as sock:
+        app = create_app(settings, supabase_auth=TokenVerifier(SUPABASE_URL, fetch_jwks=jwks.serve), storage=target)
+        with TestClient(app, base_url='http://127.0.0.1') as client:
+            if failure == 'closed_listener':
+                sock.close()
+            response = client.post('/api/knowledge/documents',
+                headers={'Authorization': f'Bearer {jwks.token()}'}, files={'file': ('fake.png', png())})
+            assert response.status_code == 409, response.text
+            assert response.json()['error']['code'] == ('LOCAL_KEY_REQUIRED' if failure == 'missing_key' else 'LOCAL_RUNTIME_REQUIRED')
+            with app.state.database.session() as session:
+                assert session.scalar(select(func.count()).select_from(FileAsset)) == 0
+                assert session.scalar(select(func.count()).select_from(KnowledgeDocument)) == 0
+            assert not target.objects
+
+
+def test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_key(database_url, monkeypatch):
+    from dataclasses import replace
+    from tests.test_local_openai import listener
+    calls = []
+    def extract(self, pages):
+        calls.append(self.read_key())
+        return ExtractionResult(profile=self.profile, pages=[PageText(number=p.number, source=p.source, text=TEXT) for p in pages])
+    def embed(self, texts):
+        calls.append(self.read_key())
+        return EmbeddingBatch(profile=self.profile, vectors=[[.25] * self.profile.dimensions for _ in texts])
+    monkeypatch.setattr(OpenAIDocumentExtractor, 'extract', extract)
+    monkeypatch.setattr(OpenAIEmbedder, 'embed_documents', embed)
+    jwks = FakeJwks()
+    settings = Settings(database_url=database_url, ai_runtime='local', openai_api_key='fake-pc-key', knowledge_embedding_dimensions='3')
+    with listener(), TestClient(create_app(settings, supabase_auth=TokenVerifier(SUPABASE_URL, fetch_jwks=jwks.serve),
+                                         storage=FakeStorage()), base_url='http://127.0.0.1') as client:
+        documents = []
+        for _ in range(2):
+            headers = {'Authorization': f'Bearer {jwks.token(sub=uuid4())}'}
+            response = client.post('/api/knowledge/documents', headers=headers, files={'file': ('fake.png', png())})
+            assert response.status_code == 202, response.text
+            path = '/api/knowledge/documents/' + response.json()['id']
+            for _ in range(400):
+                detail = client.get(path, headers=headers).json()
+                if detail['status'] in {'ready', 'failed'}: break
+                time.sleep(.02)
+            assert detail['status'] == 'ready', detail
+            documents.append((headers, path, detail))
+        assert documents[0][1] != documents[1][1]
+        assert client.get(documents[0][1], headers=documents[1][0]).status_code == 404
+        with client.app.state.database.session() as session:
+            assert all(u.google_sub is None and u.last_login_at is None for u in session.scalars(select(User)))
+        assert calls == ['fake-pc-key'] * 4
+        client.app.state.knowledge_adapters = lambda owner, profile: make_adapters(
+            client.app.state.database, replace(settings, openai_api_key=''), owner, profile)
+        headers, path, previous = documents[0]
+        response = client.post(path + '/retry', headers=headers, json={'attempt_id': previous['attempt_id']})
+        assert response.status_code == 409 and response.json()['error']['code'] == 'LOCAL_KEY_REQUIRED'
+        detail = client.get(path, headers=headers).json()
+        assert detail['attempt_id'] == previous['attempt_id'] and detail['status'] == 'ready'
