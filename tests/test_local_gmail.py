@@ -34,6 +34,7 @@ from app.services.local_gmail import LOCAL_TOPIC, LocalGmailCollector
 from app.services.watch import register_watch, renew_watch_if_due, stop_watch
 from tests.fakes.gmail import FakeGmailGoogle, history_page, message
 from tests.fakes.google import fake_login
+from tests.serial_profile import span
 from tests.test_auth import sign_in
 from tests.test_gmail_push import rows, watch
 from tests.test_local_openai import clean_environment, listener
@@ -380,21 +381,23 @@ def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_p
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     with (tmp_path / "server.log").open("w+") as logfile:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "tests.fakes.local_server", "--env", str(path), "--port", str(port)],
-            cwd=Path(__file__).resolve().parents[1], stdout=logfile, stderr=subprocess.STDOUT,
-        )
+        with span("process.spawn", "local"):
+            process = subprocess.Popen(
+                [sys.executable, "-m", "tests.fakes.local_server", "--env", str(path), "--port", str(port)],
+                cwd=Path(__file__).resolve().parents[1], stdout=logfile, stderr=subprocess.STDOUT,
+            )
         try:
             with httpx.Client(base_url=f"http://127.0.0.1:{port}", trust_env=False, timeout=5) as client:
-                deadline = time.monotonic() + 15
-                while True:
-                    try:
-                        if client.get("/healthz").status_code == 200:
-                            break
-                    except httpx.TransportError:
-                        pass
-                    assert process.poll() is None and time.monotonic() < deadline
-                    time.sleep(0.05)
+                with span("process.ready_wait", "local"):
+                    deadline = time.monotonic() + 15
+                    while True:
+                        try:
+                            if client.get("/healthz").status_code == 200:
+                                break
+                        except httpx.TransportError:
+                            pass
+                        assert process.poll() is None and time.monotonic() < deadline
+                        time.sleep(0.05)
                 assert "이 PC에서 본인 Gmail" in client.get("/login").text
                 assert client.get("/healthz", headers={"Host": "public.example.invalid"}).status_code == 400
                 start = client.get("/auth/google/start")
@@ -416,9 +419,10 @@ def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_p
                 time.sleep(0.15)
                 after = client.get("/test/state").json()
                 assert before == after and after["watches"] == after["stops"] == 0
-            process.terminate()
             # Uvicorn은 정상 lifespan 종료 뒤 원래 SIGTERM을 다시 발생시킬 수 있다.
-            return_code = process.wait(timeout=10)
+            with span("process.stop", "local"):
+                process.terminate()
+                return_code = process.wait(timeout=10)
             if os.name == "nt":
                 assert return_code == 1
             else:

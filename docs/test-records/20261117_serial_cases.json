@@ -1,0 +1,570 @@
+{
+  "baseline_commit": "1c299f2af6bba14e4a52f1adc88b03f5a1390a06",
+  "cases": [
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_pipeline_uses_real_pgvector_parent_ranges_and_model_swap",
+      "new_nodeid": "tests/test_knowledge.py::test_pipeline_uses_real_pgvector_parent_ranges_and_model_swap",
+      "purpose": "pipeline uses real pgvector parent ranges and model swap"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_missing_page_waits_for_complete_review_and_revision_fencing",
+      "new_nodeid": "tests/test_knowledge.py::test_missing_page_waits_for_complete_review_and_revision_fencing",
+      "purpose": "missing page waits for complete review and revision fencing"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[nan]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[nan]",
+      "purpose": "invalid vectors never publish[nan]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[inf]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[inf]",
+      "purpose": "invalid vectors never publish[inf]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[dimension]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[dimension]",
+      "purpose": "invalid vectors never publish[dimension]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[count]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[count]",
+      "purpose": "invalid vectors never publish[count]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_partial_batch_failure_preserves_successful_index",
+      "new_nodeid": "tests/test_knowledge.py::test_partial_batch_failure_preserves_successful_index",
+      "purpose": "partial batch failure preserves successful index"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_expired_claim_cannot_overwrite_or_automatically_requeue",
+      "new_nodeid": "tests/test_knowledge.py::test_expired_claim_cannot_overwrite_or_automatically_requeue",
+      "purpose": "expired claim cannot overwrite or automatically requeue"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_duplicate_is_atomic_per_owner_and_file_reference_is_protected",
+      "new_nodeid": "tests/test_knowledge.py::test_duplicate_is_atomic_per_owner_and_file_reference_is_protected",
+      "purpose": "duplicate is atomic per owner and file reference is protected"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_parent_child_foreign_key_rejects_cross_scope_and_dimensions",
+      "new_nodeid": "tests/test_knowledge.py::test_parent_child_foreign_key_rejects_cross_scope_and_dimensions",
+      "purpose": "parent child foreign key rejects cross scope and dimensions"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_extension_in_existing_schema_and_repeated_migration",
+      "new_nodeid": "tests/test_knowledge.py::test_extension_in_existing_schema_and_repeated_migration",
+      "purpose": "extension in existing schema and repeated migration"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_provider_adapters_preserve_mapping_and_request_options",
+      "new_nodeid": "tests/test_knowledge.py::test_provider_adapters_preserve_mapping_and_request_options",
+      "purpose": "provider adapters preserve mapping and request options"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_upload_review_ready_and_owner_isolation_over_http",
+      "new_nodeid": "tests/test_knowledge.py::test_upload_review_ready_and_owner_isolation_over_http",
+      "purpose": "upload review ready and owner isolation over http"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.docx-data0]",
+      "new_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.docx-data0]",
+      "purpose": "real page rendering for supported formats[sample.docx-data0]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.xlsx-data1]",
+      "new_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.xlsx-data1]",
+      "purpose": "real page rendering for supported formats[sample.xlsx-data1]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.txt-\\xea\\xb0\\x80\\xec\\x83\\x81 \\xed\\x95\\x9c\\xea\\xb8\\x80 \\xeb\\xac\\xb8\\xec\\x84\\x9c\\nSynthetic test]",
+      "new_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.txt-\\xea\\xb0\\x80\\xec\\x83\\x81 \\xed\\x95\\x9c\\xea\\xb8\\x80 \\xeb\\xac\\xb8\\xec\\x84\\x9c\\nSynthetic test]",
+      "purpose": "real page rendering for supported formats[sample.txt-\\xea\\xb0\\x80\\xec\\x83\\x81 \\xed\\x95\\x9c\\xea\\xb8\\x80 \\xeb\\xac\\xb8\\xec\\x84\\x9c\\nSynthetic test]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[image.png-data3]",
+      "new_nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[image.png-data3]",
+      "purpose": "real page rendering for supported formats[image.png-data3]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data0-hidden_sheet]",
+      "new_nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data0-hidden_sheet]",
+      "purpose": "office content that cannot be rendered is not silently accepted[data0-hidden sheet]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data1-formula_cache_missing]",
+      "new_nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data1-formula_cache_missing]",
+      "purpose": "office content that cannot be rendered is not silently accepted[data1-formula cache missing]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_render_page_limit_encrypted_or_broken_pdf_and_timeout",
+      "new_nodeid": "tests/test_knowledge.py::test_render_page_limit_encrypted_or_broken_pdf_and_timeout",
+      "purpose": "render page limit encrypted or broken pdf and timeout"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_missing_key_and_pc_mode_cannot_fall_back_to_server_key",
+      "new_nodeid": "tests/test_knowledge.py::test_missing_key_and_pc_mode_cannot_fall_back_to_server_key",
+      "purpose": "missing key and pc mode cannot fall back to server key"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_sql_failure_during_replacement_rolls_back_old_index_without_exposing_text",
+      "new_nodeid": "tests/test_knowledge.py::test_sql_failure_during_replacement_rolls_back_old_index_without_exposing_text",
+      "purpose": "sql failure during replacement rolls back old index without exposing text"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[wrong.txt-%PDF-1.4\\nFake-signature_mismatch]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[wrong.txt-%PDF-1.4\\nFake-signature_mismatch]",
+      "purpose": "invalid uploads do not create storage or document[wrong.txt-%PDF-1.4\\nFake-signature mismatch]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[unknown.hwp-fake-unsupported_format]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[unknown.hwp-fake-unsupported_format]",
+      "purpose": "invalid uploads do not create storage or document[unknown.hwp-fake-unsupported format]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[empty.txt--empty_file]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[empty.txt--empty_file]",
+      "purpose": "invalid uploads do not create storage or document[empty.txt--empty file]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[large.txt-data3-file_too_large]",
+      "new_nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[large.txt-data3-file_too_large]",
+      "purpose": "invalid uploads do not create storage or document[large.txt-data3-file too large]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[missing_key]",
+      "new_nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[missing_key]",
+      "purpose": "local upload preflight stores nothing without key or listener[missing key]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[closed_listener]",
+      "new_nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[closed_listener]",
+      "purpose": "local upload preflight stores nothing without key or listener[closed listener]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_key",
+      "new_nodeid": "tests/test_knowledge.py::test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_key",
+      "purpose": "local supabase users without gmail embed separately and retry checks key"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[3]",
+      "new_nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[3]",
+      "purpose": "vision sdk retries timeout three times with long read budget[3]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[4]",
+      "new_nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[4]",
+      "purpose": "vision sdk retries timeout three times with long read budget[4]"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge_browser.py::test_browser_upload_compare_conflict_confirm_chunks_and_mobile",
+      "new_nodeid": "tests/test_knowledge_browser.py::test_browser_upload_compare_conflict_confirm_chunks_and_mobile",
+      "purpose": "browser upload compare conflict confirm chunks and mobile"
+    },
+    {
+      "old_nodeid": "tests/test_knowledge_browser.py::test_local_browser_missing_key_retry_failure_and_recovery_without_gmail",
+      "new_nodeid": "tests/test_knowledge_browser.py::test_local_browser_missing_key_retry_failure_and_recovery_without_gmail",
+      "purpose": "local browser missing key retry failure and recovery without gmail"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_login_without_pubsub_starts_at_current_history_and_never_watches",
+      "new_nodeid": "tests/test_local_gmail.py::test_login_without_pubsub_starts_at_current_history_and_never_watches",
+      "purpose": "login without pubsub starts at current history and never watches"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_collection_uses_env_key_and_only_explicit_approval_sends_once",
+      "new_nodeid": "tests/test_local_gmail.py::test_collection_uses_env_key_and_only_explicit_approval_sends_once",
+      "purpose": "collection uses env key and only explicit approval sends once"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_repeated_history_and_all_pages_do_not_duplicate",
+      "new_nodeid": "tests/test_local_gmail.py::test_repeated_history_and_all_pages_do_not_duplicate",
+      "purpose": "repeated history and all pages do not duplicate"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[page]",
+      "new_nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[page]",
+      "purpose": "failed page or message keeps cursor then resumes[page]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[message]",
+      "new_nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[message]",
+      "purpose": "failed page or message keeps cursor then resumes[message]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_expired_history_stops_until_explicit_reconnect_at_current_position",
+      "new_nodeid": "tests/test_local_gmail.py::test_expired_history_stops_until_explicit_reconnect_at_current_position",
+      "purpose": "expired history stops until explicit reconnect at current position"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[refresh]",
+      "new_nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[refresh]",
+      "purpose": "revoked or expired connection stops and does not retry[refresh]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[401]",
+      "new_nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[401]",
+      "purpose": "revoked or expired connection stops and does not retry[401]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[403]",
+      "new_nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[403]",
+      "purpose": "revoked or expired connection stops and does not retry[403]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_normal_access_token_refresh_continues_collection",
+      "new_nodeid": "tests/test_local_gmail.py::test_normal_access_token_refresh_continues_collection",
+      "purpose": "normal access token refresh continues collection"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[rateLimitExceeded]",
+      "new_nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[rateLimitExceeded]",
+      "purpose": "gmail 403 quota error keeps token and resumes[rateLimitExceeded]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[userRateLimitExceeded]",
+      "new_nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[userRateLimitExceeded]",
+      "purpose": "gmail 403 quota error keeps token and resumes[userRateLimitExceeded]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_logout_stops_without_google_stop_and_relogin_skips_logged_out_mail",
+      "new_nodeid": "tests/test_local_gmail.py::test_logout_stops_without_google_stop_and_relogin_skips_logged_out_mail",
+      "purpose": "logout stops without google stop and relogin skips logged out mail"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_cancel_reconnection_stops_local_collection",
+      "new_nodeid": "tests/test_local_gmail.py::test_cancel_reconnection_stops_local_collection",
+      "purpose": "cancel reconnection stops local collection"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[page]",
+      "new_nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[page]",
+      "purpose": "logout during read does not start more runs or revive cursor[page]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[message]",
+      "new_nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[message]",
+      "purpose": "logout during read does not start more runs or revive cursor[message]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[False]",
+      "new_nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[False]",
+      "purpose": "connected users are polled separately with same message id[False]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[True]",
+      "new_nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[True]",
+      "purpose": "connected users are polled separately with same message id[True]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[]",
+      "new_nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[]",
+      "purpose": "owner configuration does not change collection[]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[fake-other]",
+      "new_nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[fake-other]",
+      "purpose": "owner configuration does not change collection[fake-other]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[demo@example.invalid-labels0-self]",
+      "new_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[demo@example.invalid-labels0-self]",
+      "purpose": "shared filters skip mail without ai[demo@example.invalid-labels0-self]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[no-reply@example.invalid-labels1-no_reply]",
+      "new_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[no-reply@example.invalid-labels1-no_reply]",
+      "purpose": "shared filters skip mail without ai[no-reply@example.invalid-labels1-no reply]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels2-promotion]",
+      "new_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels2-promotion]",
+      "purpose": "shared filters skip mail without ai[sender@example.invalid-labels2-promotion]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels3-social]",
+      "new_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels3-social]",
+      "purpose": "shared filters skip mail without ai[sender@example.invalid-labels3-social]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels4-not_inbox]",
+      "new_nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels4-not_inbox]",
+      "purpose": "shared filters skip mail without ai[sender@example.invalid-labels4-not inbox]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_failed_initial_profile_read_retries_without_watch",
+      "new_nodeid": "tests/test_local_gmail.py::test_failed_initial_profile_read_retries_without_watch",
+      "purpose": "failed initial profile read retries without watch"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_profile_response_cannot_reactivate_logged_out_collection",
+      "new_nodeid": "tests/test_local_gmail.py::test_profile_response_cannot_reactivate_logged_out_collection",
+      "purpose": "profile response cannot reactivate logged out collection"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_process_stop_wakes_idle_loop_and_prevents_more_reads",
+      "new_nodeid": "tests/test_local_gmail.py::test_process_stop_wakes_idle_loop_and_prevents_more_reads",
+      "purpose": "process stop wakes idle loop and prevents more reads"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_new_collector_resumes_persisted_cursor_after_process_restart",
+      "new_nodeid": "tests/test_local_gmail.py::test_new_collector_resumes_persisted_cursor_after_process_restart",
+      "purpose": "new collector resumes persisted cursor after process restart"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector",
+      "new_nodeid": "tests/test_local_gmail.py::test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector",
+      "purpose": "server mode keeps pubsub login watch and stop without collector"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_real_google_profile_request_reads_position_without_watch",
+      "new_nodeid": "tests/test_local_gmail.py::test_real_google_profile_request_reads_position_without_watch",
+      "purpose": "real google profile request reads position without watch"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_actual_local_launcher_collects_while_browser_idle_then_sends_once",
+      "new_nodeid": "tests/test_local_gmail.py::test_actual_local_launcher_collects_while_browser_idle_then_sends_once",
+      "purpose": "actual local launcher collects while browser idle then sends once"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_sql_store_selects_only_connected_local_retryable_users",
+      "new_nodeid": "tests/test_local_gmail.py::test_sql_store_selects_only_connected_local_retryable_users",
+      "purpose": "sql store selects only connected local retryable users"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[disconnect]",
+      "new_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[disconnect]",
+      "purpose": "sql store rejects old generation or ineligible results[disconnect]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[stop]",
+      "new_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[stop]",
+      "purpose": "sql store rejects old generation or ineligible results[stop]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[reconnect]",
+      "new_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[reconnect]",
+      "purpose": "sql store rejects old generation or ineligible results[reconnect]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[public]",
+      "new_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[public]",
+      "purpose": "sql store rejects old generation or ineligible results[public]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[terminal]",
+      "new_nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[terminal]",
+      "purpose": "sql store rejects old generation or ineligible results[terminal]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[disconnect]",
+      "new_nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[disconnect]",
+      "purpose": "connection change during page prevents message reads and late cursor[disconnect]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[reconnect]",
+      "new_nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[reconnect]",
+      "purpose": "connection change during page prevents message reads and late cursor[reconnect]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[process_stop]",
+      "new_nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[process_stop]",
+      "purpose": "connection change during page prevents message reads and late cursor[process stop]"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_stop_between_separate_body_attachments_prevents_next_read",
+      "new_nodeid": "tests/test_local_gmail.py::test_stop_between_separate_body_attachments_prevents_next_read",
+      "purpose": "stop between separate body attachments prevents next read"
+    },
+    {
+      "old_nodeid": "tests/test_local_gmail.py::test_collector_continues_after_one_store_read_fails",
+      "new_nodeid": "tests/test_local_gmail.py::test_collector_continues_after_one_store_read_fails",
+      "purpose": "collector continues after one store read fails"
+    },
+    {
+      "old_nodeid": "tests/test_react_settings.py::test_settings_preserve_user_role_currency_and_counterparty_scopes",
+      "new_nodeid": "tests/test_react_settings.py::test_settings_preserve_user_role_currency_and_counterparty_scopes",
+      "purpose": "settings preserve user role currency and counterparty scopes"
+    },
+    {
+      "old_nodeid": "tests/test_react_settings.py::test_counterparty_upsert_is_owned_and_rejects_invalid_or_server_fields",
+      "new_nodeid": "tests/test_react_settings.py::test_counterparty_upsert_is_owned_and_rejects_invalid_or_server_fields",
+      "purpose": "counterparty upsert is owned and rejects invalid or server fields"
+    },
+    {
+      "old_nodeid": "tests/test_react_settings.py::test_saved_settings_apply_to_new_documents_and_preserve_existing_issue",
+      "new_nodeid": "tests/test_react_settings.py::test_saved_settings_apply_to_new_documents_and_preserve_existing_issue",
+      "purpose": "saved settings apply to new documents and preserve existing issue"
+    },
+    {
+      "old_nodeid": "tests/test_react_settings.py::test_gmail_settings_browser_callbacks_failures_and_mobile",
+      "new_nodeid": "tests/test_react_settings.py::test_gmail_settings_browser_callbacks_failures_and_mobile",
+      "purpose": "gmail settings browser callbacks failures and mobile"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[pi]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[pi]",
+      "purpose": "pi po mobile complete resize conflict retry[pi]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[po]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[po]",
+      "purpose": "pi po mobile complete resize conflict retry[po]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pi]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pi]",
+      "purpose": "product candidates select and continue[pi]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[po]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[po]",
+      "purpose": "product candidates select and continue[po]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[ci]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[ci]",
+      "purpose": "product candidates select and continue[ci]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pl]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pl]",
+      "purpose": "product candidates select and continue[pl]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_extracted_korean_product_offers_candidates_before_continuing",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_extracted_korean_product_offers_candidates_before_continuing",
+      "purpose": "extracted korean product offers candidates before continuing"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_ci_linked_mobile_source_reselect_preserves_shipment",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_ci_linked_mobile_source_reselect_preserves_shipment",
+      "purpose": "ci linked mobile source reselect preserves shipment"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[direct]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[direct]",
+      "purpose": "ci standalone mobile complete price conflict[direct]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[extract]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[extract]",
+      "purpose": "ci standalone mobile complete price conflict[extract]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[direct]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[direct]",
+      "purpose": "pl mobile two approvals conflict and download[direct]"
+    },
+    {
+      "old_nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[extract]",
+      "new_nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[extract]",
+      "purpose": "pl mobile two approvals conflict and download[extract]"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_credentials_roundtrip_and_separate_process",
+      "new_nodeid": "tests/test_worker_credentials.py::test_credentials_roundtrip_and_separate_process",
+      "purpose": "credentials roundtrip and separate process"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_existing_file_is_never_overwritten",
+      "new_nodeid": "tests/test_worker_credentials.py::test_existing_file_is_never_overwritten",
+      "purpose": "existing file is never overwritten"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change0]",
+      "new_nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change0]",
+      "purpose": "credentials bind to explicit owner and service[change0]"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change1]",
+      "new_nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change1]",
+      "purpose": "credentials bind to explicit owner and service[change1]"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_expired_credentials_require_new_pairing",
+      "new_nodeid": "tests/test_worker_credentials.py::test_expired_credentials_require_new_pairing",
+      "purpose": "expired credentials require new pairing"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_symlink_credentials_are_rejected_for_read_and_write",
+      "new_nodeid": "tests/test_worker_credentials.py::test_symlink_credentials_are_rejected_for_read_and_write",
+      "purpose": "symlink credentials are rejected for read and write"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_oversized_file_is_rejected_before_decoding",
+      "new_nodeid": "tests/test_worker_credentials.py::test_oversized_file_is_rejected_before_decoding",
+      "purpose": "oversized file is rejected before decoding"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_windows_plaintext_and_tampered_dpapi_are_rejected",
+      "new_nodeid": "tests/test_worker_credentials.py::test_windows_plaintext_and_tampered_dpapi_are_rejected",
+      "purpose": "windows plaintext and tampered dpapi are rejected"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_windows_acl_with_other_readers_is_rejected",
+      "new_nodeid": "tests/test_worker_credentials.py::test_windows_acl_with_other_readers_is_rejected",
+      "purpose": "windows acl with other readers is rejected"
+    },
+    {
+      "old_nodeid": "tests/test_worker_credentials.py::test_posix_world_readable_credentials_are_rejected",
+      "new_nodeid": "tests/test_worker_credentials.py::test_posix_world_readable_credentials_are_rejected",
+      "purpose": "posix world readable credentials are rejected"
+    },
+    {
+      "old_nodeid": "tests/test_worker_postgres.py::test_postgres_ownership_and_duplicate_results",
+      "new_nodeid": "tests/test_worker_postgres.py::test_postgres_ownership_and_duplicate_results",
+      "purpose": "postgres ownership and duplicate results"
+    },
+    {
+      "old_nodeid": "tests/test_worker_postgres.py::test_postgres_concurrent_claim_and_complete",
+      "new_nodeid": "tests/test_worker_postgres.py::test_postgres_concurrent_claim_and_complete",
+      "purpose": "postgres concurrent claim and complete"
+    },
+    {
+      "old_nodeid": "tests/test_worker_postgres.py::test_postgres_reconnection_and_late_completion",
+      "new_nodeid": "tests/test_worker_postgres.py::test_postgres_reconnection_and_late_completion",
+      "purpose": "postgres reconnection and late completion"
+    },
+    {
+      "old_nodeid": "tests/test_worker_postgres.py::test_postgres_encrypted_delivery_between_connections_and_revocation",
+      "new_nodeid": "tests/test_worker_postgres.py::test_postgres_encrypted_delivery_between_connections_and_revocation",
+      "purpose": "postgres encrypted delivery between connections and revocation"
+    },
+    {
+      "old_nodeid": "tests/test_worker_postgres.py::test_postgres_existing_user_upgrade_preserves_default_and_data",
+      "new_nodeid": "tests/test_worker_postgres.py::test_postgres_existing_user_upgrade_preserves_default_and_data",
+      "purpose": "postgres existing user upgrade preserves default and data"
+    },
+    {
+      "old_nodeid": "tests/test_worker_process.py::test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow",
+      "new_nodeid": "tests/test_worker_process.py::test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow",
+      "purpose": "two real pc processes gmail without session documents and manual flow"
+    },
+    {
+      "old_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[401-WORKER_KEY_REQUIRED-1-]",
+      "new_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[401-WORKER_KEY_REQUIRED-1-]",
+      "purpose": "real pc http errors do not create documents[401-WORKER KEY REQUIRED-1-]"
+    },
+    {
+      "old_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[429-WORKER_RATE_LIMIT-1-]",
+      "new_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[429-WORKER_RATE_LIMIT-1-]",
+      "purpose": "real pc http errors do not create documents[429-WORKER RATE LIMIT-1-]"
+    },
+    {
+      "old_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-]",
+      "new_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-]",
+      "purpose": "real pc http errors do not create documents[503-WORKER NETWORK-3-]"
+    },
+    {
+      "old_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-SLOW503]",
+      "new_nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-SLOW503]",
+      "purpose": "real pc http errors do not create documents[503-WORKER NETWORK-3-SLOW503]"
+    },
+    {
+      "old_nodeid": "tests/test_worker_process.py::test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_results",
+      "new_nodeid": "tests/test_worker_process.py::test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_results",
+      "purpose": "pc restart reads rotated or deleted env key and disconnect blocks results"
+    }
+  ]
+}

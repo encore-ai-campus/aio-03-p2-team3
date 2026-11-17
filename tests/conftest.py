@@ -16,7 +16,7 @@ from sqlalchemy import text
 from app.db.engine import Database
 from app.db.models import User
 
-pytest_plugins = ["tests.parallel", "pytester"]
+pytest_plugins = ["tests.parallel", "tests.serial_profile", "pytester"]
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -57,14 +57,17 @@ def postgres_uri(tmp_path_factory, request):
 def database_url(postgres_uri):
     """테스트별 독립 DB. SQL 순서를 공유하지 않아 데이터가 새지 않는다."""
     name = f"test_{uuid4().hex}"
-    with psycopg.connect(postgres_uri, autocommit=True) as connection:
-        connection.execute(f'CREATE DATABASE "{name}"')
+    from tests.serial_profile import span
+    with span("db.create", "postgres"):
+        with psycopg.connect(postgres_uri, autocommit=True) as connection:
+            connection.execute(f'CREATE DATABASE "{name}"')
     parts = urlsplit(postgres_uri)
     try:
         yield urlunsplit(parts._replace(path=f"/{name}"))
     finally:
-        with psycopg.connect(postgres_uri, autocommit=True) as connection:
-            connection.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+        with span("db.drop", "postgres"):
+            with psycopg.connect(postgres_uri, autocommit=True) as connection:
+                connection.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
 @pytest.fixture

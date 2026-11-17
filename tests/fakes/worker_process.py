@@ -4,6 +4,8 @@ import asyncio
 import json
 import os
 import sys
+from pathlib import Path
+from time import perf_counter
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -20,6 +22,7 @@ def serve():
     parser.add_argument("--cert")
     parser.add_argument("--key")
     parser.add_argument("--mock-url")
+    parser.add_argument("--profile-ready")
     args, rest = parser.parse_known_args()
     if args.role == "pc":
         from app.worker import pc
@@ -28,6 +31,13 @@ def serve():
                               use_responses_api=True, http_socket_options=(), max_retries=0, timeout=20,
                               max_tokens=policy.max_output_tokens)
         pc._backend = backend
+        if args.profile_ready:
+            original = pc.PCWorker.check_protocol
+            def checked(worker):
+                result = original(worker)
+                Path(args.profile_ready).write_text(str(perf_counter()))
+                return result
+            pc.PCWorker.check_protocol = checked
         raise SystemExit(pc.main([*rest, "--env", args.env]))
     if args.role == "server":
         from app.config import Settings, get_settings
@@ -88,6 +98,13 @@ def serve():
                                 "name": name, "arguments": json.dumps(values)}],
                     "parallel_tool_calls": False, "tool_choice": body["tool_choice"], "tools": body["tools"],
                     "usage": {"input_tokens": 5, "output_tokens": 5, "total_tokens": 10}}
+    if args.profile_ready:
+        original_startup = uvicorn.Server.startup
+        async def started(server, *values, **options):
+            await original_startup(server, *values, **options)
+            if server.started:
+                Path(args.profile_ready).write_text(str(perf_counter()))
+        uvicorn.Server.startup = started
     uvicorn.run(app, host="127.0.0.1", port=args.port, ssl_certfile=args.cert, ssl_keyfile=args.key,
                 log_level="error", access_log=False)
 

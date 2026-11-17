@@ -12,7 +12,8 @@ import socket
 import ssl
 import subprocess
 import sys
-from time import monotonic, sleep
+from time import monotonic, perf_counter, sleep
+from tempfile import TemporaryDirectory
 
 from cryptography.fernet import Fernet
 from cryptography import x509
@@ -36,6 +37,7 @@ from tests.fakes.gmail import FakeGmailGoogle
 from tests.test_gmail_push import setup_user, push_payload
 from tests.test_pi_domain import pi_input
 from tests.test_trade_flow import seal_png
+from tests.serial_profile import enabled, identify, record, span
 
 
 # 서버 큐의 전체 120초 기한과 응답 여유 5초를 기다린다. 연결 실패는 5초로 제한한다.
@@ -64,23 +66,32 @@ def until(function, seconds=15):
 
 @contextmanager
 def process(command, env):
-    proc = subprocess.Popen([sys.executable, "-m", "tests.fakes.worker_process", *command],
-                            env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    try:
-        yield proc
-    finally:
-        if proc.poll() is None:
-            proc.terminate()
+    role = command[0]
+    with TemporaryDirectory() as directory:
+        ready = Path(directory) / "ready"
+        extra = ["--profile-ready", str(ready)] if enabled() else []
+        started = perf_counter()
+        with span("process.spawn", role):
+            proc = subprocess.Popen([sys.executable, "-m", "tests.fakes.worker_process", *command, *extra],
+                                    env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         try:
-            output, _ = proc.communicate(timeout=35)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            output, _ = proc.communicate(timeout=5)
-        assert all(key not in output for key in ("fake-pc-one", "fake-pc-two", "fake-pc-rotated", "fake-sensitive-sdk-error"))
+            yield proc
+        finally:
+            with span("process.stop", role):
+                if proc.poll() is None:
+                    proc.terminate()
+                try:
+                    output, _ = proc.communicate(timeout=35)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    output, _ = proc.communicate(timeout=5)
+            if ready.exists():
+                record("process.ready", role, float(ready.read_text()) - started)
+            assert all(key not in output for key in ("fake-pc-one", "fake-pc-two", "fake-pc-rotated", "fake-sensitive-sdk-error"))
 
 
 @pytest.fixture
-def system(tmp_path, database_url):
+def system(tmp_path, database_url, request):
     cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
@@ -104,6 +115,7 @@ def system(tmp_path, database_url):
     envfile.write_text("\n".join(f"{name.upper()}={getattr(config, name)}" for name in (
         "database_url", "session_secret", "token_encryption_key", "app_base_url", "gmail_pubsub_topic", "pubsub_push_token")))
     database = Database(config.database_url)
+    request.addfinalizer(database.close)
     database.create_tables()
     cipher = TokenCipher(config.token_encryption_key)
     access = GoogleAccess(database, FakeGmailGoogle(), cipher, config.gmail_pubsub_topic)
@@ -124,11 +136,14 @@ def system(tmp_path, database_url):
          process(["openai", "--port", str(ports[1]), "--cert", str(cert), "--key", str(key)], env), \
          httpx.Client(base_url=service, verify=ssl.create_default_context(cafile=str(cert)), timeout=SERVICE_TIMEOUT) as http, \
          httpx.Client(base_url=mock, verify=ssl.create_default_context(cafile=str(cert)), timeout=5) as openai:
-        until(lambda: http.get("/healthz").status_code == 200)
-        until(lambda: openai.get("/test/state").status_code == 200)
+        identify(http, "server")
+        identify(openai, "openai")
+        with span("process.ready_wait", "server"):
+            until(lambda: http.get("/healthz").status_code == 200)
+        with span("process.ready_wait", "openai"):
+            until(lambda: openai.get("/test/state").status_code == 200)
         yield dict(http=http, openai=openai, database=database, config=config, env=env,
                    service=service, mock=mock, tmp=tmp_path, cert=cert)
-    database.close()
 
 
 def login(system, user_id):
