@@ -5,6 +5,30 @@
 - 관련: [PLAN 13~15절](../plans/react-supabase/PLAN.md#13), R-03·R-11·R-12·R-14.
 - 판정: **로컬 구현과 주요 가상 데이터 발급 흐름 확인, 일부 오류/모바일·운영 검증 남음**. 13~15절의 미확인 항목은 완료로 표시하지 않는다.
 
+## Issue #208 PI/PO 모바일 보완(2026-11-17)
+
+- 기준: 계획 PR #211이 병합된 `main` `92201fb`. R-03·R-11·R-14, [모바일 계획 1절](../plans/trade-mobile-workspaces.md#1). 기존 아래 기록의 미확인 중 PI/PO 해당 항목만 이번 결과로 보완한다. CI/PL·전체 앱 통합·운영 전환 완료를 뜻하지 않는다.
+- 환경: Linux, Python 3.12, 실제 FastAPI·빌드한 React·pgserver 임시 pgvector PostgreSQL, Playwright 1.65.2와 설치된 Chromium 155.0.8059.79. 인증은 가짜 JWKS 서명 세션, 추출과 private Storage는 가짜이며 브라우저의 외부 요청은 차단한다. 운영 계정·실제 OpenAI 호출은 사용하지 않았다.
+- 재현: 320px 최종 검토에서 `scroll_into_view_if_needed()` 뒤 버튼 아래끝 `844.36px`이 하단 탐색 위끝 `781px`보다 낮아 가려졌다. 검토/전체 확인의 작업 버튼에도 입력 단계와 같은 sticky 기준을 적용했다. 기존 원문 입력의 로컬 state는 작성 방법으로 돌아가면 unmount되어 사라지므로 부모가 원문을 보존하도록 연결했다.
+- 변경: 하단 탐색 전체 높이·본문 아래 여백·작업 버튼 위치가 `--mobile-nav-height`를 공유한다. 600px 이하 요약은 한 열이고 검토 버튼은 줄바꿈한다. 긴 회사명/문서번호/해시·오류·제목은 부모 폭 안에서 표시하고 품목별 금액 표는 포커스 가능한 영역 스크롤로 유지한다. 오류 alert에 포커스를 주어 긴 문서의 다운로드 실패도 찾을 수 있다. 재사용할 클래스·폭 기준은 계획 1절에 기록했다.
+
+| 브라우저 확인 | 결과 |
+|---|---|
+| 390px 직접 PI/PO | 주소가 빠진 초안 저장→누락 주소만 보완→전체 수정→품목 추가/삭제·상세→저장→검토 취소→재검토→수정 저장·새 검토→승인→PDF/XLSX 다운로드→같은 ID 새로고침 통과 |
+| 업무 경계 | 유상 10·할인 10%, PI 판매 단가 8/합계 72.00/은행 표시, PO 매입 단가 3/합계 27.00/무상 2/은행 없음. PI 샘플 선택 시 할인 입력 비활성화 후 해제. 금액은 실제 서버 응답으로 확인 |
+| 320/390/768/1440px | 품목 입력·저장된 전체 확인·최종 검토·발급 상태에서 `documentElement.scrollWidth <= innerWidth`, 모든 작업 버튼의 좌우끝이 viewport 안이며 모바일에서 버튼 아래끝≤탐색 위끝+1px |
+| 390→1440→390px | 유상 수량 10·현재 품목 단계·요약 `aria-expanded=true`·상세 open·동일 입력 포커스 보존. CSS 전환으로 입력 DOM은 한 벌 유지 |
+| 하단 34px 여유 모의 | 공통 탐색 높이를 97px(63+34)과 하단 padding 34px로 주입해 320/390/768px 입력 버튼과 탐색의 비겹침 확인. 실제 기기 inset 측정과 구분 |
+| 키보드 | 품목·상세·요약·최종 검토의 표시된 모든 활성 컨트롤을 Tab으로 순회하고 outline 확인. Shift+Tab/Tab과 Enter로 발급, Enter로 다운로드 재시도. 금액 영역은 Tab 접근과 오른쪽 방향키 스크롤 지원 |
+| 실제 revision 409 | 발급 문서를 편집하는 동안 HTTP 클라이언트로 같은 ID의 최신 revision을 저장한 뒤 오래된 화면에서 저장. PI/PO 모두 `UNSAVED MOBILE TERMS`와 거래 조건 단계 보존·최신본 안내 확인 |
+| 다운로드 실패/재시도 | PI/PO의 PDF와 XLSX 각각 첫 파일 요청을 중단해 오류·alert 포커스·버튼 재활성화 확인. 차단 해제 후 같은 버튼으로 다운로드하고 bytes SHA-256이 서버 `content_hash`와 일치 |
+| 가짜 원문 추출 | 원문 입력→크기 변경·작성 방법 왕복 후 문자열 보존→추출→회사명은 유지하고 누락 주소만 질문→보완 저장 통과 |
+| 공통 탐색 회귀 | 390px 설정·문서함 진입과 제목 표시·본문 전체 가로 넘침 없음 확인 |
+
+- 자동 회귀: `tests/test_trade_mobile_browser.py`의 PI/PO 두 사례. 재실행은 `uv run pytest tests/test_trade_mobile_browser.py -q`이며 프론트 의존성과 Playwright Chromium을 먼저 준비한다. 이 환경에서는 브라우저 다운로드 실패 뒤 설치된 Chromium을 테스트 캐시 경로에 연결했다. 첫 `npm ci`의 홈 캐시 쓰기 실패는 작업 폴더 캐시를 지정해 해결했다. 첫 전체 pytest는 기존 XLSX 변환 의존성 부족으로 1 failed·1083 passed·2 skipped였다. 테스트용 LibreOffice를 작업 폴더에 준비한 뒤 변환 검사 31개와 최종 전체 검사를 통과했다.
+- 최종 공통 검사: `python3 .work/check.py` **통과·경고 0개**, `uv run pytest` **1084 passed·2 skipped(Windows 전용), 390.94초**. 프론트 `npm test` **11개**, `npm run lint`·`npm run build`·`npm run check:env` 모두 통과. 새 브라우저 두 사례만 별도 실행한 결과도 **2 passed**다.
+- 실제 모바일 기기·가상 키보드 표시 상태·iOS Safari 및 운영 Supabase/Storage/Google/Render 연결은 **미확인**이다.
+
 ## 구현 범위
 
 | 구역 | 실제 연결 |

@@ -36,7 +36,7 @@
 - `app/knowledge/` — 지식 문서 업로드·페이지 렌더링·교체형 비전/임베딩·조항 parent-child·pgvector 저장과 DB 작업 처리. 계약은 `docs/CONTRACT.md` 18절 [과제별]
 - `frontend/` — React+JavaScript+Vite 앱(시안 이식 로그인·앱 뼈대·회사/거래처/판매·구매 단가/계좌/이미지 설정, PI·PO·CI·PL 입력/추출/검토/승인/다운로드·CI 원본 선택/작성 준비·PL 포장 합계 확인, Supabase Auth 클라이언트·공통 API fetch, `/api` 개발 프록시, 루트 `.env` 공유·공개값 빌드 검사). 실행·빌드는 README 실행 방법, 범위는 `docs/plans/react-supabase/PLAN.md` [과제별]
 - `frontend/src/knowledge/` — 지식 문서 업로드·상태·원본 대조·추출문 수정/확정·부모/자식 청크와 처리 모델 확인 화면 [과제별]
-- `tests/` — 실행 환경·서버·DB·그래프 흐름·노드 소요 시간·LLM 오류 구분·로그인·Calendar OAuth/서비스별 토큰 격리·감시 등록·로컬 Gmail 수집과 실제 루프백 실행·실행 기록 화면과 내보내기(개인정보 가리기)·시험 실행기와 4개 지표 테스트와 `fakes/`의 가짜 LLM·가짜 Google·로컬/개인 PC·모의 OpenAI HTTPS 시험 서버(실제 API 호출 없음) [과제별]
+- `tests/` — 실행 환경·서버·DB·그래프 흐름·노드 소요 시간·LLM 오류 구분·로그인·Calendar OAuth/서비스별 토큰 격리·감시 등록·로컬 Gmail 수집과 실제 루프백 실행·실행 기록 화면과 내보내기(개인정보 가리기)·PI/PO 모바일 브라우저 완주·크기 변경·409 입력 보존·다운로드 재시도·시험 실행기와 4개 지표 테스트와 `fakes/`의 가짜 LLM·가짜 Google·로컬/개인 PC·모의 OpenAI HTTPS 시험 서버(실제 API 호출 없음) [과제별]
 - `.work/RULES.md` — 공통 규칙 [공통]
 - `.work/TASK.md` — 이 파일 [과제별]
 - `.work/STATUS.md` — 세팅 진행기록(지금 할 일·다음 단계 안내). 세팅 단계 작업과 진행기록을 물을 때만 읽는다 [과제별]
