@@ -13,6 +13,11 @@ const STATUS = { needs_input: "입력 필요", ready: "검토 가능", issued: "
 
 export default function PLPage() {
   const { state } = useAuth()
+  return <PLEditor key={state.me?.user_id} />
+}
+
+function PLEditor() {
+  const { state } = useAuth()
   const token = state.accessToken
   const { documentId } = useParams()
   const navigate = useNavigate()
@@ -29,6 +34,7 @@ export default function PLPage() {
   const [notice, setNotice] = useState("")
   const [screen, setScreen] = useState({ key: "start", fields: null })
   const [guided, setGuided] = useState(false)
+  const [sourceText, setSourceText] = useState("")
   const [packing, setPacking] = useState(null)
   const [packingError, setPackingError] = useState("")
   const [packingLoading, setPackingLoading] = useState(false)
@@ -36,7 +42,10 @@ export default function PLPage() {
   const [settings, setSettings] = useState(null)
   const [settingsError, setSettingsError] = useState("")
   const question = useRef(null)
+  const errorBox = useRef(null)
+  const packingErrorBox = useRef(null)
   const mutation = useRef(null)
+  const created = useRef(null)
   const base = "/trade/pl"
 
   function accept(document, review = null, next = { key: "review", fields: null }) {
@@ -61,6 +70,10 @@ export default function PLPage() {
   })
   useEffect(() => {
     const controller = new AbortController()
+    if (created.current === documentId) {
+      created.current = null
+      return () => { controller.abort(); mutation.current?.abort() }
+    }
     mutation.current?.abort()
     mutation.current = null
     setBusy(false)
@@ -71,6 +84,7 @@ export default function PLPage() {
     setModifying(false)
     setDirty(false)
     if (!documentId) {
+      setSourceText("")
       setDraft(emptyPL())
       setScreen({ key: "start", fields: null })
       setGuided(false)
@@ -82,7 +96,7 @@ export default function PLPage() {
       }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     }
     return () => { controller.abort(); mutation.current?.abort() }
-  }, [documentId, reload, state.me?.user_id])
+  }, [documentId, reload])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -97,7 +111,9 @@ export default function PLPage() {
 
   useEffect(() => {
     question.current?.focus()
-  }, [screen])
+  }, [screen, proposal?.id])
+  useEffect(() => { if (error) errorBox.current?.focus() }, [error])
+  useEffect(() => { if (packingError) packingErrorBox.current?.focus() }, [packingError])
 
   const savedId = resource?.document_id
   const savedRevision = resource?.revision
@@ -173,7 +189,10 @@ export default function PLPage() {
       return { document, review: null }
     }, ({ document, review }) => {
       accept(document, review)
-      if (!documentId) navigate(`/trade/pl/${document.document_id}`, { replace: true })
+      if (!documentId) {
+        created.current = String(document.document_id)
+        navigate(`/trade/pl/${document.document_id}`, { replace: true })
+      }
       else setNotice("저장했어요. 원본·계산 합계와 전체 내용을 확인해 주세요.")
     })
   }
@@ -220,12 +239,12 @@ export default function PLPage() {
   const finalReview = proposal && ["pending", "approved"].includes(proposal.status) && !modifying && !dirty
   const missing = plMissing(draft)
   const remaining = PL_STEPS.filter((entry) => missing.some((path) => plSectionFor(path) === entry.key))
-  return <div className="pi-workspace">
+  return <div className="pi-workspace pl-workspace">
     <div className="page-head"><div><h1 className="page-title">PL 작성</h1><p className="page-sub">거래 내용을 채우고, 마지막에 전체를 확인해요.</p></div><Link className="btn" to="/">문서 종류 선택</Link></div>
     <div className="editor-toolbar"><span className="document-status">{current ? `${STATUS[current.status] ?? current.status} · 버전 ${current.revision}` : "새 PL"}</span>
       {documentId && <button type="button" className="btn" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}
     </div>
-    {error && <div className="settings-load-error" role="alert"><p>{error.status === 401 ? "로그인 확인이 필요합니다. 입력 내용을 별도로 보관한 뒤 다시 로그인해 주세요." : error.message}</p>
+    {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.status === 401 ? "로그인 확인이 필요합니다. 입력 내용을 별도로 보관한 뒤 다시 로그인해 주세요." : error.message}</p>
       {error.status === 409 && <p>최신본을 다시 읽고 새로 검토해 주세요. 다시 읽으면 현재 입력을 교체하므로, 필요한 내용은 먼저 복사해 두세요.</p>}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {loading && <p role="status">PL와 검토 내용을 불러오는 중입니다…</p>}
@@ -248,10 +267,11 @@ export default function PLPage() {
         <p className="section-note">내용 확인과 승인 후에만 파일을 발급해요.</p>
       </section>}
       {screen.key === "source" && <><button className="pi-text-button" type="button" disabled={busy} onClick={() => setScreen({ key: "start", fields: null })}>← 작성 방법 선택</button>
-      <AIInput kind="PL" token={token} disabled={busy} headingRef={question} onExtract={(text) => perform((signal) => apiFetch(`${base}/extract`, {
+      <AIInput kind="PL" token={token} disabled={busy} headingRef={question} value={sourceText} onTextChange={setSourceText} onExtract={(text) => perform((signal) => apiFetch(`${base}/extract`, {
         token, signal, method: "POST", body: { text } }), (document) => {
         setGuided(true)
         accept(document, null, plNextScreen(plDraft(document.input)))
+        created.current = String(document.document_id)
         navigate(`/trade/pl/${document.document_id}`)
       })} /></>}
       {step && <form className="pi-question" aria-label="PL 입력" onSubmit={(event) => { event.preventDefault(); if (canEdit) next() }}>
@@ -283,7 +303,7 @@ export default function PLPage() {
         {current.issues.length > 0 && <ul className="document-issues" role="alert">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
         {current.status === "needs_input" && <p className="section-note">표시된 항목을 수정한 뒤 다시 저장해 주세요. 발행 회사·직인은 <Link to="/settings">회사 설정</Link>에서 확인할 수 있어요.</p>}
         <DocumentSnapshot kind="pl" document={current.document} />
-        {packingError && <p className="form-error" role="alert">{packingError}</p>}
+        {packingError && <p className="form-error" role="alert" tabIndex={-1} ref={packingErrorBox}>{packingError}</p>}
         {packingLoading && <p role="status">현재 버전의 포장 합계를 읽는 중입니다…</p>}
         <PackingReview view={packing} current={current} dirty={dirty || modifying} disabled={busy || packingLoading}
           onReload={() => setPackingReload((value) => value + 1)} onDecision={decidePacking} onEdit={() => edit("packing")} />

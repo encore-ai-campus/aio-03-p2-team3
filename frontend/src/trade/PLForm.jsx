@@ -49,7 +49,7 @@ export default function PLForm({ draft, setDraft, step, fields = null, settings,
           </details></td></tr>
         </Fragment>)}</tbody></table></div>
       <button className="btn pi-add-item" type="button" disabled={draft.items.length >= 500} onClick={() => { onShowAll(); change("items",[...draft.items,newPLItem()]) }}>품목 추가</button>
-      <details className="pi-optional" open={fields?.some((path) => path.startsWith("packages"))}><summary>별도 포장 행</summary>
+      <details className="pi-optional" open={fields?.some((path) => path.startsWith("packages"))}><summary>별도 포장 행 · {draft.packages.length}행</summary>
         <p className="section-note">품목별 포장과 별도 포장 행은 각각 보존합니다. 어느 쪽을 합계에 사용할지는 서버 결과에서 확인해요.</p>
         {draft.packages.map((row,index) => <div className="pl-package" key={row.rowId}><h3>포장 {index+1}</h3><div className="settings-fields">{PACKAGE_FIELDS.map((key) => itemField("packages",index,row,key))}</div>
           <button className="btn" type="button" aria-label={`포장 ${index+1} 삭제`} onClick={() => { onShowAll(); change("packages",draft.packages.filter((_,i) => i !== index)) }}>포장 삭제</button></div>)}

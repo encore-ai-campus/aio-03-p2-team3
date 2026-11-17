@@ -17,7 +17,7 @@
 | PO | `pages/POPage.jsx`, `trade/POForm.jsx`, `/app/trade/po[/{id}]` | PI 공통 배치 적용, 구매자/공급처·매입 가격·무상 수량 표시 확인 |
 | CI | `pages/CIPage.jsx`, `trade/CISourcePicker.jsx`, `trade/CIForm.jsx`, `/app/trade/ci[/{id}]` | 긴 PI 목록·보완 안내·선적 입력·고정 원본을 모바일로 확인 |
 | CI 단독 | `pages/CIStandalonePage.jsx`, `trade/PIForm.jsx`, `/app/trade/ci/standalone[/{id}]` | 거래·품목·선적 입력과 직접 단가 확인을 모바일로 확인 |
-| PL | `pages/PLPage.jsx`, `trade/PLForm.jsx`, `trade/PackingReview.jsx`, `trade/PLSnapshot.jsx`, `/app/trade/pl[/{id}]` | 품목/별도 포장·원본/계산 대조·합계 승인과 최종 발급의 분리 확인 |
+| PL | `pages/PLPage.jsx`, `trade/PLForm.jsx`, `trade/PackingReview.jsx`, `trade/PLSnapshot.jsx`, `/app/trade/pl[/{id}]` | 3절 코드/자동 브라우저 회귀 완료. 실제 기기/운영 확인은 남음 |
 
 `frontend/src/styles.css`에는 이미 1100px 이하 접이식 요약, 800px 이하 앱 탐색/작업 버튼, 600px 이하 품목 카드가 있다. 이를 시작점으로 사용한다. `.pi-step-actions`의 `bottom:63px`와 `.bottom-nav` 높이·safe-area 조합은 **확인할 후보**이며 실제 겹침 결함으로 확정된 것은 아니다. 기존 검증 기록은 `docs/test-records/20261113_po_ci_pl_screens.md`, 원래 업무 계약은 `docs/plans/react-supabase/PLAN.md` 12~15절과 `docs/trade-api.md`에 있다.
 
@@ -77,7 +77,7 @@
 
 <a id="3"></a>
 
-## 3. PL 포장·두 승인 모바일 화면과 4종 회귀
+## 3. PL 포장·두 승인 모바일 화면과 4종 회귀 (완료)
 
 - 할 일: **1절에 기록된 공통 배치 규칙을 먼저 읽고** `PLPage.jsx`·`PLForm.jsx`·`PackingReview.jsx`·`PLSnapshot.jsx`의 품목/별도 포장 행, 원본/계산 합계·차이·단위별 수량과 두 승인 버튼을 모바일로 보완한다. 대조 표는 읽을 수 있는 카드/영역 스크롤 중 기존 화면에 맞는 최소 변경을 적용하고 원본/계산 라벨을 유지한다. 공통 CSS 변경을 포함한 PI/PO/CI의 최종 회귀 결과를 검증 기록에 모은다.
 - 완료 기준: 기본 웹 흐름을 확인하고 390px에서 직접/가짜 추출 입력→포장 행 보완→합계 승인→별도 최종 검토/발급→PDF/XLSX 다운로드를 완주한다. 320·768·1440px의 포장/대조/검토 배치를 확인한다. 별도 `packages`, 원본/계산 불일치, PCS/KG 분리, 컨테이너 없음/`2 x 40FT`, 합계 취소·행 수정·최종 수정 후 재승인, 오래된 revision/해시와 미저장 변경의 차단/입력 보존을 확인한다. 합계 승인만으로 파일이 생기지 않으며 최종 승인 뒤 파일 해시가 일치한다. 크기 변경·키보드·본문 넘침·다운로드 재시도와 PI/PO/두 CI 경로의 핵심 입력/검토/다운로드 회귀를 기록하고 공통 검사를 통과한다. 미확인 항목이 있으면 4종 모바일 전환 전체 완료로 표시하지 않는다.
@@ -88,6 +88,12 @@
 - 수정 범위: 위 PL 파일과 실제 필요한 공통 검토/문서 영역 CSS의 최소 변경, 관련 검증, 이 계획 3절·기존 검증 기록·최신 흐름. #143의 기존 PL 완료 기준과 겹치는 확인은 한 번 실행한 근거를 함께 연결하되 확인하지 않은 범위까지 Issue를 닫지 않는다.
 - 새 작업 요청문:
   > Issue: #210. `docs/plans/trade-mobile-workspaces.md` 3절을 진행해 주세요. 선행 2절 병합과 1절의 공통 배치 규칙을 확인하세요. 관련 상태는 PL 포장 합계 선택·revision/해시·최종 제안이며 그래프·도구·노드는 유지합니다. PL 폼·합계 대조·검토 표시와 최소 CSS만 보완하고 320/390/768/1440px·합계 승인/취소·수정 후 재승인·발급 해시·PI/PO/두 CI 경로 회귀를 검증해 PR을 열어 주세요.
+
+### 3절 구현 결과
+
+- 선행 2절이 병합된 main `9fefdba`에서 시작했다. PL은 1절의 입력 카드·요약·작업 버튼을 재사용한다. 별도 포장 행 개수를 표시하고, 원본/서버 계산 합계와 품목/별도 포장 표에 이름 있는 키보드 스크롤 영역을 제공한다. CSS는 PL 영역에 제한했다.
+- 원문은 부모에 보존하고 오류·새 검토로 포커스를 옮긴다. 첫 저장/추출 후 ID 전환의 중복 재조회를 막아 입력·요약을 유지한다. 서버 계산·revision/해시·합계 승인/최종 발급 승인과 그래프·도구·노드는 유지했다.
+- 실제 FastAPI·임시 pgvector PostgreSQL·가짜 인증/추출/Storage의 PI/PO·CI 연결/단독·PL 직접/추출 브라우저 회귀를 실행했다. 상세 실행 결과와 실제 기기/운영 미확인은 [기존 검증 기록](../test-records/20261113_po_ci_pl_screens.md#issue-210-pl-모바일-보완2026-11-17)에 둔다. 이 절의 코드/자동화 완료를 실제 기기까지 포함한 4종 모바일 전환 전체 완료로 표시하지 않는다.
 
 ### 각 절의 공통 검증과 완료 기록
 
