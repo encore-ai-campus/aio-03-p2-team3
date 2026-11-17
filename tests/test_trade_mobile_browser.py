@@ -1,4 +1,4 @@
-"""#208·#209: 실제 FastAPI/임시 PostgreSQL, 가짜 인증·추출·Storage의 PI/PO/CI 모바일 회귀."""
+"""#208·#209·#210: 실제 FastAPI/임시 PostgreSQL, 가짜 인증·추출·Storage의 PI/PO/CI/PL 모바일 회귀."""
 from contextlib import nullcontext
 from copy import deepcopy
 from hashlib import sha256
@@ -497,3 +497,118 @@ def test_ci_standalone_mobile_complete_price_conflict(ci_browser, monkeypatch, t
     expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래·선적 조건", exact=True).click()
     expect(page.get_by_label("선적 참조", exact=True)).to_have_value("SHIP-MOBILE")
+
+
+@pytest.mark.parametrize("method", ["direct", "extract"])
+def test_pl_mobile_two_approvals_conflict_and_download(ci_browser, monkeypatch, tmp_path, method):
+    from app.trade.pl import agent
+    from tests.test_trade_domain_api import pl_values
+
+    page, context, client, base = ci_browser
+    values = pl_values()
+    values.update(document_number="PL-MOBILE", container_count="2 x 40FT" if method == "extract" else None)
+    values["buyer"]["address"] = None
+    monkeypatch.setattr(agent, "extract_facts", lambda *_: deepcopy(values))
+    monkeypatch.setattr(trade_router, "user_openai", lambda *_args, **_kwargs: nullcontext(SimpleNamespace(issue=None)))
+    page.goto(base + "/app/trade/pl")
+    page.get_by_role("button", name="원문 붙여넣기" if method == "extract" else "직접 작성", exact=False).click()
+    if method == "extract":
+        page.get_by_label("거래 원문", exact=True).fill("Virtual packing source")
+        page.get_by_role("button", name="← 작성 방법 선택", exact=True).click()
+        page.get_by_role("button", name="원문 붙여넣기", exact=False).click()
+        expect(page.get_by_label("거래 원문", exact=True)).to_have_value("Virtual packing source")
+        page.get_by_role("button", name="원문에서 정보 가져오기", exact=True).click()
+    else:
+        page.get_by_label("회사명 (영문)", exact=True).fill("Virtual Buyer")
+    page.get_by_label("주소 (영문)", exact=True).fill("1 Fiction Avenue " * 20)
+    nav = page.get_by_role("navigation", name="PL 작성 단계")
+    nav.get_by_role("button", name="품목·포장", exact=True).click()
+    if method == "direct":
+        page.get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Item")
+        page.get_by_label("수량 · 품목 1", exact=True).fill("10")
+        page.get_by_label("포장 수 · 품목 1", exact=True).fill("2")
+        page.get_by_label("포장 종류 · 품목 1", exact=True).fill("BOX")
+    page.get_by_text("별도 포장 행 ·", exact=False).click()
+    page.get_by_role("button", name="포장 행 추가", exact=True).click()
+    for label, value in [("포장 종류", "PALLET"), ("포장 수", "3"), ("순중량 (kg)", "10"), ("총중량 (kg)", "12")]:
+        page.get_by_label(label + " · 포장 1", exact=True).fill(value)
+    field = page.get_by_label("포장 수 · 포장 1", exact=True)
+    page.get_by_role("button", name="작성 내용 보기", exact=True).click()
+    field.focus()
+    for width in (1440, 390):
+        page.set_viewport_size({"width": width, "height": 844})
+        expect(field).to_have_value("3")
+        expect(field).to_be_focused()
+        expect(page.locator(".pi-summary-toggle")).to_have_attribute("aria-expanded", "true")
+    layout(page)
+    keyboard_reachable(page)
+    nav.get_by_role("button", name="선적 조건·합계", exact=True).click()
+    page.get_by_label("PL 문서번호", exact=True).fill("PL-" + method)
+    page.get_by_label("선적 참조", exact=True).fill("SHIP-MOBILE")
+    page.get_by_label("납품 조건", exact=True).fill("FOB Busan")
+    page.get_by_label("원본 포장 수", exact=True).fill("99")
+    page.get_by_role("button", name="저장하고 전체 확인", exact=True).click()
+    approve = page.get_by_role("button", name="합계 승인", exact=True)
+    expect(approve).to_be_enabled()
+    path = "/api/trade/pl/" + page.url.rsplit("/", 1)[1]
+    original = client.get(path).json()
+    comparison = client.get(path + "/packing-review").json()
+    assert original["document"]["packing_totals"]["packages_total"]["net_weight_kg"] == "10"
+    if method == "extract":
+        assert original["document"]["packing_totals"]["quantities"] == {"PCS": "616001", "KG": "2399.48"}
+    layout(page)
+    region = page.get_by_role("region", name="원본과 서버 계산 합계 · 가로 스크롤", exact=True)
+    region.focus()
+    page.keyboard.press("ArrowRight")
+    page.wait_for_function("document.querySelector('.packing-review .table-scroll').scrollLeft > 0")
+    keyboard_reachable(page)
+    # 해시 불일치와 오래된 revision은 서버에서 거부한다.
+    assert client.post(path + "/packing-review/decisions", json={"action": "approve", "revision": comparison["revision"], "content_hash": "0" * 64}).status_code == 409
+    nav.get_by_role("button", name="품목·포장", exact=True).click()
+    page.get_by_label("수량 · 품목 1", exact=True).fill("11")
+    nav.get_by_role("button", name="거래처", exact=True).click()
+    page.get_by_role("button", name="이전", exact=True).click()
+    expect(approve).to_be_disabled()
+    page.get_by_role("button", name="변경사항 저장", exact=True).click()
+    expect(approve).to_be_enabled()
+    approve.click()
+    expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
+    approved = client.get(path).json()
+    assert approved["proposal_id"] is None
+    assert client.post(path + "/packing-review/decisions", json={"action": "approve", "revision": comparison["revision"], "content_hash": comparison["content_hash"]}).status_code == 409
+    page.get_by_role("button", name="합계 취소", exact=True).click()
+    expect(approve).to_be_enabled()
+    assert client.get(path).json()["document"]["actual_package_count"] == "99"
+    approve.click()
+    page.get_by_role("button", name="최종 검토 만들기", exact=True).click()
+    expect(page.get_by_role("heading", name="최종 검토 · 버전", exact=False)).to_be_focused()
+    page.get_by_role("button", name="수정", exact=True).click()
+    page.get_by_label("주소 (영문)", exact=True).fill("2 Fiction Avenue")
+    page.get_by_role("button", name="임시 저장", exact=True).click()
+    expect(approve).to_be_enabled()
+    expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_disabled()
+    approve.click()
+    page.get_by_role("button", name="최종 검토 만들기", exact=True).click()
+    layout(page)
+    page.screenshot(path=str(tmp_path / ("pl-" + method + ".png")), full_page=True)
+    page.get_by_role("button", name="승인하고 파일 발급", exact=True).click()
+    expect(page.get_by_role("button", name="PDF 다운로드", exact=True)).to_be_enabled()
+    document = client.get(path).json()
+    proposal = client.get(path + "/reviews/" + str(document["proposal_id"])).json()
+    for file in proposal["files"]:
+        url = base + file["download_url"]
+        button = page.get_by_role("button", name=file["file_format"].upper() + " 다운로드", exact=True)
+        context.route(url, lambda route: route.abort())
+        button.click()
+        expect(page.get_by_role("alert")).to_be_focused()
+        context.unroute(url)
+        with page.expect_download() as download:
+            button.click()
+        assert sha256(Path(download.value.path()).read_bytes()).hexdigest() == file["content_hash"]
+    nav.get_by_role("button", name="선적 조건·합계", exact=True).click()
+    page.get_by_label("선적 참조", exact=True).fill("UNSAVED SHIPMENT")
+    current = client.get(path).json()
+    assert client.put(path, json={"revision": current["revision"], "document": current["input"]}).status_code == 200
+    page.get_by_role("button", name="임시 저장", exact=True).click()
+    expect(page.get_by_role("alert")).to_be_focused()
+    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED SHIPMENT")

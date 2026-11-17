@@ -81,3 +81,12 @@
 .ci-workspace .ci-source-picker .form-error,.ci-workspace .pi-main>[aria-label="원본 PI 남은 작업"]{overflow-wrap:anywhere}
 .ci-workspace .pi-main>[aria-label="원본 PI 남은 작업"] .form-actions{gap:8px}
 @media(max-width:800px){.ci-workspace .pi-main>[aria-label="원본 PI 남은 작업"] .btn{max-width:100%;white-space:normal}}
+
+/* PL도 같은 입력 카드를 쓰고, 원본/계산 표는 이름 있는 영역 안에서 비교한다. */
+.pl-workspace .packing-review{margin-top:24px;border-top:1px solid var(--line);padding-top:16px;overflow-wrap:anywhere}
+.pl-workspace .packing-review .document-table{min-width:420px;table-layout:fixed;font-size:14px}
+.pl-workspace .packing-review .document-table th{overflow-wrap:anywhere}
+.pl-workspace .packing-review .document-table th[scope=row]{text-align:left;font-size:13px}
+.pl-workspace .packing-quantities>div{min-width:0;overflow-wrap:anywhere}
+.pl-workspace .packing-quantities dt{flex-shrink:0}
+@media(max-width:600px){.pl-workspace .packing-review>.form-actions .blue{flex:1 1 100%}.pl-workspace .pl-package{padding:16px 0}.pl-workspace .pi-progress button{white-space:normal;min-height:44px}}
