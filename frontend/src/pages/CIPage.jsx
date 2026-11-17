@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { apiFetch, downloadFile } from "../api"
 import { useAuth } from "../useAuth"
-import CIForm from "../trade/CIForm"
+import CIForm, { CISummary } from "../trade/CIForm"
 import CISourcePicker from "../trade/CISourcePicker"
 import DocumentSnapshot from "../trade/DocumentSnapshot"
 import ReviewPanel from "../trade/ReviewPanel"
@@ -34,6 +34,7 @@ export default function CIPage() {
   const mutation = useRef(null)
   const created = useRef(null)
   const question = useRef(null)
+  const errorBox = useRef(null)
   const base = "/trade/ci"
 
   async function readSource(id, revision, signal) {
@@ -86,7 +87,8 @@ export default function CIPage() {
     return () => { controller.abort(); mutation.current?.abort() }
   }, [documentId, owner, reload])
 
-  useEffect(() => { question.current?.focus() }, [screen])
+  useEffect(() => { question.current?.focus() }, [screen, proposal?.id])
+  useEffect(() => { if (error) errorBox.current?.focus() }, [error])
 
   async function perform(work, success) {
     if (mutation.current) return
@@ -176,11 +178,11 @@ export default function CIPage() {
   const finalReview = proposal && ["pending", "approved"].includes(proposal.status) && !modifying && !dirty
   const missing = ciMissing(draft)
 
-  return <div className="pi-workspace">
+  return <div className="pi-workspace ci-workspace">
     <div className="page-head"><div><h1 className="page-title">CI 작성</h1><p className="page-sub">거래 내용을 입력하거나 PI를 불러와 작성해요.</p></div><Link className="btn" to="/">문서 종류 선택</Link></div>
     <div className="editor-toolbar"><span className="document-status">{current ? `${STATUS[current.status] ?? current.status} · 버전 ${current.revision}` : "작성 중 · 서버 미저장"}</span>
       {documentId && <button className="btn" type="button" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}</div>
-    {error && <div className="settings-load-error" role="alert"><p>{error.message}</p>
+    {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.message}</p>
       {error.status === 409 && <p>입력은 보존했습니다. PI 상태를 다시 확인하거나 최신 CI를 다시 읽고 재검토해 주세요. 최신 CI를 읽으면 현재 입력을 교체하므로 필요한 내용은 먼저 복사해 두세요.</p>}
       {error.code === "SOURCE_PI_CHANGE_REQUIRES_NEW_CI" && <Link to="/trade/ci">새 CI 작성</Link>}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
@@ -204,8 +206,9 @@ export default function CIPage() {
           {!source.checked && <p>원본 PI 상태를 다시 확인해 주세요. 확인 전에는 서버에 CI를 생성하지 않습니다.</p>}
           {!source.approved && <><ul>{source.missing_fields.map((path) => <li key={path}>{piFieldLabel(path)} 보완</li>)}{source.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}<li>PI 최종 검토 후 ‘승인하고 파일 발급’ 완료</li></ul>
             {source.current_revision !== source.source_revision && <p>현재 PI는 버전 {source.current_revision}입니다. 현재 버전을 보완·승인한 뒤 목록에서 새 버전을 직접 선택해 주세요.</p>}
-            <Link className="btn" to={`/trade/pi/${source.source_pi_id}`} target="_blank" rel="noopener noreferrer">PI 보완·승인하기 ↗</Link></>}
-          <button className="btn" type="button" disabled={!canEdit} onClick={refreshSource}>PI 상태 다시 확인</button>
+          </>}
+          <div className="form-actions">{!source.approved && <Link className="btn" to={`/trade/pi/${source.source_pi_id}`} target="_blank" rel="noopener noreferrer">PI 보완·승인하기 ↗</Link>}
+          <button className="btn" type="button" disabled={!canEdit} onClick={refreshSource}>PI 상태 다시 확인</button></div>
         </section>}
         {screen === "source-pi" && <section className="pi-question"><h2 tabIndex={-1} ref={question}>어떤 PI로 만들까요?</h2>
           {current?.input.source_pi_id ? <p className="section-note">저장된 CI의 원본은 고정됩니다. 다른 버전은 <Link to="/trade/ci">새 CI로 작성</Link>해 주세요.</p>
@@ -238,17 +241,4 @@ export default function CIPage() {
       </div>{screen !== "start" && <CISummary source={source} original={original} draft={draft} />}</div>
     </>}
   </div>
-}
-
-function CISummary({ source, original, draft }) {
-  const [open, setOpen] = useState(false)
-  return <aside className="pi-summary" aria-label="작성 내용 요약"><button className="pi-summary-toggle" type="button" aria-expanded={open} aria-controls="ci-summary" onClick={() => setOpen(!open)}>작성 내용 {open ? "접기" : "보기"}</button>
-    <div id="ci-summary" className={open ? "open" : ""}><h2>작성 중인 CI</h2><p className="pi-summary-number">{draft.document_number || "문서번호 미입력"}</p>
-      <dl><div><dt>원본 PI</dt><dd>{source ? `${source.document_number || source.source_pi_id} · 버전 ${source.source_revision}` : "선택 필요"}</dd></div>
-        <div><dt>구매자</dt><dd>{original?.buyer?.legal_name || "—"}</dd></div><div><dt>판매자</dt><dd>{original?.seller?.legal_name || "—"}</dd></div>
-        <div><dt>원본 품목·유상/FOC 수량</dt><dd>{original?.items?.map((row,index) => <div key={index}>{row.product_name} · {row.paid_quantity ?? row.quantity ?? "—"} / {row.free_quantity ?? "—"} {row.unit} · {row.unit_price ?? "미확정"}</div>) || "—"}</dd></div>
-        <div><dt>선적 참조</dt><dd>{draft.shipment_reference || "미입력"}</dd></div></dl>
-      {source && <div className="pi-summary-total"><span>선택한 PI 버전의 합계</span><strong>{source.currency} {source.total ?? "미확정"}</strong></div>}
-      <p className="section-note">PI 승인 전에는 작성 준비만 가능합니다. 거래 사실은 선택한 승인 버전으로 고정됩니다.</p>
-    </div></aside>
 }

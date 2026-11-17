@@ -9,6 +9,8 @@ export default function CISourcePicker({ token, selected, disabled, onSelect }) 
   const [error, setError] = useState("")
   const [reload, setReload] = useState(0)
   const request = useRef(null)
+  const errorBox = useRef(null)
+  useEffect(() => { if (error) errorBox.current?.focus() }, [error])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -39,9 +41,10 @@ export default function CISourcePicker({ token, selected, disabled, onSelect }) 
     finally { if (request.current === controller) { request.current = null; setLoading(false) } }
   }
 
-  return <section aria-label="원본 PI 선택"><p className="pi-question-note">정보 보완 중인 PI도 선택할 수 있어요. 서버에 CI를 생성하려면 선택한 PI 버전의 승인이 필요합니다.</p>
-    {error && <div className="form-error" role="alert">{error} <button className="btn" type="button" disabled={loading || disabled} onClick={() => setReload((value) => value + 1)}>목록 다시 읽기</button></div>}
+  return <section className="ci-source-picker" aria-label="원본 PI 선택"><p className="pi-question-note">정보 보완 중인 PI도 선택할 수 있어요. 서버에 CI를 생성하려면 선택한 PI 버전의 승인이 필요합니다.</p>
+    {error && <div className="form-error" role="alert" ref={errorBox} tabIndex={-1}>{error} <button className="btn" type="button" disabled={loading || disabled} onClick={() => setReload((value) => value + 1)}>목록 다시 읽기</button></div>}
     {!loading && !error && !page.items.length && <p>저장된 PI가 없습니다. <Link to="/trade/pi">PI 작성하기</Link></p>}
+    {page.items.length > 0 && <p className="section-note" role="status">PI {page.items.length}개 표시 · 각 PI의 최신 버전만 표시합니다. 원본은 직접 선택해 주세요.</p>}
     {page.items.map((row) => <label className="ci-source-choice" key={`${row.source_pi_id}:${row.source_revision}`}>
       <input type="radio" name="source-pi" checked={selected?.source_pi_id === row.source_pi_id && selected?.source_revision === row.source_revision}
         disabled={disabled || loading} onChange={() => onSelect(row)} />
@@ -51,6 +54,6 @@ export default function CISourcePicker({ token, selected, disabled, onSelect }) 
     </label>)}
     {loading && <p role="status">PI 목록을 읽는 중입니다…</p>}
     <div className="form-actions"><button className="btn" type="button" disabled={loading || disabled} onClick={() => setReload((value) => value + 1)}>목록 새로고침</button>
-      {page.next_cursor && <button className="btn" type="button" disabled={loading || disabled} onClick={more}>이전 PI 버전 더 보기</button>}</div>
+      {page.next_cursor && <button className="btn" type="button" disabled={loading || disabled} onClick={more}>PI 더 보기</button>}</div>
   </section>
 }

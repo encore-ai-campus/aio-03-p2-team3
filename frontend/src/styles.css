@@ -75,3 +75,9 @@
   .pi-workspace .form-actions .btn{min-width:0;max-width:100%;white-space:normal}
 }
 @media(max-width:600px){.pi-summary dl{grid-template-columns:minmax(0,1fr)}.pi-workspace .review-panel>.form-actions .blue{flex:1 1 100%}}
+
+/* CI는 1절의 공통 요약·작업 배치를 재사용한다. 긴 원본명과 보완 동작만 제한한다. */
+.ci-workspace .ci-source-choice input{flex-shrink:0}
+.ci-workspace .ci-source-picker .form-error,.ci-workspace .pi-main>[aria-label="원본 PI 남은 작업"]{overflow-wrap:anywhere}
+.ci-workspace .pi-main>[aria-label="원본 PI 남은 작업"] .form-actions{gap:8px}
+@media(max-width:800px){.ci-workspace .pi-main>[aria-label="원본 PI 남은 작업"] .btn{max-width:100%;white-space:normal}}

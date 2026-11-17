@@ -1,4 +1,4 @@
-"""#208: 실제 FastAPI/임시 PostgreSQL, 가짜 인증·추출·Storage의 PI/PO 모바일 회귀."""
+"""#208·#209: 실제 FastAPI/임시 PostgreSQL, 가짜 인증·추출·Storage의 PI/PO/CI 모바일 회귀."""
 from contextlib import nullcontext
 from copy import deepcopy
 from hashlib import sha256
@@ -229,3 +229,271 @@ def test_pi_po_mobile_complete_resize_conflict_retry(database_url, mobile_fronte
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors
         browser.close()
+
+
+def ci_issue_download(page, context, client, base, tmp_path, name):
+    """모바일 검토/발급과 실패 후 같은 파일 재다운로드를 실제 bytes로 확인한다."""
+    page.get_by_role("button", name="최종 검토 만들기", exact=True).click()
+    expect(page.get_by_role("heading", name="최종 검토 · 버전", exact=False)).to_be_focused()
+    page.get_by_text("고정된 버전·파일 정보", exact=True).click()
+    layout(page)
+    keyboard_reachable(page)
+    page.screenshot(path=str(tmp_path / (name + "-review.png")), full_page=True)
+    button = page.get_by_role("button", name="승인하고 파일 발급", exact=True)
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(page.get_by_role("button", name="PDF 다운로드", exact=True)).to_be_enabled()
+    path = "/api/trade/ci/" + page.url.rsplit("/", 1)[1]
+    document = client.get(path).json()
+    proposal = client.get(path + "/reviews/" + str(document["proposal_id"])).json()
+    for file in proposal["files"]:
+        url = base + file["download_url"]
+        context.route(url, lambda route: route.abort())
+        button = page.get_by_role("button", name=file["file_format"].upper() + " 다운로드", exact=True)
+        button.click()
+        expect(page.get_by_role("alert")).to_contain_text("다시 시도")
+        expect(page.get_by_role("alert")).to_be_focused()
+        expect(button).to_be_enabled()
+        context.unroute(url)
+        with page.expect_download() as download:
+            button.focus()
+            page.keyboard.press("Enter")
+        assert sha256(Path(download.value.path()).read_bytes()).hexdigest() == file["content_hash"]
+    layout(page)
+    page.reload()
+    expect(page.get_by_role("button", name="PDF 다운로드", exact=True)).to_be_enabled()
+    return path
+
+
+@pytest.fixture
+def ci_browser(database_url, mobile_frontend, monkeypatch):
+    monkeypatch.setattr(frontend, "DIST", mobile_frontend)
+    jwks, subject = FakeJwks(), uuid4()
+    token = jwks.token(sub=subject)
+    headers = {"Authorization": "Bearer " + token}
+    app = create_app(Settings(database_url=database_url, session_secret="fake-ci-mobile-session"),
+                     supabase_auth=TokenVerifier(SUPABASE_URL, fetch_jwks=jwks.serve), storage=FakeStorage())
+    session = {"access_token": token, "refresh_token": "fake-refresh", "token_type": "bearer",
+               "expires_at": int(time.time()) + 3600, "expires_in": 3600,
+               "user": {"id": str(subject), "aud": "authenticated", "email": "mobile@example.invalid"}}
+    with serve(app) as base, httpx.Client(base_url=base, headers=headers) as client, sync_playwright() as pw:
+        write_settings(client, headers)
+        assert client.post("/api/trade/settings/branding/seal", files={"image": ("seal.png", seal_png(), "image/png")}).status_code == 200
+        browser = pw.chromium.launch()
+        context = browser.new_context(viewport={"width": 390, "height": 844})
+        context.route("**/*", lambda route: route.continue_() if route.request.url.startswith(base + "/") else route.abort())
+        context.add_init_script("if (location.origin === " + json.dumps(base) + ") localStorage.setItem('sb-test-project-auth-token', " + json.dumps(json.dumps(session)) + ")")
+        page = context.new_page()
+        errors = []
+        context.on("page", lambda tab: tab.on("pageerror", lambda error: errors.append(str(error))))
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        yield page, context, client, base
+        assert not errors
+        browser.close()
+
+
+def test_ci_linked_mobile_source_reselect_preserves_shipment(ci_browser, tmp_path):
+    from tests.test_trade_domain_api import post, review, choice
+
+    page, context, client, base = ci_browser
+    page.goto(base + "/app/trade/ci")
+    page.get_by_role("button", name="PI 문서 불러오기", exact=False).click()
+    expect(page.get_by_text("저장된 PI가 없습니다.", exact=False)).to_be_visible()
+    url = base + "/api/trade/ci/source-pis"
+    context.route(url, lambda route: route.abort())
+    page.get_by_role("button", name="목록 새로고침", exact=True).click()
+    expect(page.get_by_role("alert")).to_contain_text("목록 다시 읽기")
+    expect(page.get_by_role("alert")).to_be_focused()
+    context.unroute(url)
+    incomplete_values = pi_input(document_number="PI-INCOMPLETE").model_dump(mode="json")
+    incomplete_values["buyer"]["address"] = None
+    incomplete_values["items"][0]["free_quantity"] = "5"
+    incomplete = post(client, "/api/trade/pi", incomplete_values)
+    ready = post(client, "/api/trade/pi", pi_input(document_number="PI-READY").model_dump(mode="json"))
+    approved = post(client, "/api/trade/pi", pi_input(document_number="PI-APPROVED").model_dump(mode="json"))
+    assert choice(client, "pi", review(client, "pi", approved), "approve").status_code == 200
+    # 최신 revision만 목록에 표시한다. 오래된 승인 버전은 자동 선택하지 않는다.
+    assert client.put(f"/api/trade/pi/{ready['document_id']}", json={"revision": 1, "document": ready["input"]}).status_code == 200
+    for number in range(52):
+        post(client, "/api/trade/pi", pi_input(document_number=f"PI-{number}-" + "LONG" * 30).model_dump(mode="json"))
+    page.get_by_role("button", name="목록 다시 읽기", exact=True).click()
+    expect(page.get_by_role("radio")).to_have_count(50)
+    expect(page.get_by_role("radio", checked=True)).to_have_count(0)
+    layout(page)
+    more_url = url + "?cursor=*"
+    context.route(more_url, lambda route: route.abort())
+    page.get_by_role("button", name="PI 더 보기", exact=True).click()
+    expect(page.get_by_role("alert")).to_be_visible()
+    expect(page.get_by_role("radio")).to_have_count(50)
+    context.unroute(more_url)
+    page.get_by_role("button", name="PI 더 보기", exact=True).click()
+    expect(page.get_by_role("radio")).to_have_count(55)
+    expect(page.get_by_role("button", name="PI 더 보기", exact=True)).to_have_count(0)
+    for number, status, revision in (("PI-APPROVED", "승인 완료", 1), ("PI-READY", "PI 승인 필요", 2), ("PI-INCOMPLETE", "정보 보완 필요", 1)):
+        radio = page.get_by_role("radio", name=number, exact=False)
+        if number == "PI-READY":
+            previous = page.get_by_role("radio", name="PI-APPROVED", exact=False)
+            previous.focus()
+            page.keyboard.press("ArrowDown")
+        else:
+            radio.click()
+        expect(radio).to_be_checked()
+        expect(radio).to_be_enabled()
+        expect(page.get_by_label("원본 PI 남은 작업")).to_contain_text(f"버전 {revision} · {status}")
+    page.get_by_role("button", name="선적 정보 입력", exact=True).click()
+    shipment = {"CI 문서번호": "CI-" + "LONG" * 30, "선적 참조": "SHIP-" + "LONG" * 30,
+                "원산지": "Republic of Korea", "납품 조건": "FOB Busan", "배송지": "1 Fiction Avenue " * 20,
+                "청구지": "2 Fiction Avenue " * 20, "비고": "Virtual shipment notes " * 10}
+    for label, value in shipment.items():
+        page.get_by_label(label, exact=True).fill(value)
+    expect(page.get_by_role("button", name="CI 생성", exact=True)).to_be_disabled()
+    assert client.get("/api/trade/ci").json() == []
+    assert client.post("/api/trade/ci", json={"source_pi_id": incomplete["document_id"], "source_revision": 1}).status_code == 409
+    page.get_by_role("button", name="작성 내용 보기", exact=True).click()
+    reference = page.get_by_label("선적 참조", exact=True)
+    reference.focus()
+    for width in (1440, 390):
+        page.set_viewport_size({"width": width, "height": 844})
+        expect(reference).to_be_focused()
+        expect(page.locator('[aria-current="step"]')).to_have_text("선적 정보")
+        expect(page.locator(".pi-summary-toggle")).to_have_attribute("aria-expanded", "true")
+        for label, value in shipment.items():
+            expect(page.get_by_label(label, exact=True)).to_have_value(value)
+    layout(page)
+    keyboard_reachable(page)
+    # 실제 별도 PI 탭에서 보완/발급한다. CI 준비 화면은 서버 생성 없이 유지한다.
+    with page.expect_popup() as popup:
+        page.get_by_role("link", name="PI 보완·승인하기", exact=False).click()
+    pi_tab = popup.value
+    pi_tab.get_by_label("주소 (영문)", exact=True).fill("3 Fiction Ave, Seoul")
+    pi_tab.get_by_role("button", name="임시 저장", exact=True).click()
+    pi_tab.get_by_role("button", name="최종 검토 만들기", exact=True).click()
+    pi_tab.get_by_role("button", name="승인하고 파일 발급", exact=True).click()
+    expect(pi_tab.get_by_role("button", name="PDF 다운로드", exact=True)).to_be_enabled()
+    pi_tab.close()
+    page.get_by_role("button", name="PI 상태 다시 확인", exact=True).click()
+    expect(page.get_by_label("원본 PI 남은 작업")).to_contain_text("현재 PI는 버전 2")
+    expect(page.get_by_role("button", name="CI 생성", exact=True)).to_be_disabled()
+    page.get_by_role("button", name="이전", exact=True).click()
+    page.get_by_role("button", name="PI 더 보기", exact=True).click()
+    page.get_by_role("radio", name="PI-INCOMPLETE · 버전 2", exact=False).click()
+    page.get_by_role("button", name="선적 정보 입력", exact=True).click()
+    for label, value in shipment.items():
+        expect(page.get_by_label(label, exact=True)).to_have_value(value)
+    # 선택 뒤 PI·단가표가 바뀌어도 선택한 승인 버전의 가격/FOC로 발급한다.
+    original = client.get(f"/api/trade/pi/{incomplete['document_id']}").json()
+    new_values = deepcopy(original["input"])
+    new_values["items"][0].update(unit_price="25", confirm_price_override=True)
+    assert client.put(f"/api/trade/pi/{incomplete['document_id']}", json={"revision": 2, "document": new_values}).status_code == 200
+    assert client.put("/api/trade/settings/prices", json={"item_name": "Virtual Serum", "capacity": "50ml", "role": "sale", "currency": "USD", "unit_price": "99", "price_basis": "PCS"}).status_code == 200
+    page.get_by_role("button", name="CI 생성", exact=True).click()
+    expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
+    path = "/api/trade/ci/" + page.url.rsplit("/", 1)[1]
+    saved = client.get(path).json()
+    assert saved["input"]["source_revision"] == 2
+    assert saved["document"]["total"] == original["document"]["total"] == "80.00"
+    for field in ("unit_price", "paid_quantity", "free_quantity"):
+        assert saved["document"]["items"][0][field] == original["document"]["items"][0][field]
+    assert not saved["document"].get("bank") and saved["document"].get("payment_terms") in (None, "N/A")
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="원본 PI", exact=True).click()
+    expect(page.get_by_role("radio")).to_have_count(0)
+    expect(page.get_by_text("저장된 CI의 원본은 고정됩니다.", exact=False)).to_be_visible()
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="전체 확인", exact=True).click()
+    ci_issue_download(page, context, client, base, tmp_path, "ci-linked")
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="선적 정보", exact=True).click()
+    page.get_by_label("선적 참조", exact=True).fill("UNSAVED LINKED SHIPMENT")
+    current = client.get(path).json()
+    assert client.put(path, json={"revision": current["revision"], "document": current["input"]}).status_code == 200
+    page.get_by_role("button", name="저장하고 전체 확인", exact=True).click()
+    expect(page.get_by_role("alert")).to_contain_text("입력은 보존")
+    expect(page.get_by_role("alert")).to_be_focused()
+    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED LINKED SHIPMENT")
+    page.get_by_role("button", name="최신본 다시 읽기", exact=True).click()
+    expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="선적 정보", exact=True).click()
+    expect(page.get_by_label("선적 참조", exact=True)).to_have_value(shipment["선적 참조"])
+
+
+@pytest.mark.parametrize("method", ["direct", "extract"])
+def test_ci_standalone_mobile_complete_price_conflict(ci_browser, monkeypatch, tmp_path, method):
+    from app.trade.ci import agent as ci_agent
+
+    page, context, client, base = ci_browser
+    values = pi_input(document_number="CI-EXTRACT").model_dump(mode="json")
+    values.pop("payment_terms")
+    values["items"][0].pop("is_sample")
+    values["items"][0].update(unit_price="9", source="Virtual Serum 50ml 10 PCS USD 9 discount 0")
+    values["buyer"]["address"] = None
+    values.update(mode="standalone", document_type="CI", shipment_reference="SHIP", country_of_origin="Korea")
+    monkeypatch.setattr(ci_agent, "extract_facts", lambda *_: deepcopy(values))
+    monkeypatch.setattr(trade_router, "user_openai", lambda *_args, **_kwargs: nullcontext(SimpleNamespace(issue=None)))
+    page.goto(base + "/app/trade/ci")
+    page.get_by_role("button", name="원문 붙여넣기" if method == "extract" else "직접 작성", exact=False).click()
+    if method == "extract":
+        source = "CI-EXTRACT Acme Trading FOB Busan SHIP Korea Virtual Serum 50ml 10 PCS USD 9 discount 0"
+        page.get_by_label("거래 원문", exact=True).fill(source)
+        layout(page)
+        expect(page.get_by_label("거래 원문", exact=True)).to_have_value(source)
+        extract_url = base + "/api/trade/ci/extract-standalone"
+        context.route(extract_url, lambda route: route.abort())
+        page.get_by_role("button", name="원문에서 정보 가져오기", exact=True).click()
+        expect(page.get_by_role("alert")).to_be_focused()
+        expect(page.get_by_label("거래 원문", exact=True)).to_have_value(source)
+        context.unroute(extract_url)
+        page.get_by_role("button", name="원문에서 정보 가져오기", exact=True).click()
+        expect(page.get_by_role("heading", name="거래처 입력", exact=True)).to_be_focused()
+        expect(page.get_by_label("회사명 (영문)", exact=True)).to_have_count(0)
+    else:
+        page.get_by_label("회사명 (영문)", exact=True).fill("VirtualCounterparty" * 10)
+        page.get_by_role("button", name="임시 저장", exact=True).click()
+        expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_disabled()
+        page.get_by_role("button", name="거래처 보완", exact=True).click()
+    page.get_by_label("주소 (영문)", exact=True).fill("1 Fiction Avenue " * 20)
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="품목", exact=True).click()
+    if method == "direct":
+        page.get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Serum")
+        page.get_by_label("유상 수량 · 품목 1", exact=True).fill("10")
+        page.get_by_text("품목 1 상세", exact=False).click()
+        page.get_by_label("용량·규격 · 품목 1", exact=True).fill("50ml")
+    else:
+        page.get_by_role("button", name="임시 저장", exact=True).click()
+        expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_disabled()
+        page.get_by_role("button", name="품목 보완", exact=True).click()
+        page.get_by_label("품목 1 · 단가표 대신 입력한 단가 사용", exact=True).check()
+    page.get_by_role("button", name="작성 내용 보기", exact=True).click()
+    field = page.get_by_label("유상 수량 · 품목 1", exact=True)
+    field.focus()
+    for width in (1440, 390):
+        page.set_viewport_size({"width": width, "height": 844})
+        expect(field).to_have_value("10")
+        expect(field).to_be_focused()
+        expect(page.locator('[aria-current="step"]')).to_have_text("품목")
+        expect(page.locator(".pi-summary-toggle")).to_have_attribute("aria-expanded", "true")
+    layout(page)
+    keyboard_reachable(page)
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래·선적 조건", exact=True).click()
+    page.get_by_label("CI 문서번호", exact=True).fill("CI-" + method + "-LONG" * 30)
+    page.get_by_label("선적 참조", exact=True).fill("SHIP-MOBILE")
+    page.get_by_label("원산지", exact=True).fill("Republic of Korea")
+    page.get_by_label("납품 조건", exact=True).fill("FOB Busan")
+    layout(page)
+    page.get_by_role("button", name="저장하고 전체 확인", exact=True).click()
+    expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
+    path = "/api/trade/ci/" + page.url.rsplit("/", 1)[1]
+    saved = client.get(path).json()
+    assert saved["document"]["total"] == ("80.00" if method == "direct" else "90.00")
+    assert saved["input"]["mode"] == "standalone" and not saved["document"].get("bank")
+    assert saved["document"].get("payment_terms") in (None, "N/A")
+    ci_issue_download(page, context, client, base, tmp_path, "ci-" + method)
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래·선적 조건", exact=True).click()
+    page.get_by_label("선적 참조", exact=True).fill("UNSAVED STANDALONE SHIPMENT")
+    current = client.get(path).json()
+    assert client.put(path, json={"revision": current["revision"], "document": current["input"]}).status_code == 200
+    page.get_by_role("button", name="임시 저장", exact=True).click()
+    expect(page.get_by_role("alert")).to_be_focused()
+    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED STANDALONE SHIPMENT")
+    expect(page.locator('[aria-current="step"]')).to_have_text("거래·선적 조건")
+    page.get_by_role("button", name="최신본 다시 읽기", exact=True).click()
+    expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
+    page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래·선적 조건", exact=True).click()
+    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("SHIP-MOBILE")

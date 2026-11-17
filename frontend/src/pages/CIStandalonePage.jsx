@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { apiFetch, downloadFile } from "../api"
 import { useAuth } from "../useAuth"
 import PIForm from "../trade/PIForm"
-import CIForm from "../trade/CIForm"
+import CIForm, { CISummary } from "../trade/CIForm"
 import DocumentSnapshot from "../trade/DocumentSnapshot"
 import ReviewPanel from "../trade/ReviewPanel"
 import AIInput from "../trade/AIInput"
@@ -48,6 +48,9 @@ function StandaloneEditor() {
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState("")
   const [reload, setReload] = useState(0)
+  const [sourceText, setSourceText] = useState("")
+  const question = useRef(null)
+  const errorBox = useRef(null)
   const mutation = useRef(null)
   const created = useRef(null)
 
@@ -76,7 +79,7 @@ function StandaloneEditor() {
     mutation.current?.abort()
     mutation.current = null
     setBusy(false); setError(null); setNotice(""); setResource(null); setProposal(null); setDirty(false); setModifying(false)
-    if (!documentId) { setDraft(emptyPI()); setScreen(location.state?.source ? "source" : "buyer"); setGuided(false); setFields(null); setLoading(false) }
+    if (!documentId) { setSourceText(""); setDraft(emptyPI()); setScreen(location.state?.source ? "source" : "buyer"); setGuided(false); setFields(null); setLoading(false) }
     else {
       setLoading(true)
       read(documentId, controller.signal).catch((failure) => { if (!controller.signal.aborted) setError(failure) })
@@ -100,6 +103,9 @@ function StandaloneEditor() {
     }).catch((failure) => { if (!controller.signal.aborted) setSettingsError(failure.message) })
     return () => controller.abort()
   }, [token, documentId])
+
+  useEffect(() => { question.current?.focus() }, [screen, proposal?.id])
+  useEffect(() => { if (error) errorBox.current?.focus() }, [error])
 
   async function perform(work, success) {
     if (mutation.current) return
@@ -127,7 +133,10 @@ function StandaloneEditor() {
       return { document, review: null }
     }, ({ document, review }) => {
       accept(document, review)
-      if (!documentId) navigate(`/trade/ci/standalone/${document.document_id}`, { replace: true })
+      if (!documentId) {
+        created.current = String(document.document_id)
+        navigate(`/trade/ci/standalone/${document.document_id}`, { replace: true })
+      }
       else setNotice("저장했습니다. 계산된 금액과 전체 내용을 확인해 주세요.")
     })
   }
@@ -157,22 +166,22 @@ function StandaloneEditor() {
   const index = steps.findIndex(([key]) => key === screen)
   const nextStep = guided && index >= 0 ? standaloneCINext(draft, index).key : steps[index + 1]?.[0] ?? "review"
   const finalReview = proposal && ["pending", "approved"].includes(proposal.status) && !dirty && !modifying
-  return <div className="pi-workspace">
+  return <div className="pi-workspace ci-workspace">
     <div className="page-head"><div><h1 className="page-title">CI 직접 작성</h1><p className="page-sub">PI 없이 거래 내용과 선적 정보를 직접 입력합니다.</p></div><Link className="btn" to="/trade/ci">CI 작성 방법 선택</Link></div>
     <div className="editor-toolbar"><span className="document-status">{current ? `${statuses[current.status] ?? current.status} · 버전 ${current.revision}` : "새 CI"}</span>
       {documentId && <button className="btn" type="button" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}</div>
-    {error && <div className="settings-load-error" role="alert"><p>{error.message}</p>{error.status === 409 && <p>최신본을 다시 읽으면 현재 입력이 교체됩니다. 필요한 내용은 먼저 복사해 두세요.</p>}</div>}
+    {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.message}</p>{error.status === 409 && <p>입력은 보존했습니다. 최신본을 다시 읽으면 현재 입력이 교체됩니다. 필요한 내용은 먼저 복사해 두세요.</p>}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {settingsError && <p className="section-note" role="status">기본 설정을 불러오지 못했습니다. 직접 입력할 수 있습니다. {settingsError}</p>}
     {loading && <p role="status">CI를 불러오는 중입니다.</p>}
     {!loading && (!documentId || current) && <>
       {screen !== "source" && <nav className="pi-progress" aria-label="CI 작성 단계"><ol>{steps.map(([key, label]) => <li key={key}><button type="button" disabled={!enabled} aria-current={screen === key ? "step" : undefined} onClick={() => edit(key)}>{label}</button></li>)}
         <li><button type="button" disabled={!enabled || !current || dirty || modifying} aria-current={screen === "review" ? "step" : undefined} onClick={() => setScreen("review")}>전체 확인</button></li></ol></nav>}
-      <div className="pi-editor"><div className="pi-main">
+      <div className={`pi-editor${screen === "source" ? " pi-intro" : ""}`}><div className="pi-main">
         {screen === "source" && <><button className="pi-text-button" type="button" disabled={busy} onClick={() => navigate("/trade/ci")}>← 작성 방법 선택</button>
-          <AIInput kind="CI" token={token} disabled={!enabled} onExtract={extract} /></>}
+          <AIInput kind="CI" token={token} disabled={!enabled} onExtract={extract} headingRef={question} value={sourceText} onTextChange={setSourceText} /></>}
         {index >= 0 && <form className="pi-question" onSubmit={(event) => { event.preventDefault(); const next = guided ? standaloneCINext(draft, index) : { key: steps[index + 1]?.[0] ?? "review", fields: null }; if (next.key === "review") { if (!current || dirty || modifying) save(); else setScreen("review") } else { setFields(next.fields); setScreen(next.key) } }}>
-          <h2>{steps[index][1]} 입력</h2>
+          <h2 tabIndex={-1} ref={question}>{steps[index][1]} 입력</h2>
           {fields && <><p className="pi-question-note">이미 채워진 내용은 보관했어요. 아래 빈칸만 알려주세요.</p><button className="pi-text-button" type="button" onClick={() => setFields(null)}>이 단계 전체 수정</button></>}
           {dirty && <p className="unsaved" role="status">저장하지 않은 변경사항이 있어요.</p>}
           {screen === "terms" ? <>
@@ -185,16 +194,19 @@ function StandaloneEditor() {
             <button className="btn" type="button" disabled={!enabled || (current && !dirty && !modifying)} onClick={save}>임시 저장</button>
             <button className="btn blue" type="submit" disabled={!enabled}>{nextStep === "review" ? "저장하고 전체 확인" : "다음"}</button></div>
         </form>}
-        {screen === "review" && current && (finalReview ? <ReviewPanel kind="ci" proposal={proposal} token={token} busy={busy} dirty={dirty} modifying={modifying} onDecision={decide} onModify={() => edit("buyer")}
+        {screen === "review" && current && (finalReview ? <ReviewPanel kind="ci" proposal={proposal} token={token} busy={busy} dirty={dirty} modifying={modifying} headingRef={question} onDecision={decide} onModify={() => edit("buyer")}
           onDownload={(file) => perform((signal) => downloadFile(file, token, signal), () => setNotice("파일 다운로드를 요청했습니다."))} /> :
-          <section className="pi-question"><h2>전체 내용을 확인해 주세요</h2>
+          <section className="pi-question"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
             {current.issues.length > 0 && <ul className="document-issues">{current.issues.map((issue, i) => <li key={i}>{issue.message}</li>)}</ul>}
             {current.missing_fields.length > 0 && <p className="form-error">보완할 항목: {current.missing_fields.join(", ")}</p>}
+            {(current.missing_fields.length > 0 || current.issues.length > 0) && <div className="form-actions">
+              {steps.map(([key, label]) => <button className="btn" type="button" key={key} disabled={!enabled} onClick={() => edit(key)}>{label} 보완</button>)}
+            </div>}
             <DocumentSnapshot kind="ci" document={current.document} />
             <fieldset className="editor-checks" disabled={busy || current.status !== "ready"}><legend>발급 형식</legend>{["pdf", "xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous, format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
             <div className="form-actions"><button className="btn blue" type="button" disabled={busy || dirty || modifying || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
           </section>)}
-      </div></div>
+      </div>{screen !== "source" && <CISummary draft={draft} standalone />}</div>
     </>}
   </div>
 }
