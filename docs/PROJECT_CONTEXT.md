@@ -106,7 +106,9 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-16 · Calendar OAuth·기존 기능 통합 회귀 검증
+마지막 갱신: 2026-11-17 · PI/PO 모바일 작성·검토·오류 복구 검증
+
+- PI/PO 모바일 계획 1절: 실제 FastAPI·임시 pgvector PostgreSQL·가짜 인증/추출/Storage와 Chromium으로 390px 직접/원문 보완·검토 취소/수정/승인·PDF/XLSX 다운로드·ID 재개를 확인했다. 320/768/1440px 배치·390→1440→390px 입력/단계/요약/포커스 보존·실제 409 입력 보존·다운로드 실패/재시도 해시 일치와 키보드 접근을 검증했다. 전체 `uv run pytest`는 **1084 passed·2 skipped**, 프론트 test(11개)/lint/build/check:env와 규칙 검사(경고 0개)를 통과했다. 실제 기기 키보드·운영 연결은 미확인이며, 수치와 공통 규칙은 [기존 검증 기록](test-records/20261113_po_ci_pl_screens.md#issue-208-pipo-모바일-보완2026-11-17)·[모바일 계획 1절](plans/trade-mobile-workspaces.md#1)에 둔다.
 
 - 최신 main `ab01eda`와 Calendar OAuth 충돌을 합쳐 서버의 Calendar 초기화·로컬 Gmail 저장소 주입과 문서함/로컬 실행 변경을 함께 유지했다. 통합 전체 pytest는 **1082 passed·2 skipped**, 프론트 lint/test(11개)/build와 규칙 검사를 통과했다.
 
@@ -154,9 +156,9 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-17 · 문서 4종 모바일 후속 작업 분리
+마지막 갱신: 2026-11-17 · 공통 모바일 배치와 PI/PO 상태 보존
 
-- PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 현재는 계획만 작성했으며 모바일 구현·추가 브라우저 검증은 미착수다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
+- PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 1절의 공통 모바일 배치와 PI/PO 입력·검토 보완 및 브라우저 검증을 구현했다. 2절 CI 연결/단독과 3절 PL/4종 회귀는 남아 있다. 공통 높이·sticky 작업 버튼·스크롤/포커스 규칙과 재검증 방법은 계획 1절을 재사용한다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
 
 - 단독 CI 작성은 `/app/trade/ci/standalone`과 `/app/trade/ci/standalone/{id}`를 사용한다. 기존 PI 연결 CI는 기존 주소를 사용한다. 실제 운영 연결은 확인하지 않았다.
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
@@ -169,7 +171,7 @@
 - LOCAL_OWNER_GOOGLE_SUB는 app.worker.pc의 명시적 개인 파일/LocalPolicy에서만 읽는다. 앱 공통 Settings와 로컬 화면의 식별자 복사 안내는 제거했다. 서버 PC 연결 화면의 본인 Google 식별자 대조와 Gmail 연결 계정 일치 검사는 유지한다. 지식 문서는 로컬 키/리스너 설정 오류를 정확히 안내하고, 처리 실패 뒤 이전 접수 안내를 숨긴다.
 - 로컬 AI는 Google/Gmail 연결 없이 `AI_RUNTIME=local`·`.env` 키와 `uv run python -m app.local`을 쓴다. 실제 리스너는 `127.0.0.1` 전용이고 공용 Uvicorn/Render 시작은 거부한다. Gmail 수집은 개인 Google OAuth·루프백 콜백과 별도 로컬 DB에서 refresh 토큰·local:history·활성/재시도 상태가 있는 user_id들만 순차 처리하며 Pub/Sub 토픽 없이 연결한다. 운영 DB·암호화 키·OAuth 비밀값을 개인 PC로 복사하지 않는다(#159·#160·#157).
 - 서버+PC 방식은 `uv run python -m app.worker.pc pair`로 본인 HTTPS 서비스와 연결 승인 후 `run`으로 실행한다. 개인 환경 파일·서비스 주소·검증된 본인 Google 식별자를 지정하고, 키 교체 뒤 재시작한다. Windows PowerShell도 WSL 없이 지원한다(#163). 설치·`--env`/`--credentials`·중지·재연결·문제 해결은 [README](../README.md)의 개인 PC 실행 안내에 있다.
-- React 앱은 `frontend/`의 JavaScript/Vite이며 개발은 `npm ci` 후 `npm run dev`(`/app`, `/api` 프록시)다. 루트 `.env`의 `FRONTEND_PORT`가 개발 포트이며 비우면 5174, 지정하면 그 포트만 쓴다(사용 중이거나 올바르지 않으면 실패). 로그인 반환 주소는 실제 포트의 `/app/login`과 맞춘다. `/app/settings`에서 회사·거래처·판매/구매 단가·통화별 계좌·로고/직인을 저장한다. 기존 API를 재사용하고 거래처 저장만 추가했다. 실패 입력 보존·조회 취소·이미지 객체 URL 정리를 두며 새 설정은 기존 제안/발급 파일을 바꾸지 않는다. PI는 `/app/trade/pi`·`/app/trade/pi/{id}`에서 작성 방법 선택 → 거래처/판매자/품목/거래 조건 → 전체 확인 → 검토/승인/다운로드로 진행한다. 원문 추출 결과와 설정 기본값을 보존하고 필요한 빈칸만 질문하며, 채워진 내용도 단계별 전체 수정에서 바꿀 수 있다. 품목은 표로 편집하고 규격·할인·샘플은 접어 둔다. 오른쪽 작성 요약은 모바일에서 펼쳐 보고, 전체 문서는 마지막에 한 번만 표시한다. 금액·가격 확인·revision/해시 검토·발급은 기존 서버 API를 그대로 쓴다. 버전 충돌 때 입력을 보존하며 최신본 재조회와 재검토를 안내한다. 고정된 회사 이미지는 소유자·문서·제안 범위 읽기 API로 확인하고, 개인 키 관리는 기존 서비스를 Bearer API로 연결했다. PO·CI·PL은 13~15절대로 같은 작성 카드의 링크와 `/app/trade/{po|ci|pl}`·`/app/trade/{kind}/{id}` 경로를 로컬 연결했다. CI의 PI 선택/미승인 작성 준비와 PL의 별도 합계 확인을 포함하며 브라우저 완주 검증은 남았다. 실제 운영 연결과 전체 UI 통합 검증은 남아 있다. 업로드 문서함은 기존 지식 문서 화면을 통합해 연결했다. 원래 계획 16절의 무역 초안/발급 이력 목록과는 구분하며, 메일/현황 등은 17~20절, 전체 UI 통합 검증은 21.2절 후속 작업이다.
+- React 앱은 `frontend/`의 JavaScript/Vite이며 개발은 `npm ci` 후 `npm run dev`(`/app`, `/api` 프록시)다. 루트 `.env`의 `FRONTEND_PORT`가 개발 포트이며 비우면 5174, 지정하면 그 포트만 쓴다(사용 중이거나 올바르지 않으면 실패). 로그인 반환 주소는 실제 포트의 `/app/login`과 맞춘다. `/app/settings`에서 회사·거래처·판매/구매 단가·통화별 계좌·로고/직인을 저장한다. 기존 API를 재사용하고 거래처 저장만 추가했다. 실패 입력 보존·조회 취소·이미지 객체 URL 정리를 두며 새 설정은 기존 제안/발급 파일을 바꾸지 않는다. PI는 `/app/trade/pi`·`/app/trade/pi/{id}`에서 작성 방법 선택 → 거래처/판매자/품목/거래 조건 → 전체 확인 → 검토/승인/다운로드로 진행한다. 원문 추출 결과와 설정 기본값을 보존하고 필요한 빈칸만 질문하며, 채워진 내용도 단계별 전체 수정에서 바꿀 수 있다. 품목은 표로 편집하고 규격·할인·샘플은 접어 둔다. 오른쪽 작성 요약은 모바일에서 펼쳐 보고, 전체 문서는 마지막에 한 번만 표시한다. 금액·가격 확인·revision/해시 검토·발급은 기존 서버 API를 그대로 쓴다. 버전 충돌 때 입력을 보존하며 최신본 재조회와 재검토를 안내한다. PI/PO 원문은 작성 방법을 왕복해도 보존하고 오류 안내로 포커스를 옮긴다. 하단 탐색·본문 여백·작업 버튼은 safe-area를 포함한 공통 높이를 쓰며 화면 크기 변경은 폼 DOM·단계·요약을 재생성하지 않는다. 고정된 회사 이미지는 소유자·문서·제안 범위 읽기 API로 확인하고, 개인 키 관리는 기존 서비스를 Bearer API로 연결했다. PO·CI·PL은 13~15절대로 같은 작성 카드의 링크와 `/app/trade/{po|ci|pl}`·`/app/trade/{kind}/{id}` 경로를 로컬 연결했다. CI의 PI 선택/미승인 작성 준비와 PL의 별도 합계 확인을 포함한다. PI/PO의 390px 완주는 확인했으며 CI/PL의 추가 모바일 검증은 남았다. 실제 운영 연결과 전체 UI 통합 검증은 남아 있다. 업로드 문서함은 기존 지식 문서 화면을 통합해 연결했다. 원래 계획 16절의 무역 초안/발급 이력 목록과는 구분하며, 메일/현황 등은 17~20절, 전체 UI 통합 검증은 21.2절 후속 작업이다.
 - Supabase 로그인은 `SUPABASE_URL`의 JWKS로 Bearer 서명·issuer/audience·만료·UUID를 검증해 기존 정수 사용자 ID에 매핑한다. `/api/me`·`/api/gmail/*`·`/api/files*`와 무역/설정 API를 연결했으며 잘못된 Bearer가 쿠키 세션으로 우회하지 않는다. legacy 로그인/CSRF는 전환 기간 유지한다. Gmail 연결은 state·PKCE·같은 Google 공급자 subject를 확인하고, 앱 로그아웃 때 감시를 중지한다(계약 9.1절). `/app/settings`의 로고·직인 아래 `연동하기`에서 Gmail 연결·재연결·확인 후 해제를 제공하고, Google 캘린더는 본인 계정의 별도 읽기 전용 OAuth와 목록 조회 검증 뒤 연결한다. `calendar_tokens`·일회성 DB state를 Gmail과 분리하며 Calendar만 연결할 때 Pub/Sub는 필요 없다. Calendar 해제는 앱 토큰만 삭제하고, Gmail 해제/Google 전체 권한 철회 뒤에는 공급자로 재검증한다. 회사 설정 조회 실패에도 메뉴/카드를 열 수 있으며 콜백은 연동 항목을 자동 선택하고 `/api/me`를 재조회한다. URL 결과는 안내 뒤 소비하며 실제 연결·감시 상태는 서버 응답으로 구분한다. 401·설정 누락·취소·권한/계정 오류·감시/해제 실패에는 로그인 복구 또는 상태 재조회를 안내한다. 서비스별 인증 조회·오류·해제의 재사용 경계는 [연동 계획 1절](plans/settings-google-integrations.md#1절-구현-결과와-재사용-경계)에 있다. Calendar의 만료 토큰은 갱신하고 철회·권한 부족은 재연결, 공급자 장애는 Gmail과 분리한 미확인으로 표시한다. 실제 Google/Render 연결 확인은 #193에 남는다.
 - `web/routes`와 `web/deps.py`는 제거하고 HTTP 진입점을 `auth`·`mail`·`settings`·`quote`·`runlog`로 옮겼다. `web`에는 공개 페이지·공유 템플릿·정적 자산만 둔다. 공통 인증/폼 CSRF는 `auth/deps.py`에서 제공해 무역 API·worker가 화면 모듈을 import하지 않는다. 기존 URL·세션/Bearer 우선순위·승인·DB 의미는 유지한다. React 메일/실행기록·전체 UI 통합 검증이 미완료라 기존 HTML 자산은 아직 필요하다([이동표·유지 조건](domain-layout.md)).
 - 첨부·회사 이미지·승인 PDF/XLSX의 bytes는 private Storage, 소유자/참조/해시는 PostgreSQL에 둔다. 모든 형식 업로드 뒤에만 문서 승인 SQL을 확정한다. 새 XLSX는 ZIP 내부 시각을 고정해 같은 검토 내용의 재시도에서 같은 해시·객체 key를 사용한다. 발행일과 기존 발급 파일은 유지한다. 발급 객체 재사용·backfill·수동 정리는 같은 객체별 PostgreSQL 트랜잭션 잠금으로 조율하고 삭제 전 참조를 다시 확인한다. 상세 파일 계약/제한/이전 명령은 계약 16.3절과 README다.
@@ -177,7 +179,7 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-17 · 문서 4종 모바일 전환 계획
+마지막 갱신: 2026-11-17 · 모바일 1절 구현과 공통 규칙 기록
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -196,7 +198,7 @@
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
 | React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`·`frontend/` | 1·3~12절·21.1절 및 13~15절 코드 구현. 13~15절의 일부 브라우저 경로와 운영 연결 검증, 16~20·21.2절과 사람의 22절 남음. 콘솔 준비는 사용자 확인이며 실제 계정 로그인·운영 전환 미확인. 상세 검증/제한은 PROGRESS.md·`test-records/20261113_po_ci_pl_screens.md` |
-| PI·PO·CI·PL 모바일 화면 전환 | `docs/plans/trade-mobile-workspaces.md` | 기존 반응형/보류 기록을 확인해 공통·PI/PO, CI 연결/단독, PL/4종 회귀의 3개 작업으로 분리한 계획. 각 절의 선행 작업·수정 범위·완료 기준·새 작업 요청문 포함. 구현 미착수 |
+| PI·PO·CI·PL 모바일 화면 전환 | `docs/plans/trade-mobile-workspaces.md` | 기존 반응형/보류 기록을 확인해 공통·PI/PO, CI 연결/단독, PL/4종 회귀의 3개 작업으로 분리한 계획. 1절 공통 배치·PI/PO 입력/검토와 상태 보존·브라우저 회귀 구현. 공통 CSS/표시 컴포넌트 재사용 규칙은 1절, 상세 근거는 기존 검증 기록에 둔다. 2절 CI·3절 PL/4종 회귀는 남음 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |

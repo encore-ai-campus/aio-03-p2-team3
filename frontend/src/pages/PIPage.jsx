@@ -30,6 +30,8 @@ export default function PIPage() {
   const [guided, setGuided] = useState(false)
   const [settings, setSettings] = useState(null)
   const [settingsError, setSettingsError] = useState("")
+  const [sourceText, setSourceText] = useState("")
+  const errorBox = useRef(null)
   const question = useRef(null)
   const mutation = useRef(null)
   const base = "/trade/pi"
@@ -66,6 +68,7 @@ export default function PIPage() {
     setModifying(false)
     setDirty(false)
     if (!documentId) {
+      setSourceText("")
       setDraft(emptyPI())
       setScreen({ key: "start", fields: null })
       setGuided(false)
@@ -92,6 +95,10 @@ export default function PIPage() {
   useEffect(() => {
     question.current?.focus()
   }, [screen])
+
+  useEffect(() => {
+    if (error) errorBox.current?.focus()
+  }, [error])
 
   function edit(key) {
     setNotice("")
@@ -191,7 +198,7 @@ export default function PIPage() {
     <div className="editor-toolbar"><span className="document-status">{current ? `${STATUS[current.status] ?? current.status} · 버전 ${current.revision}` : "새 PI"}</span>
       {documentId && <button type="button" className="btn" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}
     </div>
-    {error && <div className="settings-load-error" role="alert"><p>{error.status === 401 ? "로그인 확인이 필요합니다. 입력 내용을 별도로 보관한 뒤 다시 로그인해 주세요." : error.message}</p>
+    {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.status === 401 ? "로그인 확인이 필요합니다. 입력 내용을 별도로 보관한 뒤 다시 로그인해 주세요." : error.message}</p>
       {error.status === 409 && error.code !== "PI_NUMBER_DUPLICATE" && <p>최신본을 다시 읽고 새로 검토해 주세요. 다시 읽으면 현재 입력을 교체하므로, 필요한 내용은 먼저 복사해 두세요.</p>}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {loading && <p role="status">PI와 검토 내용을 불러오는 중입니다…</p>}
@@ -214,7 +221,7 @@ export default function PIPage() {
         <p className="section-note">내용 확인과 승인 후에만 파일을 발급해요.</p>
       </section>}
       {screen.key === "source" && <><button className="pi-text-button" type="button" disabled={busy} onClick={() => setScreen({ key: "start", fields: null })}>← 작성 방법 선택</button>
-      <AIInput token={token} disabled={busy} headingRef={question} onExtract={(text) => perform((signal) => apiFetch(`${base}/extract`, {
+      <AIInput token={token} disabled={busy} headingRef={question} value={sourceText} onTextChange={setSourceText} onExtract={(text) => perform((signal) => apiFetch(`${base}/extract`, {
         token, signal, method: "POST", body: { text } }), (document) => {
         setGuided(true)
         accept(document, null, piNextScreen(piDraft(document.input)))
