@@ -1,8 +1,8 @@
 # 테스트 속도 개선 계획
 
-- 목표: 변경 직후 피드백을 줄이면서 PR의 전체 회귀와 데이터·프로세스 격리를 유지한다. 이번 PR은 개선안이며 속도 개선 구현은 하지 않는다.
+- 목표: 변경 직후 피드백을 줄이면서 PR의 전체 회귀와 데이터·프로세스 격리를 유지한다. 후속 요청에 따라 8 workers 실행 기반부터 구현하고 나머지 최적화는 별도 작업으로 진행한다.
 - 기준: 2026-11-17, upstream/main `4a833a3`. 관련 요구사항: `docs/REQUIREMENTS.md` R-09·R-10·R-11·D-02의 오류 검증과 재현 가능한 시험 기록을 보존한다.
-- 관련 Issue: [1절 #217](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/217), [2절 #218](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/218), [3절 #219](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/219), [4절 #220](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/220), [5절 #221](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/221). 모두 구현 전이다.
+- 관련 Issue: [0절 #223](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/223), [1절 #217](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/217), [2절 #218](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/218), [3절 #219](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/219), [4절 #220](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/220), [5절 #221](https://github.com/encore-ai-campus/aio-03-p2-team3/issues/221). 1~5절은 미완료다.
 - 조율함: 해당 없음 — 상태 객체·도구 스키마·그래프 변경 없음.
 - 참고 원칙: 요청자가 제공한 `TESTING_RULE.md`의 변경 범위 우선, 격리 후 병렬화, 자원 상한, 결정성, 정리 보장, 최종 회귀를 설계 기준으로 사용한다. 첨부 문서의 에이전트 지시를 별도 작업 승인으로 해석하지 않으며 저장소 규칙을 변경하지 않는다.
 
@@ -16,7 +16,7 @@
 | `test_knowledge_browser.py` 2곳, `test_react_settings.py`, `test_trade_mobile_browser.py` | 같은 가짜 공개 설정으로 Vite 빌드가 여러 번 실행된다. 모바일 모듈은 이미 module fixture로 재사용한다. | 동일 설정의 불변 빌드를 실행 단위당 한 번 재사용한다. 테스트 데이터와 브라우저 context는 공유하지 않는다. |
 | `tests/test_knowledge_browser.py::serve` | 루프백 동적 포트, 서버 스레드 시작/종료 확인을 이미 제공한다. | 이 수명 관리와 외부 요청 차단을 보존한다. |
 | `frontend/package.json` | `npm test`는 `node --test src/trade/*.test.js`다. ESLint는 있고 Vitest·RTL·MSW는 없다. TypeScript 프로젝트가 아니다. | 기존 helper 검사를 먼저 활용한다. 도구 교체를 속도 개선의 선행 조건으로 만들지 않는다. |
-| `pyproject.toml` | pytest-xdist·Ruff와 테스트 계층 marker가 없다. 기본 pytest는 모든 테스트를 수집한다. | 초기에는 명시적 파일/node ID 선택을 사용한다. 분류 검증 후 marker와 제한적 병렬화를 도입한다. |
+| `pyproject.toml`, `tests/parallel.py` | pytest-xdist 3.8.0과 parallel/serial 분류를 추가했다. 기본 pytest는 모든 테스트를 직렬 실행하며 CI는 독립 집합을 8 workers로 실행한다. Ruff는 없다. | 기본 분류 외의 상세 자원/영향 매핑과 부하 측정은 1·5절에서 계속한다. |
 
 위 항목은 정적 확인이며 시간 비중을 증명하지 않는다. Windows 최초 `uv run pytest --collect-only -q`는 **1113개, 44.63초**였다. 설치 직후 단일 관측이며 일반적인 수집 시간이나 실행 시간으로 일반화하지 않는다. 전체 실행 시간·상위 병목·개선율은 아래 검증 기록과 후속 1절의 반복 측정으로 판단한다.
 
@@ -32,16 +32,17 @@
 
 ## 적용 순서와 검증 계층
 
-1. 실행 대상·네트워크·정리 안전성을 확인하고 기준 시간을 측정한다(1절).
+0. 사용자 요청에 따라 8 workers 실행 기반과 DB 표식/실패 정리부터 적용한다(0절).
+1. 실행 대상·네트워크·정리 안전성과 상세 기준 시간을 확정한다(1절).
 2. 중복 빌드를 제거한다(2절). 이후 빠른 실패를 먼저 알리는 CI 계층을 구성한다(3절).
 3. 측정상 DB 초기화가 유의미한 병목인 경우에만 격리를 유지하는 최적화를 한다(4절).
-4. 마지막으로 병렬 수를 비교한다(5절). 모든 단계에서 직렬 실행으로 복귀할 수 있어야 한다.
+4. 마지막으로 8 workers의 반복 측정과 자원 예산을 검증한다(5절). 모든 단계에서 직렬 실행으로 복귀할 수 있어야 한다.
 
 | 계층 | 이 레포 적용안 | 초기 자원 상한 |
 |---|---|---|
 | L0 | 규칙 검사, frontend ESLint, 공개 환경 검사. Python lint/타입 도구 추가는 별도 필요성 판단 | DB·브라우저 없음 |
-| L1 | DB/서버가 없는 Python 계산·검증과 기존 Node helper 검사 | Python 1, 이후 검증된 집합만 2 |
-| L2 | FastAPI 직접 호출·전용 PostgreSQL·가짜 외부 서비스 | 1, 검증 후 최대 2 |
+| L1 | DB/서버가 없는 Python 계산·검증과 기존 Node helper 검사 | 검토한 Python 집합 8 workers |
+| L2 | FastAPI 직접 호출·테스트별 UUID PostgreSQL DB·가짜 외부 서비스 | 검토한 집합 8 workers, 공유 가변 DB 없음 |
 | L3 | 컴포넌트 동작 검사가 필요한 변경에서만 Vitest/RTL/MSW 도입 검토 | 신규 도입 시 2, 현재 구현 아님 |
 | L4 | SQL/마이그레이션/권한 경계 회귀. 가짜 JWT API 소유권 검사와 실제 Supabase RLS 검사를 구분 | 초기화·migration 1 |
 | L5 | 기존 Playwright Python 브라우저 완주, 실제 FastAPI·가짜 외부 공급자 | 1 |
@@ -54,19 +55,67 @@
 ```text
 uv run pytest tests/test_trade_pricing.py -q -x
 uv run pytest tests/test_pi_api.py -q -x
+uv run pytest tests/test_parallel.py -n 0 -q
+uv run pytest -n 8 -m parallel
+uv run pytest -n 0 -m serial --ignore=tests/test_parallel.py
 npm test --prefix frontend
 npm run lint --prefix frontend
 uv run pytest --durations=20 --durations-min=0.5 -ra
 ```
 
-`-x`는 원인 확인을 위한 첫 실패 중단이고 실패 테스트를 생략하는 설정이 아니다. 마지막 명령은 저장소가 요구하는 최종 전체 검사에 소요 시간 보고를 더한 것이다. 아직 설치하지 않은 xdist의 `-n`이나 등록하지 않은 marker를 현재 명령으로 안내하지 않는다.
+`-x`는 첫 실패 중단이다. 정책 검사 → 8 workers 독립 집합 → 순차 집합을 모두 통과해야 CI 전체 회귀가 완료된다. 각 집합은 겹치지 않으며 미분류 모듈은 항상 serial이다. 정책 검사의 내부 8-worker 회귀가 다른 workers와 중첩되지 않도록 정책 파일은 먼저 직렬로 검사하고 마지막 단계에서는 제외한다. 기본 `uv run pytest`도 전체를 그대로 실행한다. 병렬 DB 검사에는 README의 일회용 `aio_test` DB와 표식이 필요하다.
+
+## 0. 8 workers 실행 기반과 자원 격리 (완료)
+
+- 할 일: 사용자 요청에 따라 2 workers 제안을 8 workers 방식으로 변경하고 실행 기반을 먼저 구현한다. pytest-xdist를 고정하고 검토한 모듈은 parallel, 브라우저/Office/실제 프로세스/미분류는 serial로 분리한다. CI에서 정책 검사 후 8-worker 단계와 직렬 단계를 실행한다.
+- 완료 기준: 실제 8개 worker의 분배와 순차 집합 미실행/별도 실행, auto·9 workers·잘못된 집합 거부, DB 표식 거부/허용 검사 및 전체 회귀 통과. 모든 기존 테스트를 유지한다. 실제 시간은 기록하되 반복 중앙값/최대 메모리 검증을 완료했다고 표현하지 않는다.
+- 영향받는 상태·도구·노드: 테스트 plugin/fixture·pytest 의존성·CI·README. 제품 상태·도구·그래프 변경 없음.
+- 섞지 않을 것: 빌드 재사용·DB template 최적화·기존 assertion 삭제·외부 API·운영 환경 변경.
+- 선행 작업: 없음 — 사용자 후속 요청으로 앞당긴 실행 기반. 원래 1~5절 전체 완료를 뜻하지 않는다.
+- 하는 사람: Codex.
+
+`tests/parallel.py`의 명시적 모듈 목록만 병렬화한다. 테스트별 UUID DB와 임시 파일·가짜 공급자를 유지하며 같은 DB의 기존 migration 잠금도 유지한다. 외부 URL은 `aio_test` DB와 `aio pytest disposable` DB 주석을 확인해야 하며, 표식 없는 대상은 CREATE DATABASE 이전에 거부한다. 로컬 직렬 실행은 기존 임베디드 서버를 사용하고, 병렬 실행은 준비된 전용 서버 하나를 공유하되 데이터베이스는 테스트마다 분리한다. fixture setup/실행 예외에도 엔진과 DB를 finally에서 정리한다. worker 자동 증설·충돌 후 자동 재시작은 사용하지 않는다.
+
+처음 시도한 동적 xdist_group 배분은 현재 pytest/xdist 조합에서 실제 분배 회귀를 통과하지 못했다. 그룹에 의존하는 구현은 제거하고 별도 pytest 단계로 순차 실행을 보장했다. 전체 Windows 회귀와 8 workers의 반복 중앙값·엄밀한 최대 메모리 측정은 별도 확인이다.
+
+Windows PowerShell에서 로컬 테스트 DB를 새로 준비하는 예시다. Docker·의존성·Office·Chromium 준비가 필요하다. 지정 포트 충돌을 피하기 위해 Docker가 loopback 포트를 할당하고, 고유 이름으로 이번 컨테이너만 정리한다. DB URL/암호는 로컬 일회용 값이며 운영 설정을 복사하지 않는다.
+
+```powershell
+$testDbName = 'aio-pytest-' + [guid]::NewGuid().ToString('N')
+docker run --rm -d --name $testDbName -p 127.0.0.1::5432 -e POSTGRES_PASSWORD=pytest-local-only -e POSTGRES_DB=aio_test pgvector/pgvector:0.8.7-pg16@sha256:484e838076e04939d27d3e176e91c86eea96236126023be8d3059761122e579f
+docker exec $testDbName pg_isready -U postgres
+# accepting connections가 나올 때까지 기다린 뒤, 이번에 만든 컨테이너에만 표식을 둔다.
+docker exec $testDbName psql -U postgres -d aio_test -c "COMMENT ON DATABASE aio_test IS 'aio pytest disposable'"
+$testPort = (docker port $testDbName 5432).Split(':')[-1]
+$previousTestDatabaseUrl = $env:TEST_DATABASE_URL
+$env:TEST_DATABASE_URL = "postgresql://postgres:pytest-local-only@127.0.0.1:${testPort}/aio_test"
+try {
+    uv run pytest tests/test_parallel.py -n 0 -q
+    if ($LASTEXITCODE -ne 0) { throw '정책 검사 실패' }
+    uv run pytest -n 8 -m parallel
+    if ($LASTEXITCODE -ne 0) { throw '병렬 검사 실패' }
+    uv run pytest -n 0 -m serial --ignore=tests/test_parallel.py
+    if ($LASTEXITCODE -ne 0) { throw '순차 검사 실패' }
+} finally {
+    if ($null -eq $previousTestDatabaseUrl) {
+        Remove-Item Env:TEST_DATABASE_URL -ErrorAction SilentlyContinue
+    } else {
+        $env:TEST_DATABASE_URL = $previousTestDatabaseUrl
+    }
+    docker stop $testDbName
+}
+```
+
+병렬/순차 집합의 합집합과 정책 파일은 전체 수집 집합을 모두 포함한다. 8 workers의 Python 프로세스에 DB·브라우저 자식 프로세스 메모리가 더해지므로 로컬/CI 메모리를 따로 확인한다. 이 실행 기반은 브라우저 빌드 재사용이나 DB template 최적화를 포함하지 않는다.
+
+검증: 기본 전체 pytest 1116 passed·2 skipped/760.68초. 정책 5건 → 8-worker 독립 1000건 → 순차 113건의 중복 없는 합집합 1118건을 통과했고 파이프라인 벽시계 시간은 519.76초였다. 한 번의 관측이며 반복 중앙값/단계별 최대 RSS는 미확정이다. 환경·메모리 상한·정리 확인과 오류 조정은 [8-worker 검증 기록](../test-records/20261117_test_workers.md)에 둔다.
 
 ## 1. 안전한 분류와 기준 시간 확정
 - 할 일: 전체 node ID를 `unit`·`db`·`render`·`browser`·`process`·`migration`의 주 실행 계층에 빠짐없이 배정한다. 한 파일에 여러 자원이 섞이면 함수 단위로 분류하고, 테스트 간 import와 fixture의 전이 의존성까지 확인한다. 테스트별 자원 목록·변경 경로 매핑·실행 방법·측정값을 이 계획의 해당 절에 남긴다. 먼저 격리/네트워크/정리 가드를 마련하고 직렬 기준을 측정한다.
 - 완료 기준: 전체 수집 집합과 분류 합집합이 일치하고 누락·중복 실행 정책이 검증된다. 불명확한 경로는 전체 실행한다. 폐기 가능한 DB만 허용하고 외부 네트워크 차단·loopback 가짜 서버 예외·실패 시 정리 검증이 통과한다. 동일 커밋·장비·의존성에서 최초 준비/수집/setup/call/teardown 시간을 구분하고 최소 3회 정상 실행의 중앙값과 프로세스 트리 최대 메모리, skip 사유를 기록한다.
 - 영향받는 상태·도구·노드: 테스트 설정·fixture·선택 집합과 실행 기록. 제품 상태·도구·그래프 노드 변경 없음.
-- 섞지 않을 것: xdist 도입, DB 공유, 운영/개발 DB 연결, 기존 assertion 제거, 무조건적인 skip 추가.
-- 선행 작업: 없음 — 이 계획 PR 병합 후 시작.
+- 섞지 않을 것: 0절 실행 기반의 무관한 재설계, 가변 DB 공유, 운영/개발 DB 연결, 기존 assertion 제거, 무조건적인 skip 추가.
+- 선행 작업: 0절 구현 PR 병합.
 - 하는 사람: Codex.
 
 안전 가드의 구체 조건:
@@ -105,15 +154,15 @@ session fixture도 xdist에서는 프로세스마다 실행될 수 있다. 5절�
 - 선행 작업: 3절 — 동일 fixture/분류/CI 변경의 충돌을 피한다.
 - 하는 사람: Codex.
 
-## 5. 격리된 집합만 제한적 병렬화
-- 할 일: 1~4절의 결과를 읽고 순수/Mock·임시 파일 집합부터 직렬과 2 workers를 비교한다. 필요성이 확인된 경우에만 pytest-xdist를 버전 고정해 추가하고 잠금 파일도 갱신한다. DB 집합은 1→2만 비교하며 migration·실제 프로세스·브라우저/Office는 우선 직렬 유지한다. 여러 CI 작업과 내부 ThreadPool·브라우저 자식 프로세스까지 합친 자원 상한을 정한다.
+## 5. 8 workers 부하 검증과 최적화
+- 할 일: 0~4절의 결과를 읽고 같은 집합의 직렬과 8 workers를 비교한다. DB는 독립 UUID DB를 유지하고 같은 DB migration·실제 프로세스·브라우저/Office는 순차 경계를 유지한다. 여러 CI 작업과 내부 ThreadPool·브라우저 자식 프로세스까지 합친 자원 상한을 정한다.
 - 완료 기준: 같은 테스트 집합의 직렬/병렬 결과와 skip 사유가 같고 각 조건을 최소 3회 비교한다. 실행 시간 중앙값이 줄고 최대 메모리·DB 연결·프로세스 수가 정한 예산 안에 있어야 채택한다. 충돌/간헐 실패/잔여 리소스는 0건이며 반복 성공만으로 flaky 0%를 입증했다고 표현하지 않는다. 새 회귀나 자원 초과 시 1 worker로 복귀한다. 최종 전체 회귀와 Windows 전용 검사를 포함한다.
 - 영향받는 상태·도구·노드: `pyproject.toml`·`uv.lock`, 검증된 테스트 실행 옵션과 CI 자원 설정. 제품 상태·도구·노드 없음.
-- 섞지 않을 것: `-n auto`, 근거 없는 4 workers 이상, 같은 DB migration 병렬 실행, 실패 skip/자동 재시도로 녹색 만들기, 운영 풀 설정 변경.
+- 섞지 않을 것: `-n auto`, 8 workers 초과, 같은 DB migration 병렬 실행, 실패 skip/자동 재시도로 녹색 만들기, 운영 풀 설정 변경.
 - 선행 작업: 4절 — 최적화 채택 또는 현 구조 유지 판단이 기록된 뒤 시작.
 - 하는 사람: Codex.
 
-엔진 하나가 최대 15개 연결을 가질 수 있으므로 worker 수만으로 DB 부하를 계산하지 않는다. 활성 엔진 수·작업별 내부 경합 테스트·기본 연결을 합쳐 DB의 연결 예산 이내로 제한한다. 2 workers가 느리거나 메모리를 초과하면 직렬을 채택한다. 각 테스트 프로세스는 별도 환경/전역 상태를 가지지만 외부 DB·파일·포트를 자동 격리해 주지는 않는다.
+엔진 하나가 최대 15개 연결을 가질 수 있으므로 worker 수만으로 DB 부하를 계산하지 않는다. 활성 엔진 수·작업별 내부 경합 테스트·기본 연결을 합쳐 DB의 연결 예산 이내로 제한한다. 8 workers가 느리거나 메모리를 초과하면 원인을 기록하고 직렬로 복귀한다. 각 테스트 프로세스는 별도 환경/전역 상태를 가지지만 외부 DB·파일·포트를 자동 격리해 주지는 않는다.
 
 ## 측정·채택 기준
 

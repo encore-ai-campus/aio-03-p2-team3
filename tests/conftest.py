@@ -16,6 +16,8 @@ from sqlalchemy import text
 from app.db.engine import Database
 from app.db.models import User
 
+pytest_plugins = ["tests.parallel", "pytester"]
+
 
 @pytest.fixture(autouse=True, scope="session")
 def isolated_llm_keys():
@@ -33,12 +35,19 @@ def isolated_llm_keys():
 
 
 @pytest.fixture(scope="session")
-def postgres_uri(tmp_path_factory):
+def postgres_uri(tmp_path_factory, request):
     """세션 PostgreSQL 접속. 로컬은 pgserver 임베디드, CI는 TEST_DATABASE_URL."""
     configured = os.environ.get("TEST_DATABASE_URL", "").strip()
     if configured:
+        from tests.parallel import require_test_database
+        if urlsplit(configured).path != "/aio_test":
+            raise pytest.UsageError("TEST_DATABASE_URL은 일회용 aio_test DB를 가리켜야 합니다.")
+        with psycopg.connect(configured, autocommit=True) as connection:
+            require_test_database(connection)
         yield configured
         return
+    if hasattr(request.config, "workerinput"):
+        raise pytest.UsageError("병렬 DB 검사는 일회용 TEST_DATABASE_URL을 먼저 준비해야 합니다.")
     import pgserver
     with pgserver.get_server(tmp_path_factory.mktemp("pgserver"), cleanup_mode="delete") as server:
         yield server.get_uri()
@@ -51,21 +60,25 @@ def database_url(postgres_uri):
     with psycopg.connect(postgres_uri, autocommit=True) as connection:
         connection.execute(f'CREATE DATABASE "{name}"')
     parts = urlsplit(postgres_uri)
-    yield urlunsplit(parts._replace(path=f"/{name}"))
-    with psycopg.connect(postgres_uri, autocommit=True) as connection:
-        connection.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+    try:
+        yield urlunsplit(parts._replace(path=f"/{name}"))
+    finally:
+        with psycopg.connect(postgres_uri, autocommit=True) as connection:
+            connection.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
 @pytest.fixture
 def database(database_url):
     db = Database(database_url)
-    db.create_tables()
-    with db.session() as session:
-        session.add(User(id=1, google_sub="fake-sub-1", email="demo@example.invalid"))
-        # 명시적 id로 심으면 시퀀스가 그대로라 이후 save_login 사용자와 겹친다. 다음 id를 2로 맞춘다.
-        session.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), 1)"))
-    yield db
-    db.close()
+    try:
+        db.create_tables()
+        with db.session() as session:
+            session.add(User(id=1, google_sub="fake-sub-1", email="demo@example.invalid"))
+            # 명시적 id로 심으면 시퀀스가 그대로라 이후 사용자와 겹친다.
+            session.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), 1)"))
+        yield db
+    finally:
+        db.close()
 
 
 @pytest.fixture

@@ -55,6 +55,7 @@ jobs:
         image: ${{ needs.check.outputs.run_tests == 'true' && 'pgvector/pgvector:0.8.7-pg16@sha256:484e838076e04939d27d3e176e91c86eea96236126023be8d3059761122e579f' || '' }}
         env:
           POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aio_test
         ports:
           - 5432:5432
         options: >-
@@ -94,11 +95,29 @@ jobs:
         if: needs.check.outputs.run_tests == 'true'
         run: npm ci --prefix frontend && uv run playwright install --with-deps chromium
 
-      - name: 테스트
+      - name: 일회용 DB 표식과 병렬 정책 검사
         if: needs.check.outputs.run_tests == 'true'
-        run: uv run pytest
+        run: |
+          uv run python - <<'PY'
+          import psycopg
+          with psycopg.connect('postgresql://postgres:postgres@localhost:5432/aio_test', autocommit=True) as connection:
+              connection.execute("COMMENT ON DATABASE aio_test IS 'aio pytest disposable'")
+          PY
+          uv run pytest tests/test_parallel.py -n 0 -q
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aio_test
+
+      - name: 독립 회귀 (8 workers)
+        if: needs.check.outputs.run_tests == 'true'
+        run: uv run pytest -n 8 -m parallel
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aio_test
+
+      - name: 무거운 검사와 미분류 회귀 (순차)
+        if: needs.check.outputs.run_tests == 'true'
+        run: uv run pytest -n 0 -m serial --ignore=tests/test_parallel.py
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aio_test
 
   windows-worker:
     name: windows-worker
@@ -108,7 +127,7 @@ jobs:
     timeout-minutes: 10
     env:
       PYTHONUTF8: "1"
-      TEST_DATABASE_URL: postgresql://postgres:root@localhost:5432/postgres
+      TEST_DATABASE_URL: postgresql://postgres:root@localhost:5432/aio_test
     steps:
       - uses: actions/checkout@v7
 
@@ -127,6 +146,15 @@ jobs:
       - name: Windows PostgreSQL pgvector 설치
         shell: pwsh
         run: ./scripts/install-pgvector-windows.ps1
+
+      - name: Windows 일회용 DB와 표식 준비
+        run: |
+          @'
+          import psycopg
+          with psycopg.connect('postgresql://postgres:root@localhost:5432/postgres', autocommit=True) as connection:
+              connection.execute('CREATE DATABASE aio_test')
+              connection.execute("COMMENT ON DATABASE aio_test IS 'aio pytest disposable'")
+          '@ | uv run python
 
       - name: Windows 개인 실행기·DPAPI·DACL·HTTPS 프로세스 검사
         run: uv run pytest tests/test_worker_credentials.py tests/test_worker_execution.py tests/test_worker_process.py -q

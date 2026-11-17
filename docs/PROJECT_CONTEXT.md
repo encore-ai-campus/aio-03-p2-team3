@@ -107,9 +107,9 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-17 · 테스트 속도 개선 계획 추가
+마지막 갱신: 2026-11-17 · 8 workers 테스트 실행 기반
 
-- [테스트 속도 개선 계획](plans/test-speed-improvement.md)은 현재 문서 전용 CI 생략·테스트별 PostgreSQL 격리·반복 Vite 빌드를 출발점으로 안전한 분류/기준 측정 → 빌드 재사용 → CI 계층 분리 → 조건부 DB 초기화 개선 → 제한적 병렬화의 5개 작업을 제안한다. 계획만 작성했으며 테스트 설정·제품 코드·검증 범위를 변경하지 않았다. 구현·개선율·최대 메모리는 미확인이고 기존 전체 회귀 의무를 유지한다.
+- [테스트 속도 개선 계획](plans/test-speed-improvement.md)의 0절/#223에서 8 workers 실행 기반을 구현했다. pytest-xdist 고정·검토한 독립 모듈 parallel/그 외 serial 분류로 CI를 정책 검사 → 8 workers → 순차 회귀로 실행한다. 외부 DB는 전용 aio_test/DB 표식을 확인하고 UUID DB·실패 시 정리를 유지한다. 전체 직렬과 분리 실행 모두 1116 passed·2 skipped였고 중복 없는 1118건을 확인했다([검증·측정 한계](test-records/20261117_test_workers.md)). 제품 코드는 유지하며 1~5절의 상세 분류/반복 측정·빌드 재사용·CI 계층 최적화·DB 준비 개선·단계별 최대 RSS 검증은 미완료다.
 
 - PL 모바일 계획 3절: 실제 FastAPI·임시 pgvector PostgreSQL·가짜 인증/추출/Storage와 Chromium으로 PL 직접/가짜 추출의 두 승인·취소·행 수정·미저장 차단·409 입력 보존·다운로드 재시도 해시 일치를 확인했다. PI/PO·CI 연결/단독 포함 브라우저 7개 경로와 320/390/768/1440px 배치를 검증했다. 전체 `uv run pytest` **1089 passed·2 skipped**, 규칙 검사(경고 0개)·프론트 test(11개)/lint/build/check:env를 통과했다. 실제 기기/운영 연결은 미확인이고 상세 결과는 [기존 검증 기록](test-records/20261113_po_ci_pl_screens.md#issue-210-pl-모바일-보완2026-11-17)에 둔다.
 
@@ -214,7 +214,7 @@
 - 설계 결정·오류 사례·수정 이유·버전·재실행 결과는 Issue, PR('오류·재실행 기록' 칸), 팀 노션에도 남긴다.
 
 ## 9. 레포 세팅·작업 방식
-마지막 갱신: 2026-11-16 · 지식 문서 CI 준비와 문서·PR 설명 검사 분리 통합
+마지막 갱신: 2026-11-17 · 테스트 DB 표식과 8 workers 단계 실행
 
 - KE KOREA 이식 1~6절 완료에 따라 `.work/TASK.md`의 이식 전용 규칙을 삭제했다. 이식 계획과 원본 사본은 참고 이력으로 보관한다(2026-11-12, 요청자 지시).
 - 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜 둠). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
@@ -228,4 +228,5 @@
 - 담당(2026-11-10): 공통 기반(공통 계약, 서버·DB·배포, Google 로그인·Gmail 알림 수신)과 검토 기능은 김민성, 캘린더 연결 기능은 정원철, 이미지→견적서 기능은 임석원. 김진혁은 Assignees가 비어 있는 Issue에서 배정받는다. 담당은 Issue Assignees로 보고, 프로젝트를 마친 뒤 PR 내역으로 README에 정리한다(`.work/TASK.md`). [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다. 자세한 것은 README '실행 방법'.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
+- Python 코드 회귀는 정책 파일을 먼저 검사하고 검토한 parallel 집합을 8 workers로, serial 집합을 직렬로 실행해 전체를 포함한다. 미분류 모듈은 serial이며 실패 시 다음 단계로 진행하지 않는다. 외부 테스트 DB는 `aio_test` 이름과 전용 DB 주석을 확인한다. Linux/Windows CI는 일회용 DB/표식을 직접 준비하고 Windows 실행기 전용 검사는 기존 직렬 실행을 유지한다. 기본 로컬 전체 pytest도 직렬이며 명령과 안전한 DB 준비는 README와 속도 개선 계획 0절에 있다.
 - CI: `.github/workflows/rules-check.yml`은 PR 생성/코드 갱신/재개와 `main` push에서 규칙 검사 후 `scripts/ci_scope.py`로 변경 경로를 판별한다. 코드·설정·미분류 경로가 있거나 비교가 실패하면 전체 Python/pgvector PostgreSQL·Windows worker 검사를 실행한다. Linux는 지식 문서용 Office·한글 폰트·Chromium/프론트 준비와 15분 한도, Windows는 고정 pgvector 설치를 유지한다. README·지정 문서 폴더의 Markdown·작업 규칙·PR 양식만 바뀌면 이 설치/DB/무거운 테스트를 모두 생략한다(테스트가 직접 읽는 `docs/TEST_REPORT.md`는 제외). 필수 검사 이름 `rules-check`·`tests`는 유지하고 범위 확인 실패는 `tests` 성공으로 처리하지 않는다. `.github/workflows/pr-check.yml`은 PR 본문/읽음 코드/최신 흐름 기재를 독립적으로 검사해 설명 수정이 이전 테스트 실패를 덮거나 테스트를 다시 시작하지 않는다. 동일 브랜치의 새 커밋은 이전 실행을 취소하며 본문/코드 워크플로는 서로 취소하지 않는다. GitHub의 병합 충돌 판정과 기존 필수 검사 Ruleset은 유지한다.
