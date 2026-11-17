@@ -4,6 +4,7 @@ from typing import Callable
 
 from app.trade.common.models import DocumentContext, DocumentError, DocumentResult, DocumentSummary
 from app.trade.common import operations as common
+from app.trade.common.postprocess import apply_issuer_defaults
 from app.trade.common.results import document_result, editable_values
 from app.trade.pi.models import PIInput, PIItem, PIRepository
 from app.trade.pi.samples import update_sample
@@ -71,6 +72,40 @@ def revise_pi(document_id: int, revision: int, command: PIInput, *, repository: 
     document = prepare_pi(values, context)
     if review_reference is not None:
         return pi_result(repository.replace(document_id, revision, document, review_reference))
+    return pi_result(repository.replace(document_id, revision, document))
+
+
+def refresh_issuer(document_id: int, revision: int, *, repository: PIRepository) -> DocumentResult:
+    previous = repository.get(document_id)
+    if previous["revision"] != revision:
+        raise DocumentError("REVISION_CONFLICT", "최신 PI를 다시 확인하세요")
+    if previous["status"] in {"sent", "sending"}:
+        raise DocumentError("REVISION_CONFLICT", "발송 중이거나 발송된 PI는 수정할 수 없습니다")
+
+    issuer = deepcopy(repository.context(previous.get("currency")).issuer)
+    document = deepcopy(previous)
+    old_issuer = previous.get("issuer") or {}
+    defaults = {
+        "legal_name": ("legal_name_en", "legal_name", "company_name"),
+        "address": ("address",), "contact": ("contact",), "phone": ("phone",), "email": ("email",),
+    }
+    seller = deepcopy(document.get("seller") or {})
+    for field, setting_keys in defaults.items():
+        old_value = next((old_issuer.get(key) for key in setting_keys if old_issuer.get(key)), None)
+        if old_value and seller.get(field) == old_value:
+            seller[field] = next((issuer.get(key) for key in setting_keys if issuer.get(key)), None)
+    document["seller"] = seller
+    document["issuer"] = issuer
+    apply_issuer_defaults(document, "PI", issuer)
+
+    issue_date = previous.get("issue_date")
+    document = common.calculate(document)
+    document["issue_date"] = issue_date
+    for key in ("BENEFICIARY", "BANK_NAME", "BRANCH", "SWIFT", "ACCOUNT_NUMBER", "BANK_ADDRESS"):
+        if not (document.get("bank") or {}).get(key):
+            document["blocking_issues"].append(f"PI bank detail required: {key}")
+    if document["blocking_issues"]:
+        document["status"] = "needs_input"
     return pi_result(repository.replace(document_id, revision, document))
 
 

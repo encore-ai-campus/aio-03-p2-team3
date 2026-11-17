@@ -26,6 +26,7 @@ export default function PIPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState("")
+  const [previousFiles, setPreviousFiles] = useState([])
   const [screen, setScreen] = useState({ key: "start", fields: null })
   const [guided, setGuided] = useState(false)
   const [settings, setSettings] = useState(null)
@@ -65,6 +66,7 @@ export default function PIPage() {
     setNotice("")
     setResource(null)
     setProposal(null)
+    setPreviousFiles([])
     setModifying(false)
     setDirty(false)
     if (!documentId) {
@@ -171,6 +173,16 @@ export default function PIPage() {
     })
   }
 
+  function refreshIssuer() {
+    const files = resource.files ?? []
+    perform((signal) => apiFetch(`${base}/${resource.document_id}/refresh-issuer`, { token, signal,
+      method: "POST", body: { revision: resource.revision } }), (document) => {
+      accept(document)
+      setPreviousFiles(files)
+      setNotice("최신 발행자 설정을 새 PI 버전에 반영했어요. 다시 검토·승인해야 하며 기존 발급 파일은 보존됩니다.")
+    })
+  }
+
   function decide(action) {
     perform(async (signal) => {
       const review = await apiFetch(`${base}/${resource.document_id}/reviews/${proposal.id}/decisions`, {
@@ -196,11 +208,18 @@ export default function PIPage() {
   return <div className="pi-workspace">
     <div className="page-head"><div><h1 className="page-title">PI 작성</h1><p className="page-sub">거래 내용을 채우고, 마지막에 전체를 확인해요.</p></div><Link className="btn" to="/">문서 종류 선택</Link></div>
     <div className="editor-toolbar"><span className="document-status">{current ? `${STATUS[current.status] ?? current.status} · 버전 ${current.revision}` : "새 PI"}</span>
+      {current && <button type="button" className="btn" disabled={busy || loading || ["sent", "sending"].includes(current.status)} onClick={refreshIssuer}>최신 발행자 설정 반영</button>}
       {documentId && <button type="button" className="btn" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}
     </div>
     {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.status === 401 ? "로그인 확인이 필요합니다. 입력 내용을 별도로 보관한 뒤 다시 로그인해 주세요." : error.message}</p>
       {error.status === 409 && error.code !== "PI_NUMBER_DUPLICATE" && <p>최신본을 다시 읽고 새로 검토해 주세요. 다시 읽으면 현재 입력을 교체하므로, 필요한 내용은 먼저 복사해 두세요.</p>}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
+    {previousFiles.length > 0 && <section className="pi-question" aria-label="이전 발급 파일">
+      <h2>설정 변경 전 발급 파일</h2><p className="section-note">이 파일은 기존 설정으로 발급된 그대로 보존됩니다.</p>
+      <div className="form-actions">{previousFiles.map((file) => <button key={file.file_id} type="button" className="btn"
+        disabled={busy} onClick={() => perform((signal) => downloadFile(file, token, signal), () => setNotice("이전 발급 파일 다운로드를 요청했습니다."))}>
+        이전 {file.file_format.toUpperCase()} 다운로드</button>)}</div>
+    </section>}
     {loading && <p role="status">PI와 검토 내용을 불러오는 중입니다…</p>}
     {!loading && (!documentId || current) && <>
       {!["start", "source"].includes(screen.key) && <nav className="pi-progress" aria-label="PI 작성 단계"><ol>

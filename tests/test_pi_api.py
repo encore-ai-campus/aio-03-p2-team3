@@ -271,6 +271,52 @@ def test_proposal_keeps_company_bank_and_seal_snapshot(pi_client):
     assert all(image.image.width == 1 for page in reader.pages for image in page.images)
 
 
+def test_refresh_issuer_creates_new_revision_and_keeps_issued_files_unchanged(pi_client):
+    client = pi_client
+    created = create_pi(client)
+    old_proposal = propose(client, created)
+    approved = decide(client, old_proposal, "approve").json()
+    old_files = {file["file_format"]: client.get(file["download_url"]).content for file in approved["files"]}
+
+    assert client.put("/api/trade/settings/company", json={
+        "company_name": "Changed Trading", "legal_name_en": "Changed Trading Co", "business_no": "NEW-1",
+        "ceo_name": "New Signer", "contact": "New Contact", "address": "9 New-ro, Seoul",
+        "phone": "+82-2-0000-0000", "email": "new@example.invalid", "registration_details": "New details",
+    }).status_code == 200
+    refreshed = client.post(f"/api/trade/pi/{created['document_id']}/refresh-issuer",
+                            json={"revision": created["revision"]})
+    assert refreshed.status_code == 200, refreshed.text
+    document = refreshed.json()
+    assert document["revision"] == 2 and document["status"] == "ready"
+    assert document["document"]["issuer"]["legal_name_en"] == "Changed Trading Co"
+    assert document["document"]["issuer"]["ceo_name"] == "New Signer"
+    assert document["document"]["seller"]["legal_name"] == "Changed Trading Co"
+    assert document["document"]["seller"]["address"] == "9 New-ro, Seoul"
+    assert document["document"]["items"][0]["unit_price"] == created["document"]["items"][0]["unit_price"]
+    assert document["document"]["total"] == created["document"]["total"]
+    assert client.get(f"/api/trade/pi/{created['document_id']}/versions/1").json()["issuer"]["ceo_name"] == "Example Signer"
+    assert client.get(f"/api/trade/pi/{created['document_id']}/reviews/{old_proposal['id']}").json()["status"] == "approved"
+    for file in approved["files"]:
+        assert client.get(file["download_url"]).content == old_files[file["file_format"]]
+
+    new_proposal = propose(client, document)
+    new_approved = decide(client, new_proposal, "approve").json()
+    new_pdf = next(file for file in new_approved["files"] if file["file_format"] == "pdf")
+    text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(client.get(new_pdf["download_url"]).content)).pages)
+    assert "New Signer" in text and "Changed Trading Co" in text
+
+
+def test_refresh_issuer_rejects_stale_revision_and_other_owner(pi_client):
+    created = create_pi(pi_client)
+    refreshed = pi_client.post(f"/api/trade/pi/{created['document_id']}/refresh-issuer", json={"revision": 1})
+    assert refreshed.status_code == 200
+    stale = pi_client.post(f"/api/trade/pi/{created['document_id']}/refresh-issuer", json={"revision": 1})
+    assert stale.status_code == 409
+    pi_client.app.dependency_overrides[current_user_id] = lambda: 2
+    other_user = pi_client.post(f"/api/trade/pi/{created['document_id']}/refresh-issuer", json={"revision": 2})
+    assert other_user.status_code == 404
+
+
 def test_ai_http_extraction_uses_pi_agent_without_mail_graph(pi_client):
     from app.llm.client import use_backend
     from tests.fakes.llm import FakeLLM
