@@ -1,0 +1,3389 @@
+{
+  "schema": 1,
+  "measurement_commit": "b958f416fc251cd68dd009a002ffb6a3ff3621e1",
+  "canonical_manifest": "20261117_serial_cases.json",
+  "cases_equal_across_all_six_runs": true,
+  "outcomes": [
+    {
+      "nodeid": "tests/test_knowledge.py::test_pipeline_uses_real_pgvector_parent_ranges_and_model_swap",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_missing_page_waits_for_complete_review_and_revision_fencing",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[nan]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[inf]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[dimension]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[count]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_partial_batch_failure_preserves_successful_index",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_expired_claim_cannot_overwrite_or_automatically_requeue",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_duplicate_is_atomic_per_owner_and_file_reference_is_protected",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_parent_child_foreign_key_rejects_cross_scope_and_dimensions",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_extension_in_existing_schema_and_repeated_migration",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_provider_adapters_preserve_mapping_and_request_options",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_upload_review_ready_and_owner_isolation_over_http",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.docx-data0]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.xlsx-data1]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.txt-\\xea\\xb0\\x80\\xec\\x83\\x81 \\xed\\x95\\x9c\\xea\\xb8\\x80 \\xeb\\xac\\xb8\\xec\\x84\\x9c\\nSynthetic test]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[image.png-data3]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data0-hidden_sheet]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data1-formula_cache_missing]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_render_page_limit_encrypted_or_broken_pdf_and_timeout",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_missing_key_and_pc_mode_cannot_fall_back_to_server_key",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_sql_failure_during_replacement_rolls_back_old_index_without_exposing_text",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[wrong.txt-%PDF-1.4\\nFake-signature_mismatch]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[unknown.hwp-fake-unsupported_format]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[empty.txt--empty_file]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[large.txt-data3-file_too_large]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[missing_key]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[closed_listener]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_key",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[3]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[4]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge_browser.py::test_browser_upload_compare_conflict_confirm_chunks_and_mobile",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_knowledge_browser.py::test_local_browser_missing_key_retry_failure_and_recovery_without_gmail",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_login_without_pubsub_starts_at_current_history_and_never_watches",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_collection_uses_env_key_and_only_explicit_approval_sends_once",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_repeated_history_and_all_pages_do_not_duplicate",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[page]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[message]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_expired_history_stops_until_explicit_reconnect_at_current_position",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[refresh]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[401]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[403]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_normal_access_token_refresh_continues_collection",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[rateLimitExceeded]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[userRateLimitExceeded]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_logout_stops_without_google_stop_and_relogin_skips_logged_out_mail",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_cancel_reconnection_stops_local_collection",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[page]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[message]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[False]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[True]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[fake-other]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[demo@example.invalid-labels0-self]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[no-reply@example.invalid-labels1-no_reply]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels2-promotion]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels3-social]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels4-not_inbox]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_failed_initial_profile_read_retries_without_watch",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_profile_response_cannot_reactivate_logged_out_collection",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_process_stop_wakes_idle_loop_and_prevents_more_reads",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_new_collector_resumes_persisted_cursor_after_process_restart",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_real_google_profile_request_reads_position_without_watch",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_actual_local_launcher_collects_while_browser_idle_then_sends_once",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_sql_store_selects_only_connected_local_retryable_users",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[disconnect]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[stop]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[reconnect]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[public]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[terminal]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[disconnect]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[reconnect]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[process_stop]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_stop_between_separate_body_attachments_prevents_next_read",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_local_gmail.py::test_collector_continues_after_one_store_read_fails",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_react_settings.py::test_settings_preserve_user_role_currency_and_counterparty_scopes",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_react_settings.py::test_counterparty_upsert_is_owned_and_rejects_invalid_or_server_fields",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_react_settings.py::test_saved_settings_apply_to_new_documents_and_preserve_existing_issue",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_react_settings.py::test_gmail_settings_browser_callbacks_failures_and_mobile",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[pi]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[po]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pi]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[po]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[ci]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pl]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_extracted_korean_product_offers_candidates_before_continuing",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_ci_linked_mobile_source_reselect_preserves_shipment",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[direct]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[extract]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[direct]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[extract]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_credentials_roundtrip_and_separate_process",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_existing_file_is_never_overwritten",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change0]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change1]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_expired_credentials_require_new_pairing",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_symlink_credentials_are_rejected_for_read_and_write",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_oversized_file_is_rejected_before_decoding",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_windows_plaintext_and_tampered_dpapi_are_rejected",
+      "outcome": "skipped"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_windows_acl_with_other_readers_is_rejected",
+      "outcome": "skipped"
+    },
+    {
+      "nodeid": "tests/test_worker_credentials.py::test_posix_world_readable_credentials_are_rejected",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_postgres.py::test_postgres_ownership_and_duplicate_results",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_postgres.py::test_postgres_concurrent_claim_and_complete",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_postgres.py::test_postgres_reconnection_and_late_completion",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_postgres.py::test_postgres_encrypted_delivery_between_connections_and_revocation",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_postgres.py::test_postgres_existing_user_upgrade_preserves_default_and_data",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_process.py::test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[401-WORKER_KEY_REQUIRED-1-]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[429-WORKER_RATE_LIMIT-1-]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-SLOW503]",
+      "outcome": "passed"
+    },
+    {
+      "nodeid": "tests/test_worker_process.py::test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_results",
+      "outcome": "passed"
+    }
+  ],
+  "runs": [
+    {
+      "profile": false,
+      "seconds": 342.934169,
+      "returncode": 0,
+      "memory_sampled_peak_bytes": 3472658432,
+      "memory_limit_bytes": 5368709120,
+      "oom_events": 0,
+      "oom_kill_events": 0,
+      "residual_live_processes": 0,
+      "external_tcp_blocked": true,
+      "residual_databases": 0,
+      "manifest_match": true,
+      "run": "off-1"
+    },
+    {
+      "profile": true,
+      "seconds": 338.761912,
+      "returncode": 0,
+      "memory_sampled_peak_bytes": 3454533632,
+      "memory_limit_bytes": 5368709120,
+      "oom_events": 0,
+      "oom_kill_events": 0,
+      "residual_live_processes": 0,
+      "external_tcp_blocked": true,
+      "residual_databases": 0,
+      "manifest_match": true,
+      "run": "on-1"
+    },
+    {
+      "profile": false,
+      "seconds": 333.205931,
+      "returncode": 0,
+      "memory_sampled_peak_bytes": 3436064768,
+      "memory_limit_bytes": 5368709120,
+      "oom_events": 0,
+      "oom_kill_events": 0,
+      "residual_live_processes": 0,
+      "external_tcp_blocked": true,
+      "residual_databases": 0,
+      "manifest_match": true,
+      "run": "off-2"
+    },
+    {
+      "profile": true,
+      "seconds": 326.216161,
+      "returncode": 0,
+      "memory_sampled_peak_bytes": 3426004992,
+      "memory_limit_bytes": 5368709120,
+      "oom_events": 0,
+      "oom_kill_events": 0,
+      "residual_live_processes": 0,
+      "external_tcp_blocked": true,
+      "residual_databases": 0,
+      "manifest_match": true,
+      "run": "on-2"
+    },
+    {
+      "profile": false,
+      "seconds": 318.591581,
+      "returncode": 0,
+      "memory_sampled_peak_bytes": 3412287488,
+      "memory_limit_bytes": 5368709120,
+      "oom_events": 0,
+      "oom_kill_events": 0,
+      "residual_live_processes": 0,
+      "external_tcp_blocked": true,
+      "residual_databases": 0,
+      "manifest_match": true,
+      "run": "off-3"
+    },
+    {
+      "profile": true,
+      "seconds": 308.997099,
+      "returncode": 0,
+      "memory_sampled_peak_bytes": 3408224256,
+      "memory_limit_bytes": 5368709120,
+      "oom_events": 0,
+      "oom_kill_events": 0,
+      "residual_live_processes": 0,
+      "external_tcp_blocked": true,
+      "residual_databases": 0,
+      "manifest_match": true,
+      "run": "on-3"
+    }
+  ],
+  "wall_seconds": {
+    "off": {
+      "median_seconds": 333.205931,
+      "min_seconds": 318.591581,
+      "max_seconds": 342.934169,
+      "sample_variance_seconds_squared": 150.12990517414775,
+      "sample_stdev_seconds": 12.252750922717222
+    },
+    "on": {
+      "median_seconds": 326.216161,
+      "min_seconds": 308.997099,
+      "max_seconds": 338.761912,
+      "sample_variance_seconds_squared": 223.3060095398024,
+      "sample_stdev_seconds": 14.943426967727396
+    }
+  },
+  "paired_on_minus_off_seconds": [
+    -4.172257000000002,
+    -6.989770000000021,
+    -9.594482000000028
+  ],
+  "paired_delta_median_seconds": -6.989770000000021,
+  "profiles": [
+    {
+      "run": "on-1",
+      "source_sha256": "8ca728e4929203257bbc5d4aa59d0d071d46cb97a3a7ad7f3bedbe660a0a0c4b",
+      "phases": [
+        {
+          "phase": "call",
+          "role": "pytest",
+          "seconds": 260.459462,
+          "count": 111
+        },
+        {
+          "phase": "collection",
+          "role": "pytest",
+          "seconds": 2.565534,
+          "count": 1
+        },
+        {
+          "phase": "db.create",
+          "role": "postgres",
+          "seconds": 2.225212,
+          "count": 87
+        },
+        {
+          "phase": "db.drop",
+          "role": "postgres",
+          "seconds": 1.209692,
+          "count": 87
+        },
+        {
+          "phase": "db.migration",
+          "role": "postgres",
+          "seconds": 24.98565,
+          "count": 93
+        },
+        {
+          "phase": "db.schema",
+          "role": "postgres",
+          "seconds": 24.977397,
+          "count": 93
+        },
+        {
+          "phase": "db.server_start",
+          "role": "postgres",
+          "seconds": 2.580673,
+          "count": 5
+        },
+        {
+          "phase": "db.server_stop",
+          "role": "postgres",
+          "seconds": 0.568009,
+          "count": 5
+        },
+        {
+          "phase": "frontend.build",
+          "role": "vite",
+          "seconds": 5.560326,
+          "count": 4
+        },
+        {
+          "phase": "http.request",
+          "role": "local",
+          "seconds": 1.218505,
+          "count": 118
+        },
+        {
+          "phase": "http.request",
+          "role": "openai",
+          "seconds": 0.132163,
+          "count": 13
+        },
+        {
+          "phase": "http.request",
+          "role": "server",
+          "seconds": 60.630624,
+          "count": 537
+        },
+        {
+          "phase": "process.ready",
+          "role": "openai",
+          "seconds": 13.868051,
+          "count": 6
+        },
+        {
+          "phase": "process.ready",
+          "role": "pc",
+          "seconds": 25.58731,
+          "count": 9
+        },
+        {
+          "phase": "process.ready",
+          "role": "server",
+          "seconds": 23.219603,
+          "count": 6
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "local",
+          "seconds": 3.778052,
+          "count": 1
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "openai",
+          "seconds": 0.106777,
+          "count": 6
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "server",
+          "seconds": 23.857383,
+          "count": 6
+        },
+        {
+          "phase": "process.spawn",
+          "role": "local",
+          "seconds": 0.001009,
+          "count": 1
+        },
+        {
+          "phase": "process.spawn",
+          "role": "openai",
+          "seconds": 0.002495,
+          "count": 6
+        },
+        {
+          "phase": "process.spawn",
+          "role": "pc",
+          "seconds": 0.004357,
+          "count": 9
+        },
+        {
+          "phase": "process.spawn",
+          "role": "server",
+          "seconds": 0.003448,
+          "count": 6
+        },
+        {
+          "phase": "process.stop",
+          "role": "local",
+          "seconds": 0.215377,
+          "count": 1
+        },
+        {
+          "phase": "process.stop",
+          "role": "openai",
+          "seconds": 1.04279,
+          "count": 6
+        },
+        {
+          "phase": "process.stop",
+          "role": "pc",
+          "seconds": 48.239709,
+          "count": 9
+        },
+        {
+          "phase": "process.stop",
+          "role": "server",
+          "seconds": 0.934273,
+          "count": 6
+        },
+        {
+          "phase": "setup",
+          "role": "pytest",
+          "seconds": 64.364544,
+          "count": 113
+        },
+        {
+          "phase": "teardown",
+          "role": "pytest",
+          "seconds": 6.091113,
+          "count": 113
+        },
+        {
+          "phase": "tls.certificate",
+          "role": "worker",
+          "seconds": 0.006296,
+          "count": 6
+        },
+        {
+          "phase": "tls.context",
+          "role": "client",
+          "seconds": 0.342192,
+          "count": 29
+        },
+        {
+          "phase": "tls.key",
+          "role": "worker",
+          "seconds": 2.224267,
+          "count": 50
+        }
+      ],
+      "worker_tls_keys": {
+        "seconds": 0.31054,
+        "count": 6
+      },
+      "modules": [
+        {
+          "module": "tests/test_knowledge.py",
+          "setup": 4.838123,
+          "call": 20.699831,
+          "teardown": 0.311028
+        },
+        {
+          "module": "tests/test_knowledge_browser.py",
+          "setup": 0.045444,
+          "call": 24.604996,
+          "teardown": 0.038015
+        },
+        {
+          "module": "tests/test_local_gmail.py",
+          "setup": 14.568878,
+          "call": 10.919507,
+          "teardown": 0.74377
+        },
+        {
+          "module": "tests/test_react_settings.py",
+          "setup": 0.08142,
+          "call": 13.657231,
+          "teardown": 0.057527
+        },
+        {
+          "module": "tests/test_trade_mobile_browser.py",
+          "setup": 14.436134,
+          "call": 67.267595,
+          "teardown": 2.392538
+        },
+        {
+          "module": "tests/test_worker_credentials.py",
+          "setup": 0.007399,
+          "call": 2.724455,
+          "teardown": 0.002219
+        },
+        {
+          "module": "tests/test_worker_postgres.py",
+          "setup": 3.35929,
+          "call": 2.866533,
+          "teardown": 0.484494
+        },
+        {
+          "module": "tests/test_worker_process.py",
+          "setup": 27.027856,
+          "call": 117.719314,
+          "teardown": 2.061522
+        }
+      ],
+      "test_times": [
+        {
+          "nodeid": "tests/test_knowledge.py::test_pipeline_uses_real_pgvector_parent_ranges_and_model_swap",
+          "setup": 0.379066,
+          "call": 0.89671,
+          "teardown": 0.013292
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_missing_page_waits_for_complete_review_and_revision_fencing",
+          "setup": 0.280101,
+          "call": 0.084927,
+          "teardown": 0.014363
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[nan]",
+          "setup": 0.243207,
+          "call": 0.040067,
+          "teardown": 0.012145
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[inf]",
+          "setup": 0.235751,
+          "call": 0.040707,
+          "teardown": 0.012483
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[dimension]",
+          "setup": 0.239142,
+          "call": 0.045277,
+          "teardown": 0.01137
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[count]",
+          "setup": 0.235549,
+          "call": 0.04102,
+          "teardown": 0.013117
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_partial_batch_failure_preserves_successful_index",
+          "setup": 0.256098,
+          "call": 0.095973,
+          "teardown": 0.013482
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_expired_claim_cannot_overwrite_or_automatically_requeue",
+          "setup": 0.23464,
+          "call": 0.064835,
+          "teardown": 0.013805
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_duplicate_is_atomic_per_owner_and_file_reference_is_protected",
+          "setup": 0.235656,
+          "call": 0.040789,
+          "teardown": 0.013288
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_parent_child_foreign_key_rejects_cross_scope_and_dimensions",
+          "setup": 0.443985,
+          "call": 0.054587,
+          "teardown": 0.012335
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_extension_in_existing_schema_and_repeated_migration",
+          "setup": 0.022154,
+          "call": 0.33032,
+          "teardown": 0.015102
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_provider_adapters_preserve_mapping_and_request_options",
+          "setup": 0.000234,
+          "call": 0.000591,
+          "teardown": 0.000216
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_upload_review_ready_and_owner_isolation_over_http",
+          "setup": 0.028514,
+          "call": 4.667284,
+          "teardown": 0.016915
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.docx-data0]",
+          "setup": 0.000702,
+          "call": 2.083089,
+          "teardown": 0.000217
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.xlsx-data1]",
+          "setup": 0.000359,
+          "call": 1.675503,
+          "teardown": 0.00028
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.txt-\\xea\\xb0\\x80\\xec\\x83\\x81 \\xed\\x95\\x9c\\xea\\xb8\\x80 \\xeb\\xac\\xb8\\xec\\x84\\x9c\\nSynthetic test]",
+          "setup": 0.000416,
+          "call": 1.576857,
+          "teardown": 0.000212
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[image.png-data3]",
+          "setup": 0.000315,
+          "call": 0.417145,
+          "teardown": 0.000851
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data0-hidden_sheet]",
+          "setup": 0.001134,
+          "call": 0.420077,
+          "teardown": 0.000225
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data1-formula_cache_missing]",
+          "setup": 0.000374,
+          "call": 0.367143,
+          "teardown": 0.000263
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_render_page_limit_encrypted_or_broken_pdf_and_timeout",
+          "setup": 0.000209,
+          "call": 0.94969,
+          "teardown": 0.000205
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_missing_key_and_pc_mode_cannot_fall_back_to_server_key",
+          "setup": 0.236104,
+          "call": 0.010464,
+          "teardown": 0.011768
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_sql_failure_during_replacement_rolls_back_old_index_without_exposing_text",
+          "setup": 0.254326,
+          "call": 0.077157,
+          "teardown": 0.012087
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[wrong.txt-%PDF-1.4\\nFake-signature_mismatch]",
+          "setup": 0.241596,
+          "call": 0.006953,
+          "teardown": 0.014617
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[unknown.hwp-fake-unsupported_format]",
+          "setup": 0.346362,
+          "call": 0.023446,
+          "teardown": 0.017811
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[empty.txt--empty_file]",
+          "setup": 0.508169,
+          "call": 0.006219,
+          "teardown": 0.016028
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[large.txt-data3-file_too_large]",
+          "setup": 0.327821,
+          "call": 0.004031,
+          "teardown": 0.029413
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[missing_key]",
+          "setup": 0.026049,
+          "call": 0.477976,
+          "teardown": 0.021439
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[closed_listener]",
+          "setup": 0.032815,
+          "call": 0.386864,
+          "teardown": 0.01106
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_key",
+          "setup": 0.026226,
+          "call": 5.396324,
+          "teardown": 0.011998
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[3]",
+          "setup": 0.00046,
+          "call": 0.41371,
+          "teardown": 0.000413
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[4]",
+          "setup": 0.000589,
+          "call": 0.004096,
+          "teardown": 0.000228
+        },
+        {
+          "nodeid": "tests/test_knowledge_browser.py::test_browser_upload_compare_conflict_confirm_chunks_and_mobile",
+          "setup": 0.022472,
+          "call": 13.281858,
+          "teardown": 0.014156
+        },
+        {
+          "nodeid": "tests/test_knowledge_browser.py::test_local_browser_missing_key_retry_failure_and_recovery_without_gmail",
+          "setup": 0.022972,
+          "call": 11.323138,
+          "teardown": 0.023859
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_login_without_pubsub_starts_at_current_history_and_never_watches",
+          "setup": 0.327375,
+          "call": 0.128811,
+          "teardown": 0.016316
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_collection_uses_env_key_and_only_explicit_approval_sends_once",
+          "setup": 0.27305,
+          "call": 0.563,
+          "teardown": 0.015886
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_repeated_history_and_all_pages_do_not_duplicate",
+          "setup": 0.751586,
+          "call": 0.418345,
+          "teardown": 0.015359
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[page]",
+          "setup": 0.315132,
+          "call": 0.409993,
+          "teardown": 0.016604
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[message]",
+          "setup": 0.416904,
+          "call": 0.385256,
+          "teardown": 0.01764
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_expired_history_stops_until_explicit_reconnect_at_current_position",
+          "setup": 0.336846,
+          "call": 0.175709,
+          "teardown": 0.029491
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[refresh]",
+          "setup": 0.36556,
+          "call": 0.146049,
+          "teardown": 0.015058
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[401]",
+          "setup": 0.319504,
+          "call": 0.111402,
+          "teardown": 0.01498
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[403]",
+          "setup": 0.320638,
+          "call": 0.117792,
+          "teardown": 0.014874
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_normal_access_token_refresh_continues_collection",
+          "setup": 0.319073,
+          "call": 0.201894,
+          "teardown": 0.015449
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[rateLimitExceeded]",
+          "setup": 0.778629,
+          "call": 0.20098,
+          "teardown": 0.015684
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[userRateLimitExceeded]",
+          "setup": 0.331174,
+          "call": 0.217635,
+          "teardown": 0.014572
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_stops_without_google_stop_and_relogin_skips_logged_out_mail",
+          "setup": 0.351948,
+          "call": 0.067197,
+          "teardown": 0.020165
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_cancel_reconnection_stops_local_collection",
+          "setup": 0.358936,
+          "call": 0.026277,
+          "teardown": 0.018715
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[page]",
+          "setup": 0.407119,
+          "call": 0.032489,
+          "teardown": 0.033694
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[message]",
+          "setup": 0.367305,
+          "call": 0.02924,
+          "teardown": 0.01725
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[False]",
+          "setup": 0.3339,
+          "call": 0.402161,
+          "teardown": 0.016865
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[True]",
+          "setup": 0.299899,
+          "call": 0.327677,
+          "teardown": 0.014209
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[]",
+          "setup": 0.285848,
+          "call": 0.175052,
+          "teardown": 0.019014
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[fake-other]",
+          "setup": 0.288601,
+          "call": 0.185462,
+          "teardown": 0.016535
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[demo@example.invalid-labels0-self]",
+          "setup": 0.296404,
+          "call": 0.039187,
+          "teardown": 0.015081
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[no-reply@example.invalid-labels1-no_reply]",
+          "setup": 0.277939,
+          "call": 0.072505,
+          "teardown": 0.016905
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels2-promotion]",
+          "setup": 0.372439,
+          "call": 0.066287,
+          "teardown": 0.019672
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels3-social]",
+          "setup": 0.765181,
+          "call": 0.102685,
+          "teardown": 0.025069
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels4-not_inbox]",
+          "setup": 0.316962,
+          "call": 0.047048,
+          "teardown": 0.020949
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_initial_profile_read_retries_without_watch",
+          "setup": 0.313189,
+          "call": 0.044467,
+          "teardown": 0.015622
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_profile_response_cannot_reactivate_logged_out_collection",
+          "setup": 0.279458,
+          "call": 0.013326,
+          "teardown": 0.015359
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_process_stop_wakes_idle_loop_and_prevents_more_reads",
+          "setup": 0.304797,
+          "call": 0.000529,
+          "teardown": 0.017014
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_new_collector_resumes_persisted_cursor_after_process_restart",
+          "setup": 0.366158,
+          "call": 0.433806,
+          "teardown": 0.015756
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector",
+          "setup": 0.022931,
+          "call": 0.375083,
+          "teardown": 0.010833
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_real_google_profile_request_reads_position_without_watch",
+          "setup": 0.298455,
+          "call": 0.000212,
+          "teardown": 0.01451
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_actual_local_launcher_collects_while_browser_idle_then_sends_once",
+          "setup": 0.020142,
+          "call": 5.17111,
+          "teardown": 0.011288
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_selects_only_connected_local_retryable_users",
+          "setup": 0.336675,
+          "call": 0.044891,
+          "teardown": 0.014889
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[disconnect]",
+          "setup": 0.277023,
+          "call": 0.015555,
+          "teardown": 0.033549
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[stop]",
+          "setup": 0.322243,
+          "call": 0.01769,
+          "teardown": 0.013908
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[reconnect]",
+          "setup": 0.309852,
+          "call": 0.017201,
+          "teardown": 0.01489
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[public]",
+          "setup": 0.267154,
+          "call": 0.016321,
+          "teardown": 0.01653
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[terminal]",
+          "setup": 0.274842,
+          "call": 0.015312,
+          "teardown": 0.031549
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[disconnect]",
+          "setup": 0.324068,
+          "call": 0.025473,
+          "teardown": 0.016777
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[reconnect]",
+          "setup": 0.677255,
+          "call": 0.023238,
+          "teardown": 0.01442
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[process_stop]",
+          "setup": 0.296886,
+          "call": 0.020553,
+          "teardown": 0.016342
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_stop_between_separate_body_attachments_prevents_next_read",
+          "setup": 0.299275,
+          "call": 0.034033,
+          "teardown": 0.01427
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_collector_continues_after_one_store_read_fails",
+          "setup": 0.000523,
+          "call": 0.000574,
+          "teardown": 0.000228
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_settings_preserve_user_role_currency_and_counterparty_scopes",
+          "setup": 0.020869,
+          "call": 0.559719,
+          "teardown": 0.012223
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_counterparty_upsert_is_owned_and_rejects_invalid_or_server_fields",
+          "setup": 0.020485,
+          "call": 0.46618,
+          "teardown": 0.013008
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_saved_settings_apply_to_new_documents_and_preserve_existing_issue",
+          "setup": 0.019315,
+          "call": 0.713401,
+          "teardown": 0.012489
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_gmail_settings_browser_callbacks_failures_and_mobile",
+          "setup": 0.020751,
+          "call": 11.917931,
+          "teardown": 0.019807
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[pi]",
+          "setup": 1.423111,
+          "call": 9.880416,
+          "teardown": 0.013362
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[po]",
+          "setup": 0.022703,
+          "call": 8.48993,
+          "teardown": 0.013993
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pi]",
+          "setup": 1.334905,
+          "call": 3.880084,
+          "teardown": 0.233575
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[po]",
+          "setup": 1.472605,
+          "call": 4.831883,
+          "teardown": 0.289932
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[ci]",
+          "setup": 1.40874,
+          "call": 3.9958,
+          "teardown": 0.220337
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pl]",
+          "setup": 1.244989,
+          "call": 3.725107,
+          "teardown": 0.293256
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_extracted_korean_product_offers_candidates_before_continuing",
+          "setup": 1.055176,
+          "call": 1.767479,
+          "teardown": 0.1827
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_linked_mobile_source_reselect_preserves_shipment",
+          "setup": 1.130712,
+          "call": 10.32317,
+          "teardown": 0.244765
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[direct]",
+          "setup": 1.576254,
+          "call": 4.882046,
+          "teardown": 0.294558
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[extract]",
+          "setup": 1.39074,
+          "call": 5.472373,
+          "teardown": 0.233392
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[direct]",
+          "setup": 1.272322,
+          "call": 4.652942,
+          "teardown": 0.179308
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[extract]",
+          "setup": 1.103877,
+          "call": 5.366365,
+          "teardown": 0.19336
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_roundtrip_and_separate_process",
+          "setup": 0.000942,
+          "call": 2.720815,
+          "teardown": 0.000249
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_existing_file_is_never_overwritten",
+          "setup": 0.000676,
+          "call": 0.000375,
+          "teardown": 0.000209
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change0]",
+          "setup": 0.000737,
+          "call": 0.000478,
+          "teardown": 0.000185
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change1]",
+          "setup": 0.000697,
+          "call": 0.00038,
+          "teardown": 0.000175
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_expired_credentials_require_new_pairing",
+          "setup": 0.000604,
+          "call": 0.000435,
+          "teardown": 0.000197
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_symlink_credentials_are_rejected_for_read_and_write",
+          "setup": 0.000854,
+          "call": 0.000578,
+          "teardown": 0.000246
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_oversized_file_is_rejected_before_decoding",
+          "setup": 0.001498,
+          "call": 0.000904,
+          "teardown": 0.000273
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_windows_plaintext_and_tampered_dpapi_are_rejected",
+          "setup": 0.000259,
+          "call": 0.0,
+          "teardown": 0.000239
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_windows_acl_with_other_readers_is_rejected",
+          "setup": 0.000313,
+          "call": 0.0,
+          "teardown": 0.000266
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_posix_world_readable_credentials_are_rejected",
+          "setup": 0.000819,
+          "call": 0.00049,
+          "teardown": 0.00018
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_ownership_and_duplicate_results",
+          "setup": 0.689893,
+          "call": 0.585911,
+          "teardown": 0.129131
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_concurrent_claim_and_complete",
+          "setup": 0.670968,
+          "call": 0.276025,
+          "teardown": 0.116566
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_reconnection_and_late_completion",
+          "setup": 1.057708,
+          "call": 0.789588,
+          "teardown": 0.123966
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_encrypted_delivery_between_connections_and_revocation",
+          "setup": 0.940028,
+          "call": 0.421016,
+          "teardown": 0.114475
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_existing_user_upgrade_preserves_default_and_data",
+          "setup": 0.000693,
+          "call": 0.793993,
+          "teardown": 0.000356
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow",
+          "setup": 4.195286,
+          "call": 29.142678,
+          "teardown": 0.369324
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[401-WORKER_KEY_REQUIRED-1-]",
+          "setup": 4.360656,
+          "call": 8.387944,
+          "teardown": 0.258047
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[429-WORKER_RATE_LIMIT-1-]",
+          "setup": 3.925625,
+          "call": 8.349159,
+          "teardown": 0.343315
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-]",
+          "setup": 4.144226,
+          "call": 13.611935,
+          "teardown": 0.323843
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-SLOW503]",
+          "setup": 4.207489,
+          "call": 32.144872,
+          "teardown": 0.360485
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_results",
+          "setup": 6.194574,
+          "call": 26.082726,
+          "teardown": 0.406508
+        }
+      ]
+    },
+    {
+      "run": "on-2",
+      "source_sha256": "82bc92ce5ba088b5ba4150cfaee2c2bc59107effc62c12e94de36e7ca9c0776e",
+      "phases": [
+        {
+          "phase": "call",
+          "role": "pytest",
+          "seconds": 253.291959,
+          "count": 111
+        },
+        {
+          "phase": "collection",
+          "role": "pytest",
+          "seconds": 2.801572,
+          "count": 1
+        },
+        {
+          "phase": "db.create",
+          "role": "postgres",
+          "seconds": 1.887524,
+          "count": 87
+        },
+        {
+          "phase": "db.drop",
+          "role": "postgres",
+          "seconds": 1.139619,
+          "count": 87
+        },
+        {
+          "phase": "db.migration",
+          "role": "postgres",
+          "seconds": 22.972288,
+          "count": 93
+        },
+        {
+          "phase": "db.schema",
+          "role": "postgres",
+          "seconds": 22.966295,
+          "count": 93
+        },
+        {
+          "phase": "db.server_start",
+          "role": "postgres",
+          "seconds": 2.478178,
+          "count": 5
+        },
+        {
+          "phase": "db.server_stop",
+          "role": "postgres",
+          "seconds": 0.582873,
+          "count": 5
+        },
+        {
+          "phase": "frontend.build",
+          "role": "vite",
+          "seconds": 3.964286,
+          "count": 4
+        },
+        {
+          "phase": "http.request",
+          "role": "local",
+          "seconds": 1.197694,
+          "count": 121
+        },
+        {
+          "phase": "http.request",
+          "role": "openai",
+          "seconds": 0.143623,
+          "count": 13
+        },
+        {
+          "phase": "http.request",
+          "role": "server",
+          "seconds": 61.493837,
+          "count": 525
+        },
+        {
+          "phase": "process.ready",
+          "role": "openai",
+          "seconds": 12.875929,
+          "count": 6
+        },
+        {
+          "phase": "process.ready",
+          "role": "pc",
+          "seconds": 24.895725,
+          "count": 9
+        },
+        {
+          "phase": "process.ready",
+          "role": "server",
+          "seconds": 22.719532,
+          "count": 6
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "local",
+          "seconds": 3.8682,
+          "count": 1
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "openai",
+          "seconds": 0.11824,
+          "count": 6
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "server",
+          "seconds": 23.523263,
+          "count": 6
+        },
+        {
+          "phase": "process.spawn",
+          "role": "local",
+          "seconds": 0.000512,
+          "count": 1
+        },
+        {
+          "phase": "process.spawn",
+          "role": "openai",
+          "seconds": 0.002538,
+          "count": 6
+        },
+        {
+          "phase": "process.spawn",
+          "role": "pc",
+          "seconds": 0.00415,
+          "count": 9
+        },
+        {
+          "phase": "process.spawn",
+          "role": "server",
+          "seconds": 0.003147,
+          "count": 6
+        },
+        {
+          "phase": "process.stop",
+          "role": "local",
+          "seconds": 0.165572,
+          "count": 1
+        },
+        {
+          "phase": "process.stop",
+          "role": "openai",
+          "seconds": 0.941727,
+          "count": 6
+        },
+        {
+          "phase": "process.stop",
+          "role": "pc",
+          "seconds": 43.077824,
+          "count": 9
+        },
+        {
+          "phase": "process.stop",
+          "role": "server",
+          "seconds": 0.935289,
+          "count": 6
+        },
+        {
+          "phase": "setup",
+          "role": "pytest",
+          "seconds": 59.27272,
+          "count": 113
+        },
+        {
+          "phase": "teardown",
+          "role": "pytest",
+          "seconds": 5.728142,
+          "count": 113
+        },
+        {
+          "phase": "tls.certificate",
+          "role": "worker",
+          "seconds": 0.004992,
+          "count": 6
+        },
+        {
+          "phase": "tls.context",
+          "role": "client",
+          "seconds": 0.297898,
+          "count": 29
+        },
+        {
+          "phase": "tls.key",
+          "role": "worker",
+          "seconds": 2.201646,
+          "count": 50
+        }
+      ],
+      "worker_tls_keys": {
+        "seconds": 0.232884,
+        "count": 6
+      },
+      "modules": [
+        {
+          "module": "tests/test_knowledge.py",
+          "setup": 4.185358,
+          "call": 18.896319,
+          "teardown": 0.256519
+        },
+        {
+          "module": "tests/test_knowledge_browser.py",
+          "setup": 0.048249,
+          "call": 24.126522,
+          "teardown": 0.025445
+        },
+        {
+          "module": "tests/test_local_gmail.py",
+          "setup": 13.250852,
+          "call": 11.592706,
+          "teardown": 0.73242
+        },
+        {
+          "module": "tests/test_react_settings.py",
+          "setup": 0.079922,
+          "call": 13.657323,
+          "teardown": 0.04744
+        },
+        {
+          "module": "tests/test_trade_mobile_browser.py",
+          "setup": 12.693478,
+          "call": 67.489232,
+          "teardown": 2.208128
+        },
+        {
+          "module": "tests/test_worker_credentials.py",
+          "setup": 0.007702,
+          "call": 2.535762,
+          "teardown": 0.002369
+        },
+        {
+          "module": "tests/test_worker_postgres.py",
+          "setup": 2.847991,
+          "call": 2.621298,
+          "teardown": 0.485503
+        },
+        {
+          "module": "tests/test_worker_process.py",
+          "setup": 26.159168,
+          "call": 112.372797,
+          "teardown": 1.970318
+        }
+      ],
+      "test_times": [
+        {
+          "nodeid": "tests/test_knowledge.py::test_pipeline_uses_real_pgvector_parent_ranges_and_model_swap",
+          "setup": 0.264184,
+          "call": 0.61715,
+          "teardown": 0.011466
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_missing_page_waits_for_complete_review_and_revision_fencing",
+          "setup": 0.217395,
+          "call": 0.077551,
+          "teardown": 0.011255
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[nan]",
+          "setup": 0.244541,
+          "call": 0.044113,
+          "teardown": 0.012838
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[inf]",
+          "setup": 0.238346,
+          "call": 0.040373,
+          "teardown": 0.012342
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[dimension]",
+          "setup": 0.219969,
+          "call": 0.037384,
+          "teardown": 0.011785
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[count]",
+          "setup": 0.220961,
+          "call": 0.04089,
+          "teardown": 0.012205
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_partial_batch_failure_preserves_successful_index",
+          "setup": 0.220073,
+          "call": 0.090608,
+          "teardown": 0.012682
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_expired_claim_cannot_overwrite_or_automatically_requeue",
+          "setup": 0.216845,
+          "call": 0.058281,
+          "teardown": 0.011512
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_duplicate_is_atomic_per_owner_and_file_reference_is_protected",
+          "setup": 0.220583,
+          "call": 0.03227,
+          "teardown": 0.011138
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_parent_child_foreign_key_rejects_cross_scope_and_dimensions",
+          "setup": 0.404524,
+          "call": 0.055029,
+          "teardown": 0.012905
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_extension_in_existing_schema_and_repeated_migration",
+          "setup": 0.018469,
+          "call": 0.257837,
+          "teardown": 0.011126
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_provider_adapters_preserve_mapping_and_request_options",
+          "setup": 0.000232,
+          "call": 0.000615,
+          "teardown": 0.000152
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_upload_review_ready_and_owner_isolation_over_http",
+          "setup": 0.020256,
+          "call": 4.464899,
+          "teardown": 0.011551
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.docx-data0]",
+          "setup": 0.000425,
+          "call": 1.576957,
+          "teardown": 0.000331
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.xlsx-data1]",
+          "setup": 0.00056,
+          "call": 1.473083,
+          "teardown": 0.000246
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.txt-\\xea\\xb0\\x80\\xec\\x83\\x81 \\xed\\x95\\x9c\\xea\\xb8\\x80 \\xeb\\xac\\xb8\\xec\\x84\\x9c\\nSynthetic test]",
+          "setup": 0.000407,
+          "call": 1.525112,
+          "teardown": 0.000248
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[image.png-data3]",
+          "setup": 0.000389,
+          "call": 0.367259,
+          "teardown": 0.000251
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data0-hidden_sheet]",
+          "setup": 0.000429,
+          "call": 0.317158,
+          "teardown": 0.000256
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data1-formula_cache_missing]",
+          "setup": 0.000476,
+          "call": 0.367322,
+          "teardown": 0.000225
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_render_page_limit_encrypted_or_broken_pdf_and_timeout",
+          "setup": 0.000163,
+          "call": 0.847943,
+          "teardown": 0.00031
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_missing_key_and_pc_mode_cannot_fall_back_to_server_key",
+          "setup": 0.235438,
+          "call": 0.008888,
+          "teardown": 0.010843
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_sql_failure_during_replacement_rolls_back_old_index_without_exposing_text",
+          "setup": 0.266485,
+          "call": 0.09135,
+          "teardown": 0.014262
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[wrong.txt-%PDF-1.4\\nFake-signature_mismatch]",
+          "setup": 0.322433,
+          "call": 0.005939,
+          "teardown": 0.014345
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[unknown.hwp-fake-unsupported_format]",
+          "setup": 0.278399,
+          "call": 0.00388,
+          "teardown": 0.012727
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[empty.txt--empty_file]",
+          "setup": 0.299857,
+          "call": 0.004664,
+          "teardown": 0.012518
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[large.txt-data3-file_too_large]",
+          "setup": 0.215025,
+          "call": 0.003444,
+          "teardown": 0.011485
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[missing_key]",
+          "setup": 0.019977,
+          "call": 0.348753,
+          "teardown": 0.011654
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[closed_listener]",
+          "setup": 0.01842,
+          "call": 0.355293,
+          "teardown": 0.011589
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_key",
+          "setup": 0.019228,
+          "call": 5.387135,
+          "teardown": 0.011774
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[3]",
+          "setup": 0.000429,
+          "call": 0.391159,
+          "teardown": 0.000261
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[4]",
+          "setup": 0.00044,
+          "call": 0.00398,
+          "teardown": 0.000237
+        },
+        {
+          "nodeid": "tests/test_knowledge_browser.py::test_browser_upload_compare_conflict_confirm_chunks_and_mobile",
+          "setup": 0.026044,
+          "call": 13.445651,
+          "teardown": 0.012115
+        },
+        {
+          "nodeid": "tests/test_knowledge_browser.py::test_local_browser_missing_key_retry_failure_and_recovery_without_gmail",
+          "setup": 0.022205,
+          "call": 10.680871,
+          "teardown": 0.01333
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_login_without_pubsub_starts_at_current_history_and_never_watches",
+          "setup": 0.279486,
+          "call": 0.093927,
+          "teardown": 0.014312
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_collection_uses_env_key_and_only_explicit_approval_sends_once",
+          "setup": 0.274256,
+          "call": 0.860481,
+          "teardown": 0.017636
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_repeated_history_and_all_pages_do_not_duplicate",
+          "setup": 0.40986,
+          "call": 0.351592,
+          "teardown": 0.015151
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[page]",
+          "setup": 0.297005,
+          "call": 0.484019,
+          "teardown": 0.02783
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[message]",
+          "setup": 0.452351,
+          "call": 0.406238,
+          "teardown": 0.03008
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_expired_history_stops_until_explicit_reconnect_at_current_position",
+          "setup": 0.281499,
+          "call": 0.147871,
+          "teardown": 0.020306
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[refresh]",
+          "setup": 0.31571,
+          "call": 0.130472,
+          "teardown": 0.014024
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[401]",
+          "setup": 0.298603,
+          "call": 0.10791,
+          "teardown": 0.015198
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[403]",
+          "setup": 0.2635,
+          "call": 0.109199,
+          "teardown": 0.013568
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_normal_access_token_refresh_continues_collection",
+          "setup": 0.261391,
+          "call": 0.16999,
+          "teardown": 0.014351
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[rateLimitExceeded]",
+          "setup": 0.259286,
+          "call": 0.460044,
+          "teardown": 0.013864
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[userRateLimitExceeded]",
+          "setup": 0.313311,
+          "call": 0.191732,
+          "teardown": 0.014309
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_stops_without_google_stop_and_relogin_skips_logged_out_mail",
+          "setup": 0.269364,
+          "call": 0.044039,
+          "teardown": 0.014259
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_cancel_reconnection_stops_local_collection",
+          "setup": 0.263196,
+          "call": 0.023534,
+          "teardown": 0.014311
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[page]",
+          "setup": 0.323677,
+          "call": 0.045612,
+          "teardown": 0.014502
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[message]",
+          "setup": 0.293338,
+          "call": 0.056721,
+          "teardown": 0.017635
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[False]",
+          "setup": 0.457044,
+          "call": 0.554035,
+          "teardown": 0.015061
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[True]",
+          "setup": 0.377868,
+          "call": 0.265064,
+          "teardown": 0.014323
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[]",
+          "setup": 0.272794,
+          "call": 0.193982,
+          "teardown": 0.028319
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[fake-other]",
+          "setup": 0.268737,
+          "call": 0.179591,
+          "teardown": 0.014532
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[demo@example.invalid-labels0-self]",
+          "setup": 0.325241,
+          "call": 0.036067,
+          "teardown": 0.014343
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[no-reply@example.invalid-labels1-no_reply]",
+          "setup": 0.309443,
+          "call": 0.030436,
+          "teardown": 0.014732
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels2-promotion]",
+          "setup": 0.380846,
+          "call": 0.039401,
+          "teardown": 0.015589
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels3-social]",
+          "setup": 0.688785,
+          "call": 0.034125,
+          "teardown": 0.014905
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels4-not_inbox]",
+          "setup": 0.286891,
+          "call": 0.036104,
+          "teardown": 0.014502
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_initial_profile_read_retries_without_watch",
+          "setup": 0.327664,
+          "call": 0.033981,
+          "teardown": 0.015622
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_profile_response_cannot_reactivate_logged_out_collection",
+          "setup": 0.318384,
+          "call": 0.016358,
+          "teardown": 0.014862
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_process_stop_wakes_idle_loop_and_prevents_more_reads",
+          "setup": 0.282998,
+          "call": 0.000944,
+          "teardown": 0.019248
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_new_collector_resumes_persisted_cursor_after_process_restart",
+          "setup": 0.307057,
+          "call": 0.472252,
+          "teardown": 0.028257
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector",
+          "setup": 0.033717,
+          "call": 0.507823,
+          "teardown": 0.012801
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_real_google_profile_request_reads_position_without_watch",
+          "setup": 0.285619,
+          "call": 0.000266,
+          "teardown": 0.015713
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_actual_local_launcher_collects_while_browser_idle_then_sends_once",
+          "setup": 0.029312,
+          "call": 5.247906,
+          "teardown": 0.011054
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_selects_only_connected_local_retryable_users",
+          "setup": 0.279328,
+          "call": 0.046899,
+          "teardown": 0.015629
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[disconnect]",
+          "setup": 0.253994,
+          "call": 0.014491,
+          "teardown": 0.01475
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[stop]",
+          "setup": 0.278206,
+          "call": 0.018712,
+          "teardown": 0.027341
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[reconnect]",
+          "setup": 0.337392,
+          "call": 0.018844,
+          "teardown": 0.016944
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[public]",
+          "setup": 0.36593,
+          "call": 0.022506,
+          "teardown": 0.034393
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[terminal]",
+          "setup": 0.309346,
+          "call": 0.025082,
+          "teardown": 0.01785
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[disconnect]",
+          "setup": 0.335296,
+          "call": 0.025382,
+          "teardown": 0.016307
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[reconnect]",
+          "setup": 0.359951,
+          "call": 0.027261,
+          "teardown": 0.022435
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[process_stop]",
+          "setup": 0.632571,
+          "call": 0.020255,
+          "teardown": 0.014614
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_stop_between_separate_body_attachments_prevents_next_read",
+          "setup": 0.289802,
+          "call": 0.040748,
+          "teardown": 0.016653
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_collector_continues_after_one_store_read_fails",
+          "setup": 0.000803,
+          "call": 0.00081,
+          "teardown": 0.000305
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_settings_preserve_user_role_currency_and_counterparty_scopes",
+          "setup": 0.02102,
+          "call": 0.617082,
+          "teardown": 0.011285
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_counterparty_upsert_is_owned_and_rejects_invalid_or_server_fields",
+          "setup": 0.018779,
+          "call": 0.509429,
+          "teardown": 0.010647
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_saved_settings_apply_to_new_documents_and_preserve_existing_issue",
+          "setup": 0.018995,
+          "call": 0.738371,
+          "teardown": 0.012073
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_gmail_settings_browser_callbacks_failures_and_mobile",
+          "setup": 0.021128,
+          "call": 11.792441,
+          "teardown": 0.013435
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[pi]",
+          "setup": 0.711847,
+          "call": 9.070193,
+          "teardown": 0.014715
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[po]",
+          "setup": 0.022744,
+          "call": 8.524289,
+          "teardown": 0.026121
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pi]",
+          "setup": 1.522933,
+          "call": 3.86186,
+          "teardown": 0.162503
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[po]",
+          "setup": 1.101996,
+          "call": 4.193465,
+          "teardown": 0.229754
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[ci]",
+          "setup": 0.970474,
+          "call": 3.969145,
+          "teardown": 0.226024
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pl]",
+          "setup": 1.121051,
+          "call": 3.574601,
+          "teardown": 0.184218
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_extracted_korean_product_offers_candidates_before_continuing",
+          "setup": 1.087067,
+          "call": 1.761426,
+          "teardown": 0.18941
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_linked_mobile_source_reselect_preserves_shipment",
+          "setup": 1.123819,
+          "call": 10.206954,
+          "teardown": 0.209284
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[direct]",
+          "setup": 1.166455,
+          "call": 6.087866,
+          "teardown": 0.28601
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[extract]",
+          "setup": 1.598083,
+          "call": 5.35516,
+          "teardown": 0.181163
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[direct]",
+          "setup": 1.172523,
+          "call": 5.133081,
+          "teardown": 0.256369
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[extract]",
+          "setup": 1.094486,
+          "call": 5.751192,
+          "teardown": 0.242557
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_roundtrip_and_separate_process",
+          "setup": 0.001046,
+          "call": 2.53092,
+          "teardown": 0.000342
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_existing_file_is_never_overwritten",
+          "setup": 0.00082,
+          "call": 0.000419,
+          "teardown": 0.000239
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change0]",
+          "setup": 0.001046,
+          "call": 0.000611,
+          "teardown": 0.000218
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change1]",
+          "setup": 0.001626,
+          "call": 0.001052,
+          "teardown": 0.000299
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_expired_credentials_require_new_pairing",
+          "setup": 0.000727,
+          "call": 0.001114,
+          "teardown": 0.000218
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_symlink_credentials_are_rejected_for_read_and_write",
+          "setup": 0.000742,
+          "call": 0.000409,
+          "teardown": 0.000224
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_oversized_file_is_rejected_before_decoding",
+          "setup": 0.00069,
+          "call": 0.000698,
+          "teardown": 0.00024
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_windows_plaintext_and_tampered_dpapi_are_rejected",
+          "setup": 0.000158,
+          "call": 0.0,
+          "teardown": 0.000188
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_windows_acl_with_other_readers_is_rejected",
+          "setup": 0.000162,
+          "call": 0.0,
+          "teardown": 0.000213
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_posix_world_readable_credentials_are_rejected",
+          "setup": 0.000685,
+          "call": 0.000539,
+          "teardown": 0.000188
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_ownership_and_duplicate_results",
+          "setup": 0.745603,
+          "call": 0.668138,
+          "teardown": 0.134987
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_concurrent_claim_and_complete",
+          "setup": 0.679459,
+          "call": 0.270176,
+          "teardown": 0.115715
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_reconnection_and_late_completion",
+          "setup": 0.683603,
+          "call": 0.463429,
+          "teardown": 0.114694
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_encrypted_delivery_between_connections_and_revocation",
+          "setup": 0.738639,
+          "call": 0.414515,
+          "teardown": 0.119808
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_existing_user_upgrade_preserves_default_and_data",
+          "setup": 0.000687,
+          "call": 0.80504,
+          "teardown": 0.000299
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow",
+          "setup": 4.743821,
+          "call": 24.63682,
+          "teardown": 0.331764
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[401-WORKER_KEY_REQUIRED-1-]",
+          "setup": 4.161181,
+          "call": 8.297889,
+          "teardown": 0.285686
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[429-WORKER_RATE_LIMIT-1-]",
+          "setup": 5.121697,
+          "call": 8.942454,
+          "teardown": 0.322577
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-]",
+          "setup": 3.97658,
+          "call": 13.940322,
+          "teardown": 0.394207
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-SLOW503]",
+          "setup": 3.965359,
+          "call": 30.638289,
+          "teardown": 0.31126
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_results",
+          "setup": 4.19053,
+          "call": 25.917023,
+          "teardown": 0.324824
+        }
+      ]
+    },
+    {
+      "run": "on-3",
+      "source_sha256": "40cb2ba7921a9f68d2d923a88feccc646e5a858f720c07dc722e282d664a5b57",
+      "phases": [
+        {
+          "phase": "call",
+          "role": "pytest",
+          "seconds": 243.581255,
+          "count": 111
+        },
+        {
+          "phase": "collection",
+          "role": "pytest",
+          "seconds": 2.346499,
+          "count": 1
+        },
+        {
+          "phase": "db.create",
+          "role": "postgres",
+          "seconds": 1.763294,
+          "count": 87
+        },
+        {
+          "phase": "db.drop",
+          "role": "postgres",
+          "seconds": 1.019057,
+          "count": 87
+        },
+        {
+          "phase": "db.migration",
+          "role": "postgres",
+          "seconds": 20.152871,
+          "count": 93
+        },
+        {
+          "phase": "db.schema",
+          "role": "postgres",
+          "seconds": 20.144809,
+          "count": 93
+        },
+        {
+          "phase": "db.server_start",
+          "role": "postgres",
+          "seconds": 2.274914,
+          "count": 5
+        },
+        {
+          "phase": "db.server_stop",
+          "role": "postgres",
+          "seconds": 0.560055,
+          "count": 5
+        },
+        {
+          "phase": "frontend.build",
+          "role": "vite",
+          "seconds": 3.143015,
+          "count": 4
+        },
+        {
+          "phase": "http.request",
+          "role": "local",
+          "seconds": 1.148145,
+          "count": 113
+        },
+        {
+          "phase": "http.request",
+          "role": "openai",
+          "seconds": 0.127171,
+          "count": 13
+        },
+        {
+          "phase": "http.request",
+          "role": "server",
+          "seconds": 56.204768,
+          "count": 464
+        },
+        {
+          "phase": "process.ready",
+          "role": "openai",
+          "seconds": 11.431938,
+          "count": 6
+        },
+        {
+          "phase": "process.ready",
+          "role": "pc",
+          "seconds": 20.881931,
+          "count": 9
+        },
+        {
+          "phase": "process.ready",
+          "role": "server",
+          "seconds": 19.411815,
+          "count": 6
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "local",
+          "seconds": 3.486843,
+          "count": 1
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "openai",
+          "seconds": 0.104298,
+          "count": 6
+        },
+        {
+          "phase": "process.ready_wait",
+          "role": "server",
+          "seconds": 19.994664,
+          "count": 6
+        },
+        {
+          "phase": "process.spawn",
+          "role": "local",
+          "seconds": 0.000563,
+          "count": 1
+        },
+        {
+          "phase": "process.spawn",
+          "role": "openai",
+          "seconds": 0.002259,
+          "count": 6
+        },
+        {
+          "phase": "process.spawn",
+          "role": "pc",
+          "seconds": 0.004509,
+          "count": 9
+        },
+        {
+          "phase": "process.spawn",
+          "role": "server",
+          "seconds": 0.00308,
+          "count": 6
+        },
+        {
+          "phase": "process.stop",
+          "role": "local",
+          "seconds": 0.216186,
+          "count": 1
+        },
+        {
+          "phase": "process.stop",
+          "role": "openai",
+          "seconds": 0.901823,
+          "count": 6
+        },
+        {
+          "phase": "process.stop",
+          "role": "pc",
+          "seconds": 47.852218,
+          "count": 9
+        },
+        {
+          "phase": "process.stop",
+          "role": "server",
+          "seconds": 1.062575,
+          "count": 6
+        },
+        {
+          "phase": "setup",
+          "role": "pytest",
+          "seconds": 52.836175,
+          "count": 113
+        },
+        {
+          "phase": "teardown",
+          "role": "pytest",
+          "seconds": 5.739876,
+          "count": 113
+        },
+        {
+          "phase": "tls.certificate",
+          "role": "worker",
+          "seconds": 0.004714,
+          "count": 6
+        },
+        {
+          "phase": "tls.context",
+          "role": "client",
+          "seconds": 0.308473,
+          "count": 29
+        },
+        {
+          "phase": "tls.key",
+          "role": "worker",
+          "seconds": 2.197528,
+          "count": 50
+        }
+      ],
+      "worker_tls_keys": {
+        "seconds": 0.276107,
+        "count": 6
+      },
+      "modules": [
+        {
+          "module": "tests/test_knowledge.py",
+          "setup": 4.325133,
+          "call": 18.757638,
+          "teardown": 0.259804
+        },
+        {
+          "module": "tests/test_knowledge_browser.py",
+          "setup": 0.048066,
+          "call": 24.491308,
+          "teardown": 0.027643
+        },
+        {
+          "module": "tests/test_local_gmail.py",
+          "setup": 11.935287,
+          "call": 10.061816,
+          "teardown": 0.629761
+        },
+        {
+          "module": "tests/test_react_settings.py",
+          "setup": 0.07709,
+          "call": 12.679079,
+          "teardown": 0.04909
+        },
+        {
+          "module": "tests/test_trade_mobile_browser.py",
+          "setup": 11.474951,
+          "call": 61.574831,
+          "teardown": 2.267951
+        },
+        {
+          "module": "tests/test_worker_credentials.py",
+          "setup": 0.007086,
+          "call": 2.11336,
+          "teardown": 0.002271
+        },
+        {
+          "module": "tests/test_worker_postgres.py",
+          "setup": 2.550018,
+          "call": 2.238821,
+          "teardown": 0.46287
+        },
+        {
+          "module": "tests/test_worker_process.py",
+          "setup": 22.418544,
+          "call": 111.664402,
+          "teardown": 2.040486
+        }
+      ],
+      "test_times": [
+        {
+          "nodeid": "tests/test_knowledge.py::test_pipeline_uses_real_pgvector_parent_ranges_and_model_swap",
+          "setup": 0.265248,
+          "call": 0.665772,
+          "teardown": 0.0109
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_missing_page_waits_for_complete_review_and_revision_fencing",
+          "setup": 0.218484,
+          "call": 0.073264,
+          "teardown": 0.011489
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[nan]",
+          "setup": 0.218793,
+          "call": 0.036268,
+          "teardown": 0.01251
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[inf]",
+          "setup": 0.220842,
+          "call": 0.04682,
+          "teardown": 0.012869
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[dimension]",
+          "setup": 0.224893,
+          "call": 0.057331,
+          "teardown": 0.012498
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_vectors_never_publish[count]",
+          "setup": 0.218387,
+          "call": 0.033515,
+          "teardown": 0.011853
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_partial_batch_failure_preserves_successful_index",
+          "setup": 0.221162,
+          "call": 0.105946,
+          "teardown": 0.011993
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_expired_claim_cannot_overwrite_or_automatically_requeue",
+          "setup": 0.228854,
+          "call": 0.057337,
+          "teardown": 0.011447
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_duplicate_is_atomic_per_owner_and_file_reference_is_protected",
+          "setup": 0.250165,
+          "call": 0.029279,
+          "teardown": 0.011744
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_parent_child_foreign_key_rejects_cross_scope_and_dimensions",
+          "setup": 0.390618,
+          "call": 0.055162,
+          "teardown": 0.011752
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_extension_in_existing_schema_and_repeated_migration",
+          "setup": 0.01973,
+          "call": 0.248286,
+          "teardown": 0.011742
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_provider_adapters_preserve_mapping_and_request_options",
+          "setup": 0.000227,
+          "call": 0.000599,
+          "teardown": 0.000151
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_upload_review_ready_and_owner_isolation_over_http",
+          "setup": 0.021389,
+          "call": 4.452048,
+          "teardown": 0.01154
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.docx-data0]",
+          "setup": 0.000401,
+          "call": 1.477245,
+          "teardown": 0.000324
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.xlsx-data1]",
+          "setup": 0.000468,
+          "call": 1.473858,
+          "teardown": 0.000246
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[sample.txt-\\xea\\xb0\\x80\\xec\\x83\\x81 \\xed\\x95\\x9c\\xea\\xb8\\x80 \\xeb\\xac\\xb8\\xec\\x84\\x9c\\nSynthetic test]",
+          "setup": 0.000429,
+          "call": 1.524078,
+          "teardown": 0.000254
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_real_page_rendering_for_supported_formats[image.png-data3]",
+          "setup": 0.00047,
+          "call": 0.36692,
+          "teardown": 0.000252
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data0-hidden_sheet]",
+          "setup": 0.000498,
+          "call": 0.316973,
+          "teardown": 0.000223
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_office_content_that_cannot_be_rendered_is_not_silently_accepted[data1-formula_cache_missing]",
+          "setup": 0.000511,
+          "call": 0.316969,
+          "teardown": 0.000248
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_render_page_limit_encrypted_or_broken_pdf_and_timeout",
+          "setup": 0.000247,
+          "call": 0.900506,
+          "teardown": 0.000255
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_missing_key_and_pc_mode_cannot_fall_back_to_server_key",
+          "setup": 0.353681,
+          "call": 0.010157,
+          "teardown": 0.013639
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_sql_failure_during_replacement_rolls_back_old_index_without_exposing_text",
+          "setup": 0.235809,
+          "call": 0.101303,
+          "teardown": 0.014163
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[wrong.txt-%PDF-1.4\\nFake-signature_mismatch]",
+          "setup": 0.283495,
+          "call": 0.003607,
+          "teardown": 0.012416
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[unknown.hwp-fake-unsupported_format]",
+          "setup": 0.262873,
+          "call": 0.003772,
+          "teardown": 0.01121
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[empty.txt--empty_file]",
+          "setup": 0.266602,
+          "call": 0.004013,
+          "teardown": 0.011909
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_invalid_uploads_do_not_create_storage_or_document[large.txt-data3-file_too_large]",
+          "setup": 0.361116,
+          "call": 0.010582,
+          "teardown": 0.011096
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[missing_key]",
+          "setup": 0.020208,
+          "call": 0.379602,
+          "teardown": 0.010778
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_upload_preflight_stores_nothing_without_key_or_listener[closed_listener]",
+          "setup": 0.019366,
+          "call": 0.326935,
+          "teardown": 0.011751
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_local_supabase_users_without_gmail_embed_separately_and_retry_checks_key",
+          "setup": 0.019116,
+          "call": 5.242607,
+          "teardown": 0.018027
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[3]",
+          "setup": 0.000689,
+          "call": 0.432084,
+          "teardown": 0.000304
+        },
+        {
+          "nodeid": "tests/test_knowledge.py::test_vision_sdk_retries_timeout_three_times_with_long_read_budget[4]",
+          "setup": 0.000362,
+          "call": 0.0048,
+          "teardown": 0.000221
+        },
+        {
+          "nodeid": "tests/test_knowledge_browser.py::test_browser_upload_compare_conflict_confirm_chunks_and_mobile",
+          "setup": 0.024586,
+          "call": 11.639897,
+          "teardown": 0.012791
+        },
+        {
+          "nodeid": "tests/test_knowledge_browser.py::test_local_browser_missing_key_retry_failure_and_recovery_without_gmail",
+          "setup": 0.02348,
+          "call": 12.851411,
+          "teardown": 0.014852
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_login_without_pubsub_starts_at_current_history_and_never_watches",
+          "setup": 0.393544,
+          "call": 0.114927,
+          "teardown": 0.014546
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_collection_uses_env_key_and_only_explicit_approval_sends_once",
+          "setup": 0.316989,
+          "call": 0.659872,
+          "teardown": 0.015487
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_repeated_history_and_all_pages_do_not_duplicate",
+          "setup": 0.270269,
+          "call": 0.321848,
+          "teardown": 0.014985
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[page]",
+          "setup": 0.260882,
+          "call": 0.307143,
+          "teardown": 0.013986
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_page_or_message_keeps_cursor_then_resumes[message]",
+          "setup": 0.277345,
+          "call": 0.308726,
+          "teardown": 0.013974
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_expired_history_stops_until_explicit_reconnect_at_current_position",
+          "setup": 0.260998,
+          "call": 0.148579,
+          "teardown": 0.014523
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[refresh]",
+          "setup": 0.269758,
+          "call": 0.097535,
+          "teardown": 0.013958
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[401]",
+          "setup": 0.269895,
+          "call": 0.127823,
+          "teardown": 0.014659
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_revoked_or_expired_connection_stops_and_does_not_retry[403]",
+          "setup": 0.250475,
+          "call": 0.100009,
+          "teardown": 0.014752
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_normal_access_token_refresh_continues_collection",
+          "setup": 0.259653,
+          "call": 0.202132,
+          "teardown": 0.014065
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[rateLimitExceeded]",
+          "setup": 0.258721,
+          "call": 0.452018,
+          "teardown": 0.013895
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_gmail_403_quota_error_keeps_token_and_resumes[userRateLimitExceeded]",
+          "setup": 0.257652,
+          "call": 0.186568,
+          "teardown": 0.014866
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_stops_without_google_stop_and_relogin_skips_logged_out_mail",
+          "setup": 0.248148,
+          "call": 0.043775,
+          "teardown": 0.014264
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_cancel_reconnection_stops_local_collection",
+          "setup": 0.24945,
+          "call": 0.029872,
+          "teardown": 0.018528
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[page]",
+          "setup": 0.409593,
+          "call": 0.032482,
+          "teardown": 0.013525
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_logout_during_read_does_not_start_more_runs_or_revive_cursor[message]",
+          "setup": 0.254815,
+          "call": 0.034202,
+          "teardown": 0.016748
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[False]",
+          "setup": 0.306327,
+          "call": 0.379382,
+          "teardown": 0.014999
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connected_users_are_polled_separately_with_same_message_id[True]",
+          "setup": 0.256064,
+          "call": 0.242572,
+          "teardown": 0.013834
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[]",
+          "setup": 0.249617,
+          "call": 0.173172,
+          "teardown": 0.013991
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_owner_configuration_does_not_change_collection[fake-other]",
+          "setup": 0.294717,
+          "call": 0.157434,
+          "teardown": 0.015163
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[demo@example.invalid-labels0-self]",
+          "setup": 0.274518,
+          "call": 0.04313,
+          "teardown": 0.014533
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[no-reply@example.invalid-labels1-no_reply]",
+          "setup": 0.267143,
+          "call": 0.036502,
+          "teardown": 0.015213
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels2-promotion]",
+          "setup": 0.330562,
+          "call": 0.035539,
+          "teardown": 0.016289
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels3-social]",
+          "setup": 0.729334,
+          "call": 0.037578,
+          "teardown": 0.027933
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_shared_filters_skip_mail_without_ai[sender@example.invalid-labels4-not_inbox]",
+          "setup": 0.242958,
+          "call": 0.031344,
+          "teardown": 0.014894
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_failed_initial_profile_read_retries_without_watch",
+          "setup": 0.313468,
+          "call": 0.037946,
+          "teardown": 0.016403
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_profile_response_cannot_reactivate_logged_out_collection",
+          "setup": 0.254543,
+          "call": 0.013737,
+          "teardown": 0.013275
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_process_stop_wakes_idle_loop_and_prevents_more_reads",
+          "setup": 0.248238,
+          "call": 0.000472,
+          "teardown": 0.013687
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_new_collector_resumes_persisted_cursor_after_process_restart",
+          "setup": 0.260743,
+          "call": 0.291375,
+          "teardown": 0.013999
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector",
+          "setup": 0.019585,
+          "call": 0.329935,
+          "teardown": 0.011409
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_real_google_profile_request_reads_position_without_watch",
+          "setup": 0.252152,
+          "call": 0.000266,
+          "teardown": 0.017644
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_actual_local_launcher_collects_while_browser_idle_then_sends_once",
+          "setup": 0.022336,
+          "call": 4.861201,
+          "teardown": 0.013594
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_selects_only_connected_local_retryable_users",
+          "setup": 0.270469,
+          "call": 0.049433,
+          "teardown": 0.014192
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[disconnect]",
+          "setup": 0.259433,
+          "call": 0.01927,
+          "teardown": 0.01427
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[stop]",
+          "setup": 0.258304,
+          "call": 0.015172,
+          "teardown": 0.01463
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[reconnect]",
+          "setup": 0.261182,
+          "call": 0.013194,
+          "teardown": 0.013879
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[public]",
+          "setup": 0.250092,
+          "call": 0.013336,
+          "teardown": 0.013824
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_sql_store_rejects_old_generation_or_ineligible_results[terminal]",
+          "setup": 0.252433,
+          "call": 0.015003,
+          "teardown": 0.014256
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[disconnect]",
+          "setup": 0.250053,
+          "call": 0.022273,
+          "teardown": 0.014454
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[reconnect]",
+          "setup": 0.254502,
+          "call": 0.021062,
+          "teardown": 0.014792
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_connection_change_during_page_prevents_message_reads_and_late_cursor[process_stop]",
+          "setup": 0.75241,
+          "call": 0.020366,
+          "teardown": 0.017197
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_stop_between_separate_body_attachments_prevents_next_read",
+          "setup": 0.295489,
+          "call": 0.033152,
+          "teardown": 0.014442
+        },
+        {
+          "nodeid": "tests/test_local_gmail.py::test_collector_continues_after_one_store_read_fails",
+          "setup": 0.000428,
+          "call": 0.000459,
+          "teardown": 0.000204
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_settings_preserve_user_role_currency_and_counterparty_scopes",
+          "setup": 0.019323,
+          "call": 0.530366,
+          "teardown": 0.010776
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_counterparty_upsert_is_owned_and_rejects_invalid_or_server_fields",
+          "setup": 0.019588,
+          "call": 0.439108,
+          "teardown": 0.011671
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_saved_settings_apply_to_new_documents_and_preserve_existing_issue",
+          "setup": 0.018463,
+          "call": 0.584951,
+          "teardown": 0.012011
+        },
+        {
+          "nodeid": "tests/test_react_settings.py::test_gmail_settings_browser_callbacks_failures_and_mobile",
+          "setup": 0.019716,
+          "call": 11.124654,
+          "teardown": 0.014632
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[pi]",
+          "setup": 0.713603,
+          "call": 8.140265,
+          "teardown": 0.014082
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pi_po_mobile_complete_resize_conflict_retry[po]",
+          "setup": 0.037093,
+          "call": 7.599832,
+          "teardown": 0.012267
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pi]",
+          "setup": 1.527133,
+          "call": 3.603347,
+          "teardown": 0.223445
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[po]",
+          "setup": 1.011305,
+          "call": 4.090242,
+          "teardown": 0.184423
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[ci]",
+          "setup": 0.998723,
+          "call": 3.567652,
+          "teardown": 0.21903
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_product_candidates_select_and_continue[pl]",
+          "setup": 1.004238,
+          "call": 3.587266,
+          "teardown": 0.19257
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_extracted_korean_product_offers_candidates_before_continuing",
+          "setup": 1.063548,
+          "call": 1.866279,
+          "teardown": 0.252303
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_linked_mobile_source_reselect_preserves_shipment",
+          "setup": 1.110372,
+          "call": 9.713028,
+          "teardown": 0.247747
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[direct]",
+          "setup": 1.022681,
+          "call": 5.377497,
+          "teardown": 0.278974
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_ci_standalone_mobile_complete_price_conflict[extract]",
+          "setup": 1.033409,
+          "call": 4.765738,
+          "teardown": 0.215233
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[direct]",
+          "setup": 0.993197,
+          "call": 4.197429,
+          "teardown": 0.188819
+        },
+        {
+          "nodeid": "tests/test_trade_mobile_browser.py::test_pl_mobile_two_approvals_conflict_and_download[extract]",
+          "setup": 0.959649,
+          "call": 5.066256,
+          "teardown": 0.239058
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_roundtrip_and_separate_process",
+          "setup": 0.001009,
+          "call": 2.109719,
+          "teardown": 0.000454
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_existing_file_is_never_overwritten",
+          "setup": 0.001282,
+          "call": 0.000437,
+          "teardown": 0.000242
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change0]",
+          "setup": 0.000891,
+          "call": 0.000566,
+          "teardown": 0.000243
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_credentials_bind_to_explicit_owner_and_service[change1]",
+          "setup": 0.000677,
+          "call": 0.000434,
+          "teardown": 0.000166
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_expired_credentials_require_new_pairing",
+          "setup": 0.000568,
+          "call": 0.00053,
+          "teardown": 0.00021
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_symlink_credentials_are_rejected_for_read_and_write",
+          "setup": 0.000592,
+          "call": 0.000394,
+          "teardown": 0.00021
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_oversized_file_is_rejected_before_decoding",
+          "setup": 0.000744,
+          "call": 0.000781,
+          "teardown": 0.000195
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_windows_plaintext_and_tampered_dpapi_are_rejected",
+          "setup": 0.000175,
+          "call": 0.0,
+          "teardown": 0.000158
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_windows_acl_with_other_readers_is_rejected",
+          "setup": 0.000218,
+          "call": 0.0,
+          "teardown": 0.000224
+        },
+        {
+          "nodeid": "tests/test_worker_credentials.py::test_posix_world_readable_credentials_are_rejected",
+          "setup": 0.00093,
+          "call": 0.000499,
+          "teardown": 0.000169
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_ownership_and_duplicate_results",
+          "setup": 0.635341,
+          "call": 0.514622,
+          "teardown": 0.114663
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_concurrent_claim_and_complete",
+          "setup": 0.64176,
+          "call": 0.253846,
+          "teardown": 0.114106
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_reconnection_and_late_completion",
+          "setup": 0.627013,
+          "call": 0.402108,
+          "teardown": 0.117225
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_encrypted_delivery_between_connections_and_revocation",
+          "setup": 0.645323,
+          "call": 0.314362,
+          "teardown": 0.116492
+        },
+        {
+          "nodeid": "tests/test_worker_postgres.py::test_postgres_existing_user_upgrade_preserves_default_and_data",
+          "setup": 0.000581,
+          "call": 0.753883,
+          "teardown": 0.000384
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_two_real_pc_processes_gmail_without_session_documents_and_manual_flow",
+          "setup": 3.584607,
+          "call": 27.659252,
+          "teardown": 0.29363
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[401-WORKER_KEY_REQUIRED-1-]",
+          "setup": 3.82905,
+          "call": 8.031085,
+          "teardown": 0.335002
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[429-WORKER_RATE_LIMIT-1-]",
+          "setup": 3.954885,
+          "call": 8.213007,
+          "teardown": 0.360689
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-]",
+          "setup": 3.690637,
+          "call": 12.435516,
+          "teardown": 0.379119
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_real_pc_http_errors_do_not_create_documents[503-WORKER_NETWORK-3-SLOW503]",
+          "setup": 3.584753,
+          "call": 31.603532,
+          "teardown": 0.329898
+        },
+        {
+          "nodeid": "tests/test_worker_process.py::test_pc_restart_reads_rotated_or_deleted_env_key_and_disconnect_blocks_results",
+          "setup": 3.774612,
+          "call": 23.72201,
+          "teardown": 0.342148
+        }
+      ]
+    }
+  ],
+  "failure_cleanup_validation": {
+    "expected_failure_returncode": 1,
+    "setup": "passed",
+    "call": "failed",
+    "teardown": "passed",
+    "stopped_processes": 2,
+    "residual_databases": 0,
+    "residual_live_processes": 0,
+    "seconds": 8.733724
+  },
+  "database_container_after_serials": {
+    "memory_peak_bytes": 135835648,
+    "memory_limit_bytes": 1610612736,
+    "oom_events": 0,
+    "oom_kill_events": 0,
+    "oom_killed": false
+  },
+  "full_validation": {
+    "command": "uv run pytest",
+    "passed": 1117,
+    "skipped": 2,
+    "pytest_seconds": 604.15,
+    "docker_exec_wall_seconds": 615.915609,
+    "residual_live_processes": 0,
+    "terminated_zombies": 323,
+    "oom_events": 0,
+    "oom_kill_events": 0,
+    "residual_databases": 0
+  },
+  "cleanup": {
+    "owned_containers_removed": 2,
+    "owned_internal_networks_removed": 1,
+    "remaining_owned_containers": 0,
+    "remaining_owned_networks": 0,
+    "terminated_zombies_released_with_container": 323
+  },
+  "rules_validation": {
+    "linux_python3": "passed",
+    "windows_uv_python": "passed",
+    "warnings": 0
+  }
+}
