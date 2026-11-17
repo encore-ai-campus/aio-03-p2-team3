@@ -216,7 +216,7 @@ export default function PIPage() {
     {notice && <p className="form-success" role="status">{notice}</p>}
     {previousFiles.length > 0 && <section className="pi-question" aria-label="이전 발급 파일">
       <h2>설정 변경 전 발급 파일</h2><p className="section-note">이 파일은 기존 설정으로 발급된 그대로 보존됩니다.</p>
-      <div className="form-actions">{previousFiles.map((file) => <button key={file.file_id} type="button" className="btn"
+      <div className="form-actions">{previousFiles.map((file) => <button key={file.id} type="button" className="btn"
         disabled={busy} onClick={() => perform((signal) => downloadFile(file, token, signal), () => setNotice("이전 발급 파일 다운로드를 요청했습니다."))}>
         이전 {file.file_format.toUpperCase()} 다운로드</button>)}</div>
     </section>}
