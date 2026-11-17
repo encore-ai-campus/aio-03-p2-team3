@@ -90,3 +90,7 @@
 .pl-workspace .packing-quantities>div{min-width:0;overflow-wrap:anywhere}
 .pl-workspace .packing-quantities dt{flex-shrink:0}
 @media(max-width:600px){.pl-workspace .packing-review>.form-actions .blue{flex:1 1 100%}.pl-workspace .pl-package{padding:16px 0}.pl-workspace .pi-progress button{white-space:normal;min-height:44px}}
+
+.product-candidates { margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.product-candidates ul { list-style: none; padding: 0; display: grid; gap: 6px; }
+.product-candidates .btn { text-align: left; white-space: normal; overflow-wrap: anywhere; max-width: 100%; }

@@ -1,4 +1,6 @@
 import { Fragment, useId } from "react"
+import ProductCandidates from "./ProductCandidates"
+import { selectProduct } from "./product-selection"
 import { Link } from "react-router-dom"
 import { newPIItem } from "./pi-input"
 
@@ -13,7 +15,7 @@ function DocumentField({ label, value, onChange, multiline = false, error, ...pr
   </div>
 }
 
-export default function PIForm({ draft, setDraft, step, fields = null, settings, missing = [], disabled = false, onDirty, onShowAll, kind = "pi" }) {
+export default function PIForm({ token, draft, setDraft, step, fields = null, settings, missing = [], disabled = false, onDirty, onShowAll, kind = "pi" }) {
   const wanted = (path) => fields === null || fields.includes(path)
   const invalid = (path) => missing.includes(path) || fields?.includes(path)
   function change(key, value) {
@@ -90,6 +92,10 @@ export default function PIForm({ draft, setDraft, step, fields = null, settings,
             <td><button type="button" className="btn" aria-label={`품목 ${index+1} 삭제`} onClick={() => { onShowAll(); change("items", draft.items.filter((_,i) => i !== index)) }}>삭제</button></td>
           </tr>
           <tr className="pi-item-detail"><td colSpan={6}>
+            <ProductCandidates name={row.product_name} role="sale" token={token} index={index} onSelect={(product) => {
+              onDirty()
+              setDraft((previous) => ({ ...previous, items: previous.items.map((entry) => entry.rowId === row.rowId ? selectProduct(entry, product) : entry) }))
+            }} />
             <label className="pi-price-check"><input type="checkbox" aria-label={`품목 ${index+1} · 단가표 대신 입력한 단가 사용`} checked={row.confirm_price_override ?? false} onChange={(event) => item(index,"confirm_price_override",event.target.checked)} /> 단가표 대신 입력한 단가 사용</label>
             <details open={fields?.some((path) => path === `items.${index}.discount_percent`)}>
             <summary>품목 {index+1} 상세 · 규격·할인{kind === "pi" && "·샘플"}</summary>

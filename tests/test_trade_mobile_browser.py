@@ -4,6 +4,7 @@ from copy import deepcopy
 from hashlib import sha256
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import time
@@ -290,6 +291,91 @@ def ci_browser(database_url, mobile_frontend, monkeypatch):
         yield page, context, client, base
         assert not errors
         browser.close()
+
+
+@pytest.mark.parametrize('kind', ['pi', 'po', 'ci', 'pl'])
+def test_product_candidates_select_and_continue(ci_browser, kind):
+    from tests.test_product_search import seed_demo
+
+    page, context, client, base = ci_browser
+    seed_demo(client)
+    # PO는 매입 카탈로그만 검색한다.
+    if kind == 'po':
+        from tests.test_product_search import DEMO_NAMES
+        for name in DEMO_NAMES:
+            assert client.put('/api/trade/settings/prices', json={
+                'item_name': name, 'role': 'purchase', 'currency': 'USD',
+                'unit_price': '140', 'unit': 'PCS', 'price_basis': 'PCS'}).status_code == 200
+    page.goto(base + '/app/trade/' + kind)
+    page.get_by_role('button', name='직접 작성', exact=False).click()
+    page.get_by_role('navigation', name=kind.upper() + ' 작성 단계').get_by_role(
+        'button', name='품목·포장' if kind == 'pl' else '품목', exact=True).click()
+    name = page.get_by_label('품목명 (영문) · 품목 1', exact=True)
+    quantity = page.get_by_label(('수량' if kind == 'pl' else '유상 수량') + ' · 품목 1', exact=True)
+    quantity.fill('25')
+    name.fill('superligt 2')
+    candidates = page.get_by_role('region', name='품목 1 후보', exact=True)
+    expect(candidates.get_by_role('button')).to_have_count(6)
+    expect(name).to_have_value('superligt 2')  # 후보를 찾았다고 자동 선택하지 않는다.
+    name.fill('슈퍼라이트')
+    expect(candidates.get_by_role('button')).to_have_count(6)
+    page.get_by_role('button', name='품목 추가', exact=True).click()
+    second = page.get_by_label('품목명 (영문) · 품목 2', exact=True)
+    second.fill('수정하지 않을 품목')
+    search_url = '**/api/trade/settings/products/search?*'
+    context.route(search_url, lambda route: route.abort())
+    name.fill('슈퍼라이트 블랙')
+    retry = page.get_by_role('button', name='품목 1 후보 다시 찾기', exact=True)
+    expect(retry).to_be_visible()
+    expect(quantity).to_have_value('25')
+    context.unroute(search_url)
+    retry.click()
+    expect(candidates.get_by_role('button')).to_have_count(2)
+    name.fill('관련없는검색어')
+    expect(candidates).to_contain_text('비슷한 등록 품목이 없습니다')
+    expect(candidates.get_by_role('button')).to_have_count(0)
+    name.fill('슈퍼라이트')
+    expect(candidates.get_by_role('button')).to_have_count(6)
+    chosen = candidates.get_by_role('button', name='LOGITECH PRO X SUPERLIGHT2 Pink 선택', exact=True)
+    chosen.focus()
+    page.keyboard.press('Enter')
+    expect(name).to_have_value('LOGITECH PRO X SUPERLIGHT2 Pink')
+    expect(quantity).to_have_value('25')
+    expect(second).to_have_value('수정하지 않을 품목')
+    layout(page)
+    # 이어서 저장한 서버 초안에도 선택과 수량이 보존된다.
+    page.get_by_role('button', name='품목 2 삭제', exact=True).click()
+    page.get_by_role('button', name='임시 저장', exact=True).click()
+    expect(page).to_have_url(re.compile(r'/\d+$'))
+    path = '/api/trade/' + kind + '/' + page.url.rsplit('/', 1)[1]
+    saved = client.get(path).json()
+    assert saved['input']['items'][0]['product_name'] == 'LOGITECH PRO X SUPERLIGHT2 Pink'
+    assert saved['input']['items'][0]['quantity'] == '25'
+
+
+def test_extracted_korean_product_offers_candidates_before_continuing(ci_browser, monkeypatch):
+    from tests.test_product_search import seed_demo
+
+    page, _context, client, base = ci_browser
+    seed_demo(client)
+    values = pi_input(product_family='other').model_dump(mode='json')
+    values['items'][0].update(product_name='슈퍼라이트', capacity=None)
+    monkeypatch.setattr(pi_agent, 'extract_facts', lambda *_: deepcopy(values))
+    monkeypatch.setattr(trade_router, 'user_openai', lambda *_args, **_kwargs: nullcontext(SimpleNamespace(issue=None)))
+    page.goto(base + '/app/trade/pi')
+    page.get_by_role('button', name='원문 붙여넣기', exact=False).click()
+    page.get_by_label('거래 원문', exact=True).fill('Acme Trading 슈퍼라이트 10 PCS USD PI-100 FOB Busan T/T')
+    page.get_by_role('button', name='원문에서 정보 가져오기', exact=True).click()
+    candidates = page.get_by_role('region', name='품목 1 후보', exact=True)
+    expect(candidates.get_by_role('button')).to_have_count(6)
+    candidates.get_by_role('button', name='LOGITECH PRO X SUPERLIGHT2 Pink 선택', exact=True).click()
+    page.get_by_role('button', name='임시 저장', exact=True).click()
+    expect(page.get_by_role('button', name='최종 검토 만들기', exact=True)).to_be_enabled()
+    saved = client.get('/api/trade/pi/' + page.url.rsplit('/', 1)[1]).json()
+    assert saved['status'] == 'ready'
+    assert saved['document']['items'][0]['quantity'] == '10'
+    assert saved['document']['items'][0]['unit_price'] == '140'
+    assert saved['document']['total'] == '1400.00'
 
 
 def test_ci_linked_mobile_source_reselect_preserves_shipment(ci_browser, tmp_path):
