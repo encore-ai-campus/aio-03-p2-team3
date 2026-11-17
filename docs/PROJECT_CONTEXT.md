@@ -154,7 +154,9 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-16 · Calendar OAuth·최신 main 통합
+마지막 갱신: 2026-11-17 · 문서 4종 모바일 후속 작업 분리
+
+- PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 현재는 계획만 작성했으며 모바일 구현·추가 브라우저 검증은 미착수다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
 
 - 단독 CI 작성은 `/app/trade/ci/standalone`과 `/app/trade/ci/standalone/{id}`를 사용한다. 기존 PI 연결 CI는 기존 주소를 사용한다. 실제 운영 연결은 확인하지 않았다.
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
@@ -175,7 +177,7 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-16 · Calendar OAuth·최신 main 통합
+마지막 갱신: 2026-11-17 · 문서 4종 모바일 전환 계획
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -194,6 +196,7 @@
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
 | React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`·`frontend/` | 1·3~12절·21.1절 및 13~15절 코드 구현. 13~15절의 일부 브라우저 경로와 운영 연결 검증, 16~20·21.2절과 사람의 22절 남음. 콘솔 준비는 사용자 확인이며 실제 계정 로그인·운영 전환 미확인. 상세 검증/제한은 PROGRESS.md·`test-records/20261113_po_ci_pl_screens.md` |
+| PI·PO·CI·PL 모바일 화면 전환 | `docs/plans/trade-mobile-workspaces.md` | 기존 반응형/보류 기록을 확인해 공통·PI/PO, CI 연결/단독, PL/4종 회귀의 3개 작업으로 분리한 계획. 각 절의 선행 작업·수정 범위·완료 기준·새 작업 요청문 포함. 구현 미착수 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |
