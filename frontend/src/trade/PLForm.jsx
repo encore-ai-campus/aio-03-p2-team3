@@ -1,4 +1,6 @@
 import { Fragment, useId } from "react"
+import ProductCandidates from "./ProductCandidates"
+import { selectProduct } from "./product-selection"
 import { newPLItem, newPackage, PACKAGE_FIELDS } from "./pl-input"
 
 const LABELS = { product_name: "품목명 (영문)", quantity: "수량", unit: "단위", package_type: "포장 종류", package_count: "포장 수",
@@ -11,7 +13,7 @@ function Field({ label, value, onChange, multiline = false, ...props }) {
   return <div className="field"><label htmlFor={id}>{label}</label><Control id={id} value={value ?? ""} maxLength={4000} onChange={(event) => onChange(event.target.value)} {...props} /></div>
 }
 
-export default function PLForm({ draft, setDraft, step, fields = null, settings, missing = [], disabled, onDirty, onShowAll }) {
+export default function PLForm({ token, draft, setDraft, step, fields = null, settings, missing = [], disabled, onDirty, onShowAll }) {
   const wanted = (path) => fields === null || fields.includes(path)
   function change(key,value) { onDirty(); setDraft((previous) => ({ ...previous, [key]: value })) }
   function party(role,key,value) { onDirty(); setDraft((previous) => ({ ...previous, [role]: { ...previous[role], [key]: value } })) }
@@ -44,7 +46,11 @@ export default function PLForm({ draft, setDraft, step, fields = null, settings,
           <tr className="pi-item-main">{["product_name","quantity","unit","package_count","package_type"].map((key) => <td key={key}>
             {wanted(`items.${index}.${key}`) || fields?.includes("items") ? itemField("items",index,row,key) : <span className="pi-filled"><small>{LABELS[key]}</small>{row[key] || "미입력"}</span>}</td>)}
             <td><button className="btn" type="button" aria-label={`품목 ${index+1} 삭제`} onClick={() => { onShowAll(); change("items",draft.items.filter((_,i) => i !== index)) }}>삭제</button></td></tr>
-          <tr className="pi-item-detail"><td colSpan={6}><details open={fields?.some((path) => path.startsWith(`items.${index}.`) && !["product_name","quantity","unit","package_count","package_type"].some((key) => path.endsWith(`.${key}`)))}>
+          <tr className="pi-item-detail"><td colSpan={6}>
+            <ProductCandidates name={row.product_name} token={token} index={index} onSelect={(product) => {
+              onDirty()
+              setDraft((previous) => ({ ...previous, items: previous.items.map((entry) => entry.rowId === row.rowId ? selectProduct(entry, product) : entry) }))
+            }} /><details open={fields?.some((path) => path.startsWith(`items.${index}.`) && !["product_name","quantity","unit","package_count","package_type"].some((key) => path.endsWith(`.${key}`)))}>
             <summary>품목 {index+1} 상세 · 중량·부피·규격</summary><div className="settings-fields">{["net_weight_kg","gross_weight_kg","volume_cbm","dimensions","shipping_marks","product_code","capacity","source"].filter((key) => wanted(`items.${index}.${key}`) || fields?.includes("items")).map((key) => itemField("items",index,row,key))}</div>
           </details></td></tr>
         </Fragment>)}</tbody></table></div>

@@ -1,14 +1,29 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Path, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Path, Query, Request, Response, UploadFile
 
 from app.trade.common.api import require_write
 from app.trade.settings import operations
 from app.trade.settings.models import BankInput, CompanyInput, CounterpartyInput, PriceInput
 from app.trade.settings.repository import SQLSettings
 from app.auth.deps import current_user_id
+from app.trade.common.product_search import search_products
 
 router = APIRouter(prefix="/api/trade/settings", tags=["trade-settings"])
+
+
+@router.get("/products/search")
+def products_search(request: Request, response: Response,
+                    q: Annotated[str, Query(min_length=1, max_length=200)],
+                    role: Literal['sale', 'purchase'] | None = None,
+                    user_id: int = Depends(current_user_id)):
+    response.headers['Cache-Control'] = 'private, no-store'
+    rows = SQLSettings(request.app.state.database, user_id).read()['prices']
+    products = [{'id': row['id'], 'item_name': row['item_name'],
+                 'source_code': row['product_code'], 'capacity': row['capacity'], 'unit': row['unit']}
+                for row in rows if role is None or row['role'] == role]
+    candidates = search_products(q, products)
+    return {'candidates': candidates[:20], 'total': len(candidates)}
 
 
 @router.get("")

@@ -233,7 +233,7 @@ export default function PIPage() {
         {screen.fields && <button className="pi-text-button" type="button" disabled={!canEdit} onClick={() => edit(step.key)}>이 단계 전체 수정</button>}
         {dirty && <p className="unsaved" role="status">저장 전 변경사항이 있어요.</p>}
         {current?.status === "issued" && <p className="section-note">수정 저장하면 새 버전으로 바뀝니다. 이미 발급된 파일은 그대로 보존합니다.</p>}
-        <PIForm key={`${step.key}-${screen.fields ? "missing" : "all"}`} draft={draft} setDraft={setDraft} step={step.key} fields={screen.fields} settings={settings}
+        <PIForm token={token} key={`${step.key}-${screen.fields ? "missing" : "all"}`} draft={draft} setDraft={setDraft} step={step.key} fields={screen.fields} settings={settings}
           missing={current?.missing_fields} disabled={!canEdit} onDirty={() => setDirty(true)} onShowAll={() => { if (screen.fields) edit(step.key) }} />
         <div className="pi-step-actions">
           <button className="btn" type="button" disabled={!canEdit} onClick={() => {
