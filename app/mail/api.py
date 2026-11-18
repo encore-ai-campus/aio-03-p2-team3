@@ -44,6 +44,24 @@ def process(request: Request, message_id: int, user_id: int = Depends(bearer_use
 class SendInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     revision: int | None = None
+    expected_subject: str | None = None
+    expected_body: str | None = None
+
+
+class EditCandidateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    subject: str
+    body: str
+    expected_subject: str
+    expected_body: str
+
+
+@router.put("/candidates/{candidate_id}")
+def edit_candidate(request: Request, candidate_id: int, body: EditCandidateInput,
+                   user_id: int = Depends(bearer_user_id)):
+    return _reply(mailbox.edit_candidate, MailStore(request.app.state.database), user_id,
+                  candidate_id, subject=body.subject, body=body.body,
+                  expected_subject=body.expected_subject, expected_body=body.expected_body)
 
 
 class QuotePrices(BaseModel):
@@ -71,4 +89,5 @@ def preview(request: Request, candidate_id: int, user_id: int = Depends(bearer_u
 def send(request: Request, candidate_id: int, body: SendInput, user_id: int = Depends(bearer_user_id)):
     return _reply(mailbox.send_candidate, request.app.state.google_access,
                   MailStore(request.app.state.database), user_id, candidate_id,
-                  storage=request.app.state.storage, revision=body.revision)
+                  storage=request.app.state.storage, revision=body.revision,
+                   expected_subject=body.expected_subject, expected_body=body.expected_body)
