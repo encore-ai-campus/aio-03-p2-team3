@@ -7,7 +7,7 @@
 
 Calendar OAuth 연결·토큰 저장·상태 조회는 이미 있다(`calendar_tokens`, `app/auth/calendar.py`). 그래프 쪽 계약도 정해져 있다 — `CalendarPort`(`app/graph/calendar/ports.py`), `CalendarInput`·`BusySnapshot`(`app/graph/calendar/schemas.py`), 노드 흐름(`app/graph/calendar/nodes.py`). 없는 것은 이 계약을 만족하는 Google 구현뿐이며, `app/main.py`의 `agent_runtime`이 `calendar=`를 주입하지 않아 기본 구현(`UnavailableCalendar`)이 쓰인다. 구현은 Gmail 연동과 같은 포맷을 따른다 — 호출기(`app/clients/`), 어댑터(`app/graph/<도메인>/adapters.py`, SQL과 Google 호출을 어댑터가 소유), 조립은 `make_workflow` 주입. 계약을 새로 정하지 않으므로 하위 작업 사이에 맞출 새 파일은 없다.
 
-## 1. Calendar API 호출기 확장
+## 1. Calendar API 호출기 확장 (완료)
 
 - 할 일: `CalendarClient`(`app/clients/calendar.py`)에 세 호출을 더한다. freebusy 조회(지정 캘린더·시간 범위의 busy 구간, 캘린더별 `errors` 포함), 일정 등록(`events.insert` — 제목·시작·끝·시간대·참석자), 등록 확인(`events.get`). 오류 분류는 `check_calendars`와 같은 체계를 쓴다(401 `TokenExpired`, 403은 서비스 비활성·쿼터·권한 구분, 통신 오류 `GoogleUnavailable`). 응답은 필요한 최소 필드만 파싱한다.
 - 완료 기준: 모의 HTTP로 정상·401·403 세 종류·5xx·불완전한 응답을 구분하는 단위 테스트가 통과한다. 기존 `check_calendars`·Calendar OAuth 회귀가 통과한다. 실제 Google 호출은 하지 않는다.
