@@ -1,6 +1,9 @@
 """PI/PO/CI/PL의 기존 operations/repository를 연결하는 조립 경계."""
 
 from app.graph.schemas import ExecutionResult, WorkflowError
+from app.knowledge import operations as knowledge
+from app.knowledge.repository import SqlRepository
+from app.knowledge.schemas import KnowledgeError
 from app.services.openai_keys import user_openai
 from app.trade.common import operations as common
 from app.trade.common.models import DocumentError
@@ -32,8 +35,9 @@ IMPLEMENTATIONS = {
 
 
 class ExistingDocuments:
-    def __init__(self, *, database, storage=None, key_cipher=None):
+    def __init__(self, *, database, storage=None, key_cipher=None, knowledge_adapters=None):
         self.database, self.storage, self.key_cipher = database, storage, key_cipher
+        self.knowledge_adapters = knowledge_adapters
 
     def schema(self, kind):
         return {"kind": kind, "input_schema": IMPLEMENTATIONS[kind][1].model_json_schema()}
@@ -42,6 +46,19 @@ class ExistingDocuments:
         repository = SQLReviews(self.database, actor_id, command.kind)
         return repository.search_issued(document_number=command.document_number, counterparty=command.counterparty,
                                         issued_from=command.issued_from, issued_to=command.issued_to)
+
+    def search_knowledge(self, actor_id, command):
+        def embedder():
+            if self.knowledge_adapters is None:
+                raise KnowledgeError("knowledge_search_unavailable", "문서함 내용 검색을 연결하지 못했습니다.", 503)
+            return self.knowledge_adapters(actor_id, {})[2]
+
+        try:
+            return knowledge.search(SqlRepository(self.database), actor_id, filename=command.filename,
+                document_id=str(command.document_id) if command.document_id else None,
+                query=command.query, get_embedder=embedder)
+        except KnowledgeError as error:
+            raise WorkflowError(error.code) from None
 
     def get(self, actor_id, command):
         ops, _, repository, _, _ = IMPLEMENTATIONS[command.kind]

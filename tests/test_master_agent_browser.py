@@ -17,6 +17,7 @@ from tests.test_pi_domain import pi_input
 from tests.fakes.gmail import FakeGmailGoogle
 from tests.fakes.google import fake_login
 from tests.test_approval import add_mail
+from tests.test_knowledge import FakeEmbedder, FakeExtractor, FakeRenderer, pdf
 from tests.test_knowledge_browser import serve
 from tests.test_supabase_auth import SUPABASE_URL, FakeJwks
 from app.graph.mail.adapters import ExistingMail
@@ -47,7 +48,8 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         return search(self, actor_id, query, cursor)
 
     monkeypatch.setattr(ExistingMail, 'search', delayed_search)
-    app = app_for(database_url, jwks, google, choices, storage=FakeStorage())
+    app = app_for(database_url, jwks, google, choices, storage=FakeStorage(),
+                  knowledge_adapters=lambda *_: (FakeRenderer(), FakeExtractor(), FakeEmbedder()))
     session = {'access_token': token, 'refresh_token': 'fake-refresh', 'token_type': 'bearer',
         'expires_at': int(time.time()) + 3600, 'expires_in': 3600,
         'user': {'id': str(subject), 'aud': 'authenticated', 'email': 'browser@example.invalid'}}
@@ -165,5 +167,20 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         page.get_by_role('button', name='요청하기', exact=True).click()
         expect(page.get_by_role('alert')).to_contain_text('AI 요청을 처리하지 못했습니다.', timeout=20000)
         expect_stopped('확인 필요')
+        with httpx.Client(base_url=base) as client:
+            response = client.post('/api/knowledge/documents', headers=auth(token),
+                                   files={'file': ('테이블오더.pdf', pdf(), 'application/pdf')})
+            assert response.status_code == 202, response.text
+            document_id = response.json()['id']
+        choices.calls.extend([('search_knowledge_documents', {'filename': '테이블오더'}), '문서함 파일을 찾았습니다.'])
+        page.get_by_label('업무 요청', exact=True).fill('문서함에 있는 테이블오더 문서 볼 수 있어?')
+        page.get_by_role('button', name='요청하기', exact=True).click()
+        expect(page.get_by_text('문서함 파일을 찾았습니다.', exact=True)).to_be_visible(timeout=20000)
+        row.click()
+        page.get_by_role('button', name='문서함 검색 완료').click()
+        page.get_by_role('link', name='테이블오더.pdf 열기').click()
+        expect(page).to_have_url(f'{base}/app/documents?document={document_id}')
+        page.get_by_role('button', name='원본 보기').click()
+        expect(page.get_by_role('img', name='업로드한 원본 1페이지')).to_be_visible(timeout=10000)
         assert not errors
         browser.close()

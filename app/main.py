@@ -120,7 +120,8 @@ def create_app(settings: Settings | None = None, google=None,
         def agent_runtime():
             with checkpoints(database) as saver:
                 yield make_workflow(database=database, checkpointer=saver, access=app.state.google_access,
-                    storage=app.state.storage, key_cipher=make_cipher(config), interactive=True, choose=agent_choose)
+                    storage=app.state.storage, key_cipher=make_cipher(config), interactive=True, choose=agent_choose,
+                    knowledge_adapters=app.state.knowledge_adapters)
 
         app.state.agent = AgentService(ConversationStore(database), agent_runtime)
         collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database)) if config.ai_runtime == "local" else None

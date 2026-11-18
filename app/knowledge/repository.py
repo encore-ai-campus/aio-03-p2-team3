@@ -175,6 +175,46 @@ class SqlRepository:
                     model.document_id == row.id, model.attempt_id == row.published_attempt_id))
             return result
 
+    def find_for_chat(self, owner: int, *, filename: str | None, document_id: str | None) -> list[dict]:
+        query = select(KnowledgeDocument.id, FileAsset.original_filename, KnowledgeDocument.status,
+                       KnowledgeDocument.published_attempt_id).join(FileAsset).where(
+            KnowledgeDocument.user_id == owner, FileAsset.user_id == owner,
+        )
+        if document_id:
+            query = query.where(KnowledgeDocument.id == document_id)
+        else:
+            query = query.where(FileAsset.original_filename.icontains(filename, autoescape=True)).order_by(
+                (func.lower(FileAsset.original_filename) == func.lower(filename)).desc())
+        query = query.order_by(KnowledgeDocument.created_at.desc(), KnowledgeDocument.id).limit(5)
+        with self._session() as session:
+            return [{"document_id": row.id, "filename": row.original_filename, "status": row.status,
+                     "indexed": row.published_attempt_id is not None, "url": f"/app/documents?document={row.id}"}
+                    for row in session.execute(query)]
+
+    def search_clauses(self, owner: int, *, document_id: str | None, vector: list[float],
+                       profile: ModelProfile) -> list[dict]:
+        distance = func.min(KnowledgeChild.embedding.cosine_distance(vector))
+        # ponytail: 본인·게시본·호환 프로필 범위에서 정확 검색한다. 사용량 측정 뒤 벡터 인덱스를 검토한다.
+        nearest = select(KnowledgeChild.parent_id, distance.label("distance")).join(
+            KnowledgeDocument, (KnowledgeDocument.id == KnowledgeChild.document_id)
+            & (KnowledgeDocument.published_attempt_id == KnowledgeChild.attempt_id),
+        ).where(KnowledgeDocument.user_id == owner, KnowledgeChild.user_id == owner,
+                KnowledgeChild.profile_id == profile.fingerprint, KnowledgeChild.dimensions == profile.dimensions)
+        if document_id:
+            nearest = nearest.where(KnowledgeChild.document_id == document_id)
+        nearest = nearest.group_by(KnowledgeChild.parent_id).having(distance <= 0.65).order_by(
+            distance, KnowledgeChild.parent_id).limit(2).subquery()
+        query = select(KnowledgeParent.id, KnowledgeParent.document_id, KnowledgeParent.text,
+                       KnowledgeParent.sources, FileAsset.original_filename).join(
+            nearest, nearest.c.parent_id == KnowledgeParent.id,
+        ).join(KnowledgeDocument, KnowledgeDocument.id == KnowledgeParent.document_id).join(
+            FileAsset, FileAsset.id == KnowledgeDocument.file_id,
+        ).where(KnowledgeParent.user_id == owner, FileAsset.user_id == owner).order_by(nearest.c.distance, KnowledgeParent.id)
+        with self._session() as session:
+            return [{"clause_id": row.id, "document_id": row.document_id, "filename": row.original_filename,
+                     "text": row.text, "sources": row.sources, "url": f"/app/documents?document={row.document_id}"}
+                    for row in session.execute(query)]
+
     def chunks(self, owner: int, document_id: str, offset: int = 0) -> dict:
         with self._session() as session:
             row = _owned(session, owner, document_id)
