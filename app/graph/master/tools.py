@@ -5,7 +5,7 @@ from copy import deepcopy
 from langchain_core.tools import tool
 from pydantic import Field
 
-from app.graph.documents.schemas import DocumentInput, DocumentKind, IssuedDocumentSearch
+from app.graph.documents.schemas import DocumentInput, DocumentKind, IssuedDocumentSearch, KnowledgeDocumentSearch
 
 Positive = Annotated[int, Field(gt=0, strict=True)]
 
@@ -43,6 +43,13 @@ def search_trade_documents(**inputs) -> dict:
     """발급된 본인 PI/PO/CI/PL을 찾는다. 종류, 문서번호, 거래처명, 발급일(한국 날짜, 양끝 포함) 중
     최소 한 조건을 넣는다. issued_from/issued_to는 YYYY-MM-DD다. 발급 당시 버전과 다운로드 파일을 반환한다."""
     return task("documents", "search_issued", **IssuedDocumentSearch.model_validate(inputs).model_dump(mode="json"))
+
+
+@tool(args_schema=KnowledgeDocumentSearch)
+def search_knowledge_documents(**inputs) -> dict:
+    """문서함에 업로드한 본인 파일을 찾거나 조항을 검색한다. 파일 열기에는 filename만, 내용 질문에는 query와
+    알고 있는 filename 또는 검색 결과의 document_id를 넣는다. 파일명만 같을 때는 반환된 후보에서 고른다."""
+    return task("documents", "search_knowledge", **KnowledgeDocumentSearch.model_validate(inputs).model_dump(mode="json"))
 
 
 @tool
@@ -91,5 +98,6 @@ def ask_user(question: str) -> dict:
     return {"question": question}
 
 
-AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, search_trade_documents, document_schema,
+AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, search_trade_documents,
+    search_knowledge_documents, document_schema,
     prepare_document, prepare_issue, prepare_packing, prepare_send, ask_user)}

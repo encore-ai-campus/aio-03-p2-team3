@@ -1,4 +1,5 @@
 """문서 수집 업무. SQLAlchemy·FastAPI·비전/임베딩 SDK를 import하지 않는다."""
+from collections.abc import Callable
 from hashlib import sha256
 from uuid import uuid4
 
@@ -30,6 +31,26 @@ def list_documents(repository: Repository, owner: int, offset: int) -> dict:
 
 def detail(repository: Repository, owner: int, document_id: str) -> dict:
     return repository.read(owner, document_id)
+
+
+def search(repository: Repository, owner: int, *, filename: str | None, document_id: str | None,
+           query: str | None, get_embedder: Callable[[], Embedder]) -> dict:
+    documents = repository.find_for_chat(owner, filename=filename, document_id=document_id) if filename or document_id else []
+    result = {"knowledge_documents": documents, "knowledge_clauses": []}
+    if (filename or document_id) and not documents:
+        return {**result, "knowledge_status": "not_found"}
+    if len(documents) > 1:
+        return {**result, "knowledge_status": "choose_document"}
+    if query is None:
+        return {**result, "knowledge_status": "found"}
+    if documents and not documents[0]["indexed"]:
+        return {**result, "knowledge_status": "not_indexed"}
+    embedder = get_embedder()
+    batch = embedder.embed_documents([query])
+    batch.validate_for(1, embedder.profile)
+    clauses = repository.search_clauses(owner, document_id=documents[0]["document_id"] if documents else None,
+                                        vector=batch.vectors[0], profile=embedder.profile)
+    return {**result, "knowledge_status": "found" if clauses else "no_evidence", "knowledge_clauses": clauses}
 
 
 def chunks(repository: Repository, owner: int, document_id: str, offset: int) -> dict:
