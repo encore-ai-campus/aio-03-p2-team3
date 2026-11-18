@@ -34,7 +34,7 @@ export function plSectionFor(path) {
 export function plMissing(draft) {
   const paths = ["product_family", "incoterms", "shipment_reference"]
   for (const role of ["buyer","seller"]) for (const key of ["legal_name","address"])
-    if (role !== "seller" || key !== "legal_name") paths.push(`${role}.${key}`)
+    if (role !== "seller" || !["legal_name", "address"].includes(key)) paths.push(`${role}.${key}`)
   if (!draft.items.length) paths.push("items")
   draft.items.forEach((row,index) => { for (const key of ["product_name","quantity","unit"]) paths.push(`items.${index}.${key}`) })
   return paths.filter((path) => path === "items" || /^(?:\s*|tbd|unknown|not provided|to be confirmed|n\/a)$/i.test(String(path.split(".").reduce((value,key) => value?.[key], draft) ?? "").trim()))

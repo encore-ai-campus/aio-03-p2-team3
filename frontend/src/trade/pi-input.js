@@ -42,7 +42,7 @@ function blank(value) {
 export function piMissing(draft) {
   const paths = ["product_family", "currency", "incoterms", "payment_terms"]
   for (const role of ["buyer", "seller"]) for (const key of ["legal_name", "address"])
-    if (role !== "seller" || key !== "legal_name") paths.push(`${role}.${key}`)
+    if (role !== "seller" || !["legal_name", "address"].includes(key)) paths.push(`${role}.${key}`)
   if (!draft.items.length) paths.push("items")
   draft.items.forEach((row, index) => {
     for (const key of ["product_name", "unit", "price_basis", "discount_percent"]) paths.push(`items.${index}.${key}`)

@@ -326,15 +326,27 @@ export default function MissingFieldsDialog({ open, kind, draft, missing = [], i
       if (/^Issuing company name is not configured$/i.test(rawMessage)) {
         return { ...row, message: "설정에서 당사 영문 회사명을 등록하세요.", fields: [], settings: "company" }
       }
-      const issuerPath = kind === "PO" ? "buyer.legal_name" : "seller.legal_name"
+      const issuerRole = kind === "PO" ? "buyer" : "seller"
+      const issuerPath = `${issuerRole}.legal_name`
+      const issuerAddressPath = `${issuerRole}.address`
       let detail = row.missing
         ? row.raw === "items" ? { message: "품목 항목을 추가하세요.", fields: [], step: kind === "PL" ? "packing" : kind === "CI" ? null : "items", source: kind === "CI" }
           : { message: `${fieldLabel(row.raw, draft)} 항목${String(readPath(draft, row.raw) ?? "").trim() ? "을 수정하세요" : "의 값을 입력하세요"}.`, fields: validPath(draft, row.raw) ? [row.raw] : [] }
         : issueDetails(row.raw, draft, kind)
+      if (row.raw === issuerAddressPath || detail.fields?.includes(issuerAddressPath)) {
+        const fields = (detail.fields ?? []).filter((path) => path !== issuerAddressPath)
+        const addressIssue = /(?:address.*(?:required|english|translation)|(?:required|english|translation).*address)/i.test(rawMessage)
+        if (fields.length) detail = { ...detail, fields }
+        else if (!String(readPath(draft, issuerAddressPath) ?? "").trim()) {
+          return { ...row, message: "설정에서 당사 회사 주소를 등록하세요.", fields: [], settings: "company" }
+        } else if (addressIssue) {
+          return { ...row, message: "회사 설정에서 당사 회사 주소를 영문으로 수정하세요.", fields: [], settings: "company" }
+        } else return null
+      }
       if (row.raw === issuerPath || detail.fields?.includes(issuerPath)) {
         const fields = (detail.fields ?? []).filter((path) => path !== issuerPath)
         detail = fields.length ? { ...detail, fields }
-          : { message: `${kind === "PO" ? "구매자" : "판매자"} 회사명이 설정의 당사 회사명과 일치하지 않습니다. 회사 설정을 확인한 뒤 다시 저장하세요.`, fields: [], settings: "company" }
+          : { message: `${issuerRole === "buyer" ? "구매자" : "판매자"} 회사명이 설정의 당사 회사명과 일치하지 않습니다. 회사 설정을 확인한 뒤 다시 저장하세요.`, fields: [], settings: "company" }
       }
       return { ...row, ...detail }
     }).filter(Boolean).filter((entry, index, all) => {

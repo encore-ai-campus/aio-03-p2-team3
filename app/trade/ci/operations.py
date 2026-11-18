@@ -33,7 +33,7 @@ def prepare_ci(command: CIInput, source, conflicts=(), issuer=None):
     issuer = issuer if issuer is not None else draft.get("issuer")
     if issuer is not None:
         draft["issuer"] = deepcopy(issuer)
-        apply_issuer_defaults(draft, "CI", issuer, fix_name=True)
+        apply_issuer_defaults(draft, "CI", issuer, fix_name=True, fix_address=True)
     draft["bank"] = None
     draft["conflicts"] = list(conflicts)
     document = calculate(draft)
@@ -48,7 +48,7 @@ def prepare_standalone(command, context, values=None):
     draft.pop("mode", None)
     draft["document_number"] = None
     draft.update(document_type="PI", doc_kind="PI", issuer=deepcopy(context.issuer), bank=None)
-    apply_issuer_defaults(draft, "PI", context.issuer, fix_name=True)
+    apply_issuer_defaults(draft, "PI", context.issuer, fix_name=True, fix_address=True)
     apply_company_profiles(draft, context.counterparties)
     for item in draft.get("items", []):
         item["product_match_confirmed"] = item.pop("confirm_product_override", False) is True

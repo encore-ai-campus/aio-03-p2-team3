@@ -35,9 +35,9 @@ export default function PLForm({ token, draft, setDraft, step, fields = null, se
           const selected = settings.counterparties.find((row) => row.company_key === event.target.value)
           if (selected) change("buyer", Object.fromEntries(["legal_name","address","contact","phone","email","registration_details"].map((key) => [key,selected[key] ?? ""])))
         }}><option value="">거래처 선택</option>{settings.counterparties.map((row) => <option value={row.company_key} key={row.company_key}>{row.legal_name}</option>)}</select></div>}
-      {step === "seller" && <p className="section-note">판매자 회사명 (영문) · {issuerName || <Link to="/settings">회사 설정에 등록해 주세요</Link>}. 설정값이 자동 적용됩니다.</p>}
+      {step === "seller" && <p className="section-note">판매자 회사명·주소는 회사 설정값으로 자동 적용됩니다. {issuerName || <Link to="/settings">회사 설정에 등록해 주세요</Link>}</p>}
       {fields && draft[step]?.legal_name && step !== "seller" && <p className="pi-context">{draft[step].legal_name}</p>}
-      <div className="settings-fields pi-party-fields">{[["legal_name","회사명 (영문)"],["address","주소 (영문)"]].filter(([key]) => !(key === "legal_name" && step === "seller") && wanted(`${step}.${key}`)).map(([key,label]) =>
+      <div className="settings-fields pi-party-fields">{[["legal_name","회사명 (영문)"],["address","주소 (영문)"]].filter(([key]) => !(step === "seller" && ["legal_name", "address"].includes(key)) && wanted(`${step}.${key}`)).map(([key,label]) =>
         <Field key={key} label={label} value={draft[step]?.[key]} multiline={key === "address"} rows={2} aria-invalid={missing.includes(`${step}.${key}`) || undefined} onChange={(value) => party(step,key,value)} />)}</div>
       {!fields && <details className="pi-optional"><summary>담당자·연락처·등록 정보</summary><div className="settings-fields">{[["contact","담당자"],["phone","전화"],["email","이메일"],["registration_details","등록 정보"]].map(([key,label]) =>
         <Field key={key} label={label} value={draft[step]?.[key]} onChange={(value) => party(step,key,value)} />)}</div></details>}

@@ -91,7 +91,7 @@ export default function POPage() {
       if (!controller.signal.aborted) {
         setSettings(data); setSettingsError("")
         if (!documentId) setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer,
-          legal_name: data.company?.legal_name_en || data.company?.company_name || "" } }))
+          legal_name: data.company?.legal_name_en || data.company?.company_name || "", address: data.company?.address || "" } }))
       }
     }).catch((failure) => {
       if (!controller.signal.aborted) setSettingsError(failure.message)
@@ -111,8 +111,9 @@ export default function POPage() {
     setNotice("")
     if (proposal?.status === "pending") setModifying(true)
     const companyName = settings?.company?.legal_name_en || settings?.company?.company_name
-    if (companyName && draft.buyer?.legal_name !== companyName) {
-      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: companyName } }))
+    const companyAddress = settings?.company?.address || ""
+    if (companyName && (draft.buyer?.legal_name !== companyName || draft.buyer?.address !== companyAddress)) {
+      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: companyName, address: companyAddress } }))
       setDirty(true)
     }
     setScreen({ key, fields: null })
@@ -122,7 +123,8 @@ export default function POPage() {
     const company = settings?.company ?? {}
     const companyName = company.legal_name_en || company.company_name
     setDraft((previous) => ({ ...previous, buyer: {
-      ...Object.fromEntries(["address", "contact", "phone", "email", "registration_details"].map((key) => [key, previous.buyer[key] || company[key] || ""])),
+      ...Object.fromEntries(["contact", "phone", "email", "registration_details"].map((key) => [key, previous.buyer[key] || company[key] || ""])),
+      address: company.address || "",
       legal_name: companyName,
     } }))
     setGuided(false)
@@ -207,12 +209,14 @@ export default function POPage() {
 
   const current = resource && String(resource.document_id) === documentId ? resource : null
   const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
+  const issuerAddress = settings?.company?.address || ""
   useEffect(() => {
-    if (current?.status === "needs_input" && !proposal && issuerName && draft.buyer?.legal_name !== issuerName) {
-      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: issuerName } }))
+    if (current?.status === "needs_input" && !proposal && issuerName
+        && (draft.buyer?.legal_name !== issuerName || draft.buyer?.address !== issuerAddress)) {
+      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: issuerName, address: issuerAddress } }))
       setDirty(true)
     }
-  }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, draft.buyer?.legal_name])
+  }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, issuerAddress, draft.buyer?.legal_name, draft.buyer?.address])
   const pending = proposal?.status === "pending"
   const canEdit = !busy && !loading && (!documentId || current)
   const stepIndex = PO_STEPS.findIndex((entry) => entry.key === screen.key)

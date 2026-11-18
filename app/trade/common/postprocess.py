@@ -14,12 +14,12 @@ from app.trade.common.trade_documents import apply_promotion, normalize_quantity
 
 
 # 원본: reference/kekorea/Quotation_KEKOREA/app_postprocess.py _apply_ke_korea_company_defaults
-def apply_issuer_defaults(draft, doc_kind, company, *, fix_name=False):
+def apply_issuer_defaults(draft, doc_kind, company, *, fix_name=False, fix_address=False):
     """Fill the issuing company profile on every shared document workflow.
 
     원본은 KE KOREA 고정값을 채웠다. 이식본은 사용자별 설정(company_profiles 스냅샷)에서
     영문 법인명(legal_name_en → legal_name → company_name)·주소·담당·전화·이메일을 읽어
-    빈 값을 채운다. 개별 무역 문서 입력에서 fix_name이면 법인명을 설정값으로 고정한다.
+    빈 값을 채운다. 문서 작성에서 fix_name/fix_address가 참이면 당사 이름/주소를 설정값으로 고정한다.
     """
     role = "buyer" if doc_kind == "PO" else "seller"
     party = dict(draft.get(role) or {})
@@ -41,6 +41,8 @@ def apply_issuer_defaults(draft, doc_kind, company, *, fix_name=False):
     }
     for field, value in defaults.items():
         if field == "legal_name" and fix_name:
+            party[field] = value
+        elif field == "address" and fix_address:
             party[field] = value
         elif value and not str(party.get(field) or "").strip():
             party[field] = value
