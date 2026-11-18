@@ -13,6 +13,7 @@ def document_evidence(kind, document_id, revision, document):
 
 
 class DocumentPort(Protocol):
+    def schema(self, kind: str) -> dict: ...
     def get(self, actor_id: int, command: DocumentInput) -> dict: ...
     def draft(self, actor_id: int, command: DocumentInput) -> dict: ...
     def propose(self, actor_id: int, command: DocumentInput, *, packing: bool = False) -> dict: ...
@@ -23,7 +24,7 @@ class DocumentPort(Protocol):
 
 
 class DocumentNodes:
-    operations = frozenset({"get", "draft", "approve_packing", "issue"})
+    operations = frozenset({"schema", "get", "draft", "approve_packing", "issue"})
 
     def __init__(self, port: DocumentPort):
         self.port = port
@@ -32,6 +33,8 @@ class DocumentNodes:
         if task.inputs.get("kind") is None:
             return WorkResult(status="needs_input", question=Question(fields=["kind"], message="문서 종류를 선택해 주세요."))
         command = DocumentInput.model_validate(task.inputs)
+        if task.operation == "schema":
+            return WorkResult(status="completed", data=self.port.schema(command.kind))
         if task.operation in {"get", "approve_packing", "issue"} and command.document_id is None:
             return WorkResult(status="needs_input", question=Question(fields=["document_id"], message="대상 문서를 선택해 주세요."))
         if task.operation == "get":
@@ -54,6 +57,10 @@ class DocumentNodes:
             if command.kind == "PL" and packing_only:
                 return WorkResult(status="completed", data={**data, "needs_packing_approval": True}, resume_inputs=resume, evidence=evidence)
             if data["status"] != "ready":
+                if context.memory.get("agent_mode"):
+                    # 부족한 실제 값/기존 input을 모델로 돌려 자연어 질문과 같은 문서 수정을 잇는다.
+                    return WorkResult(status="completed", data={**data, "needs_input": True},
+                                      resume_inputs=resume, evidence=evidence)
                 # 계산된 실제 누락/충돌과 기존 문서 ID를 보존하여 보완 때 새 문서를 만들지 않는다.
                 return WorkResult(status="needs_input", data=data, resume_inputs=resume, evidence=evidence,
                     question=Question(fields=["values"], message="누락값과 오류를 확인해 문서 입력값을 보완해 주세요."))

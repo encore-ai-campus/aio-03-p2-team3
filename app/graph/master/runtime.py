@@ -5,6 +5,7 @@ from copy import deepcopy
 from threading import RLock
 
 from langgraph.types import Command
+from langchain_core.messages import HumanMessage, message_to_dict
 
 from app.graph.build import build_workflow
 from app.graph.master.context import Dependencies, _ExecutionGrant, execution_grant
@@ -14,6 +15,7 @@ from app.graph.schemas import Answer, Approval, Plan, PreparedAction, WorkflowEr
 class Workflow:
     def __init__(self, *, dependencies: Dependencies, checkpointer):
         self._graph = build_workflow(dependencies=dependencies, checkpointer=checkpointer)
+        self.dependencies_choose = dependencies.choose is not None
         self._locks = defaultdict(RLock)
 
     @staticmethod
@@ -40,6 +42,9 @@ class Workflow:
                            memory={}, tasks=tasks, results={}, current=None, work=None,
                            rounds={}, repairs={}, attempts={}, actions={}, evidence={}, next="",
                            error=None, summary={}, reflection_enabled=reflection_enabled)
+            initial.update(agent_mode=plan is None and self.dependencies_choose,
+                           agent_calls=0, turn=1, messages=[message_to_dict(HumanMessage(request))],
+                           tool_call=None, dialog_question=None)
             return self._graph.invoke(initial, config=config, durability="sync")
 
     def inspect(self, *, actor_id: int, thread_id: str):
@@ -65,10 +70,12 @@ class Workflow:
                     raise WorkflowError("approval_mismatch")
                 if approval.decision == "approve":
                     grant = _ExecutionGrant(thread_id, action.id, action.content_hash)
-            elif snapshot.next == ("ask_user",):
+            elif snapshot.next in {("ask_user",), ("agent_question",)}:
                 answer = Answer.model_validate(response)
-                question = state["work"]["question"]
-                if answer.task_id != state["current"] or not answer.answers or not set(answer.answers) <= set(question["fields"]):
+                dialog = snapshot.next == ("agent_question",)
+                fields = ["response"] if dialog else state["work"]["question"]["fields"]
+                task_id = "agent" if dialog else state["current"]
+                if answer.task_id != task_id or not answer.answers or not set(answer.answers) <= set(fields):
                     raise WorkflowError("invalid_answer")
             else:
                 raise WorkflowError("use_recover_for_interrupted_execution")
@@ -78,12 +85,33 @@ class Workflow:
             finally:
                 execution_grant.reset(token)
 
+    def message(self, *, actor_id: int, thread_id: str, request: str):
+        """완료된 본인 대화에 새 요청을 잇는다. 대기 중 질문/승인은 resume만 사용한다."""
+        with self._locks[thread_id]:
+            snapshot = self._owned(actor_id, thread_id)
+            if snapshot.next or not snapshot.values.get("agent_mode"):
+                raise WorkflowError("workflow_waiting")
+            messages = [*snapshot.values["messages"], message_to_dict(HumanMessage(request))]
+            return self._graph.invoke(dict(request=request, messages=messages, tasks=[], results={},
+                current=None, work=None, rounds={}, repairs={}, attempts={}, actions={}, evidence={},
+                agent_calls=0, turn=snapshot.values.get("turn", 1) + 1,
+                tool_call=None, dialog_question=None, error=None, summary={}, next=""),
+                config=self._config(thread_id), durability="sync")
+
+    def snapshot(self, *, actor_id: int, thread_id: str):
+        """응답 생성용 상태·중단 값. 서비스 객체/실행 권한은 반환하지 않는다."""
+        with self._locks[thread_id]:
+            snapshot = self._owned(actor_id, thread_id)
+            interrupts = [item.value for task in snapshot.tasks for item in task.interrupts]
+            return {"state": deepcopy(snapshot.values), "waiting": interrupts[0] if interrupts else None,
+                    "pending": bool(snapshot.next)}
+
     def recover(self, *, actor_id: int, thread_id: str):
         """새 승인 없이 쓰지 않는다. 완료 불명 작업은 같은 action의 영수증만 다시 읽는다."""
         with self._locks[thread_id]:
             snapshot = self._owned(actor_id, thread_id)
             state = snapshot.values
-            if snapshot.next in {("ask_user",), ("await_approval",)}:
+            if snapshot.next in {("ask_user",), ("agent_question",), ("await_approval",)}:
                 return deepcopy(state)
             config = self._config(thread_id)
             if not snapshot.next:

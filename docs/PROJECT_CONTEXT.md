@@ -57,6 +57,7 @@
 | `server` + `local_worker` | 연결한 본인 PC의 개인 환경 파일 키, PC 호출 | 서버가 수신·승인 발송, PC가 AI 처리 |
 | `local` | PC `.env` 키, Google 연결과 독립적으로 로컬 앱 호출 | 개인 OAuth·루프백 콜백, 연결된 user_id별 순차 history 수집 |
 
+- React `/app/agent`는 대화 요청→업무 도구 실행→추가 질문/후보 직접 선택→문서/발송 별도 승인과 결과 링크를 제공한다. 기존 마스터에 순차 tool calling을 추가했고 기존 메일·문서 서비스/검증을 재사용한다. 대화·질문·승인은 PostgreSQL 체크포인트와 본인 화면 투영으로 복원하며, 재시작 후 진행 중 외부 쓰기는 자동 재생하지 않는다. 단일 앱 프로세스·사용자별 1건·요청당 최대 12회 모델 호출이다. local_worker·RAG 검색·Calendar 실행은 연결하지 않았다(계약 17.4절).
 - React `/app/inbox`는 본인 수집 메일의 검색/상태·목록/원문·AI 초안·관련 문서와 실제 수신자 확인 뒤 승인 발송을 제공한다. 목록은 30초, 처리 중 상세는 5초에 갱신하며 숨긴 탭의 조회는 쉬고 요청/타이머를 정리한다. `/api/mail/*`는 Bearer 전용이며 기존 승인 서비스를 사용한다. 국내 견적은 같은 화면에서 누락 단가를 채우고 합계/PDF를 확인하며, ready 이후 수정과 동시 변경은 거부한다. 금액·수량은 정수 문자열로 전달한다. 기존 HTML `/inbox`·`/threads/{thread_id}`와 실행 기록 링크는 유지한다. 자유 편집/새 메일 작성·과거 Gmail 전체 동기화는 제공하지 않는다. 공개 페이지도 유지한다.
 - 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. React 로그인·설정·PI에 이어 PO·CI·PL 화면을 구현했다. CI의 PI 목록은 본인 PI마다 최신 버전 한 건만 표시한다. PI 연결 CI의 서버 생성/추출은 선택 버전 승인 후에 가능하다. PI 없이 직접 작성하는 CI는 거래 정보와 선적 정보를 입력하고 기존 판매 단가표·단가 직접 확인 규칙으로 계산해 검토·발급한다. 브라우저에서 가상 데이터로 두 경로를 확인했으며 실제 운영 연결은 확인하지 않았다. PL은 합계 승인과 최종 발급 승인을 따로 수행한다(7절·[API 안내](trade-api.md)). 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
 - 문서함(지식 문서) `/app/documents`·`/api/knowledge/documents`는 PDF/DOCX/XLSX/TXT/PNG/JPEG 업로드 → 전량 비전 전사 → 의심 원문 대조/수정·확정 → 조항 parent-child → 자식 임베딩/pgvector 저장을 제공한다. 원본은 기존 private Storage, 본문·부모·벡터는 기존 PostgreSQL이며 두 모델은 독립 주입/설정이다. 본인만 조회/처리하고 재처리 실패는 이전 성공 인덱스를 보존한다. 이 기능은 저장까지이며 검색·그래프·메일에는 아직 연결하지 않았다(계약 18절). 지식 문서 메뉴는 문서함으로 통합했고 `/app/knowledge`는 선택 문서 query/hash를 보존해 이동한다. 업로드 목록·원본 보기(기존 페이지 렌더러·전체 페이지 수 헤더·이전/다음 탐색)·다운로드는 추출 실패 때도 사용할 수 있다.
@@ -67,8 +68,9 @@
 - 상세 위치: [공통 계약](CONTRACT.md) 6·9·10·15·16절, [독립 문서 API](trade-api.md), [로컬 실행 계획](plans/local-openai-execution.md) 1~5절. 계획 머리말과 README 일부의 '미구현' 표현은 작성 당시 기록이며, 현재 지원 범위는 위 표처럼 코드와 병합된 구현 PR을 대조했다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
-마지막 갱신: 2026-11-13 · 업무별 마스터 상태와 Gmail 호환 경계
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
 
+- 대화형 상태는 messages/agent_calls/turn/tool_call/dialog_question을 더한다. 사용자 요청 회차별 최대 12번 판단하고 실제 결과를 기록한다. 인증 주입과 실행 승인 권한은 체크포인트와 분리한다.
 - 범용 상태는 `app/graph/master/state.py`의 `WorkflowState`, 입출력은 `app/graph/schemas.py`다. 작업 DAG·실제 결과·최신 회차 근거·질문/승인 제안·실행 시도/영수증을 분리한다. 마스터는 순차 실행하고 map을 task/action ID로 교체한다. 외부 효과는 성공/실패/불명으로 구분하며 승인 권한은 체크포인트에 저장하지 않는다. 상세: 계약 2.1·3.0·17절.
 - 정의 원본: `app/graph/state.py`의 `AgentState`·`initial_state`, [공통 계약](CONTRACT.md) 2·3.4·7·12.4절. 입력(`run_id`·`user_id`·`email`), 기억(`thread_context`·`long_term`), 판단(`intent`·`selected_tool`), 거래·결과(`deal_terms`·`required_fields`·`missing_fields`·`candidates`·`quote_draft`·`trade_doc_draft`), 성찰·오류·횟수·종료 상태를 분리한다.
 - `deal_terms`는 국내 `DealTerms`와 무역 `TradeDocTerms`를 `doc_kind`로 구분한다(없으면 `quote`). 무역 수량·금액은 Decimal 문자열이다. 정확한 필드·기본값은 코드와 계약 2·15.2절에 있다(#107·#112).
@@ -78,9 +80,10 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-18 · 기존 AI·국내 견적 재사용·Decisions 제외
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
 
 - 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
+- 대화형 업무 도구는 `master/tools.py`의 10개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`은 전용 루프백 프로세스의 환경 키, `local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
 - 수신 전 `app/llm/mail_gate.py`는 같은 본인 키로 Decisions `gpt-6-luna`의 exclude/keep 한 질문을 호출한다. 명확한 무관 + confidence ≥ 0.95만 제외하고 애매함/회사 업무는 기존 그래프에 전달한다. 오류는 원문 보존 후 needs_review, local_worker는 미지원이다. no-reply/프로모션/소셜만으로 제외하지 않는다. 생성/분석 프롬프트는 기존 분기를 유지하며 analyze_email.v2로 회사 업무 전반을 다룬다.
 - 지식 문서 `DocumentExtractor`/`Embedder`는 위 구조화 호출로 가장하지 않고 OpenAI Responses 시각 입력/Embeddings API를 각각 감싼다. `UserKeyAccess`의 본인/실행 모드 검증은 재사용하며 미지원 local_worker·키 누락은 공용 키 대체 없이 실패한다. 비전 기본값은 현재 OpenAI 모델, 임베딩은 사용자 선택 text-embedding-3-small/1536이며 KNOWLEDGE_*로 따로 바꾼다. 비전 store=False·요청당 180초·SDK 재시도 최대 3회(최초 포함 4번), 임베딩은 기존 30초·재시도 0회이며 진행 시도 프로필 고정과 명시적 재처리를 적용한다. 기존 그래프 도구는 추가/변경하지 않았다.
@@ -94,10 +97,11 @@
 - 개인 PC 실행: `app/worker/{protocol,service,adapter,pc}.py`가 설치된 구조화 정의·모델·소유자·장치·시도/기한을 검증한다. 서버는 키를 받지 않고 큐 결과를 암호화해 전달 후 소비/해제/기한에 지운다. 미완료/거부된 PC 결과로 후보·문서를 저장하지 않으며 만료된 임대는 자동 재배포하지 않는다. 장치 API는 메일 승인·발송·파일 권한을 갖지 않는다(#161·#162). Windows 자격증명은 `credentials.py`의 현재 사용자 DPAPI·보호 DACL, macOS/Linux는 소유자·600 권한으로 보호한다(#163). 상세: 계약 6절.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
-마지막 갱신: 2026-11-18 · 기존 그래프 유지·수신 분류/404 복구 경계
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
 
+- 대화형 마스터는 `plan`에서 업무 도구를 하나 선택하고 기존 prepare/승인/execute 결과를 ToolMessage로 되돌려 다음 행동을 고른다. 읽은 자료는 지시가 아니며 모델이 키/소유자/승인을 지정하지 못한다. 자연어 질문과 승인 interrupt, revision/claim·영수증 경계는 유지한다.
 - 범용 진입점은 `run.Workflow`의 start/inspect/resume/recover, 조립은 `wiring.make_workflow`다. `build.py`의 StateGraph가 계획 검증 → 의존 작업 선택 → 업무 prepare → 질문/성찰/승인 → 현재 대상 재검사 → 실행 직전 체크포인트 → 실행/영수증 조회 → 실제 결과 종합을 담당한다. 메일/문서/일정 폴더의 nodes는 업무를, adapters/ports는 외부 연결을 소유한다.
-- 새 질문/승인은 interrupt로 대기하고 소유자·action/hash를 검증한다. 수정은 새 준비/승인, 취소는 해당 작업과 의존 작업만 종료한다. 응답 유실/재생은 자동 발송/등록 없이 같은 영수증만 조회한다. 운영 saver는 주입해야 하며 InMemorySaver는 재시작 보존을 보장하지 않는다. 새 범용 HTTP/UI와 실제 Calendar 연결은 후속 작업이다. 계약 3.0·17절에 입출력·전이·정상/실패 시나리오가 있다.
+- 새 질문/승인은 interrupt로 대기하고 소유자·action/hash를 검증한다. 수정은 새 준비/승인, 취소는 해당 작업과 의존 작업만 종료한다. 응답 유실/재생은 자동 발송/등록 없이 같은 영수증만 조회한다. 대화형 API는 공식 PostgresSaver를 주입해 재시작 뒤 대기를 보존한다. InMemorySaver는 테스트/기존 수신 호환 경계에만 사용한다. 대화형 HTTP/UI·PostgreSQL saver는 계약 17.4절대로 연결했고 실제 Calendar 실행은 후속 작업이다. 계약 3.0·17절에 입출력·전이·정상/실패 시나리오가 있다.
 - `start_run()`·`build_graph()`는 기존 Gmail 수신/평가/PC 경계를 유지하며 새 마스터의 수신 준비 작업으로 변환한다. 10개 준비 단계의 기존 호출/기록은 `master/inbound.py`가 연결하며 별도 StateGraph를 만들지 않는다. 본문은 `master/`, `mail/`, `documents/`로 이동했고 `nodes/`에는 PC 공개 스키마 재수출 두 개만 남는다. 기존 수신 준비 흐름은 다음과 같다.
   - `load_memory` → `analyze_email` → 일반 `draft_replies` / 거래 `extract_deal` → `check_required` → 누락 `draft_followup` / 충족 `make_quote` → `draft_replies`.
   - 후보 생성 뒤 성찰을 켰으면 `reflect`에서 필요 노드를 재실행·재검증하고, 마지막에 `save_pending`으로 저장한다. 처리 제외는 즉시 끝나며 실패는 `finish_failed`로 간다. 기존 Gmail UI의 승인/메일 발송은 기존 서비스 경로를 유지한다. 새 범용 마스터는 같은 서비스를 승인 검증 뒤 호출한다.
@@ -108,7 +112,9 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-18 · 회사 메일함 검증·실제 수집 404 복구
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
+
+- 대화형 마스터: 실제 StateGraph/PostgresSaver·임시 PostgreSQL·가짜 모델/Google/Storage의 관련 회귀 **85 passed**(42.55초), 프론트 lint·test 12개·build와 규칙 검사 경고 0개를 확인했다. 실제 SDK의 본인 키/도구 바인딩 모의 HTTP, API의 재시작/질문/후보 선택/승인·소유권/중복 차단, Chromium 1440/390px의 메일 발송·PI 발급/PDF·후속 대화/새로고침을 검증했다. 운영/실제 모델 판단 품질과 구분하며 상세는 [검증 기록](test-records/20261118_master_agent.md)에 있다.
 
 - 회사 메일함: 최신 main `4a833a3` 통합 전체 Python **1132 passed·2 skipped**, 프론트 lint/test(12개)/build/환경 검사와 제출 파일 규칙 검사(경고 0개)를 통과했다. 새 수집/제외/복구·Bearer 소유권·실제 Reply-To 확인·기존 승인 발송, Chromium 1440/390px와 키보드 확인창 이동을 자동 검사했다. 실제 Decisions 합성 9건은 업무/애매함 6건 보존·광고 1건 제외·개인/취미 2건 통과이며 운영 정확도 보장이 아니다. 실제 Gmail 프로필/시험 발송에 이어 다른 계정의 가상 업무 메일 수신·Decisions keep(1.0)·기존 그래프·견적 후보 3개 생성을 확인했다. 단가 누락(needs_price) 뒤 사용자 위임으로 가상 단가를 확정하고 첫 후보의 실제 답장·PDF 첨부를 확인했다. 같은 스레드·답장 헤더·첨부 금액·승인 재전달 already_sent·실제 발송 1건을 검증했다. FOB를 국내 견적으로 선택한 기존 문서 정책과 실제 운영 확인은 제한으로 구분한다. 최종 실행 결과와 제한은 [검증 기록](test-records/20261116_mailbox.md)에 있다.
 
@@ -164,10 +170,11 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-18 · React Gmail 콜백·로그아웃 독립 수집·메일함
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
 
 - PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 1절의 공통 모바일 배치와 PI/PO 입력·검토 보완 및 브라우저 검증을 구현했다. 2절 CI 연결/단독도 공통 요약·오류/단계 포커스·입력 보존과 브라우저 발급 검증을 마쳤다. 3절 PL 포장/대조/검토 UI와 4종 브라우저 회귀도 구현했다. 실제 기기 키보드와 운영 연결은 미확인이다. 공통 높이·sticky 작업 버튼·스크롤/포커스 규칙과 재검증 방법은 계획 1절을 재사용한다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
 
+- 대화형 API는 기존 DATABASE_URL에 대화 표와 공식 체크포인트를 저장한다. 앱 시작의 Alembic이 소유권 표를 준비하고 최초 대화 실행 때 saver가 public 표 4개를 준비해 RLS/공개 역할 접근을 제한한다. 실행 중 재시작은 interrupted로 남기고 본인의 명시적 상태 확인으로 이어간다. 운영 DB 적용/실제 모델·발송 확인은 별도다.
 - 단독 CI 작성은 `/app/trade/ci/standalone`과 `/app/trade/ci/standalone/{id}`를 사용한다. 기존 PI 연결 CI는 기존 주소를 사용한다. 실제 운영 연결은 확인하지 않았다.
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
 - 계획 21.1절(#149)은 6·7절을 선행으로 UI 개발과 병행한다. `render.yaml`·`scripts/render-build.sh`가 `uv sync --locked` → `npm ci --include=dev` → `npm run build`와 기존 서버 시작을 연결한다. FastAPI는 `frontend/dist`만 `/app/`에서 제공하며 상세 주소는 `index.html`로 복구하고 누락 자산은 404로 반환한다. `/api`·Google callback·Gmail Pub/Sub·공개 약관·기존 `/static`과 `/`→`/inbox`는 유지한다. 빌드가 없는 개발 환경에서도 서버는 동작하고 UI만 503이다. `frontend/` 파일은 수정하지 않았다. Dashboard 관리 서비스에는 README 절차대로 Build Command/Node 버전을 적용해야 하며 실제 Render 설정·배포 커밋·운영 응답은 미확인이다. 전체 UI 통합 검증/진입 전환은 20절 뒤 21.2절, 실제 운영 전환은 사람의 22절이다. #149는 후속 검증까지 열어 둔다.
@@ -189,7 +196,7 @@
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-18 · 회사 메일함 로컬 구현·실제 검증 구분
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -200,6 +207,7 @@
 | 에이전트 시험 결과 보고서 | `docs/TEST_REPORT.md` | 틀 있음(2026-11-10, 시나리오·판정 기준·시험 환경. 결과는 18·19) |
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
+| 대화형 마스터 업무 도우미 | `docs/plans/master-agent.md`·계약 17.4절·`app/graph/`·`frontend/src/agent/` | 기존 마스터의 도구 반복·본인 API·PostgreSQL 저장·대화/질문/승인 화면을 로컬 연결. 실제/모의 검증 경계는 계획 3절에서 구분 |
 | 회사 메일함·업무 분류·로그아웃 후 수집 | `docs/plans/mailbox.md` | 1~5절 로컬 구현·검증 완료. 로그아웃 후 수집 유지, 확실한 무관 메일만 Decisions 제외, 나머지는 기존 그래프, Bearer API·React 원문/초안/최종 수신자 확인·기존 승인 발송을 연결했다. 그래프 상태/엣지·수집기·React 3000/FastAPI 8000은 유지한다. 실제 Decisions 합성 시험·Gmail 연결/시험 발송과 외부 테스트 메일 수신·기존 그래프·후보 생성을 확인했다. 사용자 위임 뒤 가상 단가 확정·선택 후보의 실제 Gmail 답장/PDF·동일 스레드·중복 발송 방지를 확인했다. 운영 연결·FOB 문서 판단·분류 품질의 제한은 5절과 시험 기록에서 구분한다. |
 | 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 검색·LangGraph·메일 연결 제외 |
 | 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 1절의 연동 메뉴·기존 Gmail 연결/해제/재연결/상태 UI 구현. 회사 설정 장애 경계·서비스별 조회/해제 계약과 가짜 Google/실제 임시 PostgreSQL 브라우저 검증을 포함한다. 2절 Calendar OAuth/카드 활성화 구현. 서버 일회성 state·별도 암호화 토큰·갱신/계정/실패 격리를 검증하며 사람의 콘솔·Render 확인은 #193에 남음 |

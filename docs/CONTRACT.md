@@ -138,6 +138,7 @@ tests/
 | `evidence` | task ID별 최신 조회 회차의 source/reference/version/observed_at 목록. 재조회 때 교체 |
 | `actions`, `attempts` | 준비된 action 스냅샷, 실행 직전 확정한 action ID → 내용 해시 |
 | `next`, `error`, `summary`, `reflection_enabled` | 코드가 정한 다음 노드·계획/맥락 오류·실제 결과 종합·성찰 옵션 |
+| `agent_mode`, `messages`, `agent_calls`, `turn`, `tool_call`, `dialog_question` | 대화형 실행 여부·모델/도구 대화·회차별 호출 수·사용자 요청 회차·현재 도구 호출·자연어 질문. 승인 권한은 포함하지 않음 |
 
 - `Plan`은 중복 task ID·없는 선행 작업·순환·선행 작업에 없는 결과 바인딩을 거절한다. `bindings`는 선행 작업의 **실제** `TaskResult.data` 필드만 연결한다. 실패·취소·불명·검토 필요 결과에 의존하는 작업은 `blocked`이며 독립 작업은 계속한다.
 - 마스터는 순차 스케줄러다. 병렬 쓰기를 도입하지 않았으며 map 필드는 키로 교체한다. 조회 결과를 append해서 이전 회차의 근거와 섞지 않는다.
@@ -206,7 +207,7 @@ tests/
 | `record_result` | 준비 완료/검토 필요/실패 → task ID별 결과 | select_task |
 | `finish` | 실제 task 결과·계획 오류 → summary | END |
 
-- 조립은 `build_workflow(dependencies=..., checkpointer=...)`, 인증/소유권 경계는 `Workflow.start/inspect/resume/recover`다. 실제 서비스 조립은 `wiring.make_workflow`다. checkpointer 미주입은 오류이며 운영용 saver/추가 테이블을 이번 작업에서 만들지 않는다.
+- 조립은 `build_workflow(dependencies=..., checkpointer=...)`, 인증/소유권 경계는 `Workflow.start/inspect/resume/recover`다. 실제 서비스 조립은 `wiring.make_workflow`다. checkpointer 미주입은 오류다. 대화형 연결의 공식 PostgreSQL saver/API는 17.4절을 따른다.
 - 승인 권한은 호출 동안만 유효한 ContextVar에 있으며 한 번 소비된다. 체크포인트의 승인 여부만으로 새 쓰기를 허용하지 않는다. 동일 승인 재전송은 기존 결과를 반환하고 해시 불일치는 거절한다. 불명 결과의 복구는 같은 action/hash 영수증만 읽고 자동 재발송/등록하지 않는다.
 - `InMemorySaver`는 테스트/수신 준비 호환용이다. 프로세스 재시작 보존을 보장하지 않는다. 같은 saver를 주입한 새 runtime에서 대기 재개를 검증했다. 프로세스 간 직렬화와 공급자의 action key/hash 중복 방지는 별도 연결 구현의 책임이다.
 - 업무별 I/O·미연결 경계·정상/실패 시나리오는 17절을 따른다.
@@ -1071,8 +1072,8 @@ TradeDocDraft(TypedDict, total=False):
 | 업무 | 허용 작업 / 입력 | 준비 결과 / 외부 실행 |
 |---|---|---|
 | 마스터 | 자연어 요청 또는 검증된 Plan, 인증된 actor_id, 서버가 부여한 thread_id | 작업 의존성/실제 산출물 연결, 질문/승인 interrupt, 검토/실행 결과 종합. 업무 계산을 하지 않음 |
-| 메일 | `query/draft`: thread_id; `send`: 본인 candidate_id, 선택적 file_ids | 본인 저장 스레드 조회 / 기존 수신 준비로 후보 IDs / 수신·참조 헤더·본문·문서/버전을 고정한 발송 제안. 사용자 후보 선택 후 기존 승인 서비스만 호출 |
-| 문서 | `get/draft/issue`: kind=PI/PO/CI/PL, document_id/revision, values 또는 text, formats; `approve_packing`: PL ID/revision | 기존 operations의 계산/원본 검증 결과. 보완 때 같은 문서의 새 revision. PL 합계와 최종 발급은 별도 승인. 발급 receipt는 기존 파일 ID 목록(file_ids)·해시·다운로드 URL |
+| 메일 | `search`: query/cursor; `query/draft`: thread_id; `send`: 본인 candidate_id, 선택적 file_ids | 본인 수집 목록 검색/저장 스레드 조회 / 기존 수신 준비로 후보 IDs / 수신·참조 헤더·본문·문서/버전을 고정한 발송 제안. 사용자 후보 선택 후 기존 승인 서비스만 호출 |
+| 문서 | `schema/get/draft/issue`: kind=PI/PO/CI/PL, document_id/revision, values 또는 text, formats; `approve_packing`: PL ID/revision | 실제 입력 스키마와 기존 operations의 계산/원본 검증 결과. 보완 때 같은 문서의 새 revision. PL 합계와 최종 발급은 별도 승인. 발급 receipt는 기존 파일 ID 목록(file_ids)·해시·다운로드 URL |
 | 일정 | `find_slots/create`: offset 있는 start/end, IANA timezone, duration_minutes, calendar_ids, participants; 등록은 title/selected_start와 대상 target_calendar_id(조회 대상이 하나면 그 대상) | 모든 대상의 busy 스냅샷 확인, 코드로 교집합 가용 후보 최대 3개. 선택된 구간·참가자·제목·버전을 고정한 등록 제안. 재조회 충돌이면 재선택/재승인 |
 
 - 국내 견적과 Gmail 거래 추출은 기존 계산·도구를 `documents/*_adapter.py`에서 연결한다. 독립 문서 입력 계약은 PI/PO/CI/PL이다. 기존 수신 4개 종료 이유와 PC v1 스키마는 유지한다. `nodes/`에는 PC가 import하는 두 스키마의 재수출만 남긴다.
@@ -1086,7 +1087,7 @@ TradeDocDraft(TypedDict, total=False):
 - 노드 파일은 SQL/HTTP를 import하지 않는다. `mail/adapters.py`는 기존 Gmail 승인 서비스, `documents/adapters.py`는 기존 `app/trade` operations/repository/review/rendering을 연결한다. 계산·가격·PL 합계·CI 원본 정책을 그래프에 복사하지 않는다.
 - `CalendarPort.read_busy/create/lookup`은 실제 공급자 경계다. 기본 `UnavailableCalendar`는 `calendar_not_connected`를 반환하며 가짜 조회/등록 성공을 만들지 않는다. 실제 Google Calendar 권한·API·OAuth 범위 추가는 하지 않았다. 가짜 공급자는 테스트에만 있다.
 - `wiring.make_workflow`의 planner/repair는 기존 `user_openai/call_structured`를 사용한다. 전송 재시도와 성찰 재실행은 별도다. 신규 planner/repair 스키마는 현재 PC v1 registry에 없으므로 local_worker 자연어 계획 호출은 명시적으로 실패하며 서버 키로 대체하지 않는다. 명시적 Plan과 기존 Gmail/문서 AI 경계는 기존 실행 방식을 사용한다.
-- 새 범용 흐름은 Python 진입점이다. 기존 HTTP/UI는 그대로이며 새 start/resume API·React 연결·운영 durable saver는 후속 연결 작업이다. 새 DB migration이나 라이브러리 추가는 없다.
+- 명시적 Plan/Python 진입점과 기존 Gmail 준비 흐름은 유지한다. 대화형 도구 반복·HTTP/UI·PostgreSQL saver는 17.4절에 연결했다.
 - `Workflow` 잠금은 같은 runtime 객체의 단일 프로세스 동시 재개를 막는다. 운영에 여러 runtime/프로세스를 두려면 공유 실행 잠금도 연결해야 한다. 메일은 기존 단일 서버 서비스 claim, 문서는 기존 revision/제안 claim으로 보호한다.
 - 메일 성공 복구에는 실제 Approval의 sent_message_id와 동일 action/hash의 workflow_receipt 실행 기록이 함께 필요하다. 발송 완료와 영수증 기록 사이 장애는 보수적으로 unknown을 유지한다. 체크포인트나 영수증 부재를 미실행 증거로 해석하지 않는다.
 
@@ -1111,6 +1112,16 @@ TradeDocDraft(TypedDict, total=False):
 수업의 모든 구성요소를 새 인프라로 옮기지는 않았다. 기존 메일 기억/요약/오류 감지는 보존하고, 별도 RAG/문서 검색 공급자·캘린더·운영 체크포인터의 실제 연동은 준비된 경계를 통해 추가한다. 관련 요구사항은 R-01~R-11이며 라이브 API 검증(R-12)·성능 비교(R-13)·새 UI 배포(R-14)의 완료를 이 모의 검증으로 주장하지 않는다.
 
 LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 승인 대기 노드 앞에 비멱등 발송을 두지 않는다. 체크포인터와 장기 기억도 구분한다([공식 interrupt 문서](https://docs.langchain.com/oss/python/langgraph/interrupts), [공식 persistence 문서](https://docs.langchain.com/oss/python/langgraph/persistence)).
+
+### 17.4 대화형 업무 도우미 (2026-11-18)
+
+- `/app/agent`·`/app/agent/{id}`와 Bearer 전용 `/api/agent/conversations` GET/POST, `/{id}` GET, `/{id}/messages`·`resume`·`recover` POST를 제공한다. 소유자는 JWT에서 매핑한 내부 사용자이며 타인/없는 ID는 404, 인증 누락은 401이다. 변경 요청은 대화 revision을 확인하고 사용자별 동시 실행 1건만 접수한다. 실행은 기존 BackgroundTasks·단일 앱 프로세스 범위다.
+- `make_workflow(interactive=True)`만 순차 tool calling을 사용한다. `plan`이 기존 본인 키의 Responses 모델에 도구를 바인딩하고, `@tool` 입력을 검증한 뒤 기존 prepare/질문/승인/실행 노드로 전달한다. 실제 `TaskResult`를 ToolMessage로 돌려 다음 행동을 정한다. 한 요청에 모델 호출 최대 12번, 도구 결과의 모델 문맥은 건당 24,000자로 제한한다. 과거 Gmail/명시적 Plan 동작은 유지한다.
+- 도구: `search_mail`, `get_mail`, `prepare_reply`, `get_document`, `document_schema`, `prepare_document`, `prepare_packing`, `prepare_issue`, `prepare_send`, `ask_user`. 모델 입력에 user_id/키/승인은 없다. 문서 입력 스키마·계산·원본·단가·발급 검증은 기존 문서 서비스를 사용하고 AI가 confirm_price_override를 켜지 못하게 한다. 초안의 실제 누락/기존 input/ID/revision을 다음 판단에 돌려 자연어 보완 후 같은 문서를 수정한다.
+- 메일 발송은 모델의 제안 후보와 무관하게 사용자가 후보를 직접 선택한 뒤 실제 Reply-To·본문·첨부를 보고 별도 승인한다. 발급/PL 합계/메일 발송 승인은 분리한다. 취소/unknown은 자동 재시도 없이 끝내고 기존 action/hash/revision·claim·영수증 검증을 재사용한다. 모델의 자유 텍스트와 실제 실행 결과는 화면에서 구분한다.
+- `20261118_master_agent`는 `agent_conversations`에 소유권·revision·실행 상태·화면 투영을 저장한다. 공식 `langgraph-checkpoint-postgres==3.2.1`의 PostgresSaver가 최초 대화 실행 때 기존 DATABASE_URL의 public에 체크포인트 표 4개를 준비한다. 저장소 연결은 autocommit·dict_row·prepare_threshold=0, pool 최대 3개다. 새 대화/체크포인트 표는 RLS·PUBLIC/anon/authenticated 직접 접근 제한을 적용한다. Supabase auth/storage는 변경하지 않는다.
+- 새로고침/재시작 후 질문·승인은 그대로 이어간다. 시작 시 running은 interrupted로 표시하며 외부 쓰기를 자동 재생하지 않는다. 사용자의 상태 확인은 기존 recover를 통해 영수증을 확인하며 새 발송 권한을 만들지 않는다. 이전 회차의 대화/결과 링크도 보존한다.
+- React는 실행 중에만 2초 조회하고 숨긴 탭에서는 쉬며 요청/타이머를 정리한다. 기존 문서 스냅샷·다운로드·메일/문서 상세 링크를 재사용한다. 모델 키는 기존 stored_key/local 경계를 사용하며 local_worker의 도구 대화는 서버 키 대체 없이 거부한다. RAG 검색·Calendar 실행·새 큐·SSE는 범위 밖이다.
 
 ## 18. 문서함(지식 문서) 수집과 벡터 저장
 

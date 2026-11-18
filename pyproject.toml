@@ -28,6 +28,7 @@ dependencies = [
     "pyjwt==2.15.1",
     "pgvector==0.5.1",
     "pypdfium2==5.15.2",
+    "langgraph-checkpoint-postgres==3.2.1",
 ]
 
 [dependency-groups]

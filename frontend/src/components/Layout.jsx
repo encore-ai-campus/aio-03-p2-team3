@@ -4,6 +4,7 @@ import { useAuth } from "../useAuth"
 // 시안의 사이드바(WORKSPACE·MANAGE)·상단바·모바일 헤더·하단탐색. 활성 표시는 NavLink가 담당한다.
 const WORKSPACE_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
+  { to: "/agent", label: "업무 도우미", icon: "◇" },
   { to: "/status", label: "작업현황", icon: "▦" },
   { to: "/inbox", label: "받은 메일", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
@@ -12,7 +13,7 @@ const WORKSPACE_NAV = [
 const MANAGE_NAV = [{ to: "/settings", label: "설정", icon: "⚙" }]
 const BOTTOM_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
-  { to: "/status", label: "작업현황", icon: "▦" },
+  { to: "/agent", label: "업무 도우미", icon: "◇" },
   { to: "/inbox", label: "업무함", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
   { to: "/settings", label: "설정", icon: "⚙" },
@@ -24,6 +25,7 @@ const PAGE_LABELS = {
   "/documents": "문서함",
   "/activity": "실행 기록",
   "/settings": "설정",
+  "/agent": "업무 도우미",
 }
 
 function navClass({ isActive }) {
@@ -60,7 +62,7 @@ export default function Layout() {
       </aside>
       <main className="shell-main">
         <header className="top">
-          <div className="crumb">워크스페이스 / {PAGE_LABELS[pathname] ?? (pathname.startsWith("/trade/pi") ? "PI 작성" : "")}</div>
+          <div className="crumb">워크스페이스 / {PAGE_LABELS[pathname] ?? (pathname.startsWith("/agent/") ? "업무 도우미" : pathname.startsWith("/trade/pi") ? "PI 작성" : "")}</div>
           <div className="top-actions">
             <button className="link-button" type="button" onClick={signOut}>로그아웃</button>
           </div>
