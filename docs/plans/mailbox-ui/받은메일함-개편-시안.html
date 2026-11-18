@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ko" data-zcode-design>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>받은 메일함 개편 시안</title>
+<style>
+/* ===== 토큰 (실제 앱 styles.css 토큰 + 채팅 개편과 동일) ===== */
+:root{
+  --ink:#1c2431; --muted:#5f6b7e; --line:#e8ebef; --blue:#315df5; --blue-ink:#284ee8;
+  --green:#168052; --amber:#9a690d; --red:#b02e3a; --card:#fff;
+  --panel:#f7f8fa; --bubble:#eef2ff; --muted-2:#9aa2b1; --hover:#f1f3f7; --hairline:#eef0f4;
+  --shadow-2:#26324824; --ring:#315df526;
+  --radius-lg:16px; --radius-md:12px; --radius-sm:8px;
+  --ease:cubic-bezier(.2,0,0,1);
+  --spring:cubic-bezier(.34,1.4,.5,1);
+  --t-fast:180ms; --t:240ms; --t-slow:280ms;
+  /* 상태 필: 옅은 배경 + 같은 계열 진한 글자 */
+  --st-awaiting-bg:#eef2ff; --st-awaiting-ink:#284ee8;
+  --st-review-bg:#fdf3e2;   --st-review-ink:#9a690d;
+  --st-sent-bg:#e5f3ec;     --st-sent-ink:#168052;
+  --st-off-bg:#f0f2f6;      --st-off-ink:#5b6575;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink);background:#f5f6f8;font-size:14px;min-height:100vh}
+button{cursor:pointer;font:inherit;border:0;background:none;color:inherit;padding:0}
+button:disabled{cursor:not-allowed}
+a{color:var(--blue)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.card{border:1px solid var(--line);border-radius:12px;background:#fff}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.num{font-variant-numeric:tabular-nums}
+
+/* ===== 목업 컨트롤 바 (제품 아님, 발표용) ===== */
+.mock-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#fff;border-bottom:1px dashed #c9cfda;font-size:12px;color:#5b6575}
+.mock-bar strong{font-size:12px;color:var(--ink)}
+.mock-bar .chip{border:1px solid #d6dce6;border-radius:999px;padding:6px 13px;background:#fff;color:#5b6575;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),transform var(--t-fast) var(--spring)}
+.mock-bar .chip:hover{background:var(--hover)}
+.mock-bar .chip:active{transform:scale(.96)}
+.mock-bar .chip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.mock-bar .note{color:#6b7383}
+
+/* ===== 앱 셸 (채팅 개편 시안과 동일) ===== */
+.shell{max-width:1280px;min-height:calc(100vh - 45px);margin:auto;background:#fff;display:grid;grid-template-columns:218px minmax(0,1fr);box-shadow:0 0 50px #2632480c}
+.side{border-right:1px solid var(--line);padding:23px 14px;position:relative}
+.logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:750;color:var(--ink);padding:0 9px 23px}
+.logo-mark{display:grid;place-items:center;width:31px;height:31px;border-radius:10px;background:var(--blue);color:#fff;font-size:15px;font-weight:700}
+.nav-label{font-size:10px;letter-spacing:.12em;color:#a0a8b3;font-weight:750;padding:13px 10px 7px}
+.nav{width:100%;display:flex;align-items:center;gap:11px;border-radius:9px;padding:10px 11px;text-align:left;font-size:12px;color:#606b7b;margin:2px 0;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.nav svg{width:16px;height:16px;flex:none}
+.nav:hover{background:var(--hover)}
+.nav.active{background:#eef2ff;color:var(--blue-ink);font-weight:700}
+.side-user{position:absolute;left:16px;right:16px;bottom:18px;border-top:1px solid var(--line);padding:14px 4px 0;display:flex;align-items:center;gap:9px;font-size:11px;color:#667181}
+.avatar{height:29px;width:29px;border-radius:50%;display:grid;place-items:center;background:#e9edf7;color:#425477;font-weight:700;font-size:11px}
+.shell-main{min-width:0;display:flex;flex-direction:column;min-height:calc(100vh - 45px)}
+.top{height:61px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 27px}
+.crumb{font-size:11px;color:var(--muted)}
+.top-actions{display:flex;align-items:center;gap:13px;color:#677384;font-size:11px}
+.content{padding:26px 29px 36px;flex:1;min-width:0}
+
+/* ===== 페이지 머리: 상태 링크 없음(요청) ===== */
+.page-head{margin-bottom:16px}
+.page-title{font-size:21px;letter-spacing:-.035em;margin:0}
+.page-sub{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+
+/* ===== 툴바: 상태 탭(밑줄) + 검색 + 갱신 ===== */
+.mailbar{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.tabs{position:relative;display:flex;gap:2px;border-bottom:1px solid var(--line);flex:1;min-width:280px}
+.tab{position:relative;display:inline-flex;align-items:center;gap:7px;padding:9px 12px 11px;font-size:13px;color:#5b6575;border-radius:8px 8px 0 0;white-space:nowrap;flex:none;transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.tab:hover{background:var(--hover)}
+.tab[aria-selected="true"]{color:var(--blue-ink);font-weight:700}
+.tab .count{display:inline-grid;place-items:center;min-width:20px;height:19px;padding:0 6px;border-radius:999px;background:#eef1f6;color:#4e5b6b;font-size:11px;font-weight:700;transition:background var(--t) var(--ease),color var(--t) var(--ease),transform 320ms var(--spring)}
+.tab[aria-selected="true"] .count{background:var(--st-awaiting-bg);color:var(--st-awaiting-ink)}
+.tab .count.bump{animation:bump 460ms var(--spring)}
+@keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.32)}100%{transform:scale(1)}}
+.tab-ink{position:absolute;bottom:-1px;height:2px;background:var(--blue);border-radius:2px;transition:transform 340ms var(--spring),width 340ms var(--spring)}
+.search{display:flex;align-items:center;gap:8px;border:1px solid #dbe0e8;border-radius:9px;background:#fff;padding:0 11px;height:36px;min-width:220px;transition:border-color var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.search:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--ring)}
+.search svg{width:15px;height:15px;color:var(--muted-2);flex:none}
+.search input{border:0;outline:0;flex:1;min-width:0;font:inherit;font-size:12.5px;color:var(--ink);background:none}
+.search input::placeholder{color:#a6adba}
+.search .clear{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;color:#8a93a3;transition:background var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease)}
+.search .clear:hover{background:var(--hover)}
+.search .clear svg{width:12px;height:12px}
+.fresh{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted)}
+.fresh .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid #e0e4e9;border-radius:8px;background:#fff;color:#4e5b6b;transition:background var(--t-fast) var(--ease)}
+.fresh .icon-btn:hover{background:var(--hover)}
+.fresh .icon-btn svg{width:14px;height:14px;transition:transform 480ms var(--ease)}
+.fresh .icon-btn.spin svg{transform:rotate(360deg)}
+
+/* ===== 두 컬럼: 목록 / 상세 (각자 스크롤) ===== */
+.mail-columns{display:grid;grid-template-columns:340px minmax(0,1fr);gap:14px;align-items:stretch}
+.pane{border:1px solid var(--line);border-radius:var(--radius-md);background:#fff;min-width:0;display:flex;flex-direction:column;overflow:hidden;height:clamp(430px,calc(100vh - 330px),720px)}
+.pane-head{padding:13px 16px 11px;border-bottom:1px solid var(--hairline)}
+.pane-head p{margin:0;font-size:11px;color:#6b7484}
+.pane-scroll{flex:1;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+
+/* ----- 목록 행: 두 줄(누가/언제 · 무엇/상태) ----- */
+.rows{display:flex;flex-direction:column}
+.row{position:relative;display:grid;gap:4px;width:100%;text-align:left;padding:12px 16px 12px 18px;border-bottom:1px solid var(--hairline);transition:background var(--t-fast) var(--ease)}
+.row:hover{background:var(--hover)}
+.row::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:transparent;transition:background var(--t) var(--ease)}
+.row.is-selected{background:var(--bubble)}
+.row.is-selected::before{background:var(--blue)}
+.row-top{display:flex;align-items:center;gap:8px;min-width:0}
+.row-top .who{flex:1;min-width:0;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.unread .who{font-weight:700}
+.row-top .when{font-size:11px;color:#5b6575}
+.row-bot{display:flex;align-items:center;gap:8px;min-width:0}
+.row-bot .what{flex:1;min-width:0;font-size:13px;color:#5f6a7c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.unread .row-bot .what{color:var(--ink)}
+.dot-unread{width:6px;height:6px;border-radius:50%;background:var(--blue);flex:none}
+.row.new-arrive{animation:row-in 480ms var(--spring) both, row-flash 1800ms var(--ease) both}
+@keyframes row-in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@keyframes row-flash{from{background:#e7edff}70%{background:#eef2ff}to{background:#fff}}
+
+/* ----- 상태 필 ----- */
+.pill{display:inline-flex;align-items:center;gap:6px;flex:none;height:21px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;transition:background var(--t) var(--ease),color var(--t) var(--ease)}
+.pill.awaiting{background:var(--st-awaiting-bg);color:var(--st-awaiting-ink)}
+.pill.review{background:var(--st-review-bg);color:var(--st-review-ink)}
+.pill.sent{background:var(--st-sent-bg);color:var(--st-sent-ink)}
+.pill.off{background:var(--st-off-bg);color:var(--st-off-ink)}
+.pill .pd{width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.processing{background:var(--st-off-bg);color:#3d4a66}
+.pill.processing .pd{background:var(--blue);animation:pulse-dot 1.3s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+
+.pane-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid var(--hairline);font-size:11.5px;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:9px;border:1px solid #dbe0e8;background:#fff;color:#38445a;font-size:12.5px;font-weight:650;transition:background var(--t-fast) var(--ease),transform 140ms var(--spring),opacity var(--t-fast) var(--ease)}
+.btn:hover{background:var(--hover)}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.5}
+.btn svg{width:14px;height:14px}
+.btn.blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.blue:hover{background:var(--blue-ink)}
+.btn.sm{height:29px;padding:0 11px;font-size:11.5px;border-radius:8px}
+
+/* ===== 상세 컬럼 ===== */
+.detail-head{position:sticky;top:0;z-index:5;background:#fff;padding:16px 20px 13px;border-bottom:1px solid var(--hairline)}
+.back{display:none;align-items:center;gap:6px;font-size:12px;color:var(--blue-ink);font-weight:700;margin-bottom:9px}
+.back svg{width:14px;height:14px}
+.detail-head h2{margin:0;font-size:16.5px;letter-spacing:-.02em;overflow-wrap:anywhere}
+.detail-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.detail-meta .addr{color:var(--ink);font-weight:650}
+.detail-meta .flow{display:inline-flex;align-items:center;gap:5px}
+.detail-meta .flow svg{width:12px;height:12px;color:var(--muted-2)}
+.detail-body{padding:18px 20px 26px;display:flex;flex-direction:column;gap:22px}
+.sec h3{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:13px;font-weight:750;color:var(--ink)}
+.sec h3 .n{font-size:11px;font-weight:700;color:var(--muted-2)}
+.sec h3 svg{width:15px;height:15px;color:var(--muted-2)}
+.notice{display:flex;align-items:flex-start;gap:10px;border:1px solid #f0dfb2;background:#fdf8ec;border-radius:10px;padding:12px 14px;font-size:12px;color:#7a5a12;line-height:1.6}
+.notice svg{width:15px;height:15px;flex:none;margin-top:1px;color:var(--amber)}
+.notice .btn{margin-left:auto;flex:none}
+.notice.plain{border-color:var(--line);background:var(--panel);color:#4e5b6b}
+.notice.plain svg{color:#8a93a3}
+
+/* 원문과 대화 */
+.msg{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden;transition:border-color var(--t-fast) var(--ease)}
+.msg:hover{border-color:#d5dbe4}
+.msg-head{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:10px 13px;font-size:12px;color:#4e5b6b}
+.msg-head .dir{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--panel);color:#5b6575;flex:none}
+.msg-head .dir svg{width:13px;height:13px}
+.msg.out .msg-head .dir{background:#e5f0ff;color:#2b62c9}
+.msg-head .mwho{font-weight:650;color:var(--ink)}
+.msg-head .mwhen{color:#6b7484;font-size:11px}
+.msg-head .chev{margin-left:auto;width:14px;height:14px;color:var(--muted-2);transition:transform var(--t) var(--ease)}
+.msg[data-open] .msg-head .chev{transform:rotate(180deg)}
+.msg-body{padding:2px 14px 13px 46px;font-size:13px;line-height:1.75;color:#333d52;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg-body .mto{font-size:11px;color:var(--muted);margin:0 0 8px}
+
+/* AI 답장 초안 후보 */
+.cand{border:1px solid #dbe1ec;border-radius:var(--radius-md);padding:15px 16px;margin-bottom:10px;transition:border-color var(--t) var(--ease),opacity var(--t) var(--ease)}
+.cand:hover{border-color:#c6cfdd}
+.cand-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:999px;background:#eef2ff;color:var(--blue-ink);font-size:11px;font-weight:750}
+.tag.dim{background:var(--st-off-bg);color:var(--st-off-ink)}
+.cand-head .csub{flex:1;min-width:0;font-size:12.5px;font-weight:650;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cand-body{font-size:13px;line-height:1.75;color:#333d52;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 12px}
+/* 첨부 요약: 기본 노출(접지 않음) */
+.attach{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:9px 12px;margin-bottom:12px;font-size:11.5px;color:#4e5b6b;flex-wrap:wrap}
+.attach .file{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink)}
+.attach .file svg{width:14px;height:14px;color:var(--blue)}
+.attach .sum{margin-left:auto;color:var(--muted)}
+.attach .sum b{color:var(--ink)}
+.attach.warn{border-color:#eeddc0;background:#fdf8ec}
+.attach.warn .file svg{color:var(--amber)}
+.cand-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.cand-actions .why{font-size:11.5px;color:var(--amber)}
+/* 단가 입력(needs_price): 접지 않고 카드 안에 노출 */
+.price-form{border-top:1px dashed #d9dee8;padding-top:12px;margin:2px 0 12px}
+.price-form p{margin:0 0 9px;font-size:11.5px;color:var(--muted)}
+.price-grid{display:grid;gap:9px;max-width:420px}
+.price-grid label{display:grid;gap:5px;font-size:11.5px;color:#4e5b6b;font-weight:650}
+.price-grid input{border:1px solid #dbe0e8;border-radius:8px;height:34px;padding:0 11px;font:inherit;font-size:12.5px;min-width:0;transition:border-color var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.price-grid input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px var(--ring)}
+.price-total{display:flex;gap:16px;font-size:11.5px;color:#4e5b6b;margin-top:10px;flex-wrap:wrap}
+.price-total b{color:var(--ink)}
+/* 발송 완료 상태 */
+.sent-line{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--green);font-weight:700}
+.sent-line svg{width:17px;height:17px}
+.sent-line svg path{stroke-dasharray:24;stroke-dashoffset:24;animation:draw 520ms 120ms var(--ease) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.cand.is-sent{border-color:#cfe7db;background:#f6fbf8}
+.cand.is-done-anim{animation:cand-ok 640ms var(--spring)}
+@keyframes cand-ok{0%{transform:scale(1)}30%{transform:scale(1.012)}100%{transform:scale(1)}}
+/* 처리 중 상세 */
+.proc{display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);border-radius:10px;padding:16px}
+.proc .p-top{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink);font-weight:650}
+.proc .p-top .pd{width:8px;height:8px;border-radius:50%;background:var(--blue);animation:pulse-dot 1.3s ease-in-out infinite}
+.proc .p-sub{font-size:11.5px;color:var(--muted)}
+.proc .track{position:relative;height:5px;border-radius:999px;background:#edf0f5;overflow:hidden}
+.proc .track i{position:absolute;top:0;bottom:0;width:34%;border-radius:999px;background:var(--blue);animation:slide-track 1.5s var(--ease) infinite}
+@keyframes slide-track{0%{left:-34%}100%{left:100%}}
+.ell i{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--muted-2);margin-left:3px;animation:blink 1.2s infinite}
+.ell i:nth-child(2){animation-delay:.2s}.ell i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+
+/* ===== 발송 확인 모달 ===== */
+.overlay{position:fixed;inset:0;z-index:80;background:#1c243159;opacity:0;visibility:hidden;transition:opacity var(--t) var(--ease),visibility var(--t) var(--ease);display:grid;place-items:center;padding:18px}
+.overlay.show{opacity:1;visibility:visible}
+.modal{width:min(560px,100%);max-height:min(78vh,720px);overflow:auto;background:#fff;border-radius:var(--radius-lg);box-shadow:0 24px 70px var(--shadow-2);transform:scale(.94) translateY(10px);opacity:0;transition:transform 320ms var(--spring),opacity 220ms var(--ease)}
+.overlay.show .modal{transform:none;opacity:1}
+.modal-head{display:flex;align-items:center;gap:10px;padding:17px 20px 0}
+.modal-head h2{margin:0;font-size:15.5px;letter-spacing:-.02em}
+.modal-head .close{margin-left:auto;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;color:#8a93a3;transition:background var(--t-fast) var(--ease)}
+.modal-head .close:hover{background:var(--hover)}
+.modal-head .close svg{width:15px;height:15px}
+.modal-body{padding:14px 20px 4px}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:7px 12px;font-size:12.5px;margin:0 0 12px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;color:var(--ink);font-weight:650;overflow-wrap:anywhere}
+.modal .cand-body{border-left:3px solid var(--bubble);border-radius:6px;background:#fbfcff;padding:11px 13px}
+.modal-foot{display:flex;align-items:center;gap:9px;padding:14px 20px 18px}
+.modal-foot .note{flex:1;font-size:11px;color:var(--muted)}
+.spinner{width:15px;height:15px;animation:spin 900ms linear infinite}
+.spinner circle{stroke-dasharray:42}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== 토스트 ===== */
+.toast{position:fixed;right:22px;bottom:22px;z-index:90;display:flex;align-items:flex-start;gap:10px;max-width:380px;background:var(--ink);color:#fff;border-radius:12px;padding:13px 16px;font-size:12.5px;line-height:1.55;box-shadow:0 16px 40px #26324840;transform:translateY(14px);opacity:0;visibility:hidden;transition:transform 340ms var(--spring),opacity var(--t) var(--ease),visibility var(--t) var(--ease)}
+.toast.show{transform:none;opacity:1;visibility:visible}
+.toast svg{width:16px;height:16px;flex:none;margin-top:1px;color:#8fd7b2}
+
+/* ===== 입장 모션(스태거) ===== */
+.enter{animation:enter 460ms var(--ease) both;animation-delay:calc(var(--i,0)*55ms)}
+@keyframes enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* ===== 모션 끔 / 줄임 ===== */
+html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="off"] *::after{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ===== 모바일: 한 영역씩 ===== */
+@media(max-width:880px){
+  .shell{grid-template-columns:1fr;box-shadow:none}
+  .side{display:none}
+  .top{padding:0 18px}
+  .content{padding:18px 18px 26px}
+  .mailbar{gap:10px}
+  .tabs{order:1;min-width:100%;overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .search{order:2;min-width:100%}
+  .fresh{order:3;margin-left:auto}
+  .mail-columns{grid-template-columns:1fr}
+  .pane{height:auto}
+  .pane-scroll{overflow:visible}
+  body[data-view="list"] .pane-detail{display:none}
+  body[data-view="detail"] .pane-list{display:none}
+  .back{display:inline-flex}
+  .notice{flex-wrap:wrap}
+  .notice .btn{margin-left:0}
+  .kv{grid-template-columns:1fr;gap:2px 0}
+  .kv dd{margin-bottom:8px}
+}
+</style>
+</head>
+<body data-view="list">
+
+<!-- 목업 컨트롤 (발표용, 실제 화면엔 없음) -->
+<div class="mock-bar" role="toolbar" aria-label="시안 컨트롤">
+  <strong>받은 메일함 개편 시안</strong>
+  <button class="chip" id="replay" type="button">처음부터 재생</button>
+  <button class="chip" id="new-mail" type="button">새 메일 받기</button>
+  <span aria-hidden="true" style="width:1px;height:16px;background:#dfe3ea"></span>
+  <button class="chip" id="motion-toggle" type="button" aria-pressed="false">모션 끔</button>
+  <span class="note">위 칩은 목업용 · 후보의 '발송 내용 확인'부터 눌러보세요</span>
+</div>
+
+<div class="shell">
+  <!-- 기존 앱 사이드바(그대로) -->
+  <aside class="side">
+    <div class="logo"><span class="logo-mark" aria-hidden="true">T</span>TradeMate</div>
+    <div class="nav-label">작업</div>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>문서작성</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l2.5-2.5A8 8 0 1 1 21 12z"/></svg>업무 도우미</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l4-6 4 3 5-8 3 4"/><path d="M4 21h16"/></svg>작업현황</button>
+    <button class="nav active" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>받은 메일</button>
+    <div class="nav-label">관리</div>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>문서함</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>실행 기록</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6A7 7 0 0 0 19 12z"/></svg>설정</button>
+    <div class="side-user"><span class="avatar" aria-hidden="true">정</span>정원철 님</div>
+  </aside>
+
+  <div class="shell-main">
+    <header class="top"><span class="crumb">작업 · 받은 메일</span><span class="top-actions num" id="stamp-top">14:32 갱신</span></header>
+    <main class="content">
+      <!-- 머리: 연결 상태 링크 제거(요청) -->
+      <div class="page-head enter" style="--i:0">
+        <h1 class="page-title">받은 메일</h1>
+        <p class="page-sub">원문과 AI 답장 초안을 확인하고, 보낼 답장을 골라 승인하세요.</p>
+      </div>
+
+      <!-- 툴바: 상태 탭(건수) + 검색 + 갱신 -->
+      <div class="mailbar enter" style="--i:1">
+        <div class="tabs" role="tablist" aria-label="상태별 메일" id="tabs">
+          <button class="tab" role="tab" aria-selected="true" data-filter="awaiting">답장 대기 <span class="count num" data-count="awaiting">0</span></button>
+          <button class="tab" role="tab" aria-selected="false" data-filter="review">확인 필요 <span class="count num" data-count="review">0</span></button>
+          <button class="tab" role="tab" aria-selected="false" data-filter="processing">처리 중 <span class="count num" data-count="processing">0</span></button>
+          <button class="tab" role="tab" aria-selected="false" data-filter="all">전체 <span class="count num" data-count="all">0</span></button>
+          <span class="tab-ink" id="tab-ink" aria-hidden="true"></span>
+        </div>
+        <label class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="제목 또는 보낸 사람" autocomplete="off">
+          <button class="clear" id="q-clear" type="button" hidden aria-label="검색어 지우기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </label>
+        <span class="fresh">
+          <button class="icon-btn" id="refresh" type="button" aria-label="새로 고침"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg></button>
+          <span class="num" id="stamp">14:32 갱신</span>
+        </span>
+      </div>
+
+      <div class="mail-columns enter" style="--i:2">
+        <!-- 목록 -->
+        <section class="pane pane-list" aria-label="메일 목록">
+          <div class="pane-head"><p>연결 이후 수집한 메일 · 답장을 기다리는 순서로</p></div>
+          <div class="pane-scroll"><div class="rows" id="rows"></div></div>
+          <div class="pane-foot"><span class="num" id="range">1–8 / 16</span><button class="btn sm" type="button">다음 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
+        </section>
+        <!-- 상세 -->
+        <section class="pane pane-detail" aria-label="메일 상세" id="detail"></section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 발송 최종 확인 모달 -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" id="modal">
+    <div class="modal-head">
+      <h2 id="modal-title">이 답장을 보내시겠습니까?</h2>
+      <button class="close" id="modal-close" type="button" aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot">
+      <span class="note">선택한 답장을 같은 Gmail 대화로 보냅니다.</span>
+      <button class="btn" id="modal-cancel" type="button">취소</button>
+      <button class="btn blue" id="modal-send" type="button">확인하고 보내기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+  <span id="toast-text"></span>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ===== 데이터 (하나의 원본: 탭 건수·목록·상세 모두 여기서 파생) ===== */
+var ME = "trade@kekorea.co.kr";
+var THREADS = [
+  { id:"t1", status:"awaiting", unread:true,  from:"부산K&S 주식회사", addr:"sourcing@ks-trading.co.kr",
+    subject:"SUPERLIGHT2 500개 견적 요청", when:"14:05", kind:"ks", to:ME, date:"2026-11-18 14:05" },
+  { id:"t2", status:"awaiting", unread:true,  from:"Global Freight Inc.", addr:"ops@globalfreight.com",
+    subject:"RE: 11월 선적 일정 변경 문의", when:"13:40", kind:"plain", to:ME, date:"2026-11-18 13:40" },
+  { id:"t3", status:"excluded", unread:false, from:"네이버 쇼핑", addr:"partner@naver.com",
+    subject:"입점 제안 및 상품 등록 안내", when:"12:50", kind:"excluded", to:ME, date:"2026-11-18 12:50" },
+  { id:"t4", status:"awaiting", unread:false, from:"J. Smith (KE KOREA)", addr:"j.smith@kekorea.co.uk",
+    subject:"PI PO-2026-031 내용 확인 요청", when:"11:22", kind:"plain", to:ME, date:"2026-11-18 11:22" },
+  { id:"t5", status:"review", unread:false, from:"quicktest2", addr:"quicktest2@gmail.com",
+    subject:"(제목 없음)", when:"10:05", kind:"review", to:ME, date:"2026-11-18 10:05" },
+  { id:"t6", status:"processing", unread:false, from:"DG Traders", addr:"purchase@dgtraders.vn",
+    subject:"신규 발주 문의", when:"09:58", kind:"processing", to:ME, date:"2026-11-18 09:58" },
+  { id:"t7", status:"sent", unread:false, from:"부산K&S 주식회사", addr:"sourcing@ks-trading.co.kr",
+    subject:"RE: 지난 견적 감사 인사", when:"어제", kind:"sent", to:ME, date:"2026-11-17 16:12" },
+  { id:"t8", status:"ignored", unread:false, from:"ezone mart", addr:"buy@ezonemart.com",
+    subject:"주말 세일 상품 협찬 제안", when:"어제", kind:"ignored", to:ME, date:"2026-11-17 11:03" }
+];
+/* '새 메일 받기' 시연 대기열 */
+var INCOMING = [
+  { id:"n1", status:"awaiting", unread:true, from:"대흥상사", addr:"purchase@daeheung.co.kr",
+    subject:"SUPERLIGHT2 추가 주문 문의", when:"방금", kind:"plain", to:ME, date:"2026-11-18 14:41" },
+  { id:"n2", status:"awaiting", unread:true, from:"해운테크", addr:"ops@haeun-tech.com",
+    subject:"견적서 유효기간 연장 요청", when:"방금", kind:"plain", to:ME, date:"2026-11-18 14:52" }
+];
+
+var PILL = {
+  awaiting:{ label:"답장 대기", cls:"awaiting" },
+  review:{ label:"확인 필요", cls:"review" },
+  processing:{ label:"처리 중", cls:"processing", dot:true },
+  sent:{ label:"보냄", cls:"sent" },
+  ignored:{ label:"초안 없음", cls:"off" },
+  excluded:{ label:"자동 제외", cls:"off" }
+};
+var ORDER = { awaiting:0, review:1, processing:2, sent:3, ignored:4, excluded:4 };
+var sentMap = {}; /* threadId -> 발송 시각(시연 결과) */
+
+var el = function(id){ return document.getElementById(id); };
+var rowsEl = el("rows"), detailEl = el("detail");
+var state = { filter:"awaiting", q:"", selected:"t1" };
+
+function thread(id){ return THREADS.filter(function(t){ return t.id===id; })[0]; }
+function visible(){
+  var q = state.q.toLowerCase();
+  return THREADS.filter(function(t){
+    if(state.filter!=="all" && t.status!==state.filter) return false;
+    if(q && (t.subject+" "+t.from+" "+t.addr).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  }).sort(function(a,b){ return ORDER[a.status]-ORDER[b.status]; });
+}
+function counts(){
+  var c = { awaiting:0, review:0, processing:0, all:THREADS.length };
+  THREADS.forEach(function(t){ if(t.status==="awaiting"||t.status==="review"||t.status==="processing") c[t.status]++; });
+  return c;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+
+/* ===== 아이콘 ===== */
+var IC = {
+  chev:'<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
+  send:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>',
+  file:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>',
+  warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>',
+  arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>'
+};
+
+/* ===== 목록 렌더 ===== */
+function pillHTML(status){
+  var p = PILL[status];
+  return '<span class="pill '+p.cls+'">'+(p.dot?'<i class="pd" aria-hidden="true"></i>':'')+p.label+'</span>';
+}
+function renderRows(opts){
+  opts = opts || {};
+  var list = visible();
+  rowsEl.innerHTML = list.map(function(t, i){
+    return '<button type="button" class="row'+(t.unread?" unread":"")+(t.id===state.selected?" is-selected":"")+(opts.newId===t.id?" new-arrive":"")+'" data-id="'+t.id+'" aria-current="'+(t.id===state.selected?"true":"false")+'">'
+      + '<span class="row-top">'
+      +   (t.unread ? '<i class="dot-unread" aria-hidden="true"></i>' : '')
+      +   '<span class="who">'+esc(t.from)+'</span>'
+      +   '<span class="when num">'+esc(t.when)+'</span>'
+      + '</span>'
+      + '<span class="row-bot"><span class="what">'+esc(t.subject)+'</span>'+pillHTML(t.status)+'</span>'
+      + '</button>';
+  }).join("") || '<p style="padding:26px 16px;font-size:12.5px;color:var(--muted);margin:0">조건에 맞는 메일이 없습니다.</p>';
+  el("range").textContent = "1–"+list.length+" / "+THREADS.length;
+  if(opts.stagger){ [].forEach.call(rowsEl.children, function(n, i){ n.classList.add("enter"); n.style.setProperty("--i", i%12); }); }
+}
+
+/* ===== 탭 ===== */
+function renderCounts(changed){
+  var c = counts();
+  document.querySelectorAll("[data-count]").forEach(function(n){
+    var key = n.dataset.count, to = c[key], from = parseInt(n.textContent,10)||0;
+    n.textContent = to;
+    if(changed && changed.indexOf(key)>=0 && from!==to){ n.classList.remove("bump"); void n.offsetWidth; n.classList.add("bump"); }
+  });
+}
+function moveInk(){
+  var active = document.querySelector('.tab[aria-selected="true"]');
+  var tabsBox = el("tabs"), ink = el("tab-ink");
+  if(!active || !tabsBox) return;
+  ink.style.width = active.offsetWidth+"px";
+  ink.style.transform = "translateX("+(active.offsetLeft - tabsBox.offsetLeft)+"px)";
+}
+document.querySelectorAll(".tab").forEach(function(tab){
+  tab.addEventListener("click", function(){
+    document.querySelectorAll(".tab").forEach(function(t){ t.setAttribute("aria-selected","false"); });
+    tab.setAttribute("aria-selected","true");
+    state.filter = tab.dataset.filter;
+    moveInk();
+    var vis = visible();
+    if(!vis.some(function(t){ return t.id===state.selected; }) && vis.length){
+      state.selected = vis[0].id;
+      var t = vis[0]; t.unread = false;
+      renderDetail(true);
+    }
+    renderRows({stagger:true});
+  });
+});
+
+/* ===== 후보 데이터 (스레드 종류별) ===== */
+var KS_C1 = { n:1, subject:"RE: SUPERLIGHT2 500개 견적 요청", quoteNo:"QT-2026-114",
+  body:"안녕하세요, 문의 주셔서 감사합니다.\n요청하신 SUPERLIGHT2 500개 견적을 보내드립니다.\n\n· 품목: SUPERLIGHT2 본체 500개\n· 공급가액 1,000,000원 · 부가세 100,000원 · 합계 1,100,000원(부가세 포함)\n· 견적 유효기간: 발행일로부터 30일\n\n견적서를 첨부하니 검토 후 회신 주시기 바랍니다. 감사합니다." };
+var KS_C2 = { n:2, subject:"RE: SUPERLIGHT2 견적 요청 (본체+케이스)", quoteNo:"QT-2026-115",
+  body:"안녕하세요, 본체와 전용 케이스를 함께 주문하시는 경우의 견적입니다.\n본체 500개 단가는 안내드렸던 조건과 같고, 케이스 50개 단가 확인 후 합계를 안내드립니다." };
+function plainC(t){
+  return { n:1, subject:"RE: "+t.subject.replace(/^RE: /i,""),
+    body:"안녕하세요, 메일 잘 받았습니다.\n요청 주신 내용 확인 후 아래와 같이 안내드립니다.\n\n· 확인 결과: 정상 처리 가능\n· 회신 기한: 이번 주 내\n\n추가로 궁금하신 점 있으시면 말씀해 주세요. 감사합니다." };
+}
+function candidatesOf(t){ return t.kind==="ks" ? [KS_C1, KS_C2] : [plainC(t)]; }
+
+/* ===== 상세 ===== */
+function head(t){
+  var done = sentMap[t.id];
+  return '<div class="detail-head">'
+    + '<button class="back" type="button" data-back><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>목록으로</button>'
+    + '<h2>'+esc(t.subject)+'</h2>'
+    + '<div class="detail-meta">'
+    +   '<span class="addr">'+esc(t.from)+'</span>'
+    +   '<span class="flow">('+esc(t.addr)+')'+IC.arrow+'<span class="addr">'+esc(t.to)+'</span></span>'
+    +   '<span class="num">'+esc(t.date)+'</span>'
+    +   pillHTML(done?"sent":t.status)
+    +   (done ? '<span class="num" style="color:var(--green)">'+done+' 발송 완료</span>' : '')
+    + '</div></div>';
+}
+function messages(list){
+  return '<section class="sec"><h3>'+IC.mail+' 원문과 대화 <span class="n num">'+list.length+'통</span></h3>'
+    + list.map(function(m, idx){
+        var open = idx===list.length-1 ? " data-open" : "";
+        return '<div class="msg'+(m.out?" out":"")+'"'+open+'>'
+          + '<button class="msg-head" type="button" data-msg aria-expanded="'+(idx===list.length-1)+'">'
+          +   '<span class="dir">'+(m.out?IC.send:IC.mail)+'</span>'
+          +   '<span class="mwho">'+esc(m.from)+'</span>'
+          +   '<span class="mwhen num">'+esc(m.when)+'</span>'+IC.chev
+          + '</button>'
+          + '<div class="msg-body"><p class="mto">받는 사람: '+esc(m.to)+'</p>'+esc(m.body)+'</div>'
+          + '</div>';
+      }).join("") + '</section>';
+}
+function attachRow(c){
+  if(!c.quoteNo) return '<div class="attach"><span class="file">'+IC.mail+' 문서 첨부 없음</span><span class="sum">답장 본문만 전송됩니다</span></div>';
+  /* 금액은 초안 본문·견적서 상세와 겹치므로 요약줄은 번호와 PDF만(2026-11-18 확정) */
+  return '<div class="attach"><span class="file">'+IC.file+' 국내 견적 '+c.quoteNo+'</span><span class="sum">PDF 첨부</span></div>';
+}
+function candReady(t, c){
+  return '<div class="cand" data-cand="'+t.id+'-'+c.n+'">'
+    + '<div class="cand-head"><span class="tag">후보 '+c.n+'</span><span class="csub">'+esc(c.subject)+'</span></div>'
+    + '<p class="cand-body">'+esc(c.body)+'</p>'
+    + attachRow(c)
+    + '<div class="cand-actions"><button class="btn blue" type="button" data-preview="'+c.n+'">발송 내용 확인 '+IC.arrow+'</button></div>'
+    + '</div>';
+}
+function candPrice(t, c){
+  return '<div class="cand" data-cand="'+t.id+'-'+c.n+'">'
+    + '<div class="cand-head"><span class="tag dim">후보 '+c.n+' · 단가 확인 필요</span><span class="csub">'+esc(c.subject)+'</span></div>'
+    + '<p class="cand-body">'+esc(c.body)+'</p>'
+    + '<div class="attach warn"><span class="file">'+IC.file+' 국내 견적 '+c.quoteNo+'</span>'
+    +   '<span class="sum">케이스 50개 단가 <b>미입력</b></span></div>'
+    + '<form class="price-form" data-priceform>'
+    +   '<p>빠진 단가를 입력하면 견적 합계가 확정되고 이 답장을 보낼 수 있습니다.</p>'
+    +   '<div class="price-grid"><label>SUPERLIGHT2 전용 케이스 단가(원) · 50개<input name="price" inputmode="numeric" pattern="[0-9]+" required maxlength="12" placeholder="예: 12000"></label></div>'
+    +   '<div class="price-total num"><span>본체 500개 · 공급가 <b>1,000,000</b>원</span><span>케이스 합계 <b data-case>–</b>원</span><span>전체 합계 <b data-total>미확정</b></span></div>'
+    +   '<div class="cand-actions" style="margin-top:12px"><button class="btn" type="submit">단가 저장 · 합계 계산</button></div>'
+    + '</form>'
+    + '<div class="cand-actions" style="margin-top:12px"><button class="btn blue" type="button" disabled data-preview="2">발송 내용 확인</button><span class="why">단가 확정 뒤 발송할 수 있습니다</span></div>'
+    + '</div>';
+}
+function candSent(t, c, time){
+  return '<div class="cand is-sent'+(time?" is-done-anim":"")+'">'
+    + '<div class="cand-head"><span class="tag dim">후보 '+c.n+'</span><span class="csub">'+esc(c.subject)+'</span></div>'
+    + '<p class="cand-body">'+esc(c.body)+'</p>'
+    + attachRow(c)
+    + '<div class="sent-line">'+IC.check+'<span class="num">'+(time||"2026-11-17 16:12")+' 발송 완료</span></div>'
+    + '</div>';
+}
+function candClosed(n){
+  return '<div class="cand" style="opacity:.55">'
+    + '<div class="cand-head"><span class="tag dim">후보 '+n+'</span><span class="csub">다른 후보를 보내 종료됨</span></div>'
+    + '<div class="cand-actions"><button class="btn" type="button" disabled>선택할 수 없는 후보</button></div></div>';
+}
+
+var KS_MSGS = [
+  { out:true, from:"나", to:"sourcing@ks-trading.co.kr", when:"11/17 16:12", body:"안내해 주신 조건으로 견적서를 다시 보내드립니다. 검토 후 회신 주시면 진행하겠습니다." },
+  { out:false, from:"부산K&S 주식회사", to:ME, when:"11/18 14:05", body:"안녕하세요, 지난번 견적 잘 받았습니다.\n이번에는 SUPERLIGHT2 500개와 전용 케이스 50개를 함께 주문하려고 합니다.\n30일 납기 조건으로 견적 부탁드립니다." }
+];
+function plainMsgs(t){
+  return [{ out:false, from:t.from, to:ME, when:t.date.slice(6), body:"안녕하세요,\n업무 협조 요청드립니다. 확인 후 회신 부탁드립니다.\n\n감사합니다." }];
+}
+
+function renderDetail(anim){
+  var t = thread(state.selected);
+  if(!t){ detailEl.innerHTML=""; return; }
+  var done = sentMap[t.id], html = head(t), cands = candidatesOf(t);
+  if(t.kind==="ks"){
+    var msgs = KS_MSGS.slice();
+    if(done) msgs.push({ out:true, from:"나", to:t.addr, when:done, body:cands[0].body });
+    html += messages(msgs);
+    html += '<section class="sec"><h3>'+IC.send+' AI 답장 초안 <span class="n num">'+cands.length+'개</span></h3>';
+    html += done ? candSent(t,cands[0],done) + candClosed(2) : candReady(t,cands[0]) + candPrice(t,cands[1]);
+    html += '</section>';
+  } else if(t.kind==="plain"){
+    html += messages(plainMsgs(t));
+    html += '<section class="sec"><h3>'+IC.send+' AI 답장 초안 <span class="n num">1개</span></h3>' + (done ? candSent(t,cands[0],done) : candReady(t,cands[0])) + '</section>';
+  } else if(t.kind==="excluded" || t.kind==="ignored" || t.kind==="review"){
+    html += messages([{ out:false, from:t.from, to:ME, when:t.date.slice(6),
+      body: t.kind==="review" ? "(분류 확인이 필요한 메일입니다. 원문은 보존되어 있습니다.)" : "안녕하세요, 이번 신규 입점 제안을 안내드립니다. 검토 후 회신 부탁드립니다." }]);
+    var text = t.kind==="review"
+      ? "AI 처리 중 서버가 재시작됐습니다. 저장된 내용을 확인한 뒤 다시 처리해 주세요."
+      : "광고·개인·업무 무관으로 판단해 자동 처리를 제외했습니다. 업무 메일이면 아래 버튼으로 처리할 수 있습니다.";
+    html += '<section class="sec"><h3>'+IC.clock+' 처리 상태</h3><div class="notice'+(t.kind==="review"?"":" plain")+'">'+IC.warn+'<span>'+text+'</span><button class="btn sm" type="button" data-process>업무 메일로 확인 후 처리</button></div></section>';
+  } else if(t.kind==="processing"){
+    html += messages(plainMsgs(t));
+    html += '<section class="sec"><h3>'+IC.send+' AI 처리</h3><div class="proc">'
+      + '<div class="p-top"><i class="pd" aria-hidden="true"></i>AI가 메일을 분석하고 답장 초안을 만들고 있습니다<span class="ell" aria-hidden="true"><i></i><i></i><i></i></span></div>'
+      + '<div class="track" aria-hidden="true"><i></i></div>'
+      + '<div class="p-sub">메일 분석 · 필수 항목 확인 · 초안 작성 · 이 화면을 나가도 계속됩니다</div>'
+      + '</div></section>';
+  } else if(t.kind==="sent"){
+    html += messages([{ out:false, from:t.from, to:ME, when:"11/17 15:58", body:"지난번 견적 감사드립니다. 잘 쓰겠습니다." },
+                      { out:true, from:"나", to:t.addr, when:"11/17 16:12", body:"감사합니다. 추가로 필요하신 사항 있으시면 언제든 연락 주시기 바랍니다." }]);
+    html += '<section class="sec"><h3>'+IC.send+' 답장 초안</h3>' + candSent(t,{n:1,subject:"RE: 지난 견적 감사 인사",quoteNo:"QT-2026-108",total:"385,000",body:"감사합니다. 추가로 필요하신 사항 있으시면 언제든 연락 주시기 바랍니다."}) + '</section>';
+  }
+  detailEl.innerHTML = '<div class="pane-scroll">'+html+'</div>';
+  if(anim) [].forEach.call(detailEl.querySelectorAll(".detail-head, .sec"), function(n,i){ n.classList.add("enter"); n.style.setProperty("--i", i); });
+  bindDetail(t);
+}
+
+/* ===== 상세 상호작용 ===== */
+function select(id){
+  state.selected = id;
+  var t = thread(id); if(t) t.unread = false;
+  renderRows(); renderDetail(true);
+  document.body.dataset.view = "detail";
+  var sc = detailEl.querySelector(".pane-scroll"); if(sc) sc.scrollTop = 0;
+}
+function bindDetail(t){
+  var back = detailEl.querySelector("[data-back]");
+  if(back) back.addEventListener("click", function(){ document.body.dataset.view="list"; });
+  detailEl.querySelectorAll("[data-msg]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var m = btn.closest(".msg"), open = m.hasAttribute("data-open");
+      if(open) m.removeAttribute("data-open"); else m.setAttribute("data-open","");
+      btn.setAttribute("aria-expanded", open?"false":"true");
+    });
+  });
+  var proc = detailEl.querySelector("[data-process]");
+  if(proc) proc.addEventListener("click", function(){ toast("메일을 업무 큐로 다시 넣었습니다. 처리가 끝나면 답장 초안이 생깁니다."); });
+  detailEl.querySelectorAll("[data-preview]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var n = Number(btn.dataset.preview), c = candidatesOf(t).filter(function(x){ return x.n===n; })[0];
+      if(c) openPreview(t, n, c);
+    });
+  });
+  var form = detailEl.querySelector("[data-priceform]");
+  if(form) form.addEventListener("submit", function(e){
+    e.preventDefault();
+    var v = form.price.value.replace(/[^0-9]/g,""); if(!v) return;
+    var cs = Number(v)*50, tot = 1000000 + cs + Math.floor((1000000+cs)*0.1);
+    var cand = form.closest(".cand");
+    form.querySelector("[data-case]").textContent = cs.toLocaleString("ko-KR");
+    form.querySelector("[data-total]").textContent = tot.toLocaleString("ko-KR")+"원";
+    var later = cand.querySelector('[data-preview="2"]');
+    later.disabled = false;
+    cand.querySelector(".why").textContent = "합계가 확정됐습니다 · "+tot.toLocaleString("ko-KR")+"원";
+    /* 확정된 값으로 후보 2 내용 갱신(모달·발송에 같은 수치가 들어가게) */
+    var c2 = candidatesOf(t)[1];
+    c2.body += "\n\n· 케이스 50개 단가 "+Number(v).toLocaleString("ko-KR")+"원 · 전체 합계 "+tot.toLocaleString("ko-KR")+"원(부가세 포함)";
+    cand.querySelector(".attach.warn").classList.remove("warn");
+    toast("단가를 저장해 견적 합계를 확정했습니다. 이제 후보 2도 보낼 수 있습니다.");
+  });
+}
+
+/* ===== 발송 모달 ===== */
+var overlay = el("overlay"), lastFocus = null, currentSend = null;
+function openPreview(t, n, c){
+  currentSend = { t:t, n:n, c:c };
+  el("modal-body").innerHTML =
+      '<dl class="kv"><dt>후보</dt><dd>후보 '+n+' · '+esc(t.subject)+'</dd>'
+    + '<dt>받는 사람</dt><dd>'+esc(t.addr)+' ('+esc(t.from)+')</dd>'
+    + '<dt>제목</dt><dd>'+esc(c.subject)+'</dd></dl>'
+    + '<p class="cand-body">'+esc(c.body)+'</p>'
+    + attachRow(c);
+  lastFocus = document.activeElement;
+  overlay.classList.add("show");
+  setTimeout(function(){ el("modal-close").focus(); }, 80);
+}
+function closePreview(){
+  overlay.classList.remove("show");
+  if(lastFocus && lastFocus.focus) lastFocus.focus();
+}
+el("modal-close").addEventListener("click", closePreview);
+el("modal-cancel").addEventListener("click", closePreview);
+overlay.addEventListener("click", function(e){ if(e.target===overlay) closePreview(); });
+document.addEventListener("keydown", function(e){ if(e.key==="Escape" && overlay.classList.contains("show")) closePreview(); });
+el("modal-send").addEventListener("click", function(){
+  var btn = el("modal-send");
+  if(btn.disabled || !currentSend) return;
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>보내는 중…';
+  setTimeout(function(){
+    var s = currentSend, t = s.t;
+    sentMap[t.id] = "2026-11-18 "+new Date().toTimeString().slice(0,5);
+    t.status = "sent"; t.unread = false;
+    closePreview();
+    btn.disabled = false; btn.textContent = "확인하고 보내기";
+    renderCounts(["awaiting"]); renderRows(); renderDetail(false);
+    var cand = detailEl.querySelector("[data-cand='"+t.id+"-"+s.n+"']");
+    if(cand) cand.classList.add("is-done-anim");
+    toast("메일을 보냈습니다 · "+t.addr+" 님께 같은 스레드로 발송됐습니다."+(s.c.quoteNo?" "+s.c.quoteNo+".pdf가 첨부됐습니다.":""));
+  }, 950);
+});
+
+/* ===== 토스트 ===== */
+var toastTimer = null;
+function toast(msg){
+  el("toast-text").textContent = msg;
+  var t = el("toast");
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 4200);
+}
+
+/* ===== 새 메일 시연 ===== */
+el("new-mail").addEventListener("click", function(){
+  var next = INCOMING.shift();
+  if(!next){ toast("시연용 새 메일을 모두 받았습니다."); return; }
+  THREADS.unshift(next);
+  renderCounts(["awaiting"]); renderRows({newId:next.id});
+  toast("새 메일 1건 · "+next.from+" · 분류 뒤 답장 초안이 만들어집니다.");
+});
+
+/* ===== 새로고침 ===== */
+el("refresh").addEventListener("click", function(){
+  var b = el("refresh");
+  b.classList.add("spin");
+  setTimeout(function(){ b.classList.remove("spin"); }, 520);
+  setTimeout(function(){
+    var hhmm = new Date().toTimeString().slice(0,5);
+    el("stamp").textContent = hhmm+" 갱신";
+    el("stamp-top").textContent = hhmm+" 갱신";
+    renderRows();
+  }, 480);
+});
+
+/* ===== 검색 ===== */
+var q = el("q"), qclear = el("q-clear");
+q.addEventListener("input", function(){
+  state.q = q.value; qclear.hidden = !q.value;
+  renderRows();
+});
+qclear.addEventListener("click", function(){ q.value=""; state.q=""; qclear.hidden=true; renderRows(); q.focus(); });
+
+/* ===== 목록 클릭 ===== */
+rowsEl.addEventListener("click", function(e){
+  var row = e.target.closest(".row");
+  if(row) select(row.dataset.id);
+});
+
+/* ===== 재생(입장 스태거 다시) ===== */
+el("replay").addEventListener("click", function(){
+  renderRows({stagger:true});
+  renderDetail(true);
+});
+
+/* ===== 모션 끔 ===== */
+var motionBtn = el("motion-toggle");
+motionBtn.addEventListener("click", function(){
+  var off = document.documentElement.getAttribute("data-motion")==="off";
+  document.documentElement.setAttribute("data-motion", off?"on":"off");
+  motionBtn.setAttribute("aria-pressed", String(!off));
+  motionBtn.textContent = off?"모션 끔":"모션 켬";
+});
+
+/* ===== 시작 ===== */
+var t0 = thread(state.selected); if(t0) t0.unread = false;
+renderCounts(); renderRows(); renderDetail(false);
+window.addEventListener("resize", moveInk);
+requestAnimationFrame(function(){ moveInk(); setTimeout(moveInk, 400); });
+})();
+</script>
+</body>
+</html>

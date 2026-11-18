@@ -14,7 +14,7 @@ const MANAGE_NAV = [{ to: "/settings", label: "설정", icon: "⚙" }]
 const BOTTOM_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
   { to: "/agent", label: "업무 도우미", icon: "◇" },
-  { to: "/inbox", label: "업무함", icon: "✉" },
+  { to: "/inbox", label: "받은 메일", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
   { to: "/settings", label: "설정", icon: "⚙" },
 ]

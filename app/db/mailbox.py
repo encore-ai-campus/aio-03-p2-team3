@@ -96,8 +96,14 @@ class MailStore:
                       "subject": m.subject if m else "(제목 없음)", "from_addr": m.from_addr if m else "",
                       "preview": m.body_text[:120] if m else "", "received_at": _time(p.received_at),
                       "notice": p.notice, "triage": p.triage} for p, m in rows[:limit]]
+            # 상태 탭 건수: 목록과 같은 '스레드별 최신 처리' 기준으로 센다.
+            counts = dict(s.execute(select(ProcessedMessage.status, func.count())
+                              .where(ProcessedMessage.user_id == owner,
+                                     ProcessedMessage.id.in_(latest))
+                              .group_by(ProcessedMessage.status)).all())
             token, watch = s.get(GoogleToken, owner), s.get(GmailWatch, owner)
             return {"items": items, "next_cursor": items[-1]["id"] if len(rows) > limit else None,
+                    "status_counts": counts,
                     "connection": {"connected": bool(token and token.refresh_token_enc),
                                    "watch": watch.status if watch else "stopped"}}
 
