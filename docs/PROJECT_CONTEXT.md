@@ -83,9 +83,9 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-18 · 문서함 파일 열기와 조항 검색 도구 연결
+마지막 갱신: 2026-11-18 · 발급 무역 문서·문서함 조항 검색 도구 연결·Calendar 호출기 확장
 
-- 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
+- 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 호출기 `CalendarClient`는 freebusy 조회·일정 등록·등록 확인 호출과 `check_calendars` 공용 오류 체계를 갖췄고, 등록 거부(400·409)는 `calendar_rejected` 확정 실패다(#245). 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
 - 대화형 업무 도구는 `master/tools.py`의 12개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`은 전용 루프백 프로세스의 환경 키, `local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
 - 수신 전 `app/llm/mail_gate.py`는 같은 본인 키로 Decisions `gpt-6-luna`의 exclude/keep 한 질문을 호출한다. 명확한 무관 + confidence ≥ 0.95만 제외하고 애매함/회사 업무는 기존 그래프에 전달한다. 오류는 원문 보존 후 needs_review, local_worker는 미지원이다. no-reply/프로모션/소셜만으로 제외하지 않는다. 생성/분석 프롬프트는 기존 분기를 유지하며 analyze_email.v2로 회사 업무 전반을 다룬다.
@@ -204,7 +204,7 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-18 · 업무 도우미의 문서 검색 두 단계 구현
+마지막 갱신: 2026-11-18 · 업무 도우미의 문서 검색 두 단계 구현·Calendar 실연동 계획
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -217,6 +217,7 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 대화형 마스터 업무 도우미 | `docs/plans/master-agent.md`·계약 17.4절·`app/graph/`·`frontend/src/agent/` | 기존 마스터의 도구 반복·본인 API·PostgreSQL 저장·대화/질문/승인 화면을 로컬 연결. 실제/모의 검증 경계는 계획 3절에서 구분 |
 | 업무 도우미의 문서 검색 | `docs/plans/agent-document-search.md` | 1절 발급 무역 문서 DB 검색과 2절 문서함 파일·조항 검색 구현 |
+| Google Calendar 실연동(조회·등록) | `docs/plans/calendar-port.md` | 1절 Calendar API 호출기 확장 구현(freebusy·일정 등록·등록 확인, #245). 2절 ExistingCalendar 어댑터·영수증 표·main 주입, 3절 업무 도우미 도구 노출은 후속 |
 | 회사 메일함·업무 분류·로그아웃 후 수집 | `docs/plans/mailbox.md` | 1~5절 로컬 구현·검증 완료. 로그아웃 후 수집 유지, 확실한 무관 메일만 Decisions 제외, 나머지는 기존 그래프, Bearer API·React 원문/초안/최종 수신자 확인·기존 승인 발송을 연결했다. 그래프 상태/엣지·수집기·React 3000/FastAPI 8000은 유지한다. 실제 Decisions 합성 시험·Gmail 연결/시험 발송과 외부 테스트 메일 수신·기존 그래프·후보 생성을 확인했다. 사용자 위임 뒤 가상 단가 확정·선택 후보의 실제 Gmail 답장/PDF·동일 스레드·중복 발송 방지를 확인했다. 운영 연결·FOB 문서 판단·분류 품질의 제한은 5절과 시험 기록에서 구분한다. |
 | 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 채팅 검색은 업무 도우미 문서 검색 계획 2절에 연결 |
 | 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 1절의 연동 메뉴·기존 Gmail 연결/해제/재연결/상태 UI 구현. 회사 설정 장애 경계·서비스별 조회/해제 계약과 가짜 Google/실제 임시 PostgreSQL 브라우저 검증을 포함한다. 2절 Calendar OAuth/카드 활성화 구현. 서버 일회성 state·별도 암호화 토큰·갱신/계정/실패 격리를 검증하며 사람의 콘솔·Render 확인은 #193에 남음 |

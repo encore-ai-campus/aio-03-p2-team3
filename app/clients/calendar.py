@@ -1,4 +1,6 @@
 """읽기 전용 Calendar OAuth와 연결 확인. 일정 본문을 읽거나 기록하지 않는다."""
+from datetime import datetime
+from urllib.parse import quote
 import httpx
 
 from app.clients.gmail import (
@@ -7,10 +9,21 @@ from app.clients.gmail import (
 )
 
 CALENDAR_SCOPES = ("openid", "email", "https://www.googleapis.com/auth/calendar.readonly")
+EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars"
+FREE_BUSY_URL = "https://www.googleapis.com/calendar/v3/freeBusy"
+FORBIDDEN_SERVICE_REASONS = frozenset({"accessNotConfigured", "SERVICE_DISABLED"})
+FORBIDDEN_QUOTA_REASONS = frozenset({"rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded",
+                                     "quotaExceeded", "RATE_LIMIT_EXCEEDED"})
 
 
 class CalendarDenied(GoogleError):
     code = "scope_missing"
+
+
+class CalendarRejected(GoogleError):
+    """일정 등록 거부(400·409 등). 재시도하지 않는 확정 실패다."""
+
+    code = "calendar_rejected"
 
 
 class CalendarDisabled(GoogleError):
@@ -19,6 +32,38 @@ class CalendarDisabled(GoogleError):
 
 def missing_calendar_scopes(granted):
     return normalize_scopes(CALENDAR_SCOPES) - normalize_scopes(granted)
+
+
+def _forbidden_reasons(response):
+    try:
+        payload = response.json().get("error", {})
+        reasons = {entry.get("reason") for entry in payload.get("errors", [])}
+        reasons.update(entry.get("reason") for entry in payload.get("details", []))
+    except (ValueError, TypeError, AttributeError):
+        reasons = set()
+    return reasons
+
+
+def _raise_calendar_error(status_code, response):
+    """모든 Calendar 호출이 같은 오류 체계를 공유한다(check_calendars와 동일)."""
+    if status_code == 401:
+        raise TokenExpired("calendar_unauthorized")
+    if status_code == 403:
+        reasons = _forbidden_reasons(response)
+        if reasons & FORBIDDEN_SERVICE_REASONS:
+            raise CalendarDisabled("calendar_disabled")
+        if reasons & FORBIDDEN_QUOTA_REASONS:
+            raise GoogleUnavailable("calendar_quota")
+        raise CalendarDenied("calendar_forbidden")
+    if status_code != 200:
+        raise GoogleUnavailable("calendar_http")
+
+
+def _parse_instant(value):
+    moment = datetime.fromisoformat(value)
+    if moment.tzinfo is None:
+        raise ValueError("instant_without_offset")
+    return moment
 
 
 class CalendarClient(GoogleClient):
@@ -40,26 +85,81 @@ class CalendarClient(GoogleClient):
             )
         except httpx.HTTPError as error:
             raise GoogleUnavailable("calendar_transport") from error
-        if response.status_code == 401:
-            raise TokenExpired("calendar_unauthorized")
-        if response.status_code == 403:
-            try:
-                payload = response.json().get("error", {})
-                reasons = {entry.get("reason") for entry in payload.get("errors", [])}
-                reasons.update(entry.get("reason") for entry in payload.get("details", []))
-            except (ValueError, TypeError, AttributeError):
-                reasons = set()
-            if reasons & {"accessNotConfigured", "SERVICE_DISABLED"}:
-                raise CalendarDisabled("calendar_disabled")
-            if reasons & {"rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded",
-                          "quotaExceeded", "RATE_LIMIT_EXCEEDED"}:
-                raise GoogleUnavailable("calendar_quota")
-            raise CalendarDenied("calendar_forbidden")
-        if response.status_code != 200:
-            raise GoogleUnavailable("calendar_http")
+        _raise_calendar_error(response.status_code, response)
         try:
             data = response.json()
             if not isinstance(data, dict) or not isinstance(data.get("items", []), list):
                 raise ValueError()
         except ValueError as error:
             raise GoogleUnavailable("calendar_response") from error
+
+    def free_busy(self, access_token, calendar_ids, start, end):
+        """캘린더별 바쁜 구간과 조회 오류. 빈 캘린더도 키로 남긴다(완전성은 노드가 검사한다)."""
+        try:
+            response = httpx.post(
+                FREE_BUSY_URL,
+                json={"timeMin": start.isoformat(), "timeMax": end.isoformat(),
+                      "items": [{"id": calendar_id} for calendar_id in calendar_ids]},
+                headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            raise GoogleUnavailable("calendar_transport") from error
+        _raise_calendar_error(response.status_code, response)
+        try:
+            calendars = response.json()["calendars"]
+            if not isinstance(calendars, dict):
+                raise ValueError()
+            snapshot = {}
+            for calendar_id, entry in calendars.items():
+                busy = [(_parse_instant(item["start"]), _parse_instant(item["end"]))
+                        for item in entry.get("busy", [])]
+                errors = [item.get("reason") for item in entry.get("errors", [])]
+                snapshot[calendar_id] = {"busy": busy, "errors": errors}
+        except (ValueError, TypeError, KeyError) as error:
+            raise GoogleUnavailable("calendar_response") from error
+        return snapshot
+
+    def insert_event(self, access_token, calendar_id, *, summary, start, end, timezone, attendees=()):
+        """일정을 등록하고 이벤트 ID를 돌려준다. 거부(4xx)는 확정 실패다."""
+        try:
+            response = httpx.post(
+                f"{EVENTS_URL}/{quote(calendar_id)}/events",
+                json={"summary": summary,
+                      "start": {"dateTime": start.isoformat(), "timeZone": timezone},
+                      "end": {"dateTime": end.isoformat(), "timeZone": timezone},
+                      **({"attendees": [{"email": address} for address in attendees]} if attendees else {})},
+                headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            raise GoogleUnavailable("calendar_transport") from error
+        if 400 <= response.status_code < 500 and response.status_code not in (401, 403):
+            raise CalendarRejected("일정 등록이 거부됐다")
+        _raise_calendar_error(response.status_code, response)
+        try:
+            event_id = response.json()["id"]
+            if not isinstance(event_id, str) or not event_id:
+                raise ValueError()
+        except (ValueError, TypeError, KeyError) as error:
+            raise GoogleUnavailable("calendar_response") from error
+        return event_id
+
+    def get_event(self, access_token, calendar_id, event_id):
+        """등록 확인. 삭제된 일정은 None을 돌려준다."""
+        try:
+            response = httpx.get(
+                f"{EVENTS_URL}/{quote(calendar_id)}/events/{quote(event_id)}",
+                params={"fields": "id,status"},
+                headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            raise GoogleUnavailable("calendar_transport") from error
+        if response.status_code == 404:
+            return None
+        _raise_calendar_error(response.status_code, response)
+        try:
+            data = response.json()
+            if not isinstance(data.get("id"), str) or not isinstance(data.get("status"), str):
+                raise ValueError()
+        except (ValueError, AttributeError) as error:
+            raise GoogleUnavailable("calendar_response") from error
+        return {"id": data["id"], "status": data["status"]}

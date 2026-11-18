@@ -1,6 +1,6 @@
 """#192: 실제 PostgreSQL과 가짜 Google의 서비스 격리·OAuth·갱신·실패 검사."""
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
@@ -11,7 +11,8 @@ import pytest
 from sqlalchemy import select
 
 from app.auth.supabase import TokenVerifier
-from app.clients.calendar import CALENDAR_SCOPES, CalendarClient, CalendarDenied, CalendarDisabled
+from app.clients.calendar import (CALENDAR_SCOPES, CalendarClient, CalendarDenied, CalendarDisabled,
+                                 CalendarRejected)
 from app.clients.gmail import GoogleError, GoogleUnavailable, TokenExpired
 from app.db.models import CalendarOAuthAttempt, CalendarToken, GoogleToken
 from app.main import create_app
@@ -251,6 +252,96 @@ def test_calendar_list_http_errors_are_sanitized(monkeypatch, status, payload, e
         with pytest.raises(error): client.check_calendars('fake-access')
     else:
         client.check_calendars('fake-access')
+
+
+def test_free_busy_parses_intervals_and_keeps_empty_calendars(monkeypatch):
+    start, end = datetime(2026, 11, 24, 9, tzinfo=timezone.utc), datetime(2026, 11, 24, 18, tzinfo=timezone.utc)
+    def post(url, **kwargs):
+        assert url.endswith('/freeBusy')
+        assert kwargs['headers']['Authorization'] == 'Bearer fake-access'
+        assert kwargs['json'] == {'timeMin': start.isoformat(), 'timeMax': end.isoformat(),
+                                  'items': [{'id': 'primary'}, {'id': 'work@example.invalid'}]}
+        return httpx.Response(200, json={'calendars': {
+            'primary': {'busy': [{'start': '2026-11-24T10:00:00Z', 'end': '2026-11-24T10:30:00+09:00'}]},
+            'work@example.invalid': {'errors': [{'domain': 'calendar', 'reason': 'notFound'}]},
+        }})
+    monkeypatch.setattr(httpx, 'post', post)
+    snapshot = CalendarClient(settings_of('postgresql://fake')).free_busy(
+        'fake-access', ['primary', 'work@example.invalid'], start, end)
+    assert snapshot['primary']['busy'] == [(datetime(2026, 11, 24, 10, tzinfo=timezone.utc),
+                                            datetime(2026, 11, 24, 10, 30, tzinfo=timezone(timedelta(hours=9))))]
+    assert snapshot['primary']['errors'] == []
+    assert snapshot['work@example.invalid'] == {'busy': [], 'errors': ['notFound']}
+
+
+@pytest.mark.parametrize('status,payload,error', [
+    (401, {}, TokenExpired),
+    (403, {'error': {'errors': [{'reason': 'accessNotConfigured'}]}}, CalendarDisabled),
+    (403, {'error': {'errors': [{'reason': 'userRateLimitExceeded'}]}}, GoogleUnavailable),
+    (500, {}, GoogleUnavailable),
+    (200, {'calendars': []}, GoogleUnavailable),
+    (200, {'calendars': {'primary': {'busy': [{'start': '2026-11-24T10:00:00', 'end': '2026-11-24T11:00:00Z'}]}}},
+     GoogleUnavailable),
+])
+def test_free_busy_http_errors_are_sanitized(monkeypatch, status, payload, error):
+    def post(url, **kwargs):
+        return httpx.Response(status, json=payload)
+    monkeypatch.setattr(httpx, 'post', post)
+    with pytest.raises(error):
+        CalendarClient(settings_of('postgresql://fake')).free_busy(
+            'fake-access', ['primary'], datetime(2026, 11, 24, tzinfo=timezone.utc),
+            datetime(2026, 11, 25, tzinfo=timezone.utc))
+
+
+def test_insert_event_sends_body_and_returns_id(monkeypatch):
+    start, end = datetime(2026, 11, 24, 10, tzinfo=timezone.utc), datetime(2026, 11, 24, 11, tzinfo=timezone.utc)
+    def post(url, **kwargs):
+        assert url == ('https://www.googleapis.com/calendar/v3/calendars/'
+                       'work%40example.invalid/events')
+        assert kwargs['json'] == {'summary': '가상 업무 회의',
+                                  'start': {'dateTime': start.isoformat(), 'timeZone': 'Asia/Seoul'},
+                                  'end': {'dateTime': end.isoformat(), 'timeZone': 'Asia/Seoul'},
+                                  'attendees': [{'email': 'guest@example.invalid'}]}
+        return httpx.Response(200, json={'id': 'event-1'})
+    monkeypatch.setattr(httpx, 'post', post)
+    event_id = CalendarClient(settings_of('postgresql://fake')).insert_event(
+        'fake-access', 'work@example.invalid', summary='가상 업무 회의', start=start, end=end,
+        timezone='Asia/Seoul', attendees=('guest@example.invalid',))
+    assert event_id == 'event-1'
+
+
+@pytest.mark.parametrize('status,payload,error,code', [
+    (409, {'error': {'errors': [{'reason': 'conflict'}]}}, CalendarRejected, 'calendar_rejected'),
+    (400, {}, CalendarRejected, 'calendar_rejected'),
+    (401, {}, TokenExpired, None),
+    (500, {}, GoogleUnavailable, None),
+    (200, {}, GoogleUnavailable, None),
+])
+def test_insert_event_failures_are_classified(monkeypatch, status, payload, error, code):
+    def post(url, **kwargs):
+        return httpx.Response(status, json=payload)
+    monkeypatch.setattr(httpx, 'post', post)
+    with pytest.raises(error) as caught:
+        CalendarClient(settings_of('postgresql://fake')).insert_event(
+            'fake-access', 'primary', summary='회의', start=datetime(2026, 11, 24, 10, tzinfo=timezone.utc),
+            end=datetime(2026, 11, 24, 11, tzinfo=timezone.utc), timezone='Asia/Seoul')
+    if code:
+        assert caught.value.code == code
+
+
+def test_get_event_returns_status_and_treats_missing_as_none(monkeypatch):
+    client = CalendarClient(settings_of('postgresql://fake'))
+    responses = [httpx.Response(200, json={'id': 'event-1', 'status': 'confirmed'}),
+                 httpx.Response(404, json={}), httpx.Response(401, json={})]
+    def get(url, **kwargs):
+        assert url == ('https://www.googleapis.com/calendar/v3/calendars/'
+                       'primary/events/event-1') and kwargs['params'] == {'fields': 'id,status'}
+        return responses.pop(0)
+    monkeypatch.setattr(httpx, 'get', get)
+    assert client.get_event('fake-access', 'primary', 'event-1') == {'id': 'event-1', 'status': 'confirmed'}
+    assert client.get_event('fake-access', 'primary', 'event-1') is None
+    with pytest.raises(TokenExpired):
+        client.get_event('fake-access', 'primary', 'event-1')
 
 
 def test_disconnecting_during_provider_check_cannot_restore_token(connected_app):
