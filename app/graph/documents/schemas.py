@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import Field, JsonValue, StringConstraints, model_validator
 
@@ -22,6 +23,20 @@ class IssuedDocumentSearch(Contract):
             raise ValueError("issued_search_filter_required")
         if self.issued_from and self.issued_to and self.issued_from > self.issued_to:
             raise ValueError("invalid_issued_date_range")
+        return self
+
+
+class KnowledgeDocumentSearch(Contract):
+    filename: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)] | None = None
+    document_id: UUID | None = None
+    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=800)] | None = None
+
+    @model_validator(mode="after")
+    def check_scope(self):
+        if not (self.filename or self.document_id or self.query):
+            raise ValueError("knowledge_search_input_required")
+        if self.filename and self.document_id:
+            raise ValueError("choose_knowledge_filename_or_id")
         return self
 
 

@@ -43,7 +43,7 @@ class Repair(Contract):
 
 
 def make_workflow(*, database, checkpointer, access=None, storage=None, calendar=None, key_cipher=None,
-                  interactive=False, choose=None):
+                  interactive=False, choose=None, knowledge_adapters=None):
     """서버 API 연결 전 Python 진입점. 운영에서는 durable saver와 실제 CalendarPort를 주입한다."""
     def load_context(actor_id, thread_id):
         with database.session() as session:
@@ -85,7 +85,11 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
             "confirm_price_override를 승인하지 않는다. 단가 강제 변경은 기존 문서 화면에서 사용자가 확인한다. "
             "메일 답장 후보는 사용자 선택이 필요하며 발송/문서 발급은 각각 화면 승인 뒤 실행된다. "
             "사용자 취소나 결과 unknown이면 재실행하지 않는다. 도구가 지원하지 않는 작업은 한계를 설명한다. "
-            "지식 문서 검색·일정 조회/등록은 아직 지원하지 않는다. 원문/후보/문서 전체를 답변에 반복하지 말고 결과를 요약한다. "
+            "문서함 업로드 파일은 search_knowledge_documents로 찾는다. 파일 열기에는 filename만 넣고 PI/PO/CI/PL 종류나 번호를 묻지 않는다. "
+            "반환된 문서함 링크로 파일을 안내한다. 후보가 여러 개면 이름을 보여주고 선택을 요청한다. "
+            "내용 질문에는 query를 사용한다. 반환된 조항만 근거로 답하고 문서명과 페이지 또는 렌더 위치를 인용한다. "
+            "조항이 질문을 뒷받침하지 않거나 검색이 실패하면 근거를 확인할 수 없다고 답한다. "
+            "일정 조회/등록은 아직 지원하지 않는다. 원문/후보/문서 전체를 답변에 반복하지 말고 결과를 요약한다. "
             "사용자 설정/기억(현재 요청 우선): " + json.dumps(context.memory, ensure_ascii=False, default=str)))
         with user_openai(database, context.actor_id, cipher=key_cipher) as ai:
             if ai.issue is not None:
@@ -98,7 +102,8 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
 
     dependencies = Dependencies(handlers={
         "mail": MailNodes(ExistingMail(database=database, access=access, storage=storage, key_cipher=key_cipher)),
-        "documents": DocumentNodes(ExistingDocuments(database=database, storage=storage, key_cipher=key_cipher)),
+        "documents": DocumentNodes(ExistingDocuments(database=database, storage=storage, key_cipher=key_cipher,
+                                                     knowledge_adapters=knowledge_adapters)),
         "calendar": CalendarNodes(calendar),
     }, load_context=load_context, planner=planner, repair=repair,
         choose=(choose or choose_tool) if interactive else None)

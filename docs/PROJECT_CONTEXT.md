@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-18 · 업무 도우미의 발급 무역 문서 검색
+마지막 갱신: 2026-11-18 · 업무 도우미의 문서함 검색과 출처 답변
 
 - PI·PO·PL·CI의 `최신 설정 정보 적용`은 공통 refresh-settings 경로에서 새 revision을 만들고 회사·계좌, 저장 이름이 일치하는 거래처 프로필, 최신 단가표 가격을 적용한다. 수기·확정 단가는 보존하고 기존 발급 파일은 유지한다. PI 연결 CI는 같은 PI 문서의 최신 승인 revision 거래 정보를 반영한다. 누락 입력은 팝업에서 바로 저장하며 PL 포장 행 오류도 해당 입력을 연다. 기능 검증은 별도 요청 전까지 보류한다.
 
@@ -63,7 +63,7 @@
 - React `/app/inbox`는 본인 수집 메일을 상태 탭(답장 대기·확인 필요·처리 중·전체, 목록 응답의 `status_counts` 건수 표시)·검색·두 컬럼(목록/상세 각자 스크롤, 상세 머리는 스티키)으로 확인하고 실제 수신자 확인 뒤 승인 발송한다. 머리의 Gmail 연결 상태 링크는 제거했고(연결 관리는 설정 연동), 발송 확인은 모달·결과는 토스트로 알린다. 첨부 요약은 문서번호와 PDF만 보여 주고 금액은 초안 본문과 견적서 상세에서 확인한다. 목록은 30초, 처리 중 상세는 5초에 갱신하며 숨긴 탭의 조회는 쉬고 요청/타이머를 정리한다. `/api/mail/*`는 Bearer 전용이며 기존 승인 서비스를 사용한다. 국내 견적은 같은 화면에서 누락 단가를 채우고 합계/PDF를 확인하며, ready 이후 수정과 동시 변경은 거부한다. 금액·수량은 정수 문자열로 전달한다. 기존 HTML `/inbox`·`/threads/{thread_id}`와 실행 기록 링크는 유지한다. AI 답장 후보는 발송 전에 제목·본문을 직접 수정해 저장할 수 있으며, 수정 중에는 발송 버튼을 막고 서버가 현재 저장된 내용과 미리보기의 제목·본문을 비교한 뒤 승인 발송한다. 이전 버전의 미리보기로 보내려 하면 409로 중지한다. 발송했거나 다른 후보 발송으로 종료된 후보는 수정 불가다. 새 메일 작성·과거 Gmail 전체 동기화는 제공하지 않는다. 공개 페이지도 유지한다. 시안은 `docs/plans/mailbox-ui/`에 있다.
 - React `/app/status` 작업현황은 메일(스레드별 최신 처리, 메일함과 같은 기준)·채팅 대화·무역 문서를 읽기 전용으로 합쳐 "AI가 처리한 업무·멈춘 지점·내가 할 일"을 한 화면에 보여 준다. 소스 상태를 진행 중·답변 대기·승인 대기·완료·결과 확인 필요·처리 안 함으로 정규화하고, 상태 침은 건수가 붙은 필터다. 남은 조치 버튼이 메일함 승인(`/inbox?thread=`)·채팅 답변(`/agent/{id}`)·문서 작성(`/trade/{kind}/{id}`)으로 이어지고, 메일 상세는 기존 실행 기록의 마스킹·라벨을 그대로 재사용하는 `/api/status/runs/{run_id}` 타임라인을 펼쳐 본다(20절 React 실행 기록은 이 경로를 다시 쓴다). 화면을 열어도 그래프·AI를 다시 실행하지 않으며, 진행 중이 있을 때만 15초 갱신한다. 채팅 진행 중 단계·견적서(Quote) 행·독립 문서 AI 호출의 run 기록은 v1 범위 밖이다(계획 17절). 시안은 `docs/plans/status-screen/`에 있다.
 - 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. React 로그인·설정·PI에 이어 PO·CI·PL 화면을 구현했다. CI의 PI 목록은 본인 PI마다 최신 버전 한 건만 표시한다. PI 연결 CI의 서버 생성/추출은 선택 버전 승인 후에 가능하다. PI 없이 직접 작성하는 CI는 거래 정보와 선적 정보를 입력하고 기존 판매 단가표·단가 직접 확인 규칙으로 계산해 검토·발급한다. 브라우저에서 가상 데이터로 두 경로를 확인했으며 실제 운영 연결은 확인하지 않았다. PL은 합계 승인과 최종 발급 승인을 따로 수행한다(7절·[API 안내](trade-api.md)). 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
-- 문서함(지식 문서) `/app/documents`·`/api/knowledge/documents`는 PDF/DOCX/XLSX/TXT/PNG/JPEG 업로드 → 전량 비전 전사 → 의심 원문 대조/수정·확정 → 조항 parent-child → 자식 임베딩/pgvector 저장을 제공한다. 원본은 기존 private Storage, 본문·부모·벡터는 기존 PostgreSQL이며 두 모델은 독립 주입/설정이다. 본인만 조회/처리하고 재처리 실패는 이전 성공 인덱스를 보존한다. 이 기능은 저장까지이며 검색·그래프·메일에는 아직 연결하지 않았다(계약 18절). 지식 문서 메뉴는 문서함으로 통합했고 `/app/knowledge`는 선택 문서 query/hash를 보존해 이동한다. 업로드 목록·원본 보기(기존 페이지 렌더러·전체 페이지 수 헤더·이전/다음 탐색)·다운로드는 추출 실패 때도 사용할 수 있다.
+- 문서함(지식 문서) `/app/documents`·`/api/knowledge/documents`는 PDF/DOCX/XLSX/TXT/PNG/JPEG 업로드 → 전량 비전 전사 → 의심 원문 대조/수정·확정 → 조항 parent-child → 자식 임베딩/pgvector 저장을 제공한다. 원본은 기존 private Storage, 본문·부모·벡터는 기존 PostgreSQL이며 두 모델은 독립 주입/설정이다. 본인만 조회/처리하고 재처리 실패는 이전 성공 인덱스를 보존한다. 업무 도우미는 파일명으로 본인의 업로드 파일을 찾아 원본 링크를 안내하고, 내용 질문에는 게시된 조항 원문과 페이지 출처를 반환한다(계약 17.4·18절). 지식 문서 메뉴는 문서함으로 통합했고 `/app/knowledge`는 선택 문서 query/hash를 보존해 이동한다. 업로드 목록·원본 보기(기존 페이지 렌더러·전체 페이지 수 헤더·이전/다음 탐색)·다운로드는 추출 실패 때도 사용할 수 있다.
 - 메일 그래프는 `make_quote` → `create_trade_document`로 네 무역 문서 초안을 저장한다. 새 React 메일 API/화면은 quote/trade 후보의 관련 문서·상태·revision을 전달하며 기존 검토 화면으로 연결한다. 최종 메일 발송은 기존 가격/직인/PL 합계/CI 근거·후보 claim 검사를 유지하고 오래된 무역 revision은 거부한다. legacy HTML의 trade 링크 누락은 그대로이며 새로운 메일함은 React 경로를 사용한다. 실제 무역 메일 화면 완주/운영 확인은 별도로 남는다.
 - 과제 R-01·R-02·R-09·R-10의 기존 실행 근거는 Gmail 수신 경로이며, 현재 코드는 업무별 마스터 StateGraph에서 호환 준비 단계를 실행한다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
 - Google 로그인·암호화 토큰 저장·감시 갱신과 푸시 수신은 구현됐다(#79·#81). 로컬 Gmail 수집은 Pub/Sub·watch/stop 없이 동작한다(#160). 실제 운영 연동의 확인 범위는 6·7절과 #157에서 구분한다.
@@ -83,13 +83,13 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-18 · 발급 무역 문서 검색 도구 연결·Calendar 호출기 확장
+마지막 갱신: 2026-11-18 · 발급 무역 문서·문서함 조항 검색 도구 연결·Calendar 호출기 확장
 
 - 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 호출기 `CalendarClient`는 freebusy 조회·일정 등록·등록 확인 호출과 `check_calendars` 공용 오류 체계를 갖췄고, 등록 거부(400·409)는 `calendar_rejected` 확정 실패다(#245). 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
-- 대화형 업무 도구는 `master/tools.py`의 11개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다.
+- 대화형 업무 도구는 `master/tools.py`의 12개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`은 전용 루프백 프로세스의 환경 키, `local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
 - 수신 전 `app/llm/mail_gate.py`는 같은 본인 키로 Decisions `gpt-6-luna`의 exclude/keep 한 질문을 호출한다. 명확한 무관 + confidence ≥ 0.95만 제외하고 애매함/회사 업무는 기존 그래프에 전달한다. 오류는 원문 보존 후 needs_review, local_worker는 미지원이다. no-reply/프로모션/소셜만으로 제외하지 않는다. 생성/분석 프롬프트는 기존 분기를 유지하며 analyze_email.v2로 회사 업무 전반을 다룬다.
-- 지식 문서 `DocumentExtractor`/`Embedder`는 위 구조화 호출로 가장하지 않고 OpenAI Responses 시각 입력/Embeddings API를 각각 감싼다. `UserKeyAccess`의 본인/실행 모드 검증은 재사용하며 미지원 local_worker·키 누락은 공용 키 대체 없이 실패한다. 비전 기본값은 현재 OpenAI 모델, 임베딩은 사용자 선택 text-embedding-3-small/1536이며 KNOWLEDGE_*로 따로 바꾼다. 비전 store=False·요청당 180초·SDK 재시도 최대 3회(최초 포함 4번), 임베딩은 기존 30초·재시도 0회이며 진행 시도 프로필 고정과 명시적 재처리를 적용한다. 기존 그래프 도구는 추가/변경하지 않았다.
+- 지식 문서 `DocumentExtractor`/`Embedder`는 위 구조화 호출로 가장하지 않고 OpenAI Responses 시각 입력/Embeddings API를 각각 감싼다. `UserKeyAccess`의 본인/실행 모드 검증은 재사용하며 미지원 local_worker·키 누락은 공용 키 대체 없이 실패한다. 비전 기본값은 현재 OpenAI 모델, 임베딩은 사용자 선택 text-embedding-3-small/1536이며 KNOWLEDGE_*로 따로 바꾼다. 비전 store=False·요청당 180초·SDK 재시도 최대 3회(최초 포함 4번), 임베딩은 기존 30초·재시도 0회이며 진행 시도 프로필 고정과 명시적 재처리를 적용한다. 업무 도우미의 내용 검색은 현재 호환 임베딩 프로필의 게시본을 읽는다.
 - `app/llm/`은 AI 구조화 실행·재시도·PC 위임, `app/clients/gmail.py`는 Google OAuth/Gmail 통신으로 구현이 겹치지 않아 분리 유지한다. 상세 비교와 호출 관계는 [도메인 구조도](domain-layout.md).
 - 구조화 AI 호출 예산: SDK 자동 재시도 0, 호출 제한 20초. 429는 재시도 없이 한도 안내, 통신/5xx는 최대 3회(1·2초 대기), 형식 오류는 별도 1회 재시도다. PC 방식의 재시도는 서버 `app/worker/adapter.py` 한 곳에서 기존 예산과 전체 120초 기한으로 관리한다. 짧은 HTTP/예외 코드는 실행 기록에 남기고 키·원문은 남기지 않는다(#98).
 - 등록 도구 7개: `draft_replies`, `extract_deal_terms`, `check_required_fields`, `draft_followup_replies`, `create_quote`, `create_trade_document`, `send_email`(`app/tools/registry.py`). 필수 항목은 `get_required_fields()` 한 곳에서 받고, 답장 후보는 금액·문서번호를 복사하지 않고 첨부 문서를 안내한다. `send_email`은 승인 경로에서만 호출한다. 프롬프트 버전 원본은 `app/prompts/VERSIONS.md`다.
@@ -204,7 +204,7 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-18 · 업무 도우미 발급 문서 검색 구현·Calendar 실연동 계획
+마지막 갱신: 2026-11-18 · 업무 도우미의 문서 검색 두 단계 구현·Calendar 실연동 계획
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -216,10 +216,10 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 대화형 마스터 업무 도우미 | `docs/plans/master-agent.md`·계약 17.4절·`app/graph/`·`frontend/src/agent/` | 기존 마스터의 도구 반복·본인 API·PostgreSQL 저장·대화/질문/승인 화면을 로컬 연결. 실제/모의 검증 경계는 계획 3절에서 구분 |
-| 업무 도우미의 문서 검색 | `docs/plans/agent-document-search.md` | 1절 발급 무역 문서 DB 검색 구현. 2절 문서함 조항 검색과 출처 답변은 후속 |
+| 업무 도우미의 문서 검색 | `docs/plans/agent-document-search.md` | 1절 발급 무역 문서 DB 검색과 2절 문서함 파일·조항 검색 구현 |
 | Google Calendar 실연동(조회·등록) | `docs/plans/calendar-port.md` | 1절 Calendar API 호출기 확장 구현(freebusy·일정 등록·등록 확인, #245). 2절 ExistingCalendar 어댑터·영수증 표·main 주입, 3절 업무 도우미 도구 노출은 후속 |
 | 회사 메일함·업무 분류·로그아웃 후 수집 | `docs/plans/mailbox.md` | 1~5절 로컬 구현·검증 완료. 로그아웃 후 수집 유지, 확실한 무관 메일만 Decisions 제외, 나머지는 기존 그래프, Bearer API·React 원문/초안/최종 수신자 확인·기존 승인 발송을 연결했다. 그래프 상태/엣지·수집기·React 3000/FastAPI 8000은 유지한다. 실제 Decisions 합성 시험·Gmail 연결/시험 발송과 외부 테스트 메일 수신·기존 그래프·후보 생성을 확인했다. 사용자 위임 뒤 가상 단가 확정·선택 후보의 실제 Gmail 답장/PDF·동일 스레드·중복 발송 방지를 확인했다. 운영 연결·FOB 문서 판단·분류 품질의 제한은 5절과 시험 기록에서 구분한다. |
-| 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 검색·LangGraph·메일 연결 제외 |
+| 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 채팅 검색은 업무 도우미 문서 검색 계획 2절에 연결 |
 | 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 1절의 연동 메뉴·기존 Gmail 연결/해제/재연결/상태 UI 구현. 회사 설정 장애 경계·서비스별 조회/해제 계약과 가짜 Google/실제 임시 PostgreSQL 브라우저 검증을 포함한다. 2절 Calendar OAuth/카드 활성화 구현. 서버 일회성 state·별도 암호화 토큰·갱신/계정/실패 격리를 검증하며 사람의 콘솔·Render 확인은 #193에 남음 |
 | 개인 PC .env 키로 로컬/Render AI 실행 지원 | `docs/plans/local-openai-execution.md` | 1~4절 로컬 키·Gmail 수집·장치/큐·PC 실행기/기존 AI 연결 구현. 실제 키·Render 연동은 사람의 5절에서 미확인 |
 | 로컬 AI·Gmail 계정 결합 정리 | `docs/plans/local-runtime-simplification.md` | 1~3절 구현. 로컬 AI는 전용 루프백/환경 키, Gmail은 연결·활성 user_id 순차 수집, LOCAL_OWNER_GOOGLE_SUB는 개인 PC 실행기 전용이다. SQL/조건부 갱신은 작은 Store, 기존 인증·모델 Protocol·서버 키·승인 경계는 유지한다. 실제 API/운영 확인은 기존 #157·#178에서 별도 수행 |

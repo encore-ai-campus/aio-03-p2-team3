@@ -3,7 +3,7 @@
 from typing import Protocol
 from datetime import datetime, timezone
 
-from app.graph.documents.schemas import DocumentInput, IssuedDocumentSearch
+from app.graph.documents.schemas import DocumentInput, IssuedDocumentSearch, KnowledgeDocumentSearch
 from app.graph.schemas import Evidence, ExecutionResult, PreparedAction, Question, WorkResult, content_hash
 
 
@@ -16,6 +16,7 @@ class DocumentPort(Protocol):
     def schema(self, kind: str) -> dict: ...
     def get(self, actor_id: int, command: DocumentInput) -> dict: ...
     def search_issued(self, actor_id: int, command: IssuedDocumentSearch) -> dict: ...
+    def search_knowledge(self, actor_id: int, command: KnowledgeDocumentSearch) -> dict: ...
     def draft(self, actor_id: int, command: DocumentInput) -> dict: ...
     def propose(self, actor_id: int, command: DocumentInput, *, packing: bool = False) -> dict: ...
     def recheck(self, actor_id: int, action: PreparedAction) -> None: ...
@@ -25,7 +26,7 @@ class DocumentPort(Protocol):
 
 
 class DocumentNodes:
-    operations = frozenset({"schema", "get", "draft", "approve_packing", "issue", "search_issued"})
+    operations = frozenset({"schema", "get", "draft", "approve_packing", "issue", "search_issued", "search_knowledge"})
 
     def __init__(self, port: DocumentPort):
         self.port = port
@@ -34,6 +35,9 @@ class DocumentNodes:
         if task.operation == "search_issued":
             command = IssuedDocumentSearch.model_validate(task.inputs)
             return WorkResult(status="completed", data=self.port.search_issued(context.actor_id, command))
+        if task.operation == "search_knowledge":
+            command = KnowledgeDocumentSearch.model_validate(task.inputs)
+            return WorkResult(status="completed", data=self.port.search_knowledge(context.actor_id, command))
         if task.inputs.get("kind") is None:
             return WorkResult(status="needs_input", question=Question(fields=["kind"], message="문서 종류를 선택해 주세요."))
         command = DocumentInput.model_validate(task.inputs)

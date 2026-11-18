@@ -29,8 +29,9 @@ class Choices:
                                         "args": args}]).model_dump()
 
 
-def app_for(url, jwks, google, choices, settings=None, storage=None):
+def app_for(url, jwks, google, choices, settings=None, storage=None, knowledge_adapters=None):
     return create_app(settings or settings_of(url), google=google, agent_choose=choices, storage=storage,
+        knowledge_adapters=knowledge_adapters,
         supabase_auth=TokenVerifier(SUPABASE_URL, fetch_jwks=jwks.serve))
 
 
@@ -258,6 +259,79 @@ def test_issued_search_finds_the_original_files_for_the_authenticated_owner(data
         limited = repo.search_issued(document_number="PI-ORIG", counterparty=None, issued_from=None, issued_to=None)
         assert [match["issued_on"] for match in limited["issued_documents"]] == [
             f"2026-10-{day:02}" for day in range(12, 2, -1)]
+
+
+def test_knowledge_chat_opens_uploads_and_answers_from_the_published_owner_profile(database_url):
+    from app.knowledge.chunking import build_chunks
+    from app.knowledge.operations import upload
+    from app.knowledge.repository import KnowledgeChild, KnowledgeParent, SqlRepository
+    from app.knowledge.schemas import EmbeddingBatch, PageText
+    from tests.fakes.storage import FakeStorage
+    from tests.test_knowledge import FakeEmbedder, FakeExtractor, FakeRenderer, pdf, run
+
+    class QueryEmbedder(FakeEmbedder):
+        def embed_documents(self, texts):
+            batch = super().embed_documents(texts)
+            if texts == ["근거 없는 질문"]:
+                return EmbeddingBatch(profile=self.profile, vectors=[[-1.0, 0.0, 0.0]])
+            return batch
+
+    jwks, storage, embedder = FakeJwks(), FakeStorage(), QueryEmbedder()
+    token, outsider = jwks.token(), jwks.token(sub=uuid4())
+    choices = Choices([])
+    adapters = lambda *_: (FakeRenderer(), FakeExtractor(), embedder)
+    with TestClient(app_for(database_url, jwks, FakeGmailGoogle(), choices, knowledge_adapters=adapters)) as client:
+        database = client.app.state.database
+        repository = SqlRepository(database)
+        owner = client.get("/api/me", headers=auth(token)).json()["user_id"]
+        other_owner = client.get("/api/me", headers=auth(outsider)).json()["user_id"]
+
+        def publish(owner_id, filename, pages, text, indexing_embedder=None):
+            document = upload(repository, storage, owner_id, filename, pdf(pages))
+            assert run(repository, storage, FakeExtractor(content=text), indexing_embedder) == "ready"
+            return document
+
+        original_text = "제1조 대금\n검수 후 지급한다. 단, 반품 건은 정산에서 제외한다."
+        contract = publish(owner, "테이블오더.pdf", 1, original_text)
+        publish(other_owner, "테이블오더.pdf", 2, "다른 회사의 비공개 문구")
+        publish(owner, "이전 모델 계약.pdf", 3, "이전 모델의 근거", FakeEmbedder(dimensions=2))
+
+        def ask(text, **inputs):
+            choices.calls.extend([("search_knowledge_documents", inputs), "문서함 검색을 확인했습니다."])
+            response = client.post("/api/agent/conversations", headers=auth(token), json={"message": text})
+            assert response.status_code == 202, response.text
+            return read(client, token, response.json()["id"])["results"][0]
+
+        found = ask("문서함에 있는 테이블오더 문서 볼 수 있어?", filename="테이블오더")["data"]
+        assert found["knowledge_status"] == "found" and not embedder.calls
+        assert [document["url"] for document in found["knowledge_documents"]] == [
+            f"/app/documents?document={contract['id']}"]
+
+        retry = repository.retry(owner, contract["id"], contract["attempt_id"])
+        parents, children = build_chunks([PageText(number=1, text="게시 전의 후보 문구")])
+        scope = {"document_id": contract["id"], "user_id": owner, "attempt_id": retry["attempt_id"]}
+        with database.session() as session:
+            session.add(KnowledgeParent(**scope, **parents[0].model_dump()))
+            session.flush()
+            session.add(KnowledgeChild(**scope, **children[0].model_dump(), embedding=[0.25] * 3,
+                profile_id=embedder.profile.fingerprint, dimensions=embedder.profile.dimensions))
+
+        result = ask("결제 조건과 예외를 인용해 줘", query="결제 조건과 예외")["data"]
+        assert [source["text"] for source in result["knowledge_clauses"]] == [original_text]
+        assert result["knowledge_clauses"][0]["sources"][0]["source"] == "원본 페이지 1"
+        assert any(original_text.split("\n")[1] in message.content for message in choices.observed if message.type == "tool")
+        assert ask("없는 파일 열어줘", filename="없는 파일")["data"]["knowledge_status"] == "not_found"
+        assert ask("초안의 결제 조건", query="근거 없는 질문")["data"]["knowledge_status"] == "no_evidence"
+
+        upload(repository, storage, owner, "테이블오더_수정.pdf", pdf(4))
+        calls = len(embedder.calls)
+        ambiguous = ask("테이블오더 결제 조건은?", filename="테이블오더", query="결제 조건")["data"]
+        assert ambiguous["knowledge_status"] == "choose_document"
+        assert len(ambiguous["knowledge_documents"]) == 2 and len(embedder.calls) == calls
+        assert ask("수정 문서의 내용", filename="테이블오더_수정", query="결제 조건")["data"]["knowledge_status"] == "not_indexed"
+        embedder.fail_after = calls
+        failure = ask("계약서 오류 확인", document_id=contract["id"], query="결제 조건")
+        assert failure["status"] == "failed" and failure["code"] == "provider_unavailable"
 
 
 def test_native_tool_binding_uses_owner_key_and_refuses_worker_fallback(database, monkeypatch):
