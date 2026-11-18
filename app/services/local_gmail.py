@@ -44,6 +44,8 @@ def _connect(access, user_id, store, now, *, expected=None):
     mailbox = store.begin(user_id, now, expected=expected)
     if mailbox is None:
         return "stopped"
+    if mailbox.cursor is not None:
+        return "active" if store.advance(mailbox, mailbox.cursor) else "stopped"
     try:
         history_id = access.google.get_history_id(get_access_token(access, user_id))
     except TokenExpired:

@@ -37,6 +37,9 @@ def serve():
         load_dotenv(args.env, override=True)
         settings = get_settings(args.env)
         from app.llm import client
+        from app.llm import mail_gate
+        # 이 프로세스 시험은 기존 PC 구조화 실행을 검증한다. Decisions도 실제 API 대신 대역을 쓴다.
+        mail_gate.classify_email = lambda *args: mail_gate.GateResult(False, 1)
         from app.main import create_app
         from tests.fakes.gmail import FakeGmailGoogle
         from tests.fakes.storage import FakeStorage

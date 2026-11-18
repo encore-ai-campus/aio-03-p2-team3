@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AuthContext } from "./AuthContext"
-import { apiFetch, fetchMe } from "./api"
+import { fetchMe } from "./api"
 import { supabase } from "./supabase"
 
 // 인증 컨텍스트: Supabase 세션 하나를 앱 전체가 공유한다.
@@ -83,8 +83,6 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) await apiFetch("/gmail/logout", { method: "POST", token: session.access_token })
       currentRequest.current?.abort()
       const { error } = await supabase.auth.signOut()
       if (error) throw error

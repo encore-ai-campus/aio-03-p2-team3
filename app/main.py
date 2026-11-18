@@ -30,12 +30,15 @@ from app.knowledge.repository import SqlRepository
 from app.knowledge.schemas import KnowledgeError
 from app.knowledge.worker import IngestionWorker
 from app.graph.run import get_graph
-from app.mail import candidates, inbox, push as gmail_push
+from app.mail import candidates, inbox, push as gmail_push, api as mail_api
 from app.quote import router as quotes
 from app.runlog import router as runs
 from app.services.auth import GoogleAccess, make_cipher
 from app.services.local_gmail import LocalGmailCollector
+from app.services.watch import renew_connected_watches
 from app.db.local_gmail import SqlMailboxStore
+from app.db.mailbox import MailStore
+from app.services.mail_processing import resume_pending
 from app.settings import router as settings_routes
 from app.trade.common.models import DocumentError
 from app.trade.common import api as trade_api
@@ -111,6 +114,20 @@ def create_app(settings: Settings | None = None, google=None,
         app.state.local_gmail = collector
         task = asyncio.create_task(collector.run()) if collector else None
         worker_stop = asyncio.Event()
+        async def maintain_gmail():
+            while not worker_stop.is_set():
+                try:
+                    await asyncio.to_thread(renew_connected_watches, app.state.google_access)
+                    await asyncio.to_thread(resume_pending, app.state.google_access,
+                                            MailStore(database), graph=app.state.graph)
+                except Exception as error:
+                    logging.getLogger(__name__).warning("Gmail 주기 갱신 실패 (%s)", type(error).__name__)
+                try:
+                    await asyncio.wait_for(worker_stop.wait(), timeout=60)
+                except TimeoutError:
+                    pass
+
+        gmail_task = asyncio.create_task(maintain_gmail())
         async def clean_worker_queue():
             while not worker_stop.is_set():
                 try:
@@ -130,8 +147,10 @@ def create_app(settings: Settings | None = None, google=None,
             if ingestion_task:
                 ingestion.stop.set()
                 await ingestion_task
+            worker_stop.set()
+            if gmail_task:
+                await gmail_task
             if worker_task:
-                worker_stop.set()
                 await worker_task  # 정리 스레드가 끝난 다음 DB를 닫는다.
             if collector:
                 collector.stop()
@@ -163,6 +182,7 @@ def create_app(settings: Settings | None = None, google=None,
     app.include_router(supabase_me.router)
     app.include_router(gmail_connection.router)
     app.include_router(calendar_connection.router)
+    app.include_router(mail_api.router)
     app.include_router(files_routes.router)
     app.include_router(knowledge_routes.router)
     app.include_router(worker_routes.router)
