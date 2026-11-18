@@ -31,7 +31,8 @@ class SQLDocuments:
             raise DocumentError("INVALID_STORED_DOCUMENT", "저장된 문서 형식을 확인하세요")
         return {**deepcopy(row.draft), "trade_doc_id": row.id, "doc_no": row.doc_no,
                 "doc_kind": row.doc_kind, "document_type": row.doc_kind,
-                "revision": row.revision, "status": row.status}
+                "revision": row.revision, "status": row.status,
+                "created_at": row.created_at.isoformat()}
 
     def context(self, currency):
         with user_lock(self.database, self.user_id), self.database.session() as session:

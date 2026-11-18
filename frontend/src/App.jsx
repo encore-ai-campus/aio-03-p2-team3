@@ -10,7 +10,7 @@ import AgentPage from "./agent/AgentPage"
 import StatusPage from "./status/StatusPage"
 import SettingsPage from "./pages/SettingsPage"
 import PIPage from "./pages/PIPage"
-import KnowledgePage from "./knowledge/KnowledgePage"
+import DocumentsPage from "./documents/DocumentsPage"
 import POPage from "./pages/POPage"
 import CIPage from "./pages/CIPage"
 import CIStandalonePage from "./pages/CIStandalonePage"
@@ -53,7 +53,7 @@ export default function App() {
               <Route path="inbox" element={<MailboxPage />} />
               <Route path="agent" element={<AgentPage />} />
               <Route path="agent/:conversationId" element={<AgentPage />} />
-              <Route path="documents" element={<KnowledgePage />} />
+              <Route path="documents" element={<DocumentsPage />} />
               <Route path="activity" element={<PlaceholderPage sub="처리 단계와 오류를 확인하는 작업 이력입니다." title="실행 기록" />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="knowledge" element={<LegacyKnowledgeRedirect />} />

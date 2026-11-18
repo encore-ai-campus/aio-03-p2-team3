@@ -95,11 +95,21 @@ def get_document(document_id, *, repository, result):
     return response.model_copy(update=repository.latest_review(document_id, response.revision))
 
 
+# 문서함 거래처 표시: 수출 증빙(PI·CI·PL)은 buyer, 구매(PO)는 seller가 상대다.
+COUNTERPARTY_FIELD = {"PI": "buyer", "PO": "seller", "CI": "buyer", "PL": "buyer"}
+
+
+def counterparty_name(doc):
+    party = doc.get(COUNTERPARTY_FIELD.get(doc.get("document_type"), "buyer"), {})
+    return party.get("legal_name") if isinstance(party, dict) else None
+
+
 def list_documents(*, repository):
     return [DocumentSummary(document_id=doc["trade_doc_id"], document_type=doc["document_type"],
                             document_number=doc.get("document_number"), doc_no=doc["doc_no"],
                             revision=doc["revision"], status=doc["status"], currency=doc.get("currency"),
-                            total=doc.get("total")) for doc in repository.list()]
+                            total=doc.get("total"), counterparty=counterparty_name(doc),
+                            created_at=doc.get("created_at")) for doc in repository.list()]
 
 
 def get_version(document_id, revision, *, repository):
