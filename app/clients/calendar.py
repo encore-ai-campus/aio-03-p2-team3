@@ -1,4 +1,4 @@
-"""읽기 전용 Calendar OAuth와 연결 확인. 일정 본문을 읽거나 기록하지 않는다."""
+"""Calendar OAuth와 연결 확인, 일정 조회·등록 호출기."""
 from datetime import datetime
 from urllib.parse import quote
 import httpx
@@ -11,6 +11,7 @@ from app.clients.gmail import (
 CALENDAR_SCOPES = ("openid", "email", "https://www.googleapis.com/auth/calendar.readonly")
 EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars"
 FREE_BUSY_URL = "https://www.googleapis.com/calendar/v3/freeBusy"
+LIST_EVENTS_MAX_PAGES = 12  # 250건×12페이지. 상한을 넘으면 잘린 목록 대신 실패한다.
 FORBIDDEN_SERVICE_REASONS = frozenset({"accessNotConfigured", "SERVICE_DISABLED"})
 FORBIDDEN_QUOTA_REASONS = frozenset({"rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded",
                                      "quotaExceeded", "RATE_LIMIT_EXCEEDED"})
@@ -66,6 +67,19 @@ def _parse_instant(value):
     return moment
 
 
+def _normalize_event(item):
+    """화면이 쓰는 최소 필드. 시각은 Google 원문(offset dateTime 또는 종일 date)을 변환 없이 전달한다."""
+    start, end = item.get("start") or {}, item.get("end") or {}
+    if "date" in start or "date" in end:
+        begin, finish, all_day = start.get("date"), end.get("date"), True
+    else:
+        begin, finish, all_day = start.get("dateTime"), end.get("dateTime"), False
+    if not isinstance(begin, str) or not isinstance(finish, str):
+        raise ValueError("event_time_missing")
+    return {"id": item["id"], "summary": item.get("summary") or "",
+            "start": begin, "end": finish, "all_day": all_day}
+
+
 class CalendarClient(GoogleClient):
     scopes = CALENDAR_SCOPES
 
@@ -118,6 +132,35 @@ class CalendarClient(GoogleClient):
         except (ValueError, TypeError, KeyError) as error:
             raise GoogleUnavailable("calendar_response") from error
         return snapshot
+
+    def list_events(self, access_token, calendar_id, *, time_min, time_max):
+        """기간 내 일정 목록(읽기 전용). 종일 일정은 date, 나머지는 offset dateTime을 그대로 돌려준다."""
+        events, page_token = [], None
+        for _ in range(LIST_EVENTS_MAX_PAGES):
+            params = {"timeMin": time_min.isoformat(), "timeMax": time_max.isoformat(),
+                      "singleEvents": "true", "orderBy": "startTime", "maxResults": 250,
+                      "fields": "nextPageToken,items(id,summary,start,end)"}
+            if page_token:
+                params["pageToken"] = page_token
+            try:
+                response = httpx.get(
+                    f"{EVENTS_URL}/{quote(calendar_id)}/events", params=params,
+                    headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT_SECONDS,
+                )
+            except httpx.HTTPError as error:
+                raise GoogleUnavailable("calendar_transport") from error
+            _raise_calendar_error(response.status_code, response)
+            try:
+                data = response.json()
+                if not isinstance(data, dict) or not isinstance(data.get("items", []), list):
+                    raise ValueError()
+                events.extend(_normalize_event(item) for item in data["items"])
+            except (ValueError, TypeError, KeyError) as error:
+                raise GoogleUnavailable("calendar_response") from error
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                return events
+        raise GoogleUnavailable("calendar_response")  # 페이지 상한 초과는 잘린 목록 대신 실패
 
     def insert_event(self, access_token, calendar_id, *, summary, start, end, timezone, attendees=(),
                      event_id=None):

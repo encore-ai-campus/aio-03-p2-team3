@@ -10,6 +10,7 @@ import StatusPage from "./status/StatusPage"
 import SettingsPage from "./pages/SettingsPage"
 import PIPage from "./pages/PIPage"
 import DocumentsPage from "./documents/DocumentsPage"
+import CalendarPage from "./calendar/CalendarPage"
 import POPage from "./pages/POPage"
 import CIPage from "./pages/CIPage"
 import CIStandalonePage from "./pages/CIStandalonePage"
@@ -53,6 +54,7 @@ export default function App() {
               <Route path="agent" element={<AgentPage />} />
               <Route path="agent/:conversationId" element={<AgentPage />} />
               <Route path="documents" element={<DocumentsPage />} />
+              <Route path="calendar" element={<CalendarPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="knowledge" element={<LegacyKnowledgeRedirect />} />
               <Route path="trade/pi" element={<PIPage />} />
