@@ -62,7 +62,23 @@ def process_manually(access, store, owner, row_id, *, graph=None):
     return {"thread_id": row["thread_id"], "status": row["status"]}
 
 
-def send_candidate(access, store, owner, candidate_id, *, storage=None, revision=None):
+def edit_candidate(store, owner, candidate_id, *, subject, body, expected_subject, expected_body):
+    """Save edited subject/body only for a pending candidate owned by this user."""
+    from app.services.locks import user_lock
+
+    if not subject.strip() or not body.strip() or len(subject) > 500 or len(body) > 50000:
+        raise MailError(400, "invalid_reply", "제목과 본문을 입력해 주세요. 길이 제한도 확인해 주세요.")
+    with user_lock(store.database, owner):
+        candidate = store.candidate(owner, candidate_id)
+        if candidate is None:
+            raise MailError(404, "not_found", "답장 후보를 찾을 수 없습니다.")
+        if not store.edit_candidate(owner, candidate_id, subject=subject.strip(), body=body.strip(),
+                                    expected_subject=expected_subject, expected_body=expected_body):
+            raise MailError(409, "candidate_changed", "다른 화면에서 수정되거나 이미 발송된 답장입니다. 최신 내용을 다시 확인해 주세요.")
+        return store.candidate(owner, candidate_id)
+
+
+def send_candidate(access, store, owner, candidate_id, *, storage=None, revision=None, expected_subject=None, expected_body=None):
     candidate = store.candidate(owner, candidate_id)
     if candidate is None:
         raise MailError(404, "not_found", "답장 후보를 찾을 수 없습니다.")
@@ -71,13 +87,18 @@ def send_candidate(access, store, owner, candidate_id, *, storage=None, revision
         if not document or revision != document["revision"]:
             raise MailError(409, "document_changed", "문서가 변경되었습니다. 최신 문서를 다시 확인해 주세요.")
         result = approval.send_approved_trade_document(owner, candidate["trade_doc_id"], candidate_id,
-                         access=access, storage=storage, expected_revision=revision)
+                         access=access, storage=storage, expected_revision=revision,
+                         expected_subject=expected_subject, expected_body=expected_body)
     elif candidate["quote_id"]:
-        result = approval.send_approved_quote(owner, candidate["quote_id"], candidate_id, access=access)
+        result = approval.send_approved_quote(owner, candidate["quote_id"], candidate_id, access=access,
+                        expected_subject=expected_subject, expected_body=expected_body)
     elif candidate["kind"] == "quote":
         raise MailError(409, "document_missing", "관련 문서를 확인해 주세요.")
     else:
-        result = approval.send_approved_candidate(owner, candidate_id, access=access)
+        result = approval.send_approved_candidate(owner, candidate_id, access=access,
+                        expected_subject=expected_subject, expected_body=expected_body)
+    if result.outcome == "candidate_changed":
+        raise MailError(409, "candidate_changed", "답장 초안이 변경됐습니다. 최신 내용을 다시 확인해 주세요.")
     if result.outcome == "not_found":
         raise MailError(404, "not_found", "답장 후보를 찾을 수 없습니다.")
     return {"outcome": result.outcome, "thread_id": result.thread_id}
