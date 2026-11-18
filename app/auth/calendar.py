@@ -1,6 +1,7 @@
 """Bearer Calendar 연결. Gmail/legacy callback과 서비스·토큰·state를 분리한다."""
 from datetime import timedelta
 from hashlib import sha256
+from urllib.parse import urlsplit
 import secrets
 
 from cryptography.fernet import InvalidToken
@@ -24,8 +25,11 @@ def _digest(state):
     return sha256(state.encode()).hexdigest()
 
 
-def _to_app(notice):
-    return RedirectResponse(f"/app/settings?calendar={notice}", status_code=303)
+def _to_app(request, notice):
+    # 운영의 같은 출처 배포는 상대 주소, 별도 React 화면은 설정한 첫 출처로 복귀한다(Gmail과 같다).
+    origin = next((value.strip().rstrip("/") for value in
+                   request.app.state.settings.frontend_origins.split(",") if value.strip()), "")
+    return RedirectResponse(f"{origin}/app/settings?calendar={notice}", status_code=303)
 
 
 def _start(request, user_id, google_sub, consent=False):
@@ -50,6 +54,18 @@ def connect(request: Request, user_id: int = Depends(bearer_user_id)):
               "session_secret", "supabase_secret_key")
     if any(not getattr(settings, field) for field in fields) or make_cipher(settings) is None:
         raise GmailConnectionError(503, "config_missing", "서버의 Calendar 연결 설정이 끝나지 않았습니다.")
+    # 세션 쿠키는 호스트 단위라 localhost와 127.0.0.1을 섞으면 콜백에서 대기 state를 잃는다.
+    # Gmail과 같은 검사로 Google 동의 화면으로 가기 전에 안내한다.
+    callback_host = urlsplit(settings.google_oauth_redirect_uri).hostname
+    try:
+        browser_host = urlsplit(request.headers.get("origin") or str(request.base_url)).hostname
+    except ValueError:
+        browser_host = None
+    if callback_host in {"localhost", "127.0.0.1", "::1"} and browser_host != callback_host:
+        raise GmailConnectionError(
+            400, "callback_host_mismatch",
+            f"앱과 Google 콜백의 호스트가 다릅니다. 앱 주소의 호스트를 {callback_host}로 맞춰 "
+            "접속한 뒤 Calendar 연결을 다시 시작해 주세요. localhost와 127.0.0.1은 서로 다른 주소입니다.")
     _, _, token = request.headers.get("authorization", "").partition(" ")
     verified = request.app.state.supabase_auth.verify(token.strip())
     subject = request.app.state.supabase_auth.provider_google_subject(verified.sub)
@@ -78,7 +94,7 @@ def complete_callback(request, pending, state, code, error):
             with access.database.session() as session:
                 session.execute(delete(CalendarOAuthAttempt).where(
                     CalendarOAuthAttempt.state_hash == _digest(pending["state"])))
-        return _to_app("login_failed")
+        return _to_app(request, "login_failed")
     # 원자적 소비는 쿠키 재생·동시 콜백에도 딱 한 요청만 코드를 교환하게 한다.
     # 소비된 행은 최종 저장까지 남겨 해제/새 연결이 진행 중 콜백도 취소할 수 있게 한다.
     with access.database.session() as session:
@@ -87,26 +103,26 @@ def complete_callback(request, pending, state, code, error):
             CalendarOAuthAttempt.consumed.is_(False)).values(consumed=True)
             .returning(CalendarOAuthAttempt)).first()
     if attempt is None:
-        return _to_app("login_failed")
+        return _to_app(request, "login_failed")
     if attempt.expires_at <= utcnow():
-        return _to_app("expired")
+        return _to_app(request, "expired")
     if error or not code:
-        return _to_app("cancelled" if error == "access_denied" else "login_failed")
+        return _to_app(request, "cancelled" if error == "access_denied" else "login_failed")
     if access.cipher is None:
-        return _to_app("config_missing")
+        return _to_app(request, "config_missing")
     try:
         login = access.google.exchange_code(code, access.cipher.decrypt(attempt.verifier_enc))
         if login.sub != attempt.google_sub:
-            return _to_app("different_account")
+            return _to_app(request, "different_account")
         if missing_calendar_scopes(login.scopes):
-            return _to_app("scope_missing")
+            return _to_app(request, "scope_missing")
         if not login.refresh_token:
             if attempt.consent:
-                return _to_app("refresh_missing")
+                return _to_app(request, "refresh_missing")
             return RedirectResponse(_start(request, attempt.user_id, attempt.google_sub, consent=True),
                                     status_code=303)
         if not login.access_token or login.expires_at <= utcnow():
-            return _to_app("token_expired")
+            return _to_app(request, "token_expired")
         access.google.check_calendars(login.access_token)
         with access.database.session() as session:
             user = session.get(User, attempt.user_id, with_for_update=True)
@@ -114,12 +130,12 @@ def complete_callback(request, pending, state, code, error):
                 CalendarOAuthAttempt.state_hash == attempt.state_hash,
                 CalendarOAuthAttempt.expires_at > utcnow()).returning(CalendarOAuthAttempt.state_hash)).scalar()
             if valid is None:
-                return _to_app("expired")
+                return _to_app(request, "expired")
             if user is None or (user.google_sub and user.google_sub != login.sub):
-                return _to_app("different_account")
+                return _to_app(request, "different_account")
             other = session.scalar(select(User.id).where(User.google_sub == login.sub, User.id != user.id))
             if other is not None:
-                return _to_app("account_conflict")
+                return _to_app(request, "account_conflict")
             user.google_sub = login.sub
             stored = session.get(CalendarToken, user.id)
             if stored is None:
@@ -131,12 +147,12 @@ def complete_callback(request, pending, state, code, error):
             stored.expires_at = login.expires_at
             stored.scopes = list(login.scopes)
     except IntegrityError:
-        return _to_app("account_conflict")
+        return _to_app(request, "account_conflict")
     except InvalidToken:
-        return _to_app("config_missing")
+        return _to_app(request, "config_missing")
     except GoogleError as failure:
-        return _to_app(failure.code if failure.code != "google_error" else "login_failed")
-    return _to_app("connected")
+        return _to_app(request, failure.code if failure.code != "google_error" else "login_failed")
+    return _to_app(request, "connected")
 
 
 def calendar_status(request, user_id):
