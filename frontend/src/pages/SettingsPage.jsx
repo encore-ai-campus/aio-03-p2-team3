@@ -24,7 +24,7 @@ export default function SettingsPage() {
   const token = state.accessToken
   const [search, setSearch] = useSearchParams()
   const [callback, setCallback] = useState(() => search.has("calendar") ? { service: "calendar", code: search.get("calendar") } : { service: "gmail", code: search.get("gmail") })
-  const [section, setSection] = useState(() => (search.has("gmail") || search.has("calendar")) ? "integrations" : "company")
+  const [section, setSection] = useState(() => (search.has("gmail") || search.has("calendar")) ? "integrations" : SECTIONS.some(([key]) => key === search.get("section")) ? search.get("section") : "company")
   const [read, setRead] = useState({ phase: "loading", data: null, error: "" })
   const [reload, setReload] = useState(0)
   const [saveState, setSaveState] = useState({ saving: false, error: "", notice: "" })
@@ -90,6 +90,7 @@ export default function SettingsPage() {
           {SECTIONS.map(([key, label]) => <button key={key} type="button" className={key === section ? "active" : ""}
             aria-pressed={key === section} disabled={saveState.saving} onClick={() => {
               setSection(key)
+              setSearch((previous) => { const next = new URLSearchParams(previous); next.set("section", key); return next }, { replace: true })
               if (key !== "integrations") setCallback(null)
               setSaveState({ saving: false, error: "", notice: "" })
             }}>{label}</button>)}

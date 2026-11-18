@@ -32,6 +32,8 @@ def document_router(kind, input_model, operations, repository_factory, extractor
     router = APIRouter(prefix=f"/api/trade/{kind.lower()}", tags=[kind])
     Revision = create_model(f"{kind}Revision", __base__=InputModel,
                             revision=(int, Field(ge=1, strict=True)), document=(input_model, ...))
+    SettingsRefresh = create_model(f"{kind}SettingsRefresh", __base__=InputModel,
+                                   revision=(int, Field(ge=1, strict=True)))
     Choice = create_model(f"{kind}Decision", __base__=Modification, document=(input_model | None, None))
 
     def repositories(request, user_id):
@@ -77,6 +79,13 @@ def document_router(kind, input_model, operations, repository_factory, extractor
     def replace_document(document_id: int, command: Revision, request: Request, user_id: int = Depends(require_write)):
         repository, _ = repositories(request, user_id)
         return operations.revise(document_id, command.revision, command.document, repository=repository)
+
+    if hasattr(operations, "refresh_settings"):
+        @router.post("/{document_id}/refresh-settings", response_model=DocumentResult)
+        def refresh_settings(document_id: int, command: SettingsRefresh, request: Request,
+                             user_id: int = Depends(require_write)):
+            repository, _ = repositories(request, user_id)
+            return operations.refresh_settings(document_id, command.revision, repository=repository)
 
     @router.put("/{document_id}/sources")
     def replace_sources(document_id: int, command: SourcesLink, request: Request,

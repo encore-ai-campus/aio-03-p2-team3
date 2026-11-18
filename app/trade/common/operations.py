@@ -5,6 +5,7 @@ from app.trade.common.models import DocumentContext, DocumentError, DocumentSumm
 from app.trade.common.counterparties import apply_company_profiles, name_key
 from app.trade.common.postprocess import apply_issuer_defaults, synchronize_quantities
 from app.trade.common.pricing import build_trade_catalog, apply_verified_catalog_prices
+from app.trade.common.results import editable_values
 from app.trade.common.trade_documents import validate_and_calculate
 
 
@@ -52,6 +53,36 @@ def revision_context(previous, context, currency):
         bank = {**(bank or {}), **{key: value for key, value in (previous.get("bank") or {}).items()
                                  if value not in (None, "")}} or None
     return DocumentContext(issuer=issuer, bank=bank, price_rows=context.price_rows, counterparties=context.counterparties)
+
+
+def refresh_settings_values(previous, context, document_type, input_model, item_model):
+    """Build editable values with current settings while retaining explicit transaction data."""
+    values = editable_values(previous, input_model.model_fields, item_model.model_fields)
+    values["_company_profile"] = deepcopy(previous.get("_company_profile") or {})
+    role = "buyer" if document_type == "PO" else "seller"
+    old_issuer = previous.get("issuer") or {}
+    new_issuer = context.issuer or {}
+    old_name = next((old_issuer.get(key) for key in ("legal_name_en", "legal_name", "company_name")
+                     if old_issuer.get(key)), None)
+    new_name = next((new_issuer.get(key) for key in ("legal_name_en", "legal_name", "company_name")
+                     if new_issuer.get(key)), None)
+    defaults = {"legal_name": new_name, **{key: new_issuer.get(key) for key in ("address", "contact", "phone", "email")}}
+    old_defaults = {"legal_name": old_name, **{key: old_issuer.get(key) for key in ("address", "contact", "phone", "email")}}
+    party = values.setdefault(role, {})
+    for key, value in defaults.items():
+        if value and (not party.get(key) or party.get(key) == old_defaults.get(key)):
+            party[key] = value
+    for index, item in enumerate(values.get("items", [])):
+        old_item = (previous.get("items") or [])[index] if index < len(previous.get("items") or []) else {}
+        item["price_source"] = old_item.get("price_source")
+        item["master_price"] = old_item.get("master_price") is True
+        item["confirm_price_override"] = old_item.get("price_override_confirmed") is True
+        if old_item.get("master_price") is True and old_item.get("price_override_confirmed") is not True:
+            item["unit_price"] = None
+        elif item.get("unit_price") not in (None, ""):
+            # Applying settings refreshes the catalog, not a manually entered price.
+            item["confirm_price_override"] = True
+    return values
 
 
 def check_revision(previous, revision):

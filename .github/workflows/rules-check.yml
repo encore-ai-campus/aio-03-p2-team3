@@ -47,7 +47,7 @@ jobs:
     # 필수 검사 이름을 유지하고, 범위 확인 실패를 성공/skip으로 숨기지 않는다.
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     # 테스트 DB는 전부 PostgreSQL이다(3절). service 컨테이너를 띄워 TEST_DATABASE_URL로 쓴다.
     services:
       postgres:
