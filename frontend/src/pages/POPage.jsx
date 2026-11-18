@@ -5,8 +5,10 @@ import { useAuth } from "../useAuth"
 import AIInput from "../trade/AIInput"
 import DocumentSnapshot from "../trade/DocumentSnapshot"
 import POForm from "../trade/POForm"
-import { emptyPO, PO_STEPS, poDraft, poMissing, poNextScreen, poPayload, poSectionFor } from "../trade/po-input"
+import { emptyPO, PO_STEPS, poDraft, poNextScreen, poPayload } from "../trade/po-input"
 import ReviewPanel from "../trade/ReviewPanel"
+import RenderFailureHelp from "../trade/RenderFailureHelp"
+import MissingFieldsDialog, { updateMissingField } from "../trade/MissingFieldsDialog"
 
 const STATUS = { needs_input: "입력 필요", ready: "검토 가능", issued: "발급 완료" }
 
@@ -31,12 +33,14 @@ export default function POPage() {
   const [settings, setSettings] = useState(null)
   const [settingsError, setSettingsError] = useState("")
   const [sourceText, setSourceText] = useState("")
+  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const errorBox = useRef(null)
   const question = useRef(null)
   const mutation = useRef(null)
   const base = "/trade/po"
 
   function accept(document, review = null, next = { key: "review", fields: null }) {
+    setQuickFixOpen(false)
     setResource(document)
     setDraft(poDraft(document.input))
     setProposal(review)
@@ -163,6 +167,14 @@ export default function POPage() {
     })
   }
 
+  function refreshSettings() {
+    perform((signal) => apiFetch(`${base}/${resource.document_id}/refresh-settings`, {
+      token, signal, method: "POST", body: { revision: resource.revision } }), (document) => {
+      accept(document)
+      setNotice("최신 설정 정보를 새 PO 버전에 적용했습니다. 내용을 확인하고 다시 검토해 주세요. 이미 발급된 파일은 보존됩니다.")
+    })
+  }
+
   function propose() {
     perform((signal) => apiFetch(`${base}/${resource.document_id}/reviews`, { token, signal,
       method: "POST", body: { revision: resource.revision, formats } }), (review) => {
@@ -192,14 +204,13 @@ export default function POPage() {
   const following = guided ? poNextScreen(draft, stepIndex)
     : { key: PO_STEPS[stepIndex + 1]?.key ?? "review", fields: null }
   const finalReview = proposal && ["pending", "approved"].includes(proposal.status) && !modifying && !dirty
-  const missing = poMissing(draft)
-  const remaining = PO_STEPS.filter((entry) => missing.some((path) => poSectionFor(path) === entry.key))
   return <div className="pi-workspace">
     <div className="page-head"><div><h1 className="page-title">PO 작성</h1><p className="page-sub">거래 내용을 채우고, 마지막에 전체를 확인해요.</p></div><Link className="btn" to="/">문서 종류 선택</Link></div>
     <div className="editor-toolbar"><span className="document-status">{current ? `${STATUS[current.status] ?? current.status} · 버전 ${current.revision}` : "새 PO"}</span>
       {documentId && <button type="button" className="btn" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}
     </div>
     {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.status === 401 ? "로그인 확인이 필요합니다. 입력 내용을 별도로 보관한 뒤 다시 로그인해 주세요." : error.message}</p>
+      {error?.code === "RENDER_FAILED" && <RenderFailureHelp />}
       {error.status === 409 && <p>최신본을 다시 읽고 새로 검토해 주세요. 다시 읽으면 현재 입력을 교체하므로, 필요한 내용은 먼저 복사해 두세요.</p>}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {loading && <p role="status">PO와 검토 내용을 불러오는 중입니다…</p>}
@@ -247,21 +258,26 @@ export default function POPage() {
         </div>
       </form>}
       {screen.key === "review" && current && (finalReview ? <ReviewPanel kind="po" proposal={proposal} token={token} busy={busy} dirty={dirty} modifying={modifying} headingRef={question}
-        onDecision={decide} onModify={() => edit("seller")}
+        onDecision={decide} onModify={() => edit("seller")} onRefreshSettings={refreshSettings}
         onDownload={(file) => perform((signal) => downloadFile(file, token, signal), () => setNotice("파일 다운로드를 요청했습니다."))} />
       : <section className="pi-question" aria-label="서버 계산 결과"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
         <p className="pi-question-note">저장된 내용으로 계산한 금액이에요. 구매자·공급처와 거래 조건을 함께 확인하세요.</p>
         {dirty && <p className="form-error">아직 저장하지 않은 변경사항이 있어요. 저장한 뒤 검토해 주세요.</p>}
-        {remaining.length > 0 && <div className="pi-missing"><p>아직 입력할 내용이 있어요.</p>{remaining.map((entry) =>
-          <button key={entry.key} type="button" className="btn" disabled={!canEdit} onClick={() => setScreen({ key: entry.key, fields: missing.filter((path) => poSectionFor(path) === entry.key) })}>{entry.label} 보완</button>)}</div>}
+        {(current.missing_fields.length > 0 || current.issues.length > 0) && <div className="pi-missing"><p>아직 입력할 내용이 있어요. 팝업에서 필요한 값만 입력하고 저장할 수 있습니다.</p>
+          <button type="button" className="btn" disabled={!canEdit} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
         {current.issues.length > 0 && <ul className="document-issues" role="alert">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
         {current.status === "needs_input" && <p className="section-note">표시된 항목을 수정한 뒤 다시 저장해 주세요. 발행 회사·직인은 <Link to="/settings">회사 설정</Link>에서 확인할 수 있어요.</p>}
         <DocumentSnapshot kind="po" document={current.document} />
         <fieldset className="editor-checks" disabled={busy || pending || current.status !== "ready"}><legend>발급 형식</legend>{["pdf","xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous, format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
         <div className="form-actions">{(dirty || modifying) && <button className="btn" type="button" disabled={!canEdit} onClick={() => accept(current, proposal)}>저장 전 수정 취소</button>}
+          {current && <button type="button" className="btn" title="최신 설정 정보를 새 PO 버전에 적용합니다. 이미 발급된 파일은 보존됩니다."
+            disabled={busy || loading || ["sent", "sending"].includes(current.status)} onClick={refreshSettings}>최신 설정 정보 적용</button>}
           <button className="btn" type="button" disabled={!canEdit || (!dirty && !modifying)} onClick={save}>{modifying ? "수정 저장·재검토" : "변경사항 저장"}</button>
           <button className="btn blue" type="button" disabled={busy || dirty || modifying || pending || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
       </section>)}
+      <MissingFieldsDialog open={quickFixOpen} kind="PO" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+        onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
+        onSave={save} onClose={() => setQuickFixOpen(false)} />
       {settingsError && <p className="section-note" role="status">기본 설정을 가져오지 못했어요. 직접 입력할 수 있습니다. {settingsError}</p>}
       </div>
       {!["start", "source"].includes(screen.key) && <POSummary draft={draft} current={current} dirty={dirty} disabled={!canEdit} onEdit={edit} />}

@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import httpx
 from playwright.sync_api import expect, sync_playwright
+import pytest
 from sqlalchemy import select
 import uvicorn
 
@@ -22,6 +23,9 @@ from app.web import frontend
 from tests.fakes.storage import FakeStorage
 from tests.test_knowledge import FakeEmbedder, FakeExtractor, FakeRenderer, png, pdf
 from tests.test_supabase_auth import FakeJwks, SUPABASE_URL
+
+
+pytestmark = pytest.mark.slow
 
 
 @contextmanager

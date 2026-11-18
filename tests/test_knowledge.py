@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from io import BytesIO
+import sys
 import time
 from types import SimpleNamespace
 from uuid import uuid4
@@ -315,8 +316,12 @@ def office_bytes(extension="docx", *, hidden=False, formula=False):
     return buffer.getvalue()
 
 
-@pytest.mark.parametrize("name,data", [("sample.docx", office_bytes()), ("sample.xlsx", office_bytes("xlsx")),
-                                      ("sample.txt", "가상 한글 문서\nSynthetic test".encode()), ("image.png", png())])
+@pytest.mark.parametrize("name,data", [
+    pytest.param("sample.docx", office_bytes(), marks=pytest.mark.slow),
+    pytest.param("sample.xlsx", office_bytes("xlsx"), marks=pytest.mark.slow),
+    pytest.param("sample.txt", "가상 한글 문서\nSynthetic test".encode(), marks=pytest.mark.slow),
+    ("image.png", png()),
+])
 def test_real_page_rendering_for_supported_formats(name, data):
     result = PageRenderer().render(data, name)
     assert result.pages and result.pages[0].png.startswith(b"\x89PNG")
@@ -329,7 +334,8 @@ def test_real_page_rendering_for_supported_formats(name, data):
                                      (office_bytes("xlsx", formula=True), "formula_cache_missing")])
 def test_office_content_that_cannot_be_rendered_is_not_silently_accepted(data, code):
     with pytest.raises(KnowledgeError) as failure:
-        PageRenderer().render(data, "sample.xlsx")
+        # 변환 명령을 실행하기 전에 Excel 입력 검증에서 실패해야 한다.
+        PageRenderer(office_command=sys.executable).render(data, "sample.xlsx")
     assert failure.value.code == code
 
 
