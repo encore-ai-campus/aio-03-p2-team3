@@ -7,6 +7,7 @@ import LoginPage from "./pages/LoginPage"
 import PlaceholderPage from "./pages/PlaceholderPage"
 import MailboxPage from "./mail/MailboxPage"
 import AgentPage from "./agent/AgentPage"
+import StatusPage from "./status/StatusPage"
 import SettingsPage from "./pages/SettingsPage"
 import PIPage from "./pages/PIPage"
 import KnowledgePage from "./knowledge/KnowledgePage"
@@ -48,7 +49,7 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route element={<Layout />}>
               <Route index element={<DashboardPage />} />
-              <Route path="status" element={<PlaceholderPage sub="오늘 확인할 업무와 최근 문서를 모았어요." title="작업현황" />} />
+              <Route path="status" element={<StatusPage />} />
               <Route path="inbox" element={<MailboxPage />} />
               <Route path="agent" element={<AgentPage />} />
               <Route path="agent/:conversationId" element={<AgentPage />} />

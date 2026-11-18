@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>작업현황 — 시안</title>
+<!-- 작업현황 화면 시안(2026-11-18). 앱 셸·토큰은 frontend/src/styles.css(Inter, 잉크 #1c2431, 파랑 #315df5)을 그대로 쓰고,
+     화면 규칙은 design-taste-frontend 앱 화면 규칙(achromatic-ledger: 크롬은 잉크, 색은 상태·데이터에만)을 따른다.
+     그리드 합: 내용 1004px = 목록 596 + 간격 24 + 상세 384 (셸 1280 − 사이드바 218 − 안쪽 여백 58).
+     데이터는 모두 가상이며 침(상태별 건수)은 아래 TASKS에서 계산해 console.assert로 검증한다. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --ink:#1c2431; --muted:#5c6879; --line:#e8ebef; --blue:#315df5; --blue-ink:#284ee8;
+  --green:#168052; --amber:#9a690d; --red:#c4242a; --card:#fff; --ground:#f5f6f8;
+  --rule:#f2f2f2; --raise:#f9fafb; --pill-run-bg:#eef2ff; --pill-run-ink:#284ee8;
+  --pill-wait-bg:#fdf3df; --pill-wait-ink:#855c0b; --pill-bad-bg:#ffedea; --pill-bad-ink:#831c1e;
+  --pill-ok-bg:#e7f6ee; --pill-ok-ink:#0d5136; --pill-off-bg:#f1f2f4; --pill-off-ink:#5f6368;
+  --radius:8px; --gap:24px; --pad:29px;
+}
+*{box-sizing:border-box} body{margin:0;min-height:100vh;background:var(--ground);color:var(--ink);font-synthesis:none}
+button,input{font:inherit} button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+
+/* ── 앱 셸(기존 styles.css .shell 재현) ── */
+.shell{max-width:1280px;min-height:100vh;margin:auto;background:#fff;display:grid;grid-template-columns:218px minmax(0,1fr);box-shadow:0 0 50px #2632480c /* taste-skill-ignore: 앱 셸 고유 그림자(frontend styles.css 원본) */}
+.side{border-right:1px solid var(--line);padding:23px 14px;position:relative}
+.side .logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:750;padding:0 9px 23px}
+.logo-mark{display:grid;place-items:center;width:31px;height:31px;border-radius:10px;background:var(--blue);color:#fff}
+.nav-label{font-size:11px;letter-spacing:.12em;color:#626e7e;font-weight:700;padding:13px 10px 7px}
+.nav{width:100%;display:flex;align-items:center;gap:11px;border:0;background:transparent;color:#606b7b;border-radius:9px;padding:10px 11px;text-align:left;font-size:13px;margin:2px 0}
+.nav i{font-style:normal;width:17px;text-align:center;font-size:15px}
+.nav svg,.side .logo svg,.bottom-nav svg{width:16px;height:16px;flex:none}
+.side .logo svg{width:15px;height:15px}
+.nav.active{background:#eef2ff;color:var(--blue-ink);font-weight:700}
+.nav .count{margin-left:auto;background:#fdf3df;color:var(--amber);font-size:11px;font-weight:600;border-radius:99px;padding:1px 7px}
+.side-user{position:absolute;left:16px;right:16px;bottom:18px;border-top:1px solid var(--line);padding:14px 4px 0;display:flex;align-items:center;gap:9px;font-size:11px;color:#5c6879}
+.avatar{height:29px;width:29px;border-radius:50%;display:grid;place-items:center;background:#e9edf7;color:#425477;font-weight:700;font-size:11px}
+.shell-main{min-width:0;display:flex;flex-direction:column;min-height:100vh}
+.top{height:61px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 27px}
+.crumb{font-size:12px;color:var(--muted)}
+.top-actions{display:flex;align-items:center;gap:13px;color:#5c6879;font-size:11px}
+.link-button{border:0;background:none;color:#5c6879;font-size:11px}
+.content{padding:26px var(--pad) 36px;flex:1;min-width:0}
+
+/* ── 제목 줄 ── */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.page-title{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:0}
+.page-sub{margin:6px 0 0;font-size:14px;color:var(--muted)}
+.page-sub b{color:var(--ink);font-weight:600}
+.fresh{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;white-space:nowrap}
+.refresh{display:inline-flex;align-items:center;gap:6px;border:1px solid #d1d5db;background:#fff;border-radius:6px;height:32px;padding:0 12px;font-size:12px;color:#3d4756}
+.refresh svg{width:13px;height:13px}
+
+/* ── 상태 침 = 목록의 상태 필터(KPI의 두 번째 일) ── */
+.chips{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:var(--radius);background:#fff;margin-bottom:20px}
+.chip{border:0;background:none;text-align:left;padding:14px 18px;border-left:1px solid var(--rule);display:block}
+.chip:first-child{border-left:0}
+.chip .k{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.chip .v{font-size:26px;font-weight:600;margin-top:3px;line-height:1.2}
+.chip[data-on="1"]{background:var(--raise);border-bottom:2px solid var(--ink);padding-bottom:12px}
+.chip[data-on="1"] .v{font-weight:700}
+.chip .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.run{background:var(--blue)} .dot.wait{background:#d99a1e} .dot.bad{background:var(--red)} .dot.ok{background:var(--green)}
+.chip .hint{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── 출처 탭 + 검색 ── */
+.bar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:22px}
+.tab{border:0;background:none;padding:9px 2px 11px;font-size:13px;color:#606b7b;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
+.toolbar{display:flex;align-items:center;gap:12px;padding-bottom:8px}
+.total{font-size:12px;color:var(--muted);white-space:nowrap}
+.search{display:flex;align-items:center;gap:7px;border:1px solid #d1d5db;border-radius:6px;height:32px;padding:0 10px;background:#fff;width:220px}
+.search svg{width:13px;height:13px;color:var(--muted);flex:none}
+.search input{border:0;outline:0;width:100%;font-size:13px;background:none;color:var(--ink)}
+.search input::placeholder{color:#6b7686}
+
+/* ── 목록 + 상세 격자: 596 + 24 + 384 = 1004 ── */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:var(--gap);align-items:start;margin-top:6px}
+
+/* 목록 표 — 두 줄 행: 1줄 = 업무명·상태·시각, 2줄 = 보조 정보. 칸합: 이름 1fr + 상태 auto + 시각 58px */
+.list{background:#fff;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;font-weight:500;color:var(--muted);text-align:left;padding:11px 14px 9px}
+th.num,td.num{text-align:right}
+thead th:last-child{padding-right:14px;text-align:right}
+tbody button.row{display:block;width:100%;border:0;background:none;text-align:left;padding:10px 14px;border-top:1px solid var(--rule)}
+.row .top1{display:grid;grid-template-columns:minmax(0,1fr) auto 58px;gap:12px;align-items:center}
+.row .top2{display:flex;align-items:center;gap:8px;min-width:0;margin-top:3px}
+.t-name{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.t-sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.t-via{font-size:12px;color:var(--muted);white-space:nowrap;flex:none}
+.t-step{font-size:12px;color:#4b5563;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.t-when{font-size:12px;color:var(--muted);white-space:nowrap;justify-self:end}
+.row:hover{background:#f7f9fd}
+.row[aria-pressed="true"]{background:#eef2ff}
+.pill{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;font-style:normal;flex:none}
+.p-run{background:var(--pill-run-bg);color:var(--pill-run-ink)} .p-run i{background:var(--blue-ink)}
+.p-wait{background:var(--pill-wait-bg);color:var(--pill-wait-ink)} .p-wait i{background:#d99a1e}
+.p-bad{background:var(--pill-bad-bg);color:var(--pill-bad-ink)} .p-bad i{background:var(--red)}
+.p-ok{background:var(--pill-ok-bg);color:var(--pill-ok-ink)} .p-ok i{background:var(--green)}
+.p-off{background:var(--pill-off-bg);color:var(--pill-off-ink)} .p-off i{background:#9aa1ac}
+.spin{width:10px;height:10px;border-radius:50%;border:2px solid #c8d4fb;border-top-color:var(--blue-ink);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 모션(요청자 취향: 화려하게. 앱 화면 규칙의 절제를 요청으로 덮음) ── */
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes slidein{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 #315df540}50%{box-shadow:0 0 0 5px #315df500}} /* taste-skill-ignore: 7px 점의 맥동 피드백(정지 상태 아님) */
+.chip{animation:rise .45s cubic-bezier(.2,.7,.3,1) both;transition:transform .15s,background .15s}
+.chip:nth-child(2){animation-delay:60ms}.chip:nth-child(3){animation-delay:120ms}.chip:nth-child(4){animation-delay:180ms}
+.chip:hover{transform:translateY(-1px)}
+.dot.run{animation:pulse 2s ease-in-out infinite}
+.row{animation:rise .4s cubic-bezier(.2,.7,.3,1) both;transition:background .15s,transform .15s;position:relative}
+.row:hover{transform:translateY(-1px)}
+.row[aria-pressed="true"]::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 2px 2px 0;background:var(--blue)}
+.btn{transition:transform .15s,filter .15s,box-shadow .15s}
+.btn.blue:hover{transform:translateY(-1px);box-shadow:0 4px 14px #315df52e /* taste-skill-ignore: 누르는 순간의 뜀 피드백(정지 상태 아님) */}
+.btn:active{transform:scale(.98)}
+.step{transition:background .15s}
+.step:hover{background:#fbfcfe}
+.step.open .step-body{animation:pop .25s both}
+.detail>*{animation:slidein .35s cubic-bezier(.2,.7,.3,1) both}
+.detail>*:nth-child(2){animation-delay:45ms}.detail>*:nth-child(3){animation-delay:90ms}
+.detail>*:nth-child(4){animation-delay:135ms}.detail>*:nth-child(5){animation-delay:180ms}
+.detail>*:nth-child(6){animation-delay:225ms}.detail>*:nth-child(7){animation-delay:270ms}
+.detail>*:nth-child(8){animation-delay:315ms}.detail>*:nth-child(9){animation-delay:360ms}
+.loadmore{border:0;background:none;width:100%;padding:11px;font-size:12px;color:#3d4756;border-top:1px solid var(--rule);transition:background .15s,color .15s}
+.loadmore:hover{background:var(--raise);color:var(--ink)}
+.empty{display:none;padding:26px 16px;font-size:13px;color:var(--muted);border-top:1px solid var(--rule)}
+
+/* 상세 패널 */
+.detail{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px 16px;position:sticky;top:16px}
+.d-src{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.d-title{font-size:16px;font-weight:600;margin:7px 0 3px;letter-spacing:-.01em}
+.d-when{font-size:12px;color:var(--muted)}
+.d-act{display:flex;flex-direction:column;gap:8px;margin:14px 0 4px}
+.btn{border:1px solid transparent;border-radius:7px;height:34px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:filter .15s,background .15s}
+.btn.blue{background:var(--blue);color:#fff}
+.btn.blue:hover{filter:brightness(1.06)}
+.btn.ghost{background:#fff;border-color:#d1d5db;color:#3d4756;font-weight:500}
+.btn.ghost:hover{background:var(--raise)}
+.d-sec{margin-top:16px}
+.d-sec h3{font-size:13px;font-weight:600;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between}
+.d-sec h3 small{font-size:11px;color:var(--muted);font-weight:500}
+.steps{list-style:none;margin:0;padding:0}
+.step{border-top:1px solid var(--rule)}
+.step:first-child{border-top:0}
+.step-h{border:0;background:none;width:100%;display:flex;align-items:center;gap:9px;padding:10px 2px;text-align:left}
+.step-ic{width:16px;height:16px;flex:none;color:var(--muted)}
+.step.done .step-ic{color:var(--green)}
+.step.now .step-ic{color:var(--blue-ink)}
+.step.fail .step-ic{color:var(--red)}
+.step-n{font-size:13px;color:var(--ink);font-weight:500;flex:1;min-width:0}
+.step.now .step-n{font-weight:600}
+.step-t{font-size:11px;color:var(--muted);white-space:nowrap}
+.step-body{display:none;padding:2px 2px 10px 27px;font-size:12px;color:#4b5563;line-height:1.6}
+.step.open .step-body{display:block}
+.step-body a{color:var(--blue-ink);text-decoration:none}
+.cand{display:flex;align-items:center;gap:8px;border-top:1px solid var(--rule);padding:8px 2px;font-size:13px}
+.cand:first-of-type{border-top:0}
+.cand b{font-weight:600}
+.cand small{color:var(--muted);font-size:11px;margin-left:auto;white-space:nowrap}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;color:var(--ink)}
+.dash{color:#9aa1ac}
+.note{margin-top:14px;border-top:1px solid var(--rule);padding-top:10px;font-size:11px;color:var(--muted);line-height:1.6}
+
+/* 모바일 */
+.mobile-head,.bottom-nav,.d-back{display:none}
+@media (max-width:1040px){
+  .cols{grid-template-columns:1fr}
+  .detail{position:static}
+}
+@media (max-width:800px){
+  .shell{display:block;min-height:100dvh;padding-bottom:calc(63px + env(safe-area-inset-bottom,0px));box-shadow:none}
+  .side,.top{display:none}
+  .mobile-head{display:flex;align-items:center;justify-content:space-between;height:55px;padding:0 16px;border-bottom:1px solid var(--line)}
+  .mobile-head .logo{font-size:14px;display:flex;align-items:center;gap:8px;font-weight:750}
+  .mobile-head .logo-mark{width:25px;height:25px;font-size:14px}
+  .content{padding:18px 16px 26px}
+  .page-title{font-size:20px}
+  .page-head{flex-wrap:wrap;align-items:flex-start}
+  .chips{grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);border-color:var(--line)}
+  .chip{background:#fff} .chip[data-on="1"]{background:var(--raise)}
+  .bar{flex-wrap:wrap}
+  .toolbar{width:100%;padding-bottom:10px}
+  .search{flex:1;width:auto}
+  .cols{grid-template-columns:1fr}
+  /* 상세는 별도 화면으로 열린다 */
+  .cols.show-detail .list-wrap{display:none}
+  .cols:not(.show-detail) .detail{display:none}
+  .d-back{display:inline-flex;border:0;background:none;color:var(--blue-ink);font-size:13px;font-weight:600;padding:0 0 8px;gap:6px;align-items:center}
+  .detail{position:fixed;inset:0;z-index:30;overflow:auto;border-radius:0;border:0;padding:14px 16px 30px;background:#fff}
+  .bottom-nav{display:flex;position:fixed;z-index:10;left:0;right:0;bottom:0;height:calc(63px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--line);justify-content:space-around;align-items:center;padding-bottom:env(safe-area-inset-bottom)}
+  .bottom-nav a{border:0;background:none;color:#6a7482;font-size:11px;text-align:center;text-decoration:none;min-height:44px;min-width:44px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+  .bottom-nav b{font-size:16px;font-weight:500}
+  .bottom-nav a.active{color:var(--blue)}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>무역 AI 도우미</div>
+    <div class="nav-label">WORKSPACE</div>
+    <button class="nav"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></i>문서작성</button>
+    <button class="nav"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.3 0-2.6-.3-3.7-.8L3 21l1.8-5.8A8.5 8.5 0 1 1 21 11.5z"/></svg></i>업무 도우미</button>
+    <button class="nav active"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></i>작업현황<span class="count num" id="nav-count">4</span></button>
+    <button class="nav"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3z"/><path d="M3 6l9 7 9-7"/></svg></i>받은 메일</button>
+    <button class="nav"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5 5h14l3 7v7H2v-7z"/></svg></i>문서함</button>
+    <button class="nav"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></i>실행 기록</button>
+    <div class="nav-label">MANAGE</div>
+    <button class="nav"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="1.8" fill="#fff"/><circle cx="15" cy="12" r="1.8" fill="#fff"/><circle cx="8" cy="17" r="1.8" fill="#fff"/></svg></i>설정</button>
+    <div class="side-user"><span class="avatar">정</span>케이이무역 · 정원철</div>
+  </aside>
+  <div class="shell-main">
+    <div class="top">
+      <span class="crumb">케이이무역 / 작업현황</span>
+      <div class="top-actions"><button class="link-button">로그아웃</button></div>
+    </div>
+    <header class="mobile-head"><span class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>무역 AI 도우미</span><span style="font-size:12px;color:var(--muted)">작업현황</span></header>
+    <main class="content" id="main">
+      <div class="page-head">
+        <div>
+          <h1 class="page-title">작업현황</h1>
+          <p class="page-sub" id="finding">답장 후보 <b class="num">1</b>건·문서 검토 <b class="num">1</b>건이 승인을 기다립니다.</p>
+        </div>
+        <div class="fresh">
+          <span>마지막 갱신 <span class="num">14:07</span></span>
+          <button class="refresh" id="refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>새로고침</button>
+        </div>
+      </div>
+
+      <div class="chips" id="chips" role="group" aria-label="상태별 보기"></div>
+
+      <div class="bar">
+        <div class="tabs" role="tablist" id="tabs"></div>
+        <div class="toolbar">
+          <span class="total num" id="total"></span>
+          <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="q" type="search" placeholder="업무 검색" aria-label="업무 검색"></label>
+        </div>
+      </div>
+
+      <div class="cols" id="cols">
+        <div class="list-wrap">
+          <div class="list">
+            <table>
+              <thead><tr><th>업무</th><th style="text-align:right;padding-right:2px">상태</th><th class="num" style="padding-right:14px">최근 변경</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+            <p class="empty" id="empty">조건에 맞는 작업이 없습니다. 필터를 바꿔 보세요.</p>
+            <button class="loadmore" id="more">이전 작업 더 보기 (<span class="num">14</span>건)</button>
+          </div>
+        </div>
+        <aside class="detail" id="detail" aria-label="선택한 작업 상세"></aside>
+      </div>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav">
+  <a href="#"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></b>문서작성</a>
+  <a href="#"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.3 0-2.6-.3-3.7-.8L3 21l1.8-5.8A8.5 8.5 0 1 1 21 11.5z"/></svg></b>도우미</a>
+  <a href="#" class="active"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></b>작업현황</a>
+  <a href="#"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3z"/><path d="M3 6l9 7 9-7"/></svg></b>업무함</a>
+  <a href="#"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="1.8" fill="#fff"/><circle cx="15" cy="12" r="1.8" fill="#fff"/><circle cx="8" cy="17" r="1.8" fill="#fff"/></svg></b>설정</a>
+</nav>
+
+<script>
+/* ── 가상 데이터(모두 샘플). 침 건수·합계는 이 배열에서 계산하고 assert로 맞는지 검증한다. ── */
+const NOW = "14:07";
+const TASKS = [
+  { id:1, src:"메일", name:"가상전자 견적 문의 답장", sub:"RE: 슈퍼라이트2 20대 견적 요청", via:"받은 메일 · 가상전자", step:"답장 후보 3개 준비", when:"3분 전", sort:0,
+    status:"승인 대기", pill:"p-wait",
+    action:{label:"답장 후보 선택하러 가기", primary:true, sub:"메일 원문 보기"},
+    steps:[
+      {t:"메일 분류 · 거래 문의", at:"14:02", done:true, body:"업무 메일로 분류했습니다. 발신: sales@gasang-elec.com"},
+      {t:"원문 조회", at:"14:02", done:true, body:"받은 편지함에서 원문을 읽었습니다."},
+      {t:"필수 항목 확인", at:"14:03", done:true, body:"금액·품목·납기를 확인했습니다. 누락 항목이 없습니다."},
+      {t:"초안 작성 · 후보 3개", at:"14:04", done:true, body:"슈퍼라이트2 20대, 합계 160,000원(부가세 별도) 기준으로 답장 후보를 만들었습니다."},
+      {t:"승인 대기 · 후보 선택", at:NOW, now:true, body:"후보를 고르면 같은 스레드로 발송합니다. 발송 전까지 상대는 보지 못합니다."},
+    ],
+    results:[["정중한 확인 답변","1페이지"],["견적 금액 포함 답변","1페이지 · 첨부 1"],["간단한 안내 답변","1페이지"]],
+    ai:{model:"gpt-6-luna", calls:4, time:"2분 31초", tokens:"1,842 / 356"} },
+  { id:2, src:"채팅", name:"거래처 메일 검색·답장 준비", sub:"요청: “가상 거래처 메일을 찾아서 답장 후보를 확인해 줘”", via:"업무 도우미 대화", step:"질문 대기 · 날짜 확인", when:"8분 전", sort:1,
+    status:"답변 대기", pill:"p-wait",
+    action:{label:"도우미 질문에 답변하기", primary:true, sub:"대화 열기"},
+    steps:[
+      {t:"메일 검색 · 6건", at:"13:52", done:true, body:"“가상 거래처”로 받은 메일 6건을 찾았습니다."},
+      {t:"추가 질문", at:"13:59", now:true, body:"“어떤 날짜에 받은 메일인가요? 지난주와 이번 주 두 묶음이 있습니다.”"},
+    ],
+    results:[], ai:{model:"gpt-6-luna", calls:2, time:"41초", tokens:"604 / 96"} },
+  { id:3, src:"메일", name:"테스트상사 선적 일정 변경 안내", sub:"이번 주 출항 지연 2일 통보", via:"받은 메일 · 테스트상사", step:"답장 후보 생성 중", when:"방금 전", sort:2, running:true,
+    status:"진행 중", pill:"p-run",
+    action:null,
+    steps:[
+      {t:"메일 분류 · 거래 문의", at:"14:06", done:true, body:"업무 메일로 분류했습니다."},
+      {t:"답장 후보 생성", at:NOW, now:true, body:"2번째 후보를 만들고 있습니다. 완료되면 승인 대기로 바뀝니다."},
+    ],
+    results:[], ai:{model:"gpt-6-luna", calls:"진행 중", time:"-", tokens:"-"} },
+  { id:4, src:"채팅", name:"PO #23 발송 요청", sub:"요청: “구매주문서 23번 거래처에 보내줘”", via:"업무 도우미 대화", step:"발송 후 응답 없음", when:"1시간 전", sort:3,
+    status:"결과 확인 필요", pill:"p-bad",
+    action:{label:"보낸편지함 확인하기", primary:true, sub:"실행 상태 다시 확인"},
+    steps:[
+      {t:"문서 조회 · PO #23", at:"12:40", done:true, body:"승인된 구매주문서 23번(버전 2)을 찾았습니다."},
+      {t:"발송 승인 · 사용자 확인", at:"12:58", done:true, body:"받는 사람 orders@testmall.co.kr, 첨부 PO-23.pdf."},
+      {t:"발송 · 응답 시간 초과", at:"13:01", fail:true, body:"Gmail 응답이 30초 안에 오지 않았습니다. 자동 재발송하지 않습니다. 보낸편지함에 실제로 들어갔는지 확인한 뒤 필요하면 다시 승인해 주세요."},
+    ],
+    results:[], ai:{model:"gpt-6-luna", calls:3, time:"1분 12초", tokens:"938 / 141"} },
+  { id:5, src:"문서", name:"PI #12 초안 검토", sub:"버전 2 · 수량 40대로 수정", via:"문서작성 · 직접 입력", step:"검토 대기 · 버전 2", when:"2시간 전", sort:4,
+    status:"승인 대기", pill:"p-wait",
+    action:{label:"검토·승인하러 가기", primary:true, sub:"문서 열기"},
+    steps:[
+      {t:"입력 조건 확인", at:"11:50", done:true, body:"거래처·품목·조건을 확인했습니다."},
+      {t:"검토 대기", at:"12:05", now:true, body:"버전 2(수량 40대)가 검토를 기다립니다. 승인 후 PDF·XLSX가 발급됩니다."},
+    ],
+    results:[["PI-2026-012 · 버전 2","합계 $8,400"]], ai:null },
+  { id:6, src:"문서", name:"CI #8 파일 발급", sub:"PI #5 연결 · 최종 승인 완료", via:"문서작성 · 직접 입력", step:"발급 완료 · 파일 2개", when:"어제", sort:5,
+    status:"완료", pill:"p-ok",
+    action:{label:"발급 파일 다시 내려받기", primary:false, sub:"문서 열기"},
+    steps:[
+      {t:"합계 승인 · 포장 내역", at:"어제 16:12", done:true},
+      {t:"최종 발급 승인", at:"어제 16:20", done:true},
+      {t:"파일 발급 완료", at:"어제 16:20", done:true, body:"CI-8.pdf · CI-8.xlsx 가 저장소에 저장됐습니다."},
+    ],
+    results:[["CI-8.pdf","발급 완료"],["CI-8.xlsx","발급 완료"]], ai:null },
+  { id:7, src:"채팅", name:"지난달 PO 목록 요청", sub:"요청: “지난달에 만든 PO 목록 보여줘”", via:"업무 도우미 대화", step:"응답 완료 · 3건", when:"어제", sort:6,
+    status:"완료", pill:"p-ok",
+    action:null,
+    steps:[
+      {t:"문서 검색 · 3건", at:"어제 10:31", done:true, body:"PO #21·#22·#23 을 찾아 목록으로 정리했습니다."},
+      {t:"응답 완료", at:"어제 10:32", done:true},
+    ],
+    results:[], ai:{model:"gpt-6-luna", calls:1, time:"18초", tokens:"412 / 88"} },
+  { id:8, src:"메일", name:"뉴스레터 수신", sub:"글로벌 물류 소식 11월호", via:"받은 메일 · Decisions 사전 제외", step:"업무 아님 · 제외", when:"어제", sort:7,
+    status:"처리 안 함", pill:"p-off",
+    action:null,
+    steps:[{t:"사전 제외 · 업무 아님", at:"어제 09:14", done:true, body:"Decisions 분류에서 명확한 광고·confidence 0.97로 판단해 그래프를 실행하지 않았습니다."}],
+    results:[], ai:{model:"gpt-6-luna", calls:1, time:"3초", tokens:"- / -"} },
+];
+const STATUSES = [
+  {key:"진행 중", dot:"run", hint:"실행 중인 작업"},
+  {key:"답변 대기", dot:"wait", hint:"도우미 질문에 답할 차례"},
+  {key:"승인 대기", dot:"wait", hint:"후보·문서 승인을 기다림"},
+  {key:"결과 확인 필요", dot:"bad", hint:"실패했거나 결과를 모름"},
+];
+const SRCS = ["전체","메일","채팅","문서"];
+
+/* 사실 두 번 나오는 값은 한 곳에서 계산: 침 건수 = 목록 행에서 셈. */
+const count = s => TASKS.filter(t => t.status === s).length;
+const attention = count("진행 중") + count("답변 대기") + count("승인 대기") + count("결과 확인 필요");
+console.assert(count("승인 대기") === 2, "승인 대기 2");
+console.assert(attention === 4 && TASKS.length === 8, "할 일 4 / 전체 8");
+
+const $ = id => document.getElementById(id);
+let sel = TASKS[0].id, statusF = "", srcF = "전체", query = "";
+
+const ICON = {
+  done:'<path d="M20 6L9 17l-5-5"/>',
+  now:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  fail:'<path d="M12 8v5"/><path d="M12 16.5v.5"/><circle cx="12" cy="12" r="9"/>',
+};
+const stepIcon = s => `<svg class="step-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${s.fail ? ICON.fail : s.now ? ICON.now : ICON.done}</svg>`;
+
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function countUp(el, to){ /* 침 숫자 올라가기. 처음 렌더에서만 돌리고 이후 렌더는 즉시 값. */
+  if (reduced || el.dataset.counted) { el.textContent = to; return }
+  el.dataset.counted = 1
+  const t0 = performance.now(), dur = 550
+  const tick = now => { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3)
+    el.textContent = Math.round(to * e); if (p < 1) requestAnimationFrame(tick) }
+  requestAnimationFrame(tick)
+}
+function renderChips(){
+  if (!$("chips").dataset.built){ /* 침 구조는 한 번만 만들고, 이후 렌더는 값·선택만 갱신해 반복 재생을 막는다 */
+    $("chips").dataset.built = 1
+    $("chips").innerHTML = STATUSES.map(s => `
+      <button class="chip" data-k="${s.key}" data-on="0" aria-pressed="false">
+        <span class="k"><i class="dot ${s.dot}"></i>${s.key}</span>
+        <span class="v num" data-to="${count(s.key)}">0</span>
+        <span class="hint">${s.hint}</span>
+      </button>`).join("");
+    document.querySelectorAll(".chip .v").forEach(el => countUp(el, +el.dataset.to));
+    [...$("chips").children].forEach(b => b.onclick = () => { statusF = statusF === b.dataset.k ? "" : b.dataset.k; render(); });
+  }
+  $("nav-count").textContent = attention;
+  [...$("chips").children].forEach(b => {
+    const on = statusF === b.dataset.k
+    b.dataset.on = on ? 1 : 0; b.setAttribute("aria-pressed", on)
+  });
+}
+function renderTabs(){
+  $("tabs").innerHTML = SRCS.map(s => `
+    <button class="tab" role="tab" aria-selected="${srcF === s}">${s}</button>`).join("");
+  [...$("tabs").children].forEach((b, i) => b.onclick = () => { srcF = SRCS[i]; render(); });
+}
+function renderRows(){
+  const rows = TASKS.filter(t => (!statusF || t.status === statusF) && (srcF === "전체" || t.src === srcF)
+    && (!query || (t.name + t.sub).includes(query))).sort((a, b) => a.sort - b.sort);
+  $("rows").innerHTML = rows.map((t, i) => `
+    <tr><td colspan="3" style="padding:0">
+      <button class="row" data-id="${t.id}" aria-pressed="${t.id === sel}" style="animation-delay:${Math.min(i * 45, 320)}ms">
+        <span class="top1">
+          <span class="t-name">${t.name}</span>
+          <span class="pill ${t.pill}">${t.running ? '<i class="spin"></i>' : "<i></i>"}${t.status}</span>
+          <span class="t-when num">${t.when}</span>
+        </span>
+        <span class="top2">
+          <span class="t-via">${t.via}</span>
+          <span aria-hidden="true" style="color:#c9cfd8">·</span>
+          <span class="t-sub">${t.sub}</span>
+          <span aria-hidden="true" style="color:#c9cfd8">·</span>
+          <span class="t-step">${t.step}</span>
+        </span>
+      </button>
+    </td></tr>`).join("");
+  $("empty").style.display = rows.length ? "none" : "block";
+  $("more").style.display = rows.length ? "block" : "none";
+  $("total").textContent = ` ${rows.length}건`;
+  document.querySelectorAll(".row").forEach(b => b.onclick = () => { sel = +b.dataset.id; render(); $("cols").classList.add("show-detail"); });
+}
+function renderDetail(){
+  const t = TASKS.find(x => x.id === sel); if (!t) { $("detail").innerHTML = ""; return; }
+  const ai = t.ai;
+  $("detail").innerHTML = `
+    <button class="d-back" id="back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>목록으로</button>
+    <div class="d-src">${t.src} · ${t.via}</div>
+    <h2 class="d-title">${t.name}</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span class="pill ${t.pill}">${t.running ? '<i class="spin"></i>' : "<i></i>"}${t.status}</span>
+      <span class="d-when num">${t.when} 변경</span>
+    </div>
+    ${t.action ? `<div class="d-act">
+      <button class="btn ${t.action.primary ? "blue" : "ghost"}">${t.action.label}</button>
+      <button class="btn ghost">${t.action.sub}</button>
+    </div>` : ""}
+    <section class="d-sec"><h3>실행 과정 <small>${t.steps.length}단계</small></h3>
+      <ol class="steps">${t.steps.map((s, i) => `
+        <li class="step ${s.done ? "done" : ""} ${s.now ? "now" : ""} ${s.fail ? "fail" : ""}">
+          <button class="step-h" aria-expanded="false">
+            ${stepIcon(s)}<span class="step-n">${s.t}</span><span class="step-t num">${s.at}</span>
+          </button>
+          <div class="step-body">${s.body || "기록된 상세가 없습니다."}</div>
+        </li>`).join("")}
+      </ol>
+    </section>
+    ${t.results.length ? `<section class="d-sec"><h3>만든 결과 <small>${t.results.length}건</small></h3>
+      ${t.results.map(r => `<div class="cand"><b>${r[0]}</b><small class="num">${r[1]}</small></div>`).join("")}
+    </section>` : ""}
+    <section class="d-sec"><h3>AI 정보</h3>
+      <dl class="kv">
+        <dt>모델</dt><dd>${ai ? ai.model : '<span class="dash">-</span>'}</dd>
+        <dt>모델 호출</dt><dd class="num">${ai ? ai.calls : '<span class="dash">-</span>'}${ai && typeof ai.calls === "number" ? "회" : ""}</dd>
+        <dt>처리 시간</dt><dd class="num">${ai ? ai.time : '<span class="dash">-</span>'}</dd>
+        <dt>토큰 입력/출력</dt><dd class="num">${ai && ai.tokens && !ai.tokens.startsWith("-") ? ai.tokens : '<span class="dash">반환값 없음</span>'}</dd>
+      </dl>
+    </section>
+    <p class="note">화면을 열거나 새로고침해도 그래프나 AI를 다시 실행하지 않습니다. 기록만 읽습니다.</p>`;
+  document.querySelectorAll(".step-h").forEach(h => h.onclick = () => {
+    const li = h.parentElement, open = li.classList.toggle("open");
+    h.setAttribute("aria-expanded", open);
+  });
+  const back = $("back"); if (back) back.onclick = () => { $("cols").classList.remove("show-detail"); };
+}
+function render(){ renderChips(); renderTabs(); renderRows(); renderDetail(); }
+$("q").oninput = e => { query = e.target.value.trim(); renderRows(); };
+$("refresh").onclick = () => { $("refresh").animate([{transform:"rotate(0)"},{transform:"rotate(360deg)"}],{duration:400}); };
+render();
+</script>
+</body>
+</html>

@@ -41,6 +41,7 @@ from app.runlog import router as runs
 from app.services.auth import GoogleAccess, make_cipher
 from app.services.local_gmail import LocalGmailCollector
 from app.services.watch import renew_connected_watches
+from app.status import router as status_routes
 from app.db.local_gmail import SqlMailboxStore
 from app.db.mailbox import MailStore
 from app.services.mail_processing import resume_pending
@@ -197,6 +198,7 @@ def create_app(settings: Settings | None = None, google=None,
     app.include_router(calendar_connection.router)
     app.include_router(mail_api.router)
     app.include_router(agent_api.router)
+    app.include_router(status_routes.router)
     app.include_router(files_routes.router)
     app.include_router(knowledge_routes.router)
     app.include_router(worker_routes.router)
