@@ -34,14 +34,12 @@ export default function PIPage() {
   const [settings, setSettings] = useState(null)
   const [settingsError, setSettingsError] = useState("")
   const [sourceText, setSourceText] = useState("")
-  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const errorBox = useRef(null)
   const question = useRef(null)
   const mutation = useRef(null)
   const base = "/trade/pi"
 
   function accept(document, review = null, next = { key: "review", fields: null }) {
-    setQuickFixOpen(false)
     setResource(document)
     setDraft(piDraft(document.input))
     setProposal(review)
@@ -272,9 +270,6 @@ export default function PIPage() {
       : <section className="pi-question" aria-label="서버 계산 결과"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
         <p className="pi-question-note">저장된 내용으로 계산한 금액이에요. 회사·계좌와 거래 조건을 함께 확인하세요.</p>
         {dirty && <p className="form-error">아직 저장하지 않은 변경사항이 있어요. 저장한 뒤 검토해 주세요.</p>}
-        {(current.missing_fields.length > 0 || current.issues.length > 0) && <div className="pi-missing"><p>아직 입력할 내용이 있어요. 팝업에서 필요한 값만 입력하고 저장할 수 있습니다.</p>
-          <button type="button" className="btn" disabled={!canEdit} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
-        {current.issues.length > 0 && <ul className="document-issues">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
         {current.status === "needs_input" && <p className="section-note">표시된 항목을 수정한 뒤 다시 저장해 주세요. 발행 회사·계좌·직인은 <Link to="/settings">회사 설정</Link>에서 확인할 수 있어요.</p>}
         <DocumentSnapshot document={current.document} />
         <fieldset className="editor-checks" disabled={busy || pending || current.status !== "ready"}><legend>발급 형식</legend>{["pdf","xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous, format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
@@ -284,9 +279,9 @@ export default function PIPage() {
           <button className="btn" type="button" disabled={!canEdit || (!dirty && !modifying)} onClick={save}>{modifying ? "수정 저장·재검토" : "변경사항 저장"}</button>
           <button className="btn blue" type="button" disabled={busy || dirty || modifying || pending || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
       </section>)}
-      <MissingFieldsDialog open={quickFixOpen} kind="PI" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+      <MissingFieldsDialog open={Boolean(current && screen.key === "review" && !finalReview)} kind="PI" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
-        onSave={save} onClose={() => setQuickFixOpen(false)} />
+        onSave={save} onOpenStep={edit} />
       {settingsError && <p className="section-note" role="status">기본 설정을 가져오지 못했어요. 직접 입력할 수 있습니다. {settingsError}</p>}
       </div>
       {!["start", "source"].includes(screen.key) && <PISummary draft={draft} current={current} dirty={dirty} disabled={!canEdit} onEdit={edit} />}

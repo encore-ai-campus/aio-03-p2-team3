@@ -43,7 +43,6 @@ function PLEditor() {
   const [packingReload, setPackingReload] = useState(0)
   const [settings, setSettings] = useState(null)
   const [settingsError, setSettingsError] = useState("")
-  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const question = useRef(null)
   const errorBox = useRef(null)
   const packingErrorBox = useRef(null)
@@ -52,7 +51,6 @@ function PLEditor() {
   const base = "/trade/pl"
 
   function accept(document, review = null, next = { key: "review", fields: null }) {
-    setQuickFixOpen(false)
     setResource(document)
     setDraft(plDraft(document.input))
     setProposal(review)
@@ -309,9 +307,6 @@ function PLEditor() {
       : <section className="pi-question" aria-label="서버 계산 결과"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
         <p className="pi-question-note">포장 합계 승인과 파일 발급 승인은 별개예요. 원본·계산 합계와 선적 조건을 확인하세요.</p>
         {dirty && <p className="form-error">아직 저장하지 않은 변경사항이 있어요. 저장한 뒤 검토해 주세요.</p>}
-        {(current.missing_fields.length > 0 || current.issues.length > 0) && <div className="pi-missing"><p>아직 입력할 내용이 있어요. 팝업에서 필요한 값만 입력하고 저장할 수 있습니다.</p>
-          <button type="button" className="btn" disabled={!canEdit} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
-        {current.issues.length > 0 && <ul className="document-issues" role="alert">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
         {current.status === "needs_input" && <p className="section-note">표시된 항목을 수정한 뒤 다시 저장해 주세요. 발행 회사·직인은 <Link to="/settings">회사 설정</Link>에서 확인할 수 있어요.</p>}
         <DocumentSnapshot kind="pl" document={current.document} />
         {packingError && <p className="form-error" role="alert" tabIndex={-1} ref={packingErrorBox}>{packingError}</p>}
@@ -325,9 +320,11 @@ function PLEditor() {
           <button className="btn" type="button" disabled={!canEdit || (!dirty && !modifying)} onClick={save}>{modifying ? "수정 저장·재검토" : "변경사항 저장"}</button>
           <button className="btn blue" type="button" disabled={busy || dirty || modifying || pending || current.status !== "ready" || !current.document.packing_totals?.approved || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
       </section>)}
-      <MissingFieldsDialog open={quickFixOpen} kind="PL" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+      <MissingFieldsDialog open={Boolean(current && screen.key === "review" && !finalReview)} kind="PL" draft={draft} missing={current?.missing_fields} issues={current?.issues}
+        packingIssues={[...(packing?.payload.document.packing_totals?.issues ?? []),
+          ...(packing?.payload.document.packing_totals && !packing.payload.document.packing_totals.quantity_complete ? ["Source quantity total is invalid"] : [])]} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
-        onSave={save} onClose={() => setQuickFixOpen(false)} />
+        onSave={save} onOpenStep={edit} />
       {settingsError && <p className="section-note" role="status">기본 설정을 가져오지 못했어요. 직접 입력할 수 있습니다. {settingsError}</p>}
       </div>
       {!["start", "source"].includes(screen.key) && <PLSummary draft={draft} current={current} dirty={dirty} disabled={!canEdit} onEdit={edit} />}

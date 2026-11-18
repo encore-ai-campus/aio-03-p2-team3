@@ -63,6 +63,8 @@ NFKC/대소문자/기호·숫자 분리 후 검색 토큰 전체를 비교한다
 | `PUT /api/trade/{kind}/{id}/sources` | `{revision, file_ids}`로 문서 출처 연결(첨부). 성공하면 새 revision·대기 검토 무효화, 과거 revision 연결은 보존(계획 8절, Bearer) |
 | `GET /api/trade/files/{file_id}` | 본인이 승인한 파일 다운로드 |
 
+공통 원문 파일 텍스트 변환은 `POST /api/trade/source-text`에 multipart `file` 한 개를 보낸다. PDF·XLSX·PNG·JPG/JPEG는 본인의 OpenAI 키로 비전 전사하며 파일당 20MiB·최대 5페이지·결과 20,000자 제한을 적용한다. TXT는 UTF-8·UTF-16·CP949를 서버에서 직접 읽으며 AI 키가 필요하지 않다. 변환된 원문은 저장하지 않고, 화면에서 내용을 확인한 뒤 문서별 `/extract` 요청을 해야 새 초안이 만들어진다. 비전 처리는 별도 개인 PC 실행기 `local_worker`에 연결하지 않는다.
+
 선택 요청은 `action`, `revision`, 반환받은 `content_hash`가 필요하다. 제안 ID는 URL에 둔다. `modify`에만 새 편집 입력 전체를 `document`로 보낸다. 제안 본문은 화면에 보여 주고 변경하지 않은 서버의 해시를 돌려보낸다.
 
 - `approve`: ready인 현재 버전을 issued로 확정한다. 파일 bytes는 요청한 모든 형식을 먼저 비공개 Storage에 저장한 뒤(`{user_id}/issued/{proposal_id}/{format}/{sha256}` 결정적 key, 같은 bytes만 재사용) SQL 트랜잭션에서 revision·제안·파일 참조를 함께 확정한다(계획 10절). 저장·확정 중 실패는 발급하지 않고 pending/ready를 유지한다. 중복·동시 요청은 같은 파일을 반환한다.

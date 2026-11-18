@@ -51,14 +51,12 @@ function StandaloneEditor() {
   const [notice, setNotice] = useState("")
   const [reload, setReload] = useState(0)
   const [sourceText, setSourceText] = useState("")
-  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const question = useRef(null)
   const errorBox = useRef(null)
   const mutation = useRef(null)
   const created = useRef(null)
 
   function accept(document, review = null, next = "review") {
-    setQuickFixOpen(false)
     setResource(document)
     setDraft(piDraft(document.input))
     setProposal(review)
@@ -209,19 +207,15 @@ function StandaloneEditor() {
         {screen === "review" && current && (finalReview ? <ReviewPanel kind="ci" proposal={proposal} token={token} busy={busy} dirty={dirty} modifying={modifying} headingRef={question} onDecision={decide} onModify={() => edit("buyer")} onRefreshSettings={refreshSettings}
           onDownload={(file) => perform((signal) => downloadFile(file, token, signal), () => setNotice("파일 다운로드를 요청했습니다."))} /> :
           <section className="pi-question"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
-            {current.issues.length > 0 && <ul className="document-issues">{current.issues.map((issue, i) => <li key={i}>{issue.message}</li>)}</ul>}
-            {current.missing_fields.length > 0 && <p className="form-error">보완할 항목: {current.missing_fields.join(", ")}</p>}
-            {current.missing_fields.length > 0 && <div className="pi-missing"><p>필요한 입력값만 팝업에서 보완할 수 있습니다.</p>
-              <button className="btn" type="button" disabled={!enabled} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
             <DocumentSnapshot kind="ci" document={current.document} />
             <fieldset className="editor-checks" disabled={busy || current.status !== "ready"}><legend>발급 형식</legend>{["pdf", "xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous, format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
             <div className="form-actions">{current && <button className="btn" type="button" title="최신 설정 정보를 새 CI 버전에 적용합니다. 이미 발급된 파일은 보존됩니다."
               disabled={busy || loading || ["sent", "sending"].includes(current.status)} onClick={refreshSettings}>최신 설정 정보 적용</button>}
               <button className="btn blue" type="button" disabled={busy || dirty || modifying || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
           </section>)}
-      <MissingFieldsDialog open={quickFixOpen} kind="CI" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+      <MissingFieldsDialog open={Boolean(current && screen === "review" && !finalReview)} kind="CI" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (proposal?.status === "pending") setModifying(true) }}
-        onSave={save} onClose={() => setQuickFixOpen(false)} />
+        onSave={save} onOpenStep={edit} />
       </div>{screen !== "source" && <CISummary draft={draft} standalone />}</div>
     </>}
   </div>
