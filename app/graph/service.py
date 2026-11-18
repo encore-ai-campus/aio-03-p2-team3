@@ -24,6 +24,7 @@ PREPARE_LABELS = {
     ("documents", "search_knowledge"): "문서함 검색",
     ("documents", "draft"): "문서 초안 작성", ("documents", "issue"): "파일 발급 준비",
     ("documents", "approve_packing"): "포장 합계 승인 준비",
+    ("calendar", "list_events"): "캘린더 일정 조회",
     ("calendar", "find_slots"): "일정 후보 조회", ("calendar", "create"): "일정 등록 준비",
 }
 EXECUTE_LABELS = {"send": "답장 발송", "issue": "파일 발급", "approve_packing": "포장 합계 승인",

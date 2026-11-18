@@ -7,6 +7,7 @@ from app.graph.schemas import ExecutionResult, PreparedAction, WorkflowError
 
 
 class CalendarPort(Protocol):
+    def list_events(self, actor_id: int, start: str, end: str) -> dict: ...
     def read_busy(self, actor_id: int, query: CalendarInput) -> BusySnapshot: ...
     def create(self, actor_id: int, action: PreparedAction) -> ExecutionResult: ...
     def lookup(self, actor_id: int, action: PreparedAction) -> ExecutionResult: ...
@@ -14,6 +15,9 @@ class CalendarPort(Protocol):
 
 class UnavailableCalendar:
     """제공자가 없는 환경의 기본값. 빈 일정이나 가짜 등록 성공을 돌려주지 않는다."""
+
+    def list_events(self, actor_id: int, start: str, end: str) -> dict:
+        raise WorkflowError("calendar_not_connected")
 
     def read_busy(self, actor_id, query):
         raise WorkflowError("calendar_not_connected")

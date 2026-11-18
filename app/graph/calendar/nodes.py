@@ -69,13 +69,22 @@ def prepare_event(task, context, query, snapshot, now):
 
 
 class CalendarNodes:
-    operations = frozenset({"find_slots", "create"})
+    operations = frozenset({"list_events", "find_slots", "create"})
 
     def __init__(self, port: CalendarPort | None = None, *, clock: Callable[[], datetime] | None = None):
         self.port = port if port is not None else UnavailableCalendar()
         self.clock = clock if clock is not None else lambda: datetime.now(timezone.utc)
 
     def prepare(self, task, context):
+        if task.operation == "list_events":
+            start, end = task.inputs.get("start"), task.inputs.get("end")
+            if not isinstance(start, str) or not isinstance(end, str):
+                return WorkResult(status="failed", code="invalid_range")
+            data = self.port.list_events(context.actor_id, start, end)
+            events = data["events"]
+            return WorkResult(status="completed", data={
+                **data, "events": events[:30], "total": len(events),
+            })
         query = check_constraints(task)
         if isinstance(query, WorkResult):
             return query

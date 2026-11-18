@@ -8,7 +8,7 @@
 from cryptography.fernet import InvalidToken
 from sqlalchemy.exc import IntegrityError
 
-from app.auth.calendar import calendar_access_token
+from app.services.calendar import CalendarEventsError, calendar_access_token, list_primary_events
 from app.clients.calendar import CalendarRejected
 from app.clients.gmail import GoogleError, TokenExpired
 from app.db.models import CalendarEventReceipt, CalendarToken
@@ -43,6 +43,13 @@ class ExistingCalendar:
     @property
     def database(self):
         return self.access.database
+
+    def list_events(self, actor_id: int, start: str, end: str) -> dict:
+        try:
+            return list_primary_events(self.access, actor_id, start, end)
+        except CalendarEventsError as error:
+            code = "calendar_unavailable" if error.status >= 500 else error.code
+            raise WorkflowError(code) from error
 
     def read_busy(self, actor_id: int, query: CalendarInput) -> BusySnapshot:
         """요청한 캘린더 전부를 담는다(빈 캘린더도). 조회 오류 캘린더가 있으면 실패한다."""

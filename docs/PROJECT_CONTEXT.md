@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-18 · 일정 탭(주 캘린더 읽기 전용 월간 달력) 추가 및 실행 기록 자리 탭(`/app/activity`) 제거 — 작업현황이 실행 이력 확인을 담당, 문서함 탭 개편·채팅 확인 카드 리디자인에 이어
+마지막 갱신: 2026-11-19 · 일정 탭 조회를 업무 도우미 채팅에도 연결
 
 - PI·PO·PL·CI의 `최신 설정 정보 적용`은 공통 refresh-settings 경로에서 새 revision을 만들고 회사·계좌, 저장 이름이 일치하는 거래처 프로필, 최신 단가표 가격을 적용한다. 수기·확정 단가는 보존하고 기존 발급 파일은 유지한다. PI 연결 CI는 같은 PI 문서의 최신 승인 revision 거래 정보를 반영한다. 누락 입력은 팝업에서 바로 저장하며 PL 포장 행 오류도 해당 입력을 연다. 기능 검증은 별도 요청 전까지 보류한다.
 
@@ -69,7 +69,7 @@
 - 메일 그래프는 `make_quote` → `create_trade_document`로 네 무역 문서 초안을 저장한다. 새 React 메일 API/화면은 quote/trade 후보의 관련 문서·상태·revision을 전달하며 기존 검토 화면으로 연결한다. 최종 메일 발송은 기존 가격/직인/PL 합계/CI 근거·후보 claim 검사를 유지하고 오래된 무역 revision은 거부한다. legacy HTML의 trade 링크 누락은 그대로이며 새로운 메일함은 React 경로를 사용한다. 실제 무역 메일 화면 완주/운영 확인은 별도로 남는다.
 - 과제 R-01·R-02·R-09·R-10의 기존 실행 근거는 Gmail 수신 경로이며, 현재 코드는 업무별 마스터 StateGraph에서 호환 준비 단계를 실행한다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
 - Google 로그인·암호화 토큰 저장·감시 갱신과 푸시 수신은 구현됐다(#79·#81). 로컬 Gmail 수집은 Pub/Sub·watch/stop 없이 동작한다(#160). 실제 운영 연동의 확인 범위는 6·7절과 #157에서 구분한다.
-- 남은 범위: 필수 항목 출처는 현재 `app/quote/required_fields.py`의 `source="config"`, `evidence=[]`다. 규칙 근거 RAG는 gmail-quote-mvp 22절의 후속 작업이며, 일정 도구 후보는 `.work/design/api-choice.md`의 '일정 도구 추천 후보'에 있다. 일정 도구의 LLM 입력은 제목 없이 바쁜 시간대만 전달하는 범위다.
+- 남은 범위: 필수 항목 출처는 현재 `app/quote/required_fields.py`의 `source="config"`, `evidence=[]`다. 규칙 근거 RAG는 gmail-quote-mvp 22절의 후속 작업이며, 일정 도구 후보는 `.work/design/api-choice.md`의 '일정 도구 추천 후보'에 있다. 빈 시간 조회는 바쁜 구간을 사용하고, 업무 도우미의 일정 목록 조회는 제목과 시각을 읽는다(4절).
 - 상세 위치: [공통 계약](CONTRACT.md) 6·9·10·15·16절, [독립 문서 API](trade-api.md), [로컬 실행 계획](plans/local-openai-execution.md) 1~5절. 계획 머리말과 README 일부의 '미구현' 표현은 작성 당시 기록이며, 현재 지원 범위는 위 표처럼 코드와 병합된 구현 PR을 대조했다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
@@ -85,10 +85,10 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-18 · Calendar 실연동(어댑터·영수증)·업무 도우미 일정 도구·일정 탭 조회 API 연결
+마지막 갱신: 2026-11-19 · 채팅의 기본 캘린더 일정 목록 조회
 
-- 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`·`calendar/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정은 설정에서 연결한 `calendar_tokens`를 `ExistingCalendar`가 실제 Google Calendar로 연결하며 `app/main.py`의 `agent_runtime`이 주입한다(미연결은 `calendar_not_connected`). 호출기 `CalendarClient`는 freebusy 조회·일정 등록·등록 확인 호출과 `check_calendars` 공용 오류 체계를 갖췄고, 등록 거부(400·409)는 `calendar_rejected` 확정 실패다(#245). 일정 탭용 읽기 전용 `list_events`(기간 내 일정 목록, 페이지네이션 상한 초과는 잘린 목록 대신 실패)는 `GET /api/calendar/events`가 쓰며 토큰 갱신·실패 분류는 `calendar_access_token` 헬퍼와 연결 상태 조회 체계를 재사용한다(미연결 409·범위 검증 400). 등록은 결정적 이벤트 ID와 `calendar_event_receipts` 영수증으로 멱등을 지키고 타임아웃·5xx는 `unknown` 뒤 조회로 복구한다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
-- 대화형 업무 도구는 `master/tools.py`의 14개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다. `find_slots`는 지정한 캘린더의 빈 시간 후보를 찾고 `create_event`는 사용자가 고른 시간만 등록 제안한다.
+- 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`·`calendar/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정은 설정에서 연결한 `calendar_tokens`를 `ExistingCalendar`가 실제 Google Calendar로 연결하며 `app/main.py`의 `agent_runtime`이 주입한다(미연결은 `calendar_not_connected`). 호출기 `CalendarClient`는 freebusy 조회·일정 등록·등록 확인 호출과 `check_calendars` 공용 오류 체계를 갖췄고, 등록 거부(400·409)는 `calendar_rejected` 확정 실패다(#245). 일정 탭과 채팅이 공유하는 읽기 전용 `list_events`(기간 내 일정 목록, 페이지네이션 상한 초과는 잘린 목록 대신 실패)는 `app/services/calendar.py`를 통해 `GET /api/calendar/events`와 채팅이 쓰며 토큰 갱신·실패 분류는 `calendar_access_token` 헬퍼와 연결 상태 조회 체계를 재사용한다(미연결 409·범위 검증 400). 등록은 결정적 이벤트 ID와 `calendar_event_receipts` 영수증으로 멱등을 지키고 타임아웃·5xx는 `unknown` 뒤 조회로 복구한다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
+- 대화형 업무 도구는 `master/tools.py`의 15개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다. `list_calendar_events`는 본인 주 캘린더의 제목과 시각을 읽으며 최대 30건과 전체 건수를 반환한다. `find_slots`는 지정한 캘린더의 빈 시간 후보를 찾고 `create_event`는 사용자가 고른 시간만 등록 제안한다.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`은 전용 루프백 프로세스의 환경 키, `local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
 - 수신 전 `app/llm/mail_gate.py`는 같은 본인 키로 Decisions `gpt-6-luna`의 exclude/keep 한 질문을 호출한다. 명확한 무관 + confidence ≥ 0.95만 제외하고 애매함/회사 업무는 기존 그래프에 전달한다. 오류는 원문 보존 후 needs_review, local_worker는 미지원이다. no-reply/프로모션/소셜만으로 제외하지 않는다. 생성/분석 프롬프트는 기존 분기를 유지하며 analyze_email.v2로 회사 업무 전반을 다룬다.
 - 지식 문서 `DocumentExtractor`/`Embedder`는 위 구조화 호출로 가장하지 않고 OpenAI Responses 시각 입력/Embeddings API를 각각 감싼다. `UserKeyAccess`의 본인/실행 모드 검증은 재사용하며 미지원 local_worker·키 누락은 공용 키 대체 없이 실패한다. 비전 기본값은 현재 OpenAI 모델, 임베딩은 사용자 선택 text-embedding-3-small/1536이며 KNOWLEDGE_*로 따로 바꾼다. 비전 store=False·요청당 180초·SDK 재시도 최대 3회(최초 포함 4번), 임베딩은 기존 30초·재시도 0회이며 진행 시도 프로필 고정과 명시적 재처리를 적용한다. 업무 도우미의 내용 검색은 현재 호환 임베딩 프로필의 게시본을 읽는다.

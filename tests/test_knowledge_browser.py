@@ -51,6 +51,16 @@ def serve(app):
         assert not thread.is_alive(), "시험용 FastAPI가 종료되지 않았습니다."
 
 
+def upload_with_picker(page, name, media_type, content):
+    with page.expect_file_chooser() as pending:
+        page.get_by_role("button", name="문서 업로드", exact=True).click()
+    pending.value.set_files({"name": name, "mimeType": media_type, "buffer": content})
+
+
+def open_uploaded_document(page, name):
+    page.get_by_role("region", name="내 문서 목록").get_by_role("button", name=name).click()
+
+
 def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url, tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     environment = {**os.environ, "SUPABASE_URL": SUPABASE_URL,
@@ -83,8 +93,8 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
         expect(page).to_have_url(base + "/app/documents")
         expect(page.get_by_role("heading", name="문서함", exact=True)).to_be_visible()
         expect(page.locator('a[href="/app/knowledge"]')).to_have_count(0)
-        page.get_by_label("문서 선택").set_input_files({"name": "가상 문서.png", "mimeType": "image/png", "buffer": png()})
-        page.get_by_role("button", name="문서 업로드").click()
+        upload_with_picker(page, "가상 문서.png", "image/png", png())
+        open_uploaded_document(page, "가상 문서.png")
         detail = page.get_by_role("region", name="문서 상세")
         expect(detail.get_by_text("원문 확인 필요", exact=True)).to_be_visible(timeout=15000)
         expect(detail.get_by_alt_text("원본에서 렌더링한 1페이지")).to_be_visible()
@@ -137,8 +147,9 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
         assert len(extractor.calls) == 1 and len(embedder.calls) == 1
         page.set_viewport_size({"width": 1440, "height": 1000})
         original_pdf = pdf(2)
-        page.get_by_label("문서 선택").set_input_files({"name": "원본.pdf", "mimeType": "application/pdf", "buffer": original_pdf})
-        page.get_by_role("button", name="문서 업로드", exact=True).click()
+        page.get_by_role("button", name="문서 목록").click()
+        upload_with_picker(page, "원본.pdf", "application/pdf", original_pdf)
+        open_uploaded_document(page, "원본.pdf")
         expect(detail.get_by_role("heading", name="원본.pdf")).to_be_visible()
         detail.get_by_role("button", name="원본 보기", exact=True).click()
         expect(detail.get_by_alt_text("업로드한 원본 1페이지")).to_be_visible()
@@ -152,7 +163,8 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
         with page.expect_download() as download:
             detail.get_by_role("button", name="원본 다운로드", exact=True).click()
         assert Path(download.value.path()).read_bytes() == original_pdf
-        page.locator(".knowledge-list").get_by_role("button", name="가상 문서.png", exact=False).click()
+        page.get_by_role("button", name="문서 목록").click()
+        open_uploaded_document(page, "가상 문서.png")
         expect(detail.get_by_role("heading", name="가상 문서.png")).to_be_visible()
         expect(detail.get_by_alt_text("업로드한 원본 1페이지")).to_have_count(0)
         browser.close()
@@ -206,12 +218,12 @@ def test_local_browser_missing_key_retry_failure_and_recovery_without_gmail(data
             context.add_init_script("localStorage.setItem('sb-test-project-auth-token', " + json.dumps(json.dumps(session)) + ')')
             page = context.new_page()
             page.goto(base + '/app/documents')
-            page.get_by_label('문서 선택').set_input_files({'name': 'local-fake.png', 'mimeType': 'image/png', 'buffer': png()})
-            page.get_by_role('button', name='문서 업로드').click()
+            upload_with_picker(page, 'local-fake.png', 'image/png', png())
             expect(page.get_by_text('로컬 .env에 OPENAI_API_KEY', exact=False)).to_be_visible()
             assert not storage.objects
             mode['key'] = 'fake-local-browser-key'
-            page.get_by_role('button', name='문서 업로드').click()
+            upload_with_picker(page, 'local-fake.png', 'image/png', png())
+            open_uploaded_document(page, 'local-fake.png')
             detail = page.get_by_role('region', name='문서 상세')
             expect(detail.get_by_text('저장 완료', exact=True)).to_be_visible(timeout=15000)
             with app.state.database.session() as db:
@@ -228,7 +240,6 @@ def test_local_browser_missing_key_retry_failure_and_recovery_without_gmail(data
             release.set()
             expect(detail.get_by_text('처리 실패', exact=True)).to_be_visible(timeout=15000)
             expect(detail.get_by_text('처리를 요청했습니다.', exact=True)).to_have_count(0)
-            expect(page.locator('.knowledge-upload li')).to_have_text('local-fake.png — 처리 실패')
             detail.get_by_role('button', name='원본 보기', exact=True).click()
             expect(detail.get_by_alt_text('업로드한 원본 1페이지')).to_be_visible()
             detail.get_by_role('button', name='원본 미리보기 닫기', exact=True).click()

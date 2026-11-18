@@ -1,5 +1,6 @@
 """실제 React/API/체크포인트와 가짜 모델·Gmail의 사용자 승인 경로."""
 import json
+import re
 import os
 from pathlib import Path
 import subprocess
@@ -117,7 +118,8 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         approval = page.get_by_role('region', name='작업 최종 확인')
         expect(approval).to_be_visible(timeout=20000)
         expect_stopped('승인 대기')
-        expect(approval.get_by_text('받는 사람: sender@example.invalid', exact=True)).to_be_visible()
+        expect(approval.locator('.mail-to').get_by_text('받는 사람', exact=True)).to_be_visible()
+        expect(approval.locator('.mail-to').get_by_text('sender@example.invalid', exact=True)).to_be_visible()
         expect(approval.get_by_text('가상 답장 본문 2', exact=True)).to_be_visible()
         assert not google.mailbox.called('send')
         page.set_viewport_size({'width': 390, 'height': 844})
@@ -147,7 +149,7 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         page.locator('.work-row').first.click()  # 접힌 작업 타임라인을 펼친 뒤 단계를 연다(채팅 UI 개편).
         page.get_by_text('파일 발급 · 완료', exact=True).click()
         with page.expect_download() as download:
-            page.get_by_role('button', name='다운로드').filter(has_text='.pdf').click()
+            page.get_by_role('button', name=re.compile(r'\.pdf 다운로드$')).click()
         assert download.value.suggested_filename.endswith('.pdf')
         assert len(google.mailbox.called('send')) == 1 and not errors
         page.screenshot(path=str(tmp_path / 'agent-mobile.png'), full_page=True)
@@ -158,10 +160,10 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         row.click()
         found = page.get_by_role('list', name='작업 결과').locator('li.step').filter(has_text='발급 문서 검색')
         found.get_by_role('button', name='발급 문서 검색 완료').click()
-        expect(found.get_by_text('PI PI-100', exact=True)).to_be_visible()
-        expect(found.get_by_text('발급 버전 1', exact=False)).to_be_visible()
+        expect(found.get_by_text('PI-100', exact=True)).to_be_visible()
+        expect(found.get_by_text('버전 1', exact=False)).to_be_visible()
         with page.expect_download() as download:
-            found.get_by_role('button', name='다운로드').filter(has_text='.pdf').click()
+            found.get_by_role('button', name=re.compile(r'\.pdf 다운로드$')).click()
         assert download.value.suggested_filename.endswith('.pdf')
         page.get_by_label('업무 요청', exact=True).fill('가상 모델 오류를 확인해 줘')
         page.get_by_role('button', name='요청하기', exact=True).click()
@@ -178,9 +180,11 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         expect(page.get_by_text('문서함 파일을 찾았습니다.', exact=True)).to_be_visible(timeout=20000)
         row.click()
         page.get_by_role('button', name='문서함 검색 완료').click()
-        page.get_by_role('link', name='테이블오더.pdf 열기').click()
-        expect(page).to_have_url(f'{base}/app/documents?document={document_id}')
-        page.get_by_role('button', name='원본 보기').click()
-        expect(page.get_by_role('img', name='업로드한 원본 1페이지')).to_be_visible(timeout=10000)
+        with context.expect_page() as opened:
+            page.get_by_role('link', name='테이블오더.pdf', exact=True).click()
+        document_page = opened.value
+        expect(document_page).to_have_url(f'{base}/app/documents?document={document_id}')
+        document_page.get_by_role('button', name='원본 보기').click()
+        expect(document_page.get_by_role('img', name='업로드한 원본 1페이지')).to_be_visible(timeout=10000)
         assert not errors
         browser.close()
