@@ -7,6 +7,13 @@ import "./knowledge.css"
 const ROOT = "/knowledge/documents"
 const ACTIVE = new Set(["queued", "extracting", "chunking", "embedding"])
 const STATUS = { queued: "처리 대기", extracting: "페이지 읽는 중", needs_review: "원문 확인 필요", chunking: "청크 만드는 중", embedding: "임베딩 중", ready: "저장 완료", failed: "처리 실패" }
+// 목록 알약은 상태를 네 묶음으로 보여 주고, 처리 중은 단계까지 함께 쓴다.
+const PILL = { queued: { label: "처리 대기", cls: "run" }, extracting: { label: "읽는 중", cls: "run" },
+  chunking: { label: "청크 만드는 중", cls: "run" }, embedding: { label: "임베딩 중", cls: "run" },
+  needs_review: { label: "확인 필요", cls: "wait" }, ready: { label: "저장 완료", cls: "ok" },
+  failed: { label: "처리 실패", cls: "bad" } }
+const fileExt = (filename) => filename.includes(".") ? filename.split(".").pop().toUpperCase().slice(0, 4) : "FILE"
+const fileSize = (bytes) => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MiB` : `${Math.max(1, Math.round(bytes / 1024))}KB`
 const WARNINGS = { converted_layout_requires_review: "변환한 페이지의 표·인쇄 영역·누락 여부를 원본과 비교해 주세요.", large_page_requires_review: "큰 페이지의 작은 글씨가 정확히 읽혔는지 확인해 주세요.", page_mapping_requires_review: "일부 페이지의 전사 순서 또는 누락을 확인해 주세요.", transcription_requires_review: "판독이 불확실한 부분을 원본과 비교해 수정해 주세요.", empty_transcription_requires_review: "읽은 원문이 없습니다. 원본을 확인하고 내용을 입력하거나 다시 추출해 주세요." }
 const ERRORS = { LOCAL_KEY_REQUIRED: "로컬 .env에 OPENAI_API_KEY를 지정하고 앱을 다시 시작해 주세요.", LOCAL_RUNTIME_REQUIRED: "전용 로컬 실행 명령(uv run python -m app.local)으로 앱을 다시 시작해 주세요.", provider_rate_limit: "AI 사용 한도를 확인한 뒤 다시 시도해 주세요.", provider_access_denied: "설정에 등록한 키와 모델 이용 권한을 확인해 주세요.", LOCAL_WORKER_KEY_FORBIDDEN: "현재 개인 PC 실행 방식은 문서함의 이미지·임베딩 요청을 지원하지 않습니다.", OPENAI_KEY_REQUIRED: "설정에서 본인의 OpenAI 키를 등록해 주세요.", office_not_installed: "서버에 LibreOffice가 필요합니다. PDF로 변환해 올릴 수도 있습니다.", processing_interrupted: "처리가 중단되었습니다. 이전 저장 결과는 보존됩니다. 확인 후 다시 시도해 주세요.", hidden_sheet: "숨김 시트를 표시하거나 필요한 내용을 PDF로 내보내 주세요.", formula_cache_missing: "Excel에서 수식을 재계산·저장하거나 PDF로 내보내 주세요." }
 
@@ -252,23 +259,50 @@ export default function KnowledgePage() {
   }
 
   return <div className="knowledge-workspace">
-    <div className="page-head"><div><h1 className="page-title">문서함</h1><p className="page-sub">문서를 업로드하고 저장한 원본과 처리 상태를 확인하세요.</p></div></div>
     <form className="card knowledge-upload" onSubmit={upload}>
       <label className="field" htmlFor="knowledge-files">문서 선택<input ref={files} id="knowledge-files" type="file" multiple required disabled={busy} accept=".pdf,.docx,.xlsx,.txt,.png,.jpg,.jpeg" /></label>
       <p className="section-note">PDF·DOCX·XLSX·TXT·PNG·JPEG · 파일당 20MiB · 변환 후 50페이지까지. HWP는 PDF로 변환해 주세요. 원본 페이지를 본인의 OpenAI 키로 전송해 읽습니다.</p>
       <button className="btn blue" disabled={busy} type="submit">{busy ? "업로드 중…" : "문서 업로드"}</button>
       {!!uploads.length && <ul aria-live="polite">{uploads.map((value, index) => <li key={index}>{value.name} — {STATUS[read.documents.find((document) => document.id === value.id)?.status] ?? value.message}</li>)}</ul>}
     </form>
-    <div className="knowledge-layout"><section className="card knowledge-list" aria-label="내 문서 목록"><div className="knowledge-detail-head"><h2>업로드한 문서</h2><button className="link-button" onClick={() => setRefresh((value) => value + 1)}>새로고침</button></div>
-      {read.error && <p role="alert" className="form-error">{read.error}</p>}
-      {read.loading && <p role="status">목록을 불러오는 중입니다…</p>}
-      {!read.loading && !read.documents.length && <p>등록된 문서가 없습니다.</p>}
-      <ul>{read.documents.map((document) => <li key={document.id}><button type="button" className={id === document.id ? "selected" : ""} aria-pressed={id === document.id} onClick={() => setParams({ document: document.id })}>
-        <strong>{document.filename}</strong><span>{STATUS[document.status] ?? document.status} · {(document.size_bytes / 1024 / 1024).toFixed(1)}MiB</span>
-      </button></li>)}</ul>
-      <div className="knowledge-actions"><button className="btn" disabled={!offset} onClick={() => setOffset((value) => value - 20)}>이전</button><button className="btn" disabled={read.documents.length < 20} onClick={() => setOffset((value) => value + 20)}>다음</button></div>
+    <section aria-label="내 문서 목록">
+      <div className="doc-toolbar">
+        <div className="knowledge-list-head">
+          <h2 className="section-title">업로드한 문서</h2>
+          <span className="doc-total num">{read.loading ? "" : `${read.documents.length}건`}</span>
+          <button className="link-button" onClick={() => setRefresh((value) => value + 1)}>새로고침</button>
+        </div>
+      </div>
+      <div className="doc-list">
+        <div className="doc-row doc-row-head" aria-hidden="true">
+          <span>형식</span><span>파일명</span><span>상태</span><span className="doc-date">크기 · 올린 날짜</span>
+        </div>
+        {read.error && <div className="doc-block-error" role="alert"><p>{read.error}</p></div>}
+        {read.loading && [1, 2, 3].map((line) => <div key={line} className="doc-row doc-loading" aria-hidden="true"><span /></div>)}
+        {!read.loading && !read.error && !read.documents.length && (
+          <div className="doc-block-empty"><p>등록된 문서가 없습니다.</p><p className="doc-hint">위에서 문서를 올리면 AI가 원문을 읽어 저장합니다.</p></div>
+        )}
+        {read.documents.map((document, index) => {
+          const pill = PILL[document.status] ?? { label: document.status, cls: "off" }
+          return <button key={document.id} type="button" className="doc-row uploaded"
+            aria-pressed={id === document.id} style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+            onClick={() => setParams({ tab: "uploaded", document: document.id })}>
+            <span className="doc-kind">{fileExt(document.filename)}</span>
+            <span className="doc-id"><span className="doc-number">{document.filename}</span></span>
+            <span className={"doc-pill p-" + pill.cls}><i />{pill.label}</span>
+            <span className="doc-size num">{fileSize(document.size_bytes)} · {document.created_at?.slice(0, 10) ?? "—"}</span>
+          </button>
+        })}
+        <div className="knowledge-page-actions">
+          <span className="num">{offset + 1}–{offset + read.documents.length}건{read.documents.length === 20 ? "+" : ""}</span>
+          <span className="knowledge-actions">
+            <button className="btn" disabled={!offset} onClick={() => setOffset((value) => value - 20)}>이전</button>
+            <button className="btn" disabled={read.documents.length < 20} onClick={() => setOffset((value) => value + 20)}>다음</button>
+          </span>
+        </div>
+      </div>
     </section>
-      {id ? <DocumentDetail key={id} id={id} token={token} refresh={refresh} changed={() => setRefresh((value) => value + 1)} /> : <div className="card knowledge-empty"><h2>문서를 선택해 주세요</h2><p>업로드한 문서의 원본과 처리 결과를 확인할 수 있습니다.</p></div>}
-    </div>
+    {id ? <DocumentDetail key={id} id={id} token={token} refresh={refresh} changed={() => setRefresh((value) => value + 1)} />
+      : <div className="card knowledge-empty"><h2 className="section-title">문서를 선택해 주세요</h2><p>원본 대조·수정·확정 화면이 열립니다.</p></div>}
   </div>
 }

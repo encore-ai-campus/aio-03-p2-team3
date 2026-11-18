@@ -1,0 +1,118 @@
+/* 문서함 v2 — 생성된 문서·업로드된 문서 탭 공통 스타일(documents-v2 계획 §3.2).
+   앱 토큰(styles.css --ink·--blue·--line)과 작업현황·메일함의 목록 언어(흰 패널·1px 줄·알약)를 따른다.
+   모션은 요청자 취향(화려하게): 행 입장 스태거·호버 리프트·처리 중 펄스. prefers-reduced-motion에서는 끈다. */
+
+.doc-workspace { --doc-rule: #f2f2f2; --doc-raise: #f9fafb; --doc-active: #eef2ff;
+  --doc-pill-run-bg: #eef2ff; --doc-pill-run-ink: #284ee8;
+  --doc-pill-wait-bg: #fdf3df; --doc-pill-wait-ink: #855c0b;
+  --doc-pill-ok-bg: #e7f6ee; --doc-pill-ok-ink: #0d5136;
+  --doc-pill-bad-bg: #ffedea; --doc-pill-bad-ink: #831c1e;
+  --doc-pill-off-bg: #f1f2f4; --doc-pill-off-ink: #4c5563; }
+.doc-workspace .num { font-variant-numeric: tabular-nums }
+
+/* 탭 (밑줄 이동) */
+.doc-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 18px }
+.doc-tab { border: 0; background: none; padding: 9px 2px 11px; font-size: 14px; color: #606b7b;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .18s, border-color .18s }
+.doc-tab:hover { color: var(--ink) }
+.doc-tab[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink) }
+
+/* 패널 전환 */
+.doc-panel { animation: doc-rise .35s cubic-bezier(.2,.7,.3,1) both }
+
+/* 도구줄: 검색 + 총 건수 */
+.doc-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px }
+.doc-search { display: flex; align-items: center; gap: 7px; border: 1px solid #d1d5db; border-radius: 6px;
+  height: 32px; padding: 0 10px; background: #fff; width: 220px; transition: border-color .15s }
+.doc-search:focus-within { border-color: var(--blue) }
+.doc-search svg { width: 13px; height: 13px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; flex: none }
+.doc-search input { border: 0; outline: 0; width: 100%; font-size: 13px; background: none; color: var(--ink) }
+.doc-search input::placeholder { color: #6b7686 }
+.doc-total { font-size: 12px; color: var(--muted); margin-left: auto; white-space: nowrap }
+
+/* 목록 패널 */
+.doc-list { background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+.doc-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 100px 118px 96px; gap: 12px;
+  align-items: center; width: 100%; border: 0; background: none; text-align: left;
+  padding: 12px 16px; border-top: 1px solid var(--doc-rule); font-size: 13px; color: var(--ink);
+  animation: doc-rise .4s cubic-bezier(.2,.7,.3,1) both;
+  transition: background .15s, transform .15s; position: relative }
+.doc-row:first-child { border-top: 0 }
+.doc-row:not(.doc-row-head):not(.doc-loading):hover { background: #f7f9fd; transform: translateY(-1px) }
+.doc-row[aria-pressed="true"] { background: var(--doc-active) }
+.doc-row[aria-pressed="true"]::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px;
+  width: 3px; border-radius: 0 2px 2px 0; background: var(--blue) }
+.doc-row-head { font-size: 12px; font-weight: 500; color: var(--muted); padding-block: 10px; background: var(--doc-raise) }
+
+/* 생성된 문서 칸 */
+.doc-kind { justify-self: start; font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  color: #57627a; background: #f1f2f4; border-radius: 4px; padding: 3px 6px }
+.doc-id { min-width: 0; display: flex; flex-direction: column; gap: 3px }
+.doc-number { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.doc-party { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.doc-total-cell { text-align: right; white-space: nowrap; font-weight: 600 }
+.doc-total-cell small { color: var(--muted); font-weight: 500 }
+.doc-date { font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap }
+
+/* 업로드된 문서 칸 (기존 지식 문서 목록을 같은 패널 언어로) */
+.doc-row.uploaded { grid-template-columns: 52px minmax(0, 1fr) 108px 150px; }
+.doc-row.uploaded .doc-id { gap: 4px }
+.doc-row.uploaded .doc-size { font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap }
+
+/* 상태 알약 */
+.doc-pill { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px;
+  border-radius: 99px; font-size: 11.5px; font-weight: 600; white-space: nowrap; justify-self: start }
+.doc-pill i { width: 6px; height: 6px; border-radius: 50%; font-style: normal; flex: none }
+.doc-workspace .p-run { background: var(--doc-pill-run-bg); color: var(--doc-pill-run-ink) }
+.doc-workspace .p-run i { background: var(--doc-pill-run-ink); animation: doc-pulse 1.6s ease-in-out infinite }
+.doc-workspace .p-wait { background: var(--doc-pill-wait-bg); color: var(--doc-pill-wait-ink) }
+.doc-workspace .p-wait i { background: #d99a1e }
+.doc-workspace .p-ok { background: var(--doc-pill-ok-bg); color: var(--doc-pill-ok-ink) }
+.doc-workspace .p-ok i { background: var(--green) }
+.doc-workspace .p-bad { background: var(--doc-pill-bad-bg); color: var(--doc-pill-bad-ink) }
+.doc-workspace .p-bad i { background: #c4242a }
+.doc-workspace .p-off { background: var(--doc-pill-off-bg); color: var(--doc-pill-off-ink) }
+.doc-workspace .p-off i { background: #9aa1ac }
+
+/* 로딩(실제 줄 높이의 회색 바)·빈 상태·오류 블록 */
+.doc-loading { padding-block: 14px }
+.doc-loading span { height: 14px; border-radius: 4px; background: #eceff3; animation: doc-pulse 1.4s ease-in-out infinite }
+.doc-block-empty, .doc-block-error { border-top: 1px solid var(--doc-rule); padding: 26px 16px;
+  font-size: 13px; color: var(--muted) }
+.doc-block-empty p, .doc-block-error p { margin: 0 }
+.doc-block-empty .doc-hint { margin-top: 4px; font-size: 12px }
+.doc-block-error { color: #831c1e; display: flex; align-items: center; justify-content: space-between; gap: 12px }
+.doc-retry { border: 1px solid #f0bfc2; background: #fff; color: #831c1e; border-radius: 6px;
+  height: 30px; padding: 0 12px; font-size: 12.5px; white-space: nowrap }
+.doc-retry:hover { background: #fff5f5 }
+
+/* 문서함 패널 안 지식 문서(업로드 탭)의 안내 간격 */
+.doc-workspace .knowledge-upload { margin-bottom: 14px }
+.doc-workspace .knowledge-list-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px }
+.doc-workspace .knowledge-list-head h2 { margin: 0 }
+.doc-workspace .knowledge-list-head .doc-total { margin-left: auto }
+.doc-workspace .knowledge-page-actions { display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 16px; border-top: 1px solid var(--doc-rule); font-size: 12px; color: var(--muted) }
+.doc-workspace .knowledge-page-actions .knowledge-actions { margin: 0 }
+
+@keyframes doc-rise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@keyframes doc-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-panel, .doc-row { animation: none }
+  .doc-workspace .p-run i, .doc-loading span { animation: none }
+  .doc-row, .doc-tab, .doc-search { transition: none }
+}
+
+/* 좁은 화면: 표를 두 줄 행으로 접는다(첫 줄=번호·상태, 둘째 줄=거래처·총액·날짜). */
+@media (max-width: 760px) {
+  .doc-row, .doc-row.uploaded { grid-template-columns: 44px minmax(0, 1fr) auto; row-gap: 4px }
+  .doc-row-head { display: none }
+  .doc-date, .doc-total-cell { text-align: left }
+  .doc-total-cell { grid-column: 2 }
+  .doc-date { grid-column: 3; justify-self: end }
+  .doc-row .doc-size { grid-column: 2 / -1; text-align: left }
+  .doc-row .doc-pill { grid-row: 1; grid-column: 3; justify-self: end }
+  .doc-search { width: 100% }
+  .doc-toolbar { flex-wrap: wrap }
+}

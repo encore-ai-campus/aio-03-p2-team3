@@ -69,7 +69,11 @@ def decide(client, proposal, action, **extra):
 def test_pi_http_end_to_end_approval_and_idempotent_download(pi_client):
     client = pi_client
     created = create_pi(client)
-    assert client.get("/api/trade/pi").json()[0]["document_id"] == created["document_id"]
+    summary = client.get("/api/trade/pi").json()[0]
+    assert summary["document_id"] == created["document_id"]
+    # 문서함 메타데이터: 거래처(PI는 buyer)와 등록일이 목록에 함께 온다.
+    assert summary["counterparty"] == pi_input().buyer.legal_name
+    assert summary["created_at"]
     proposal = propose(client, created)
     assert "branding" not in proposal  # 이미지 bytes는 응답에 노출하지 않는다.
     response = decide(client, proposal, "approve")

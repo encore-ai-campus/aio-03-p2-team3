@@ -101,6 +101,8 @@ class DocumentSummary(BaseModel):
     status: str
     currency: str | None
     total: str | None
+    counterparty: str | None = None
+    created_at: str | None = None
 
 
 class DocumentRepository(Protocol):
