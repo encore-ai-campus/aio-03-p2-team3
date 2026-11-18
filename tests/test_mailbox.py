@@ -205,3 +205,53 @@ def test_mailbox_quote_price_completion_pdf_and_selected_send(mailbox_client, pr
     assert pdf.content.startswith(b"%PDF") and "no-store" in pdf.headers["cache-control"]
     result = client.post(f"/api/mail/candidates/{candidates[0]}/send", headers=headers, json={})
     assert result.json()["outcome"] == "sent" and len(google.mailbox.called("send")) == 1
+
+
+def test_edit_reply_persists_and_sends_only_final_human_approved_text(mailbox_client):
+    from tests.test_approval import sent_mail
+    client, token, owner, candidates, google, _ = mailbox_client
+    headers = bearer(token)
+    url = f"/api/mail/candidates/{candidates[0]}"
+    initial = client.get(url + "/preview", headers=headers).json()
+    updated = client.put(url, headers=headers, json={
+        "subject": "Re: 사용자 수정 제목", "body": "사용자가 직접 수정한 답장 본문",
+        "expected_subject": initial["subject"], "expected_body": initial["body"],
+    })
+    assert updated.status_code == 200
+    assert updated.json()["body"] == "사용자가 직접 수정한 답장 본문"
+    assert client.get("/api/mail/threads/fake-thread", headers=headers).json()["candidates"][0]["subject"] == "Re: 사용자 수정 제목"
+    stale = client.post(url + "/send", headers=headers, json={
+        "expected_subject": initial["subject"], "expected_body": initial["body"],
+    })
+    assert stale.status_code == 409
+    assert google.mailbox.called("send") == []
+    preview = client.get(url + "/preview", headers=headers).json()
+    assert preview["subject"] == "Re: 사용자 수정 제목"
+    assert preview["body"] == "사용자가 직접 수정한 답장 본문"
+    sent = client.post(url + "/send", headers=headers, json={
+        "expected_subject": preview["subject"], "expected_body": preview["body"],
+    })
+    assert sent.json()["outcome"] == "sent"
+    _, _, mail = sent_mail(google)
+    assert mail["Subject"] == "Re: 사용자 수정 제목"
+    assert mail.get_content().strip() == "사용자가 직접 수정한 답장 본문"
+    assert client.put(url, headers=headers, json={
+        "subject": "수정 불가", "body": "수정 불가",
+        "expected_subject": preview["subject"], "expected_body": preview["body"],
+    }).status_code == 409
+
+
+def test_edit_reply_ownership_invalid_input_and_stale_conflict(mailbox_client):
+    client, token, owner, candidates, google, jwks = mailbox_client
+    headers = bearer(token)
+    url = f"/api/mail/candidates/{candidates[0]}"
+    initial = client.get(url + "/preview", headers=headers).json()
+    payload = {"subject": "고친 제목", "body": "고친 본문",
+               "expected_subject": initial["subject"], "expected_body": initial["body"]}
+    assert client.put(url, headers=bearer(jwks.token()), json=payload).status_code == 404
+    assert client.put(url, headers=bearer("invalid"), json=payload).status_code == 401
+    assert client.put(url, headers=headers, json={**payload, "body": " "}).status_code == 400
+    assert client.put(url, headers=headers, json={**payload, "to_addrs": ["attacker@example.invalid"]}).status_code == 422
+    assert client.put(url, headers=headers, json=payload).status_code == 200
+    assert client.put(url, headers=headers, json={**payload, "subject": "다시 고침"}).status_code == 409
+    assert google.mailbox.called("send") == []

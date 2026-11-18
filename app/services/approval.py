@@ -55,7 +55,8 @@ class ApprovalResult:
     thread_id: str | None = None
 
 
-def send_approved_candidate(user_id: int, candidate_id: int, *, access: GoogleAccess) -> ApprovalResult:
+def send_approved_candidate(user_id: int, candidate_id: int, *, access: GoogleAccess,
+                            expected_subject=None, expected_body=None) -> ApprovalResult:
     """로그인한 사용자가 고른 후보 하나를 같은 스레드로 보낸다. 다른 사용자 후보면 `not_found`."""
     with _user_lock(access.database, user_id):
         # 최초 조회도 직렬화한다. 메모리 SQLite는 세션들이 DB 연결 하나를 공유한다.
@@ -64,7 +65,8 @@ def send_approved_candidate(user_id: int, candidate_id: int, *, access: GoogleAc
             if candidate is None:
                 return ApprovalResult("not_found")
             thread_id = candidate.thread_id
-        claimed = _claim(access, user_id, candidate_id)
+        claimed = _claim(access, user_id, candidate_id,
+                         expected_subject=expected_subject, expected_body=expected_body)
         if isinstance(claimed, str):
             return ApprovalResult(claimed, thread_id)
         _record(access, claimed, "approval", ok=True)
@@ -82,7 +84,8 @@ def send_approved_candidate(user_id: int, candidate_id: int, *, access: GoogleAc
     return ApprovalResult("failed", thread_id)
 
 
-def send_approved_quote(user_id: int, quote_id: int, candidate_id: int, *, access: GoogleAccess) -> ApprovalResult:
+def send_approved_quote(user_id: int, quote_id: int, candidate_id: int, *, access: GoogleAccess,
+                        expected_subject=None, expected_body=None) -> ApprovalResult:
     """견적 확인 화면의 승인. 일반 후보와 같은 사용자 잠금·조건부 claim·결과 키를 쓴다."""
     with _user_lock(access.database, user_id):
         with access.database.session() as session:
@@ -104,7 +107,8 @@ def send_approved_quote(user_id: int, quote_id: int, candidate_id: int, *, acces
         except Exception as error:
             log.warning("견적서 PDF 생성 실패 (%s)", type(error).__name__)
             return ApprovalResult("failed", thread_id)
-        claimed = _claim(access, user_id, candidate_id, quote_id=quote_id)
+        claimed = _claim(access, user_id, candidate_id, quote_id=quote_id,
+                         expected_subject=expected_subject, expected_body=expected_body)
         if isinstance(claimed, str):
             return ApprovalResult(claimed, thread_id)
         _record(access, claimed, "approval", ok=True)
@@ -123,7 +127,8 @@ def send_approved_quote(user_id: int, quote_id: int, candidate_id: int, *, acces
 
 
 def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: int,
-                                 *, access: GoogleAccess, storage=None, expected_revision=None) -> ApprovalResult:
+                                 *, access: GoogleAccess, storage=None, expected_revision=None,
+                                 expected_subject=None, expected_body=None) -> ApprovalResult:
     """무역서류 확인 승인(계약 15.6절). 일반·견적 승인과 같은 사용자 잠금·조건부 claim·결과 키를 쓴다.
 
     발송 조건: `status="ready"`(PL은 `packing_totals.approved` 포함)이고 CI는 PI 원문 근거
@@ -163,7 +168,8 @@ def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: 
             log.warning("무역서류 PDF 생성 실패 (%s)", type(error).__name__)
             return ApprovalResult("failed", thread_id)
         claimed = _claim(access, user_id, candidate_id, trade_doc_id=trade_doc_id,
-                         expected_revision=revision)
+                         expected_revision=revision,
+                          expected_subject=expected_subject, expected_body=expected_body)
         if isinstance(claimed, str):
             return ApprovalResult(claimed, thread_id)
         _record(access, claimed, "approval", ok=True)
@@ -201,7 +207,7 @@ def _claim(access, user_id, candidate_id, **options):
 
 
 def _claim_candidate(access, user_id, candidate_id, *, quote_id=None, trade_doc_id=None,
-                     expected_revision=None):
+                     expected_revision=None, expected_subject=None, expected_body=None):
     """보낼 권리를 얻으면 보낼 값(dict), 못 얻으면 화면 안내 키(str)."""
     with access.database.session() as session:
         candidate = get_owned(session, ReplyCandidate, candidate_id, user_id)
@@ -211,6 +217,10 @@ def _claim_candidate(access, user_id, candidate_id, *, quote_id=None, trade_doc_
                 return "quote_only"
             if trade_doc_id is not None and candidate.trade_doc_id != trade_doc_id:
                 return "quote_only"
+        if expected_subject is not None and candidate.subject != expected_subject:
+            return "candidate_changed"
+        if expected_body is not None and candidate.body != expected_body:
+            return "candidate_changed"
         if candidate.status in TAKEN:
             return "already_sent"
         if candidate.status == "superseded" or session.scalar(select(ReplyCandidate.id).where(

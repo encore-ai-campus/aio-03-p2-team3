@@ -159,6 +159,16 @@
 .sent-line svg{width:17px;height:17px}
 .sent-line svg path{stroke-dasharray:24;stroke-dashoffset:24;animation:mail-draw 520ms 120ms var(--ease) forwards}
 
+/* Human review: editable subject and reply body (no implicit send). */
+.reply-edit{display:grid;gap:8px;margin:8px 0 13px;min-width:0}
+.reply-edit label{font-size:12px;font-weight:700;color:var(--ink)}
+.reply-edit input,.reply-edit textarea{box-sizing:border-box;width:100%;min-width:0;border:1px solid #dbe0e8;
+  border-radius:9px;background:#fff;padding:10px 12px;color:var(--ink);font:inherit;font-size:13px}
+.reply-edit textarea{resize:vertical;line-height:1.7;min-height:140px}
+.reply-edit input:focus-visible,.reply-edit textarea:focus-visible{outline:0;border-color:var(--blue);
+  box-shadow:0 0 0 3px var(--ring)}
+.reply-edit-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.mail-candidate > .btn.sm{margin-bottom:12px}
 /* 국내 견적 상세(QuotePanel): 카드 안의 접이식 문서 패널 */
 .mail-candidate details{border:1px solid var(--line);border-radius:9px;background:var(--panel);margin:0 0 12px;overflow:hidden}
 .mail-candidate details summary{padding:10px 12px;font-size:12px;font-weight:700;color:var(--ink);overflow-wrap:anywhere}

@@ -133,6 +133,19 @@ class MailStore:
                            ReplyCandidate.user_id == owner))
             return self._candidate(s, owner, row) if row else None
 
+    def edit_candidate(self, owner, candidate_id, *, subject, body, expected_subject, expected_body):
+        """Only update an unsent owned candidate when the editor used the latest content."""
+        with self.database.session() as s:
+            return bool(s.execute(
+                update(ReplyCandidate).where(
+                    ReplyCandidate.id == candidate_id,
+                    ReplyCandidate.user_id == owner,
+                    ReplyCandidate.status.in_(("pending", "send_failed")),
+                    ReplyCandidate.subject == expected_subject,
+                    ReplyCandidate.body == expected_body,
+                ).values(subject=subject, body=body)
+            ).rowcount)
+
     def quote(self, owner, quote_id):
         with self.database.session() as s:
             row = s.scalar(select(Quote).where(Quote.user_id == owner, Quote.id == quote_id))
