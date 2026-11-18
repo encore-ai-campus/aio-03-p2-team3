@@ -119,12 +119,17 @@ class CalendarClient(GoogleClient):
             raise GoogleUnavailable("calendar_response") from error
         return snapshot
 
-    def insert_event(self, access_token, calendar_id, *, summary, start, end, timezone, attendees=()):
-        """일정을 등록하고 이벤트 ID를 돌려준다. 거부(4xx)는 확정 실패다."""
+    def insert_event(self, access_token, calendar_id, *, summary, start, end, timezone, attendees=(),
+                     event_id=None):
+        """일정을 등록하고 이벤트 ID를 돌려준다. 거부(4xx)는 확정 실패다.
+
+        event_id를 넣으면 그 ID로 등록한다(같은 승인의 재실행·타임아웃 뒤 확인에 쓰는
+        결정적 ID. 어댑터가 만들고 Google은 같은 승인의 재시도를 같은 이벤트로 받는다)."""
         try:
             response = httpx.post(
                 f"{EVENTS_URL}/{quote(calendar_id)}/events",
                 json={"summary": summary,
+                      **({"id": event_id} if event_id else {}),
                       "start": {"dateTime": start.isoformat(), "timeZone": timezone},
                       "end": {"dateTime": end.isoformat(), "timeZone": timezone},
                       **({"attendees": [{"email": address} for address in attendees]} if attendees else {})},

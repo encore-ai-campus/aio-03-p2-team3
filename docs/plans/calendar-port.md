@@ -16,7 +16,7 @@ Calendar OAuth 연결·토큰 저장·상태 조회는 이미 있다(`calendar_t
 - 선행 작업: 없음.
 - 하는 사람: Codex.
 
-## 2. ExistingCalendar 어댑터와 영수증 저장
+## 2. ExistingCalendar 어댑터와 영수증 저장 (완료)
 
 - 할 일: `app/graph/calendar/adapters.py`(신규)에 `CalendarPort` 구현을 만든다. `CalendarToken` 만료 갱신은 `app/auth/calendar.py`의 `calendar_status` 갱신 로직을 헬퍼로 빼서 어댑터와 상태 조회가 같은 코드를 쓰게 한다(Gmail의 `get_access_token`은 건드리지 않는다). `read_busy`는 1절 호출기로 `BusySnapshot`을 만들되 요청한 캘린더 전부를 결과에 포함하고(빈 캘린더도), 캘린더별 조회 오류는 실패 처리한다 — 노드의 완전성 검사를 통과해야 한다. `create`·`lookup`은 action_id PK 영수증 표(`calendar_event_receipts`: user_id, event_id, content_hash)로 멱등을 지킨다. `user_lock` 직렬화 뒤 등록하고 영수증을 저장하며, 같은 action·같은 hash 재실행은 저장 영수증을 돌려주고 다른 hash는 `idempotency_conflict`, 타임아웃·5xx는 재시도 없이 `unknown`이다(Gmail 발송의 `failed_unknown` 계약과 같다). 마이그레이션은 `20261116_calendar_oauth`와 같은 스타일(RLS 포함)이다. `app/main.py`의 `agent_runtime`이 `make_workflow`에 어댑터를 주입해 미연결 기본 구현을 실제 구현으로 바꾼다.
 - 완료 기준: 임시 PostgreSQL·가짜 Google 어댑터 테스트가 통과한다 — 조회 완전성(빈 캘린더 포함, 오류 캘린더 실패), 등록 멱등(재실행 같은 영수증, 다른 hash 거부), `unknown` 뒤 `lookup` 복구, 토큰 만료 갱신, 미연결 `calendar_not_connected`. 기존 `FakeCalendar` 노드 테스트와 전체 `uv run pytest`가 통과한다.
@@ -25,7 +25,7 @@ Calendar OAuth 연결·토큰 저장·상태 조회는 이미 있다(`calendar_t
 - 선행 작업: 1절 병합.
 - 하는 사람: Codex.
 
-## 3. 업무 도우미 일정 도구 노출
+## 3. 업무 도우미 일정 도구 노출 (완료)
 
 - 할 일: `AGENT_TOOLS`(`app/graph/master/tools.py`)에 일정 조회(`find_slots`)·일정 등록(`create`) 도구를 추가하고 `wiring.py`의 `choose_tool` 안내에서 "일정 조회/등록은 아직 지원하지 않는다" 문구를 지운다. `PLAN_PROMPT`는 이미 calendar 작업을 안내하므로 그대로 둔다. 누락 조건 질문·후보 선택·등록 승인은 기존 질문/interrupt·채팅 UI를 재사용한다. 도구 입출력과 결과 형식은 계약 17.4절에 기록한다.
 - 완료 기준: 가짜 모델·가짜 Google으로 대화 API 테스트가 "다음 주 화요일 2시간 회의 가능한 시간 찾아줘" → 후보 선택 → 승인 → 등록 receipt까지 완주한다. 미연결 사용자에게는 캘린더 연결 안내가 간다. 실제 화면 확인은 요청자가 브라우저에서 한다.

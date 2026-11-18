@@ -93,6 +93,34 @@ def prepare_send(candidate_id: Positive, file_ids: list[str] | None = None) -> d
 
 
 @tool
+def find_slots(start: str, end: str, timezone: str, duration_minutes: Positive,
+               calendar_ids: Annotated[list[str], Field(min_length=1, max_length=32)],
+               participants: list[str] | None = None, step_minutes: Positive | None = None,
+               preferred_hours: list[int] | None = None) -> dict:
+    """시간 범위에서 모든 캘린더가 비어 있는 회의 시간 후보를 찾는다. start/end는 시간대 offset을
+    포함한 ISO 8601 시각(예: 2026-11-24T09:00:00+09:00), timezone은 IANA 이름(예: Asia/Seoul),
+    calendar_ids는 확인할 캘린더 ID 목록이다. 반환된 slots 중 시간을 사용자가 고르게 하고
+    create_event의 selected_start에는 그 선택만 사용한다."""
+    return task("calendar", "find_slots", start=start, end=end, timezone=timezone,
+                duration_minutes=duration_minutes, calendar_ids=calendar_ids,
+                participants=participants or [], step_minutes=step_minutes or 15,
+                preferred_hours=preferred_hours if preferred_hours is not None else [])
+
+
+@tool
+def create_event(start: str, end: str, timezone: str, duration_minutes: Positive,
+                 calendar_ids: Annotated[list[str], Field(min_length=1, max_length=32)],
+                 title: Annotated[str, Field(max_length=200)], selected_start: str,
+                 target_calendar_id: str | None = None, participants: list[str] | None = None) -> dict:
+    """선택한 시간(selected_start)에 일정을 등록한다. 실제 등록은 사용자 승인 뒤에 실행된다.
+    캘린더가 여럿이면 target_calendar_id로 대상을 정하고, start/end는 조회 범위 그대로 전달한다."""
+    return task("calendar", "create", start=start, end=end, timezone=timezone,
+                duration_minutes=duration_minutes, calendar_ids=calendar_ids,
+                title=title, selected_start=selected_start,
+                target_calendar_id=target_calendar_id, participants=participants or [])
+
+
+@tool
 def ask_user(question: str) -> dict:
     """대상/조건이 모호하거나 사용자가 정해야 하는 사실이 부족하면 질문하고 답을 기다린다."""
     return {"question": question}
@@ -100,4 +128,5 @@ def ask_user(question: str) -> dict:
 
 AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, search_trade_documents,
     search_knowledge_documents, document_schema,
-    prepare_document, prepare_issue, prepare_packing, prepare_send, ask_user)}
+    prepare_document, prepare_issue, prepare_packing, prepare_send,
+    find_slots, create_event, ask_user)}
