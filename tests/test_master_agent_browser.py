@@ -149,6 +149,18 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         assert download.value.suggested_filename.endswith('.pdf')
         assert len(google.mailbox.called('send')) == 1 and not errors
         page.screenshot(path=str(tmp_path / 'agent-mobile.png'), full_page=True)
+        choices.calls.extend([('search_trade_documents', {'document_number': 'PI-100'}), '발급된 PI를 찾았습니다.'])
+        page.get_by_label('업무 요청', exact=True).fill('PI-100 발급본 찾아줘')
+        page.get_by_role('button', name='요청하기', exact=True).click()
+        expect(page.get_by_text('발급된 PI를 찾았습니다.', exact=True)).to_be_visible(timeout=20000)
+        row.click()
+        found = page.get_by_role('list', name='작업 결과').locator('li.step').filter(has_text='발급 문서 검색')
+        found.get_by_role('button', name='발급 문서 검색 완료').click()
+        expect(found.get_by_text('PI PI-100', exact=True)).to_be_visible()
+        expect(found.get_by_text('발급 버전 1', exact=False)).to_be_visible()
+        with page.expect_download() as download:
+            found.get_by_role('button', name='다운로드').filter(has_text='.pdf').click()
+        assert download.value.suggested_filename.endswith('.pdf')
         page.get_by_label('업무 요청', exact=True).fill('가상 모델 오류를 확인해 줘')
         page.get_by_role('button', name='요청하기', exact=True).click()
         expect(page.get_by_role('alert')).to_contain_text('AI 요청을 처리하지 못했습니다.', timeout=20000)

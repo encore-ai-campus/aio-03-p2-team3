@@ -38,6 +38,11 @@ class ExistingDocuments:
     def schema(self, kind):
         return {"kind": kind, "input_schema": IMPLEMENTATIONS[kind][1].model_json_schema()}
 
+    def search_issued(self, actor_id, command):
+        repository = SQLReviews(self.database, actor_id, command.kind)
+        return repository.search_issued(document_number=command.document_number, counterparty=command.counterparty,
+                                        issued_from=command.issued_from, issued_to=command.issued_to)
+
     def get(self, actor_id, command):
         ops, _, repository, _, _ = IMPLEMENTATIONS[command.kind]
         try:
