@@ -6,6 +6,7 @@ const WORKSPACE_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
   { to: "/agent", label: "업무 도우미", icon: "◇" },
   { to: "/status", label: "작업현황", icon: "▦" },
+  { to: "/calendar", label: "일정", icon: "▩" },
   { to: "/inbox", label: "받은 메일", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
 ]
@@ -13,6 +14,7 @@ const MANAGE_NAV = [{ to: "/settings", label: "설정", icon: "⚙" }]
 const BOTTOM_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
   { to: "/agent", label: "업무 도우미", icon: "◇" },
+  { to: "/calendar", label: "일정", icon: "▩" },
   { to: "/inbox", label: "받은 메일", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
   { to: "/settings", label: "설정", icon: "⚙" },
@@ -20,6 +22,7 @@ const BOTTOM_NAV = [
 const PAGE_LABELS = {
   "/": "문서작성",
   "/status": "작업현황",
+  "/calendar": "일정",
   "/inbox": "받은 메일",
   "/documents": "문서함",
   "/settings": "설정",

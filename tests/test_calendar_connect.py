@@ -29,6 +29,8 @@ class FakeCalendar(FakeGoogle):
         self.check_error = None
         self.exchange_error = None
         self.verifiers = {}
+        self.events = []          # list_events가 돌려줄 기간 내 일정
+        self.list_error = None
 
     def authorization_url(self, state, code_verifier, consent=False):
         self.verifiers[state] = code_verifier
@@ -46,6 +48,12 @@ class FakeCalendar(FakeGoogle):
         self.calls.append(("calendars", token))
         if self.check_error:
             raise self.check_error
+
+    def list_events(self, access_token, calendar_id, *, time_min, time_max):
+        self.calls.append(("list_events", access_token, calendar_id, time_min, time_max))
+        if self.list_error:
+            raise self.list_error
+        return [dict(event) for event in self.events]
 
 
 @pytest.fixture
@@ -382,6 +390,65 @@ def test_get_event_returns_status_and_treats_missing_as_none(monkeypatch):
         client.get_event('fake-access', 'primary', 'event-1')
 
 
+def test_list_events_paginates_and_normalizes_items(monkeypatch):
+    seoul = timezone(timedelta(hours=9))
+    start, end = datetime(2026, 11, 1, tzinfo=seoul), datetime(2026, 11, 30, 23, 59, 59, tzinfo=seoul)
+    pages = [
+        {'items': [{'id': 'event-1', 'summary': '주간 회의',
+                    'start': {'dateTime': '2026-11-18T10:00:00+09:00'}, 'end': {'dateTime': '2026-11-18T11:00:00+09:00'}},
+                   {'id': 'event-2', 'summary': None,
+                    'start': {'date': '2026-11-20'}, 'end': {'date': '2026-11-21'}}],
+         'nextPageToken': 'page-2'},
+        {'items': [{'id': 'event-3', 'summary': '거래처 방문',
+                    'start': {'dateTime': '2026-11-24T14:00:00Z'}, 'end': {'dateTime': '2026-11-24T15:00:00Z'}}]},
+    ]
+    def get(url, **kwargs):
+        assert url == 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
+        params = kwargs['params']
+        assert params['timeMin'] == start.isoformat() and params['timeMax'] == end.isoformat()
+        assert params['singleEvents'] == 'true' and params['orderBy'] == 'startTime'
+        if 'pageToken' in params:
+            assert params['pageToken'] == 'page-2'
+            return httpx.Response(200, json=pages[1])
+        return httpx.Response(200, json=pages[0])
+    monkeypatch.setattr(httpx, 'get', get)
+    found = CalendarClient(settings_of('postgresql://fake')).list_events(
+        'fake-access', 'primary', time_min=start, time_max=end)
+    assert found == [
+        {'id': 'event-1', 'summary': '주간 회의', 'start': '2026-11-18T10:00:00+09:00',
+         'end': '2026-11-18T11:00:00+09:00', 'all_day': False},
+        {'id': 'event-2', 'summary': '', 'start': '2026-11-20', 'end': '2026-11-21', 'all_day': True},
+        {'id': 'event-3', 'summary': '거래처 방문', 'start': '2026-11-24T14:00:00Z',
+         'end': '2026-11-24T15:00:00Z', 'all_day': False},
+    ]
+
+
+@pytest.mark.parametrize('status,payload,error', [
+    (401, {}, TokenExpired),
+    (403, {'error': {'errors': [{'reason': 'userRateLimitExceeded'}]}}, GoogleUnavailable),
+    (500, {}, GoogleUnavailable),
+    (200, {'items': [{'id': 'event-1', 'start': {}, 'end': {}}]}, GoogleUnavailable),
+])
+def test_list_events_failures_are_sanitized(monkeypatch, status, payload, error):
+    def get(url, **kwargs):
+        return httpx.Response(status, json=payload)
+    monkeypatch.setattr(httpx, 'get', get)
+    with pytest.raises(error):
+        CalendarClient(settings_of('postgresql://fake')).list_events(
+            'fake-access', 'primary', time_min=datetime(2026, 11, 1, tzinfo=timezone.utc),
+            time_max=datetime(2026, 11, 30, tzinfo=timezone.utc))
+
+
+def test_list_events_page_cap_fails_instead_of_truncating(monkeypatch):
+    def get(url, **kwargs):
+        return httpx.Response(200, json={'items': [], 'nextPageToken': 'more'})
+    monkeypatch.setattr(httpx, 'get', get)
+    with pytest.raises(GoogleUnavailable):
+        CalendarClient(settings_of('postgresql://fake')).list_events(
+            'fake-access', 'primary', time_min=datetime(2026, 11, 1, tzinfo=timezone.utc),
+            time_max=datetime(2026, 11, 30, tzinfo=timezone.utc))
+
+
 def test_disconnecting_during_provider_check_cannot_restore_token(connected_app):
     client, jwks, _, calendar = connected_app
     token = jwks.token()
@@ -447,3 +514,78 @@ def test_calendar_tables_are_server_only_and_existing_gmail_tokens_unchanged(con
         after = session.get(GoogleToken, user_id)
         assert (after.access_token_enc, after.refresh_token_enc, after.scopes) == before_values
     assert not gmail.called('revoke')
+
+
+def test_calendar_events_requires_connection(connected_app):
+    client, jwks, _gmail, calendar = connected_app
+    response = client.get('/api/calendar/events', headers=bearer(jwks.token()),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T23:59:59+09:00'})
+    assert response.status_code == 409
+    assert response.json()['error']['code'] == 'calendar_not_connected'
+    assert calendar.called('list_events') == []
+
+
+@pytest.mark.parametrize('start,end,code', [
+    ('2026-11-01T00:00:00', '2026-11-30T00:00:00+09:00', 'invalid_range'),      # offset 없는 start
+    ('not-a-date', '2026-11-30T00:00:00+09:00', 'invalid_range'),
+    ('2026-11-30T00:00:00+09:00', '2026-11-01T00:00:00+09:00', 'invalid_range'),  # end가 start보다 앞
+    ('2026-09-01T00:00:00+09:00', '2026-12-01T00:00:00+09:00', 'range_too_large'),
+])
+def test_calendar_events_validates_window(connected_app, start, end, code):
+    client, jwks, _gmail, calendar = connected_app
+    response = client.get('/api/calendar/events', headers=bearer(jwks.token()),
+                          params={'start': start, 'end': end})
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == code
+    assert calendar.called('list_events') == []
+
+
+def test_calendar_events_returns_primary_calendar_events(connected_app):
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    finish(client, token)
+    calendar.events = [{'id': 'event-1', 'summary': '주간 회의', 'start': '2026-11-18T10:00:00+09:00',
+                        'end': '2026-11-18T11:00:00+09:00', 'all_day': False}]
+    response = client.get('/api/calendar/events', headers=bearer(token),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T23:59:59+09:00'})
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload['calendar_id'] == 'primary'
+    assert payload['events'] == calendar.events
+    [(kind, access, calendar_id, window_start, window_end)] = calendar.called('list_events')
+    assert (kind, access, calendar_id) == ('list_events', 'calendar-access', 'primary')
+    seoul = timezone(timedelta(hours=9))
+    assert window_start == datetime(2026, 11, 1, tzinfo=seoul)
+    assert window_end == datetime(2026, 11, 30, 23, 59, 59, tzinfo=seoul)
+
+
+def test_calendar_events_refreshes_expired_token_before_listing(connected_app):
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    finish(client, token)
+    user_id = me(client, token)['user_id']
+    with client.app.state.database.session() as session:
+        stored = session.get(CalendarToken, user_id)
+        stored.expires_at = utcnow() - timedelta(minutes=1)
+    calendar.events = [{'id': 'event-1', 'summary': '회의', 'start': '2026-11-18T10:00:00+09:00',
+                        'end': '2026-11-18T11:00:00+09:00', 'all_day': False}]
+    response = client.get('/api/calendar/events', headers=bearer(token),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T00:00:00+09:00'})
+    assert response.status_code == 200, response.text
+    assert calendar.called('refresh') == [('refresh', 'calendar-refresh')]
+    assert calendar.called('list_events')[0][1] == 'fake-access-refreshed-1'
+
+
+@pytest.mark.parametrize('error,code', [
+    (GoogleUnavailable('공급자 장애'), 'google_unavailable'),
+    (TokenExpired('갱신 필요'), 'token_expired'),
+])
+def test_calendar_events_maps_provider_failures(connected_app, error, code):
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    finish(client, token)
+    calendar.list_error = error
+    response = client.get('/api/calendar/events', headers=bearer(token),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T00:00:00+09:00'})
+    assert response.status_code == 502
+    assert response.json()['error']['code'] == code
