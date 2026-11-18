@@ -42,7 +42,9 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-18 · 작업현황 화면 연결
+마지막 갱신: 2026-11-18 · 받은 메일함 UI 개편과 작업현황 화면 연결
+
+- PI·PO·PL·CI의 `최신 설정 정보 적용`은 공통 refresh-settings 경로에서 새 revision을 만들고 회사·계좌, 저장 이름이 일치하는 거래처 프로필, 최신 단가표 가격을 적용한다. 수기·확정 단가는 보존하고 기존 발급 파일은 유지한다. PI 연결 CI는 같은 PI 문서의 최신 승인 revision 거래 정보를 반영한다. 누락 입력은 팝업에서 바로 저장하며 PL 포장 행 오류도 해당 입력을 연다. 기능 검증은 별도 요청 전까지 보류한다.
 
 - CI 시작 화면은 원문 붙여넣기·직접 작성·PI 문서 불러오기 세 선택지를 같은 카드로 제공한다. 앞의 두 방식은 PI 없이 CI를 작성하고, 원문 추출은 별도 스키마로 근거를 검증한 뒤 기존 단독 CI 가격 확인·검토 흐름에 연결한다. PI 불러오기는 본인 PI의 최신 버전과 기존 승인 규칙을 사용한다.
 
@@ -58,7 +60,7 @@
 | `local` | PC `.env` 키, Google 연결과 독립적으로 로컬 앱 호출 | 개인 OAuth·루프백 콜백, 연결된 user_id별 순차 history 수집 |
 
 - React `/app/agent`는 대화 요청→업무 도구 실행→추가 질문/후보 직접 선택→문서/발송 별도 승인과 결과 링크를 제공한다. 기존 마스터에 순차 tool calling을 추가했고 기존 메일·문서 서비스/검증을 재사용한다. 대화·질문·승인은 PostgreSQL 체크포인트와 본인 화면 투영으로 복원하며, 재시작 후 진행 중 외부 쓰기는 자동 재생하지 않는다. 단일 앱 프로세스·사용자별 1건·요청당 최대 12회 모델 호출이다. local_worker·RAG 검색·Calendar 실행은 연결하지 않았다(계약 17.4절). 채팅 화면은 문서형 UI로 개편했다: 사용자 말풍선·어시스턴트 마크다운(react-markdown+remark-breaks, raw HTML 비허용), 실행 결과는 마지막 어시스턴트 본문 위에 놓이고 완료 시 접히는 작업 타임라인(진행 중 자동 펼침·단계별 상세), 대화 목록 햄버거 서랍, 스티키 컴포저와 모션(prefers-reduced-motion 대응)을 쓰고 시안은 `docs/plans/agent-chat-ui/`에 있다.
-- React `/app/inbox`는 본인 수집 메일의 검색/상태·목록/원문·AI 초안·관련 문서와 실제 수신자 확인 뒤 승인 발송을 제공한다. 목록은 30초, 처리 중 상세는 5초에 갱신하며 숨긴 탭의 조회는 쉬고 요청/타이머를 정리한다. `/api/mail/*`는 Bearer 전용이며 기존 승인 서비스를 사용한다. 국내 견적은 같은 화면에서 누락 단가를 채우고 합계/PDF를 확인하며, ready 이후 수정과 동시 변경은 거부한다. 금액·수량은 정수 문자열로 전달한다. 기존 HTML `/inbox`·`/threads/{thread_id}`와 실행 기록 링크는 유지한다. 자유 편집/새 메일 작성·과거 Gmail 전체 동기화는 제공하지 않는다. 공개 페이지도 유지한다.
+- React `/app/inbox`는 본인 수집 메일을 상태 탭(답장 대기·확인 필요·처리 중·전체, 목록 응답의 `status_counts` 건수 표시)·검색·두 컬럼(목록/상세 각자 스크롤, 상세 머리는 스티키)으로 확인하고 실제 수신자 확인 뒤 승인 발송한다. 머리의 Gmail 연결 상태 링크는 제거했고(연결 관리는 설정 연동), 발송 확인은 모달·결과는 토스트로 알린다. 첨부 요약은 문서번호와 PDF만 보여 주고 금액은 초안 본문과 견적서 상세에서 확인한다. 목록은 30초, 처리 중 상세는 5초에 갱신하며 숨긴 탭의 조회는 쉬고 요청/타이머를 정리한다. `/api/mail/*`는 Bearer 전용이며 기존 승인 서비스를 사용한다. 국내 견적은 같은 화면에서 누락 단가를 채우고 합계/PDF를 확인하며, ready 이후 수정과 동시 변경은 거부한다. 금액·수량은 정수 문자열로 전달한다. 기존 HTML `/inbox`·`/threads/{thread_id}`와 실행 기록 링크는 유지한다. 자유 편집/새 메일 작성·과거 Gmail 전체 동기화는 제공하지 않는다. 공개 페이지도 유지한다. 시안은 `docs/plans/mailbox-ui/`에 있다.
 - React `/app/status` 작업현황은 메일(스레드별 최신 처리, 메일함과 같은 기준)·채팅 대화·무역 문서를 읽기 전용으로 합쳐 "AI가 처리한 업무·멈춘 지점·내가 할 일"을 한 화면에 보여 준다. 소스 상태를 진행 중·답변 대기·승인 대기·완료·결과 확인 필요·처리 안 함으로 정규화하고, 상태 침은 건수가 붙은 필터다. 남은 조치 버튼이 메일함 승인(`/inbox?thread=`)·채팅 답변(`/agent/{id}`)·문서 작성(`/trade/{kind}/{id}`)으로 이어지고, 메일 상세는 기존 실행 기록의 마스킹·라벨을 그대로 재사용하는 `/api/status/runs/{run_id}` 타임라인을 펼쳐 본다(20절 React 실행 기록은 이 경로를 다시 쓴다). 화면을 열어도 그래프·AI를 다시 실행하지 않으며, 진행 중이 있을 때만 15초 갱신한다. 채팅 진행 중 단계·견적서(Quote) 행·독립 문서 AI 호출의 run 기록은 v1 범위 밖이다(계획 17절). 시안은 `docs/plans/status-screen/`에 있다.
 - 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. React 로그인·설정·PI에 이어 PO·CI·PL 화면을 구현했다. CI의 PI 목록은 본인 PI마다 최신 버전 한 건만 표시한다. PI 연결 CI의 서버 생성/추출은 선택 버전 승인 후에 가능하다. PI 없이 직접 작성하는 CI는 거래 정보와 선적 정보를 입력하고 기존 판매 단가표·단가 직접 확인 규칙으로 계산해 검토·발급한다. 브라우저에서 가상 데이터로 두 경로를 확인했으며 실제 운영 연결은 확인하지 않았다. PL은 합계 승인과 최종 발급 승인을 따로 수행한다(7절·[API 안내](trade-api.md)). 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
 - 문서함(지식 문서) `/app/documents`·`/api/knowledge/documents`는 PDF/DOCX/XLSX/TXT/PNG/JPEG 업로드 → 전량 비전 전사 → 의심 원문 대조/수정·확정 → 조항 parent-child → 자식 임베딩/pgvector 저장을 제공한다. 원본은 기존 private Storage, 본문·부모·벡터는 기존 PostgreSQL이며 두 모델은 독립 주입/설정이다. 본인만 조회/처리하고 재처리 실패는 이전 성공 인덱스를 보존한다. 이 기능은 저장까지이며 검색·그래프·메일에는 아직 연결하지 않았다(계약 18절). 지식 문서 메뉴는 문서함으로 통합했고 `/app/knowledge`는 선택 문서 query/hash를 보존해 이동한다. 업로드 목록·원본 보기(기존 페이지 렌더러·전체 페이지 수 헤더·이전/다음 탐색)·다운로드는 추출 실패 때도 사용할 수 있다.
@@ -69,7 +71,7 @@
 - 상세 위치: [공통 계약](CONTRACT.md) 6·9·10·15·16절, [독립 문서 API](trade-api.md), [로컬 실행 계획](plans/local-openai-execution.md) 1~5절. 계획 머리말과 README 일부의 '미구현' 표현은 작성 당시 기록이며, 현재 지원 범위는 위 표처럼 코드와 병합된 구현 PR을 대조했다.
 
 ## 3. 그래프 상태·기억 (공통 부분)
-마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결·무역 문서 설정 갱신
 
 - 대화형 상태는 messages/agent_calls/turn/tool_call/dialog_question을 더한다. 사용자 요청 회차별 최대 12번 판단하고 실제 결과를 기록한다. 인증 주입과 실행 승인 권한은 체크포인트와 분리한다.
 - 범용 상태는 `app/graph/master/state.py`의 `WorkflowState`, 입출력은 `app/graph/schemas.py`다. 작업 DAG·실제 결과·최신 회차 근거·질문/승인 제안·실행 시도/영수증을 분리한다. 마스터는 순차 실행하고 map을 task/action ID로 교체한다. 외부 효과는 성공/실패/불명으로 구분하며 승인 권한은 체크포인트에 저장하지 않는다. 상세: 계약 2.1·3.0·17절.
@@ -81,7 +83,7 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결·무역 문서 설정 갱신
 
 - 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
 - 대화형 업무 도구는 `master/tools.py`의 10개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다.
@@ -98,7 +100,7 @@
 - 개인 PC 실행: `app/worker/{protocol,service,adapter,pc}.py`가 설치된 구조화 정의·모델·소유자·장치·시도/기한을 검증한다. 서버는 키를 받지 않고 큐 결과를 암호화해 전달 후 소비/해제/기한에 지운다. 미완료/거부된 PC 결과로 후보·문서를 저장하지 않으며 만료된 임대는 자동 재배포하지 않는다. 장치 API는 메일 승인·발송·파일 권한을 갖지 않는다(#161·#162). Windows 자격증명은 `credentials.py`의 현재 사용자 DPAPI·보호 DACL, macOS/Linux는 소유자·600 권한으로 보호한다(#163). 상세: 계약 6절.
 
 ## 5. 그래프 노드·흐름 (공통 부분)
-마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결·무역 문서 설정 갱신
 
 - 대화형 마스터는 `plan`에서 업무 도구를 하나 선택하고 기존 prepare/승인/execute 결과를 ToolMessage로 되돌려 다음 행동을 고른다. 읽은 자료는 지시가 아니며 모델이 키/소유자/승인을 지정하지 못한다. 자연어 질문과 승인 interrupt, revision/claim·영수증 경계는 유지한다.
 - 범용 진입점은 `run.Workflow`의 start/inspect/resume/recover, 조립은 `wiring.make_workflow`다. `build.py`의 StateGraph가 계획 검증 → 의존 작업 선택 → 업무 prepare → 질문/성찰/승인 → 현재 대상 재검사 → 실행 직전 체크포인트 → 실행/영수증 조회 → 실제 결과 종합을 담당한다. 메일/문서/일정 폴더의 nodes는 업무를, adapters/ports는 외부 연결을 소유한다.
@@ -113,11 +115,13 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결·무역 문서 설정 갱신
 
 - 대화형 마스터: 실제 StateGraph/PostgresSaver·임시 PostgreSQL·가짜 모델/Google/Storage의 관련 회귀 **85 passed**(42.55초), 프론트 lint·test 12개·build와 규칙 검사 경고 0개를 확인했다. 실제 SDK의 본인 키/도구 바인딩 모의 HTTP, API의 재시작/질문/후보 선택/승인·소유권/중복 차단, Chromium 1440/390px의 메일 발송·PI 발급/PDF·후속 대화/새로고침을 검증했다. 운영/실제 모델 판단 품질과 구분하며 상세는 [검증 기록](test-records/20261118_master_agent.md)에 있다.
 
 - 회사 메일함: 최신 main `4a833a3` 통합 전체 Python **1132 passed·2 skipped**, 프론트 lint/test(12개)/build/환경 검사와 제출 파일 규칙 검사(경고 0개)를 통과했다. 새 수집/제외/복구·Bearer 소유권·실제 Reply-To 확인·기존 승인 발송, Chromium 1440/390px와 키보드 확인창 이동을 자동 검사했다. 실제 Decisions 합성 9건은 업무/애매함 6건 보존·광고 1건 제외·개인/취미 2건 통과이며 운영 정확도 보장이 아니다. 실제 Gmail 프로필/시험 발송에 이어 다른 계정의 가상 업무 메일 수신·Decisions keep(1.0)·기존 그래프·견적 후보 3개 생성을 확인했다. 단가 누락(needs_price) 뒤 사용자 위임으로 가상 단가를 확정하고 첫 후보의 실제 답장·PDF 첨부를 확인했다. 같은 스레드·답장 헤더·첨부 금액·승인 재전달 already_sent·실제 발송 1건을 검증했다. FOB를 국내 견적으로 선택한 기존 문서 정책과 실제 운영 확인은 제한으로 구분한다. 최종 실행 결과와 제한은 [검증 기록](test-records/20261116_mailbox.md)에 있다.
+
+- 기존 PI 발행자 설정 갱신: 도메인/API 검사 26건, 프런트 12건·lint·build, 규칙 검사(경고 0개)를 통과했다. 전체 `uv run pytest`는 **1113 passed·3 skipped**다. 첫 전체 실행은 LibreOffice 설치 경로가 PATH에 없어 문서 변환 6건과 Windows 서버 종료 1건이 실패/오류였으며, PATH를 추가해 해당 33건을 재실행한 뒤 전체 검사를 다시 실행해 통과했다. 승인 전/후 설정 변경·새 revision·가격/거래 사실 보존·이전 발급 파일 bytes·오래된 revision/타 사용자 차단을 확인했다.
 
 - PL 모바일 계획 3절: 실제 FastAPI·임시 pgvector PostgreSQL·가짜 인증/추출/Storage와 Chromium으로 PL 직접/가짜 추출의 두 승인·취소·행 수정·미저장 차단·409 입력 보존·다운로드 재시도 해시 일치를 확인했다. PI/PO·CI 연결/단독 포함 브라우저 7개 경로와 320/390/768/1440px 배치를 검증했다. 전체 `uv run pytest` **1089 passed·2 skipped**, 규칙 검사(경고 0개)·프론트 test(11개)/lint/build/check:env를 통과했다. 실제 기기/운영 연결은 미확인이고 상세 결과는 [기존 검증 기록](test-records/20261113_po_ci_pl_screens.md#issue-210-pl-모바일-보완2026-11-17)에 둔다.
 
@@ -171,7 +175,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결·무역 문서 설정 갱신
 
 - PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 1절의 공통 모바일 배치와 PI/PO 입력·검토 보완 및 브라우저 검증을 구현했다. 2절 CI 연결/단독도 공통 요약·오류/단계 포커스·입력 보존과 브라우저 발급 검증을 마쳤다. 3절 PL 포장/대조/검토 UI와 4종 브라우저 회귀도 구현했다. 실제 기기 키보드와 운영 연결은 미확인이다. 공통 높이·sticky 작업 버튼·스크롤/포커스 규칙과 재검증 방법은 계획 1절을 재사용한다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
 
@@ -194,10 +198,12 @@
 - `web/routes`와 `web/deps.py`는 제거하고 HTTP 진입점을 `auth`·`mail`·`settings`·`quote`·`runlog`로 옮겼다. `web`에는 공개 페이지·공유 템플릿·정적 자산만 둔다. 공통 인증/폼 CSRF는 `auth/deps.py`에서 제공해 무역 API·worker가 화면 모듈을 import하지 않는다. 기존 URL·세션/Bearer 우선순위·승인·DB 의미는 유지한다. React 실행기록·전체 UI 통합 검증이 미완료라 기존 HTML 자산은 아직 필요하다([이동표·유지 조건](domain-layout.md)).
 - 첨부·회사 이미지·승인 PDF/XLSX의 bytes는 private Storage, 소유자/참조/해시는 PostgreSQL에 둔다. 모든 형식 업로드 뒤에만 문서 승인 SQL을 확정한다. 새 XLSX는 ZIP 내부 시각을 고정해 같은 검토 내용의 재시도에서 같은 해시·객체 key를 사용한다. 발행일과 기존 발급 파일은 유지한다. 발급 객체 재사용·backfill·수동 정리는 같은 객체별 PostgreSQL 트랜잭션 잠금으로 조율하고 삭제 전 참조를 다시 확인한다. 상세 파일 계약/제한/이전 명령은 계약 16.3절과 README다.
 - 공용 OAuth·Gmail Pub/Sub·OIDC/대체 토큰은 유지한다. 로컬은 watch/stop을 호출하지 않는다. 문서/설정 API는 Bearer 또는 기존 세션/CSRF로 소유자를 검사하고, 장치 승인과 장치 통신의 기존 CSRF·장치 토큰 계약은 유지한다. 환경변수 원본은 `.env.example`·계약 11절이다. Supabase는 루트 `.env`의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY` 세 값으로 설정하며 Vite는 URL과 공개 키만 브라우저에 제공한다. `frontend/.env`와 중복 URL은 제거했고 버킷은 기본 `trade-files`다. 실제 DB 연결용 `DATABASE_URL`은 별도로 필요하다. `frontend/`의 `npm run check:env`로 공개값 전달·비밀값 빌드 제외를 확인한다. 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인이며 로컬 Supabase URL/키와 개발 포트를 설정했다. Auth 설정 조회·Google 로그인 시작은 확인했고, 실제 계정 로그인·Gmail·운영 DB/파일 이전은 미확인이다. 현재 로컬 DB는 임시 PostgreSQL이며 실제 DATABASE_URL과 Google/암호화 설정은 별도로 확인해야 한다.
+React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 팝업을 구현했다. 화면은 `frontend/src/trade/ReviewPanel.jsx`, `MissingFieldsDialog.jsx` 및 각 문서 페이지, API는 `app/trade/common/operations.py`와 도메인 operations/router에 있다. 상세 범위는 [계획](plans/trade-document-settings-and-missing-fields.md)이다. 기능 변경 후 검증은 별도 요청 전까지 보류한다.
+
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결
+마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결·무역 문서 설정 갱신
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -218,6 +224,7 @@
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
 | React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`·`frontend/` | 1·3~12절·21.1절 및 13~15절 코드 구현. 13~15절의 일부 브라우저 경로와 운영 연결 검증, 16~20·21.2절과 사람의 22절 남음. 콘솔 준비는 사용자 확인이며 실제 계정 로그인·운영 전환 미확인. 상세 검증/제한은 PROGRESS.md·`test-records/20261113_po_ci_pl_screens.md` |
+| 무역 문서 최신 설정 적용·누락 정보 팝업 | `docs/plans/trade-document-settings-and-missing-fields.md` | 1·2절 구현 완료. PI 연결 CI는 같은 PI 문서의 최신 승인 revision 거래 정보를 사용하고, 이름이 일치하는 최신 거래처 프로필만 반영한다. 수기 가격·기존 발급 파일은 보존한다. 기능 검증은 사용자 별도 요청 대기 |
 | PI·PO·CI·PL 모바일 화면 전환 | `docs/plans/trade-mobile-workspaces.md` | 기존 반응형/보류 기록을 확인해 공통·PI/PO, CI 연결/단독, PL/4종 회귀의 3개 작업으로 분리한 계획. 1절 공통 배치·PI/PO 입력/검토와 상태 보존·브라우저 회귀 구현. 공통 CSS/표시 컴포넌트 재사용 규칙은 1절, 상세 근거는 기존 검증 기록에 둔다. 2절 CI 연결/단독의 모바일 입력 보존·검토/발급·오류 재시도 검증 완료. 3절 PL/4종 자동 브라우저 회귀 구현. 실제 기기/운영 연결은 미확인 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
@@ -227,7 +234,7 @@
 - 설계 결정·오류 사례·수정 이유·버전·재실행 결과는 Issue, PR('오류·재실행 기록' 칸), 팀 노션에도 남긴다.
 
 ## 9. 레포 세팅·작업 방식
-마지막 갱신: 2026-11-16 · 지식 문서 CI 준비와 문서·PR 설명 검사 분리 통합
+마지막 갱신: 2026-11-18 · GitHub CI의 느린 통합 검사 제외
 
 - KE KOREA 이식 1~6절 완료에 따라 `.work/TASK.md`의 이식 전용 규칙을 삭제했다. 이식 계획과 원본 사본은 참고 이력으로 보관한다(2026-11-12, 요청자 지시).
 - 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜 둠). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
@@ -241,4 +248,5 @@
 - 담당(2026-11-10): 공통 기반(공통 계약, 서버·DB·배포, Google 로그인·Gmail 알림 수신)과 검토 기능은 김민성, 캘린더 연결 기능은 정원철, 이미지→견적서 기능은 임석원. 김진혁은 Assignees가 비어 있는 Issue에서 배정받는다. 담당은 Issue Assignees로 보고, 프로젝트를 마친 뒤 PR 내역으로 README에 정리한다(`.work/TASK.md`). [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다. 자세한 것은 README '실행 방법'.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
-- CI: `.github/workflows/rules-check.yml`은 PR 생성/코드 갱신/재개와 `main` push에서 규칙 검사 후 `scripts/ci_scope.py`로 변경 경로를 판별한다. 코드·설정·미분류 경로가 있거나 비교가 실패하면 전체 Python/pgvector PostgreSQL·Windows worker 검사를 실행한다. Linux는 지식 문서용 Office·한글 폰트·Chromium/프론트 준비와 15분 한도, Windows는 고정 pgvector 설치를 유지한다. README·지정 문서 폴더의 Markdown·작업 규칙·PR 양식만 바뀌면 이 설치/DB/무거운 테스트를 모두 생략한다(테스트가 직접 읽는 `docs/TEST_REPORT.md`는 제외). 필수 검사 이름 `rules-check`·`tests`는 유지하고 범위 확인 실패는 `tests` 성공으로 처리하지 않는다. `.github/workflows/pr-check.yml`은 PR 본문/읽음 코드/최신 흐름 기재를 독립적으로 검사해 설명 수정이 이전 테스트 실패를 덮거나 테스트를 다시 시작하지 않는다. 동일 브랜치의 새 커밋은 이전 실행을 취소하며 본문/코드 워크플로는 서로 취소하지 않는다. GitHub의 병합 충돌 판정과 기존 필수 검사 Ruleset은 유지한다.
+- CI: `.github/workflows/rules-check.yml`은 PR 생성/코드 갱신/재개와 `main` push에서 규칙 검사 후 `scripts/ci_scope.py`로 변경 경로를 판별한다. 코드·설정·미분류 경로가 있거나 비교가 실패하면 Linux의 Python/pgvector PostgreSQL 검사와 Windows 개인 실행기·DPAPI·DACL 검사를 실행한다. Linux는 LibreOffice·변환용 한글 폰트·Chromium·프론트 의존성 설치를 생략하고 `uv run --locked pytest -m 'not slow'`를 실행한다. Windows도 실제 HTTPS/PC 프로세스 검사를 제외한다. 잠금 파일 확인과 Python 패키지 설치는 각 작업의 `uv run --locked`에서 수행한다. Linux 20분 한도와 Windows 고정 pgvector 설치를 유지한다. README·지정 문서 폴더의 Markdown·작업 규칙·PR 양식만 바뀌면 테스트와 DB 준비를 생략한다(테스트가 직접 읽는 `docs/TEST_REPORT.md`는 제외). 필수 검사 이름 `rules-check`·`tests`는 유지하고 범위 확인 실패는 `tests` 성공으로 처리하지 않는다. `.github/workflows/pr-check.yml`은 PR 본문/읽음 코드/최신 흐름 기재를 독립적으로 검사해 설명 수정이 이전 테스트 실패를 덮거나 테스트를 다시 시작하지 않는다. 동일 브랜치의 새 커밋은 이전 실행을 취소하며 본문/코드 워크플로는 서로 취소하지 않는다. GitHub의 병합 충돌 판정과 기존 필수 검사 Ruleset은 유지한다.
+- 로컬 `uv run pytest`에는 DOCX·XLSX·TXT 실제 변환, Chromium, Gmail 런처·PC 별도 프로세스 시험이 포함된다. 이 시험만 실행할 때는 `uv run pytest -m slow`를 쓴다. Excel 숨김 시트·수식 결과 누락 검사는 CI에도 포함된다. 운영의 DOCX·XLSX·TXT 업로드에는 LibreOffice가 필요하다.

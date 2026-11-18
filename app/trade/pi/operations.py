@@ -74,6 +74,22 @@ def revise_pi(document_id: int, revision: int, command: PIInput, *, repository: 
     return pi_result(repository.replace(document_id, revision, document))
 
 
+def refresh_issuer(document_id: int, revision: int, *, repository: PIRepository) -> DocumentResult:
+    previous = repository.get(document_id)
+    if previous["revision"] != revision:
+        raise DocumentError("REVISION_CONFLICT", "최신 PI를 다시 확인하세요")
+    if previous["status"] in {"sent", "sending"}:
+        raise DocumentError("REVISION_CONFLICT", "발송 중이거나 발송된 PI는 수정할 수 없습니다")
+    context = repository.context(previous.get("currency"))
+    values = common.refresh_settings_values(previous, context, "PI", PIInput, PIItem)
+    refreshed = prepare_pi(values, context)
+    refreshed["issue_date"] = previous.get("issue_date")
+    return pi_result(repository.replace(document_id, revision, refreshed))
+
+
+refresh_settings = refresh_issuer
+
+
 def check_pi_for_review(document: dict) -> None:
     if not all((document.get("bank") or {}).get(key) for key in (
         "BENEFICIARY", "BANK_NAME", "BRANCH", "SWIFT", "ACCOUNT_NUMBER", "BANK_ADDRESS")):

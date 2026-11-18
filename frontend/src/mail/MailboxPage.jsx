@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { apiFetch } from "../api"
 import { useAuth } from "../useAuth"
@@ -7,17 +7,85 @@ import QuotePanel from "./QuotePanel"
 
 const STATUS = { processing: "처리 중", awaiting_approval: "답장 대기", sent: "보냄",
   error: "처리 오류", ignored: "초안 없음", needs_review: "확인 필요" }
+// 상태 탭: 행동이 필요한 순서로. 나머지 상태는 '전체'에서 상태 필로 확인한다.
+const TABS = [
+  { key: "awaiting_approval", label: "답장 대기" },
+  { key: "needs_review", label: "확인 필요" },
+  { key: "processing", label: "처리 중" },
+  { key: "", label: "전체" },
+]
+const PILL = { awaiting_approval: "awaiting", needs_review: "review", sent: "sent",
+  processing: "processing", error: "err", ignored: "off", excluded: "off" }
+const DOC_LABEL = { quote: "국내 견적", pi: "PI", po: "PO", ci: "CI", pl: "PL" }
 const RESULTS = { sent: "메일을 보냈습니다.", already_sent: "이미 발송했거나 처리한 후보입니다.",
   failed_unknown: "발송 여부를 확인하지 못했습니다. Gmail 보낸편지함을 확인한 뒤 다시 승인해 주세요.",
   failed_auth: "Gmail 권한을 확인하고 다시 연결해 주세요.", failed: "발송에 실패했습니다. 연결과 문서를 확인해 주세요.",
   needs_input: "관련 문서의 필수 항목을 먼저 확인해 주세요.", needs_seal: "회사 직인을 먼저 등록해 주세요.",
   needs_price: "관련 국내 견적서에서 빠진 단가를 먼저 입력해 주세요.",
   needs_pi_source: "CI의 PI 원문 근거를 먼저 확인해 주세요.", document_changed: "문서가 변경됐습니다. 최신 내용을 다시 확인해 주세요." }
-const date = (value) => value ? new Date(value).toLocaleString("ko-KR") : ""
-const canSend = (candidate) => ["pending", "send_failed"].includes(candidate.status)
 const NOTICE = { local_worker_key_forbidden: "개인 PC 실행 방식은 자동 분류를 지원하지 않습니다. 업무 메일로 확인 후 처리할 수 있습니다.",
   processing_interrupted: "AI 처리 중 서버가 재시작됐습니다. 저장된 내용을 확인한 뒤 다시 처리해 주세요.",
   connection_changed: "처리 중 Gmail 연결이 바뀌었습니다. 연결 상태를 확인해 주세요." }
+const date = (value) => value ? new Date(value).toLocaleString("ko-KR") : ""
+const shortDate = (value) => {
+  if (!value) return ""
+  const at = new Date(value), now = new Date()
+  return at.toDateString() === now.toDateString()
+    ? at.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+    : `${String(at.getMonth() + 1).padStart(2, "0")}/${String(at.getDate()).padStart(2, "0")}`
+}
+const clock = (value) => value ? value.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""
+const canSend = (candidate) => ["pending", "send_failed"].includes(candidate.status)
+const needsPrice = (candidate) => candidate.document?.status === "needs_price"
+const enter = (index) => ({ "--i": String(index) })
+
+// 인라인 아이콘(시안 docs/plans/mailbox-ui와 같은 도형).
+const svg = (children) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+    strokeLinejoin="round" aria-hidden="true">{children}</svg>
+)
+const IC = {
+  search: svg(<><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></>),
+  x: svg(<path d="M6 6l12 12M18 6L6 18" />),
+  refresh: svg(<><path d="M21 12a9 9 0 1 1-2.6-6.3" /><path d="M21 3v6h-6" /></>),
+  chev: svg(<path d="M6 9l6 6 6-6" />),
+  back: svg(<path d="M15 6l-6 6 6 6" />),
+  arrow: svg(<><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>),
+  mail: svg(<><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>),
+  send: svg(<><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4z" /></>),
+  file: svg(<><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" /><path d="M14 3v5h5" /></>),
+  clock: svg(<><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></>),
+  warn: svg(<><path d="M12 9v4" /><path d="M12 17h.01" /><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></>),
+  check: svg(<path d="M20 6L9 17l-5-5" />),
+}
+
+function statusPill(item) {
+  if (item.triage?.phase === "excluded") return <span className="pill off">자동 처리 제외</span>
+  return <span className={`pill ${PILL[item.status] || "off"}`}>
+    {item.status === "processing" && <i className="pd" aria-hidden="true" />}
+    {STATUS[item.status] || item.status}
+  </span>
+}
+
+// 첨부 요약: 견적은 번호와 PDF만(금액은 초안 본문·견적서 상세와 겹침), 일반 답장은 첨부 없음을 알린다.
+function attachRow(candidate) {
+  const doc = candidate.document
+  if (!doc) return <div className="attach"><span className="file">{IC.mail} 문서 첨부 없음</span>
+    <span className="sum">답장 본문만 전송됩니다</span></div>
+  if (candidate.quote_id) return <div className={`attach ${doc.status === "needs_price" ? "warn" : ""}`}>
+    <span className="file">{IC.file} 국내 견적 {doc.draft?.quote_no}</span>
+    <span className="sum">{doc.status === "needs_price" ? "빠진 단가 미입력" : "PDF 첨부"}</span>
+  </div>
+  return <div className="attach"><span className="file">{IC.file} 무역 문서 {doc.draft?.doc_no || DOC_LABEL[doc.kind] || doc.kind}</span>
+    <span className="sum">PDF 첨부</span></div>
+}
+
+function tradeLink(candidate) {
+  if (!candidate.trade_doc_id || !candidate.document) return null
+  const kind = candidate.document.kind.toLowerCase()
+  const standalone = candidate.document.draft?._ci_standalone ? "/standalone" : ""
+  return <a className="btn" href={`/app/trade/${kind}${standalone}/${candidate.trade_doc_id}`}>관련 문서 검토하기</a>
+}
 
 export default function MailboxPage() {
   const { state } = useAuth()
@@ -36,11 +104,12 @@ export default function MailboxPage() {
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState(null)
+  const [stampedAt, setStampedAt] = useState(null)
   const [reload, setReload] = useState(0)
   const operation = useRef(null)
   const confirmation = useRef(null)
-
-  useEffect(() => { if (preview) confirmation.current?.focus() }, [preview])
+  const tabsRef = useRef(null)
+  const inkRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false, timer, request
@@ -55,7 +124,7 @@ export default function MailboxPage() {
       if (cursor) search.set("cursor", cursor)
       try {
         const data = await apiFetch(`/mail/threads?${search}`, { token, signal: current.signal })
-        if (!cancelled && request === current) { setList(data); setError("") }
+        if (!cancelled && request === current) { setList(data); setStampedAt(new Date()); setError("") }
       } catch (failure) {
         if (!cancelled && request === current && failure.name !== "AbortError") setError(failure.message)
       } finally {
@@ -116,77 +185,201 @@ export default function MailboxPage() {
     }
   }
 
+  // 발송 확인 모달: 열리면 포커스를 옮기고 Esc로 닫는다.
+  useEffect(() => {
+    if (!preview) return
+    confirmation.current?.focus()
+    const onKey = (event) => { if (event.key === "Escape") setPreview(null) }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [preview])
+
+  // 결과 토스트는 잠시 뒤 저절로 사라진다.
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(""), 4200)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  // 탭 밑줄이 활성 탭 위치로 슬라이드한다.
+  useLayoutEffect(() => {
+    const active = tabsRef.current?.querySelector('[aria-selected="true"]')
+    if (!active || !tabsRef.current || !inkRef.current) return
+    inkRef.current.style.width = `${active.offsetWidth}px`
+    inkRef.current.style.transform = `translateX(${active.offsetLeft - tabsRef.current.offsetLeft}px)`
+  }, [filter, list])
+
+  const counts = list.status_counts ?? {}
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0)
   const messages = thread?.messages || []
   const processing = thread?.processing || []
   const candidates = thread?.candidates || []
-  const gmail = list.connection || state.me?.gmail
+  const lastMessage = messages.at(-1)
+  const lastProcessing = processing.at(-1)
+
   return <section className="mail-page">
-    <div className="mail-heading"><div><h1>받은 메일</h1><p>원문과 AI 답장 초안을 확인하고 보낼 내용을 선택하세요.</p></div>
-      <a href="/app/settings?section=integrations">{gmail?.connected ? gmail.watch === "active" ? "Gmail 연결됨 · 수집 중" : "Gmail 연결됨 · 수집 확인 필요" : "Gmail 연결하기"}</a>
+    <div className="page-head enter" style={enter(0)}>
+      <h1 className="page-title">받은 메일</h1>
+      <p className="page-sub">원문과 AI 답장 초안을 확인하고, 보낼 답장을 골라 승인하세요.</p>
     </div>
-    <form className="mail-toolbar" onSubmit={(event) => { event.preventDefault(); setCursor(null); setQuery(new FormData(event.currentTarget).get("q").trim()) }}>
-      <label>메일 검색<input name="q" placeholder="제목 또는 보낸 사람" /></label><button className="btn" type="submit">검색</button>
-      <label>상태<select value={filter} onChange={(event) => { setFilter(event.target.value); setCursor(null) }}>
-        <option value="">전체</option>{Object.entries(STATUS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></label><button className="btn" type="button" onClick={() => setReload((value) => value + 1)}>새로고침</button>
-    </form>
-    {error && <p role="alert">{error}</p>}
-    <div className={`mail-columns ${selected ? "mail-selected" : ""}`}>
-      <aside className="mail-list" aria-label="수집한 메일" aria-busy={loading}>
-        <p className="mail-caption">연결 이후 수집한 메일입니다. Gmail 과거 전체 목록과는 다를 수 있습니다.</p>
-        {loading && !list.items.length ? <p role="status">메일을 불러오는 중…</p> : !list.items.length && <p>표시할 메일이 없습니다.</p>}
-        {list.items.map((item) => <button key={item.id} type="button" className={`mail-row ${selected === item.thread_id ? "is-selected" : ""}`}
-          aria-current={selected === item.thread_id ? "true" : undefined} onClick={() => setParams({ thread: item.thread_id })}>
-          <span className="mail-row-top"><span>{item.from_addr}</span><span className="mail-badge">{item.triage?.phase === "excluded" ? "자동 처리 제외" : STATUS[item.status] || item.status}</span></span>
-          <strong>{item.subject || "(제목 없음)"}</strong><span className="mail-snippet">{item.preview}</span><small>{date(item.received_at)}</small>
+    <div className="mailbar enter" style={enter(1)}>
+      <div className="tabs" role="tablist" aria-label="상태별 메일" ref={tabsRef}>
+        {TABS.map((tab) => <button key={tab.label} type="button" role="tab" className="tab"
+          aria-selected={filter === tab.key} onClick={() => { setFilter(tab.key); setCursor(null) }}>
+          {tab.label} <span className="count num">{tab.key ? counts[tab.key] ?? 0 : total}</span>
         </button>)}
-        <div className="mail-pagination"><button className="btn" disabled={!cursor} onClick={() => setCursor(null)}>첫 페이지</button>
-          <button className="btn" disabled={!list.next_cursor || loading} onClick={() => setCursor(list.next_cursor)}>다음</button></div>
+        <span className="tab-ink" aria-hidden="true" ref={inkRef} />
+      </div>
+      <form className="search" onSubmit={(event) => {
+        event.preventDefault(); setCursor(null); setQuery(new FormData(event.currentTarget).get("q").trim())
+      }}>
+        {IC.search}
+        <input key={`q-${query}`} name="q" type="search" placeholder="제목 또는 보낸 사람"
+          defaultValue={query} aria-label="메일 검색" autoComplete="off" />
+        {query && <button type="button" className="clear" aria-label="검색어 지우기"
+          onClick={() => { setQuery(""); setCursor(null) }}>{IC.x}</button>}
+      </form>
+      <span className="fresh">
+        <button type="button" className="icon-btn" aria-label="새로고침" onClick={() => setReload((value) => value + 1)}>{IC.refresh}</button>
+        {stampedAt && <span className="num">{clock(stampedAt)} 갱신</span>}
+      </span>
+    </div>
+    {error && <p role="alert" className="mail-alert">{error}</p>}
+    <div className={`mail-columns enter ${selected ? "mail-selected" : ""}`} style={enter(2)}>
+      <aside className="pane pane-list" aria-label="수집한 메일" aria-busy={loading}>
+        <div className="pane-head"><p>연결 이후 수집한 메일입니다. Gmail 과거 전체 목록과는 다를 수 있습니다.</p></div>
+        <div className="pane-scroll"><div className="rows">
+          {loading && !list.items.length ? <p role="status" className="plain padded">메일을 불러오는 중…</p>
+            : !list.items.length ? <p className="plain padded">표시할 메일이 없습니다.</p>
+              : list.items.map((item, index) => <button key={item.id} type="button"
+                className={`mail-row enter ${selected === item.thread_id ? "is-selected" : ""}`} style={enter(index % 12)}
+                aria-current={selected === item.thread_id ? "true" : undefined}
+                onClick={() => setParams({ thread: item.thread_id })}>
+                <span className="row-top"><span className="who">{item.from_addr}</span>
+                  <span className="when num">{shortDate(item.received_at)}</span></span>
+                <span className="row-bot"><span className="what">{item.subject || "(제목 없음)"}</span>
+                  {statusPill(item)}</span>
+              </button>)}
+        </div></div>
+        <div className="pane-foot">
+          <span className="num">{list.items.length}건{list.next_cursor ? "+" : ""}</span>
+          <span className="pager">
+            <button className="btn sm" type="button" disabled={!cursor} onClick={() => setCursor(null)}>첫 페이지</button>
+            <button className="btn sm" type="button" disabled={!list.next_cursor || loading}
+              onClick={() => setCursor(list.next_cursor)}>다음</button>
+          </span>
+        </div>
       </aside>
-      <article className="mail-detail" aria-label="메일 원문과 답장" aria-busy={detailLoading}>
-        {selected && <button type="button" className="btn mail-back" onClick={() => setParams({})}>목록으로</button>}
-        {!selected && <p>목록에서 메일을 선택해 주세요.</p>}
-        {detailLoading && <p role="status">원문을 불러오는 중…</p>}
-        {detailError && <p role="alert">{detailError}</p>}
-        {notice && <p role="status">{notice}</p>}
-        {thread && <>
-          <h2>{messages.at(-1)?.subject || "메일 상세"}</h2>
-          <section aria-label="메일 원문"><h3>원문과 대화</h3>
-            {messages.map((message) => <details key={message.id} open={message.id === messages.at(-1)?.id}>
-              <summary>{message.direction === "out" ? "보낸 메일" : message.from_addr} · {date(message.sent_at)}</summary>
-              <p className="mail-recipients">받는 사람: {message.to_addrs.join(", ")}</p><div className="mail-body">{message.body}</div>
-            </details>)}
-            {!messages.length && <p>원문을 저장하지 않은 처리 제외 메일입니다.</p>}
-          </section>
-          <section aria-label="메일 처리 상태"><h3>처리 상태</h3>{processing.map((item) => <div key={item.id} className="mail-processing">
-            <p>{item.triage?.phase === "excluded" ? "광고·개인·업무 무관으로 판단해 자동 처리를 제외했습니다." : STATUS[item.status] || item.status}</p>
-            {item.status === "needs_review" && <p>{NOTICE[item.notice] || "분류 또는 AI 처리 설정을 확인해 주세요. 원문은 보존되어 있습니다."}</p>}
-            {(item.status === "needs_review" || item.status === "error" || item.triage?.phase === "excluded") &&
-              <button className="btn" type="button" disabled={busy} onClick={() => act(`/mail/messages/${item.id}/process`, "POST")}>업무 메일로 확인 후 처리</button>}
-          </div>)}</section>
-          <section aria-label="AI 답장 초안"><h3>AI 답장 초안</h3>
-            {!candidates.length && <p>{processing.some((item) => item.status === "processing") ? "AI가 처리하고 있습니다…" : "생성된 답장 초안이 없습니다. 알림·제외 메일은 초안을 만들지 않을 수 있습니다."}</p>}
-            {candidates.map((candidate) => <section key={candidate.id} className="mail-candidate">
-              <h4>{candidate.label} · {candidate.subject}</h4>{candidate.needs_review && <p>내용을 주의 깊게 확인해 주세요.</p>}
-              <div className="mail-body">{candidate.body}</div>
-              {candidate.quote_id && candidate.document ? <QuotePanel candidate={candidate} token={token} onSaved={() => setReload((value) => value + 1)} /> : candidate.document && <details><summary>관련 문서 · {candidate.document.kind} · {candidate.document.status}</summary>
-                <p>발송 시 관련 문서 PDF가 첨부됩니다. 필수 항목이 부족하면 발송되지 않습니다.</p>
-                <p>문서번호: {candidate.document.draft.doc_no || candidate.document.draft.quote_no || "미지정"}</p>
-                {candidate.trade_doc_id && <a href={`/app/trade/${candidate.document.kind.toLowerCase()}${candidate.document.draft._ci_standalone ? "/standalone" : ""}/${candidate.trade_doc_id}`}>관련 문서 검토하기</a>}
-              </details>}
-              <button className="btn blue" type="button" disabled={busy || !canSend(candidate)}
-                onClick={() => act(`/mail/candidates/${candidate.id}/preview`, "GET", undefined, true)}>{canSend(candidate) ? "발송 내용 확인" : candidate.status === "sent" ? "발송 완료" : "선택할 수 없는 후보"}</button>
-            </section>)}
-          </section>
-        </>}
-        {preview && <section ref={confirmation} className="mail-confirm" role="region" aria-label="발송 최종 확인" tabIndex={-1}>
-          <h3>이 답장을 보내시겠습니까?</h3><p>받는 사람: {preview.to_addrs.join(", ")}</p><p>제목: {preview.subject}</p>
-          <div className="mail-body">{preview.body}</div>{preview.document && <p>첨부: {preview.document.kind} 문서 PDF</p>}
-          <p>선택한 답장을 같은 Gmail 대화로 보냅니다.</p>
-          <button className="btn blue" type="button" disabled={busy} onClick={() => act(`/mail/candidates/${preview.id}/send`, "POST", { revision: preview.document?.revision ?? null })}>{busy ? "보내는 중…" : "확인하고 보내기"}</button>
-          <button className="btn" type="button" disabled={busy} onClick={() => setPreview(null)}>취소</button>
-        </section>}
+      <article className="pane pane-detail" aria-label="메일 원문과 답장" aria-busy={detailLoading}>
+        {!selected && <p className="plain padded">목록에서 메일을 선택해 주세요.</p>}
+        {detailLoading && <p role="status" className="plain padded">원문을 불러오는 중…</p>}
+        {detailError && <p role="alert" className="plain padded">{detailError}</p>}
+        {thread && <div className="pane-scroll" key={thread.thread_id}>
+          <div className="detail-head enter">
+            <button type="button" className="back" onClick={() => setParams({})}>{IC.back}목록으로</button>
+            <h2>{lastMessage?.subject || "메일 상세"}</h2>
+            <div className="detail-meta">
+              {lastMessage && <>
+                <span className="addr">{lastMessage.from_addr}</span>
+                <span className="flow">{IC.arrow}<span className="addr">{lastMessage.to_addrs.join(", ")}</span></span>
+                <span className="num">{date(lastMessage.sent_at)}</span>
+              </>}
+              {lastProcessing && statusPill(lastProcessing)}
+            </div>
+          </div>
+          <div className="detail-body">
+            <section className="sec enter" aria-label="메일 원문"><h3>{IC.mail} 원문과 대화</h3>
+              {messages.map((message) => <details key={message.id}
+                className={`msg ${message.direction === "out" ? "out" : ""}`}
+                open={message.id === lastMessage?.id}>
+                <summary className="msg-head">
+                  <span className="dir">{message.direction === "out" ? IC.send : IC.mail}</span>
+                  <span className="mwho">{message.direction === "out" ? "보낸 메일" : message.from_addr}</span>
+                  <span className="mwhen num">{date(message.sent_at)}</span>
+                  {IC.chev}
+                </summary>
+                <div className="msg-body">
+                  <p className="mto">받는 사람: {message.to_addrs.join(", ")}</p>
+                  <div className="mail-body">{message.body}</div>
+                </div>
+              </details>)}
+              {!messages.length && <p className="plain">원문을 저장하지 않은 처리 제외 메일입니다.</p>}
+            </section>
+            {processing.length > 0 && <section className="sec enter" aria-label="메일 처리 상태"><h3>{IC.clock} 처리 상태</h3>
+              {processing.map((item) => item.status === "processing"
+                ? <div key={item.id} className="proc">
+                  <p className="p-top"><i className="pd" aria-hidden="true" />AI가 메일을 분석하고 답장 초안을 만들고 있습니다<span className="ell" aria-hidden="true"><i /><i /><i /></span></p>
+                  <div className="track" aria-hidden="true"><i /></div>
+                  <p className="p-sub">메일 분석 · 필수 항목 확인 · 초안 작성 · 이 화면을 나가도 계속됩니다</p>
+                </div>
+                : <div key={item.id} className={`notice ${item.status === "needs_review" ? "" : "plain"}`}>{IC.warn}
+                  <span>{item.triage?.phase === "excluded"
+                    ? "광고·개인·업무 무관으로 판단해 자동 처리를 제외했습니다. 업무 메일이면 아래 버튼으로 처리할 수 있습니다."
+                    : item.status === "needs_review"
+                      ? NOTICE[item.notice] || "분류 또는 AI 처리 설정을 확인해 주세요. 원문은 보존되어 있습니다."
+                      : STATUS[item.status] || item.status}</span>
+                  {(item.status === "needs_review" || item.status === "error" || item.triage?.phase === "excluded") &&
+                    <button className="btn sm" type="button" disabled={busy}
+                      onClick={() => act(`/mail/messages/${item.id}/process`, "POST")}>업무 메일로 확인 후 처리</button>}
+                </div>)}
+            </section>}
+            <section className="sec enter" aria-label="AI 답장 초안"><h3>{IC.send} AI 답장 초안</h3>
+              {!candidates.length && <p className="plain">{processing.some((item) => item.status === "processing")
+                ? "AI가 처리하고 있습니다…" : "생성된 답장 초안이 없습니다. 알림·제외 메일은 초안을 만들지 않을 수 있습니다."}</p>}
+              {candidates.map((candidate) => <section key={candidate.id}
+                className={`mail-candidate ${candidate.status === "sent" ? "is-sent" : ""}`}>
+                <div className="cand-head">
+                  <span className={`tag ${candidate.status === "sent" ? "dim" : ""}`}>{candidate.label}</span>
+                  <span className="csub">{candidate.subject}</span>
+                </div>
+                {candidate.needs_review && <p className="cand-note">내용을 주의 깊게 확인해 주세요.</p>}
+                <p className="cand-body">{candidate.body}</p>
+                {attachRow(candidate)}
+                {candidate.quote_id && candidate.document &&
+                  <QuotePanel candidate={candidate} token={token} onSaved={() => setReload((value) => value + 1)} />}
+                <div className="cand-actions">
+                  {candidate.status === "sent"
+                    ? <span className="sent-line">{IC.check}발송 완료</span>
+                    : canSend(candidate)
+                      ? <button className="btn blue" type="button"
+                        disabled={busy || needsPrice(candidate)}
+                        onClick={() => act(`/mail/candidates/${candidate.id}/preview`, "GET", undefined, true)}>
+                        발송 내용 확인 {IC.arrow}
+                      </button>
+                      : <button className="btn" type="button" disabled>선택할 수 없는 후보</button>}
+                  {canSend(candidate) && needsPrice(candidate) && <span className="why">빠진 단가를 먼저 입력해 주세요</span>}
+                  {tradeLink(candidate)}
+                </div>
+              </section>)}
+            </section>
+          </div>
+        </div>}
       </article>
     </div>
+    {preview && <div className="overlay" onClick={(event) => { if (event.target === event.currentTarget) setPreview(null) }}>
+      <section ref={confirmation} className="modal" role="region" aria-label="발송 최종 확인" tabIndex={-1}>
+        <div className="modal-head">
+          <h2>이 답장을 보내시겠습니까?</h2>
+          <button className="close" type="button" aria-label="닫기" onClick={() => setPreview(null)}>{IC.x}</button>
+        </div>
+        <div className="modal-body">
+          <p className="mk">받는 사람: {preview.to_addrs.join(", ")}</p>
+          <p className="mk">제목: {preview.subject}</p>
+          <div className="cand-body boxed">{preview.body}</div>
+          {preview.document
+            ? <p className="attach-note">{IC.file} 첨부: {DOC_LABEL[preview.document.kind] || preview.document.kind} 문서 PDF</p>
+            : <p className="attach-note">{IC.mail} 첨부 없음 · 답장 본문만 전송됩니다</p>}
+        </div>
+        <div className="modal-foot">
+          <span className="note">선택한 답장을 같은 Gmail 대화로 보냅니다.</span>
+          <button className="btn" type="button" disabled={busy} onClick={() => setPreview(null)}>취소</button>
+          <button className="btn blue" type="button" disabled={busy}
+            onClick={() => act(`/mail/candidates/${preview.id}/send`, "POST", { revision: preview.document?.revision ?? null })}>
+            {busy ? "보내는 중…" : "확인하고 보내기"}
+          </button>
+        </div>
+      </section>
+    </div>}
+    {notice && <div className="toast" role="status">{IC.check}<span>{notice}</span></div>}
   </section>
 }

@@ -6,6 +6,8 @@ import PIForm from "../trade/PIForm"
 import CIForm, { CISummary } from "../trade/CIForm"
 import DocumentSnapshot from "../trade/DocumentSnapshot"
 import ReviewPanel from "../trade/ReviewPanel"
+import RenderFailureHelp from "../trade/RenderFailureHelp"
+import MissingFieldsDialog, { updateMissingField } from "../trade/MissingFieldsDialog"
 import AIInput from "../trade/AIInput"
 import { emptyPI, piDraft, piPayload } from "../trade/pi-input"
 import { standaloneCINext } from "../trade/ci-input"
@@ -49,12 +51,14 @@ function StandaloneEditor() {
   const [notice, setNotice] = useState("")
   const [reload, setReload] = useState(0)
   const [sourceText, setSourceText] = useState("")
+  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const question = useRef(null)
   const errorBox = useRef(null)
   const mutation = useRef(null)
   const created = useRef(null)
 
   function accept(document, review = null, next = "review") {
+    setQuickFixOpen(false)
     setResource(document)
     setDraft(piDraft(document.input))
     setProposal(review)
@@ -140,6 +144,14 @@ function StandaloneEditor() {
       else setNotice("저장했습니다. 계산된 금액과 전체 내용을 확인해 주세요.")
     })
   }
+
+  function refreshSettings() {
+    perform((signal) => apiFetch(`${base}/${resource.document_id}/refresh-settings`, {
+      token, signal, method: "POST", body: { revision: resource.revision } }), (document) => {
+      accept(document)
+      setNotice("최신 설정 정보를 새 CI 버전에 적용했습니다. 내용을 확인하고 다시 검토해 주세요. 이미 발급된 파일은 보존됩니다.")
+    })
+  }
   function extract(text) {
     perform((signal) => apiFetch(`${base}/extract-standalone`, { token, signal, method: "POST", body: { text } }), (document) => {
       const next = standaloneCINext(piDraft(document.input))
@@ -170,7 +182,7 @@ function StandaloneEditor() {
     <div className="page-head"><div><h1 className="page-title">CI 직접 작성</h1><p className="page-sub">PI 없이 거래 내용과 선적 정보를 직접 입력합니다.</p></div><Link className="btn" to="/trade/ci">CI 작성 방법 선택</Link></div>
     <div className="editor-toolbar"><span className="document-status">{current ? `${statuses[current.status] ?? current.status} · 버전 ${current.revision}` : "새 CI"}</span>
       {documentId && <button className="btn" type="button" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}</div>
-    {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.message}</p>{error.status === 409 && <p>입력은 보존했습니다. 최신본을 다시 읽으면 현재 입력이 교체됩니다. 필요한 내용은 먼저 복사해 두세요.</p>}</div>}
+    {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.message}</p>{error.status === 409 && <p>입력은 보존했습니다. 최신본을 다시 읽으면 현재 입력이 교체됩니다. 필요한 내용은 먼저 복사해 두세요.</p>}{error?.code === "RENDER_FAILED" && <RenderFailureHelp />}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {settingsError && <p className="section-note" role="status">기본 설정을 불러오지 못했습니다. 직접 입력할 수 있습니다. {settingsError}</p>}
     {loading && <p role="status">CI를 불러오는 중입니다.</p>}
@@ -194,18 +206,22 @@ function StandaloneEditor() {
             <button className="btn" type="button" disabled={!enabled || (current && !dirty && !modifying)} onClick={save}>임시 저장</button>
             <button className="btn blue" type="submit" disabled={!enabled}>{nextStep === "review" ? "저장하고 전체 확인" : "다음"}</button></div>
         </form>}
-        {screen === "review" && current && (finalReview ? <ReviewPanel kind="ci" proposal={proposal} token={token} busy={busy} dirty={dirty} modifying={modifying} headingRef={question} onDecision={decide} onModify={() => edit("buyer")}
+        {screen === "review" && current && (finalReview ? <ReviewPanel kind="ci" proposal={proposal} token={token} busy={busy} dirty={dirty} modifying={modifying} headingRef={question} onDecision={decide} onModify={() => edit("buyer")} onRefreshSettings={refreshSettings}
           onDownload={(file) => perform((signal) => downloadFile(file, token, signal), () => setNotice("파일 다운로드를 요청했습니다."))} /> :
           <section className="pi-question"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
             {current.issues.length > 0 && <ul className="document-issues">{current.issues.map((issue, i) => <li key={i}>{issue.message}</li>)}</ul>}
             {current.missing_fields.length > 0 && <p className="form-error">보완할 항목: {current.missing_fields.join(", ")}</p>}
-            {(current.missing_fields.length > 0 || current.issues.length > 0) && <div className="form-actions">
-              {steps.map(([key, label]) => <button className="btn" type="button" key={key} disabled={!enabled} onClick={() => edit(key)}>{label} 보완</button>)}
-            </div>}
+            {current.missing_fields.length > 0 && <div className="pi-missing"><p>필요한 입력값만 팝업에서 보완할 수 있습니다.</p>
+              <button className="btn" type="button" disabled={!enabled} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
             <DocumentSnapshot kind="ci" document={current.document} />
             <fieldset className="editor-checks" disabled={busy || current.status !== "ready"}><legend>발급 형식</legend>{["pdf", "xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous, format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
-            <div className="form-actions"><button className="btn blue" type="button" disabled={busy || dirty || modifying || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
+            <div className="form-actions">{current && <button className="btn" type="button" title="최신 설정 정보를 새 CI 버전에 적용합니다. 이미 발급된 파일은 보존됩니다."
+              disabled={busy || loading || ["sent", "sending"].includes(current.status)} onClick={refreshSettings}>최신 설정 정보 적용</button>}
+              <button className="btn blue" type="button" disabled={busy || dirty || modifying || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
           </section>)}
+      <MissingFieldsDialog open={quickFixOpen} kind="CI" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+        onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (proposal?.status === "pending") setModifying(true) }}
+        onSave={save} onClose={() => setQuickFixOpen(false)} />
       </div>{screen !== "source" && <CISummary draft={draft} standalone />}</div>
     </>}
   </div>
