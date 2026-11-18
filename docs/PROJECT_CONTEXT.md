@@ -42,13 +42,13 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-17 · 기존 PI에 발행자 설정 반영
+마지막 갱신: 2026-11-18 · 무역 문서 최신 설정 적용·누락 입력 팝업
 
 - CI 시작 화면은 원문 붙여넣기·직접 작성·PI 문서 불러오기 세 선택지를 같은 카드로 제공한다. 앞의 두 방식은 PI 없이 CI를 작성하고, 원문 추출은 별도 스키마로 근거를 검증한 뒤 기존 단독 CI 가격 확인·검토 흐름에 연결한다. PI 불러오기는 본인 PI의 최신 버전과 기존 승인 규칙을 사용한다.
 
 - PI 독립 문서 API는 같은 사용자의 PI에서 현재 또는 과거에 사용된 문서번호가 중복되면 생성·다른 번호로 수정할 때 409로 안내한다. 앞뒤 공백은 비교에서 제외하고 번호를 입력하지 않은 초안과 기존 중복 문서의 같은 번호 유지 수정은 허용한다. 직접 입력과 원문 추출이 같은 저장 검사를 거치며 기존 메일 경로·다른 사용자·다른 문서 종류는 변경하지 않는다.
 
-- 기존 PI 화면의 `최신 발행자 설정 반영`은 `POST /api/trade/pi/{id}/refresh-issuer`로 현재 회사 발행자 설정을 새 revision에 반영한다. 발행자 설정에서 자동 채워진 판매자 정보만 함께 갱신하고, 품목·가격·거래 조건·계좌·발행 날짜는 유지한다. 과거 승인 제안과 파일은 그대로 남으며 새 revision은 다시 검토·승인해야 한다. 자동 동기화나 PO·CI·PL 갱신은 하지 않는다.
+- PI·PO·PL·CI의 `최신 설정 정보 적용`은 공통 refresh-settings 경로에서 새 revision을 만들고 회사·계좌, 저장 이름이 일치하는 거래처 프로필, 최신 단가표 가격을 적용한다. 수기·확정 단가는 보존하고 기존 발급 파일은 유지한다. PI 연결 CI는 같은 PI 문서의 최신 승인 revision 거래 정보를 반영한다. 누락 입력은 단계 화면 대신 팝업에서 바로 저장하며 PL 포장 행 오류도 해당 입력을 연다. 실제 브라우저·회귀 검증은 별도 요청 전까지 보류한다.
 
 - 서비스: 사용자별 Gmail 메일을 분석해 답장 후보 2~3개를 만들고, 사용자가 고른 후보만 같은 스레드로 보낸다. 거래 메일은 필수 항목이 빠지면 재질문 후보, 갖춰지면 국내 견적서 또는 PI·PO·CI·PL 초안을 만든다. 문서 확정과 메일 발송 승인은 별개다.
 - 현재 지원하는 실행 방식은 아래와 같다. 모든 AI 호출은 OpenAI Responses API를 쓰며 기본 모델은 `gpt-6-luna`, 변경값은 `OPENAI_MODEL`이다(#127·#152·#159~#163).
@@ -60,7 +60,7 @@
 | `local` | PC `.env` 키, Google 연결과 독립적으로 로컬 앱 호출 | 개인 OAuth·루프백 콜백, 연결된 user_id별 순차 history 수집 |
 
 - 화면: `/inbox`는 본인 메일의 처리 중·승인 대기·발송·오류를, `/threads/{thread_id}`는 원문·후보·처리 상태와 실행 기록 링크를 제공한다. 받은 메일 목록은 90초 간격 갱신, 스레드는 처리 중일 때만 자동 갱신한다(#85·#105). 메일 HTTP 진입점은 `app/mail/`에 있고 템플릿은 `app/web/`에서 공유한다. `/about`·`/privacy`·`/terms`는 비로그인 공개 페이지다(`app/web/pages.py`).
-- 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. React 로그인·설정·PI에 이어 PO·CI·PL 화면을 구현했다. CI의 PI 목록은 본인 PI마다 최신 버전 한 건만 표시한다. PI 연결 CI의 서버 생성/추출은 선택 버전 승인 후에 가능하다. PI 없이 직접 작성하는 CI는 거래 정보와 선적 정보를 입력하고 기존 판매 단가표·단가 직접 확인 규칙으로 계산해 검토·발급한다. 브라우저에서 가상 데이터로 두 경로를 확인했으며 실제 운영 연결은 확인하지 않았다. PL은 합계 승인과 최종 발급 승인을 따로 수행한다(7절·[API 안내](trade-api.md)). 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
+- 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. React 로그인·설정·PI·PO·CI·PL 화면이 있다. CI의 PI 목록은 본인 PI마다 최신 버전 한 건만 표시하며, PI 연결 CI 서버 생성/추출은 선택 버전 승인 후 가능하다. PI 없이 작성하는 CI는 거래·선적 정보를 입력하고 기존 판매 단가표·단가 직접 확인 규칙으로 검토·발급한다. PL은 합계 승인과 최종 발급 승인을 따로 수행한다(7절·[API 안내](trade-api.md)). 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
 - 문서함(지식 문서) `/app/documents`·`/api/knowledge/documents`는 PDF/DOCX/XLSX/TXT/PNG/JPEG 업로드 → 전량 비전 전사 → 의심 원문 대조/수정·확정 → 조항 parent-child → 자식 임베딩/pgvector 저장을 제공한다. 원본은 기존 private Storage, 본문·부모·벡터는 기존 PostgreSQL이며 두 모델은 독립 주입/설정이다. 본인만 조회/처리하고 재처리 실패는 이전 성공 인덱스를 보존한다. 이 기능은 저장까지이며 검색·그래프·메일에는 아직 연결하지 않았다(계약 18절). 지식 문서 메뉴는 문서함으로 통합했고 `/app/knowledge`는 선택 문서 query/hash를 보존해 이동한다. 업로드 목록·원본 보기(기존 페이지 렌더러·전체 페이지 수 헤더·이전/다음 탐색)·다운로드는 추출 실패 때도 사용할 수 있다.
 - 메일 그래프는 `make_quote` → `create_trade_document`로 네 무역 문서 초안을 저장한다. 그러나 기존 스레드 화면의 `thread_view()`는 후보의 `trade_doc_id`를 전달하지 않고 국내 `quote_id`만 링크로 표시한다. 따라서 무역 후보가 생성돼도 기존 화면에서 문서 검토·발송 승인으로 갈 수 없다. 임시 PostgreSQL·가짜 LLM으로 PI 후보 2개 생성과 링크/승인 폼 0개를 재현했다. 화면/JSON 연결은 전환 계획 19절(#147)에서 보완·검증해야 하며, 백엔드 발송 서비스 시험 통과를 사용자 화면 완주로 표시하지 않는다.
 - 과제 R-01·R-02·R-09·R-10의 기존 실행 근거는 Gmail 수신 경로이며, 현재 코드는 업무별 마스터 StateGraph에서 호환 준비 단계를 실행한다. 독립 문서 작성/추출 API는 그 그래프를 실행하지 않으므로 PI 폼 완주만으로 성찰·기억·도구 선택을 시연했다고 볼 수 없다. 마스터 챗봇·멀티 에이전트는 과제 필수 조건이 아니다. 대표 흐름과 실제 배포 검증의 차이는 [서비스 연결 검토](plans/react-supabase/PROGRESS.md#서비스-연결-검토2026-11-13)를 참고한다.
@@ -165,7 +165,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-17 · PL 원본/계산 대조·입력 보존과 두 승인 UI
+마지막 갱신: 2026-11-18 · 무역문서 전체 설정 적용·누락 입력 팝업
 
 - PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 1절의 공통 모바일 배치와 PI/PO 입력·검토 보완 및 브라우저 검증을 구현했다. 2절 CI 연결/단독도 공통 요약·오류/단계 포커스·입력 보존과 브라우저 발급 검증을 마쳤다. 3절 PL 포장/대조/검토 UI와 4종 브라우저 회귀도 구현했다. 실제 기기 키보드와 운영 연결은 미확인이다. 공통 높이·sticky 작업 버튼·스크롤/포커스 규칙과 재검증 방법은 계획 1절을 재사용한다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
 
@@ -187,8 +187,10 @@
 - 공용 OAuth·Gmail Pub/Sub·OIDC/대체 토큰은 유지한다. 로컬은 watch/stop을 호출하지 않는다. 문서/설정 API는 Bearer 또는 기존 세션/CSRF로 소유자를 검사하고, 장치 승인과 장치 통신의 기존 CSRF·장치 토큰 계약은 유지한다. 환경변수 원본은 `.env.example`·계약 11절이다. Supabase는 루트 `.env`의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY` 세 값으로 설정하며 Vite는 URL과 공개 키만 브라우저에 제공한다. `frontend/.env`와 중복 URL은 제거했고 버킷은 기본 `trade-files`다. 실제 DB 연결용 `DATABASE_URL`은 별도로 필요하다. `frontend/`의 `npm run check:env`로 공개값 전달·비밀값 빌드 제외를 확인한다. 프로젝트·비공개 버킷·Google OAuth 준비는 사용자 확인이며 로컬 Supabase URL/키와 개발 포트를 설정했다. Auth 설정 조회·Google 로그인 시작은 확인했고, 실제 계정 로그인·Gmail·운영 DB/파일 이전은 미확인이다. 현재 로컬 DB는 임시 PostgreSQL이며 실제 DATABASE_URL과 Google/암호화 설정은 별도로 확인해야 한다.
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
+React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 팝업을 구현했다. 화면은 `frontend/src/trade/ReviewPanel.jsx`, `MissingFieldsDialog.jsx` 및 각 문서 페이지, API는 `app/trade/common/operations.py`와 도메인 operations/router에 있다. 상세 범위는 [계획](plans/trade-document-settings-and-missing-fields.md)이다. 기능 변경 후 검증은 별도 요청 전까지 보류한다.
+
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-17 · 모바일 3절 PL 구현과 4종 회귀 기록
+마지막 갱신: 2026-11-18 · 무역 문서 설정 갱신·누락 팝업 구현
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -206,8 +208,9 @@
 | KE KOREA 무역서류 로직 이식 계획 이력 | `docs/plans/kekorea-port.md` | 1~6절 완료, 참고 이력 |
 | KE KOREA 원본 사본(참고 이력, 읽기 전용) | `reference/kekorea/` (담은 것·바꾼 것·원본 테스트 실행법은 그 폴더 README) | 완료한 이식의 원본(ai-agents `8d397a1`, 앱에서 import하지 않음) |
 | 무역 문서 API 연결/폴더/승인 흐름 | `docs/trade-api.md`·계약 16절·`docs/plans/trade-domain-api.md` | 1~4절 구현·검증 |
-| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`·`frontend/` | 1·3~12절·21.1절 및 13~15절 코드 구현. 13~15절의 일부 브라우저 경로와 운영 연결 검증, 16~20·21.2절과 사람의 22절 남음. 콘솔 준비는 사용자 확인이며 실제 계정 로그인·운영 전환 미확인. 상세 검증/제한은 PROGRESS.md·`test-records/20261113_po_ci_pl_screens.md` |
+| React·JavaScript·Vite / Supabase 전환 | `docs/plans/react-supabase/`·`frontend/` | 1·3~12절·21.1절 및 13~15절 코드 구현. `frontend/src/styles.css`에 TasteSkill 참고 공통 시안의 글꼴·색상·탐색·버튼·입력·카드·표 크기를 적용했으며 페이지별 흐름·기능은 유지한다. 13~15절의 일부 브라우저 경로와 운영 연결 검증, 16~20·21.2절과 사람의 22절 남음. 콘솔 준비는 사용자 확인이며 실제 계정 로그인·운영 전환 미확인. 상세 검증/제한은 PROGRESS.md·`test-records/20261113_po_ci_pl_screens.md` |
 | PI·PO·CI·PL 모바일 화면 전환 | `docs/plans/trade-mobile-workspaces.md` | 기존 반응형/보류 기록을 확인해 공통·PI/PO, CI 연결/단독, PL/4종 회귀의 3개 작업으로 분리한 계획. 1절 공통 배치·PI/PO 입력/검토와 상태 보존·브라우저 회귀 구현. 공통 CSS/표시 컴포넌트 재사용 규칙은 1절, 상세 근거는 기존 검증 기록에 둔다. 2절 CI 연결/단독의 모바일 입력 보존·검토/발급·오류 재시도 검증 완료. 3절 PL/4종 자동 브라우저 회귀 구현. 실제 기기/운영 연결은 미확인 |
+| 무역 문서 최신 설정 적용·누락 정보 팝업 | `docs/plans/trade-document-settings-and-missing-fields.md` | 1·2절 구현 완료. PI 연결 CI는 같은 PI 문서의 최신 승인 revision 거래 정보를 사용하고, 이름이 일치하는 최신 거래처 프로필만 반영한다. 수기 가격·기존 발급 파일은 보존한다. 기능 검증은 사용자 별도 요청 대기 |
 | KE KOREA 개인 에이전트 개선 사례·선택 적용 제안 | `Team/README.md` | 참고 제안, 현재 팀 코드와 비교 후 판단 |
 | 개인 에이전트 개선 사례 발표용 참고 | `Presentation/README.md` | 참고 자료, 팀 기능 구현 완료와 구분 |
 | 발표 PPT | 미정 | 아직 없음 |

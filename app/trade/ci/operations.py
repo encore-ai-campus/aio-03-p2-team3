@@ -2,6 +2,8 @@
 from copy import deepcopy
 
 from app.trade.ci.models import CIInput, CIRepository, StandaloneCIInput
+from app.trade.common.models import PricedItem
+from app.trade.common.operations import refresh_settings_values
 from app.trade.ci.imports import _PAYMENT, ci_import_issues, is_pi_import, prepare_ci_import
 from app.trade.common.models import DocumentError
 from app.trade.common.operations import calculate, check_revision, revision_context, revision_values
@@ -114,6 +116,38 @@ def revise(document_id, revision, command: CIInput | StandaloneCIInput, *, repos
         raise DocumentError("SOURCE_PI_CHANGE_REQUIRES_NEW_CI", "다른 PI 버전은 새 CI로 작성하세요")
     document = prepare_ci(command, repository.source_pi(command.source_pi_id, command.source_revision))
     return result(repository.replace(document_id, revision, document, review_reference))
+
+
+def refresh_settings(document_id, revision, *, repository: CIRepository):
+    previous = repository.get(document_id)
+    check_revision(previous, revision)
+    context = repository.context(previous.get("currency"))
+    if previous.get("_ci_standalone") is True:
+        values = refresh_settings_values(previous, context, "CI", StandaloneCIInput, PricedItem)
+        command = StandaloneCIInput.model_validate({**values, "mode": "standalone"})
+        document = prepare_standalone(command, context, values)
+    else:
+        source = repository.latest_approved_source_pi(previous["source_pi_id"])
+        command = CIInput.model_validate({key: (source["revision"] if key == "source_revision" else previous.get(key))
+                                          for key in CIInput.model_fields})
+        document = prepare_ci(command, source)
+        old_issuer = source.get("issuer") or {}
+        new_issuer = context.issuer or {}
+        old_name = next((old_issuer.get(key) for key in ("legal_name_en", "legal_name", "company_name")
+                         if old_issuer.get(key)), None)
+        new_name = next((new_issuer.get(key) for key in ("legal_name_en", "legal_name", "company_name")
+                         if new_issuer.get(key)), None)
+        seller = dict(document.get("seller") or {})
+        defaults = {"legal_name": (old_name, new_name), **{key: (old_issuer.get(key), new_issuer.get(key))
+                    for key in ("address", "contact", "phone", "email")}}
+        for key, (old_value, new_value) in defaults.items():
+            if new_value and (not seller.get(key) or (old_value and seller.get(key) == old_value)):
+                seller[key] = new_value
+        document["seller"] = seller
+        document["issuer"] = deepcopy(context.issuer)
+        apply_company_profiles(document, context.counterparties)
+        document = calculate(document)
+    return result(repository.replace(document_id, revision, document))
 
 
 def check(document):
