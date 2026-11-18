@@ -57,6 +57,7 @@
 - `docs/plans/mailbox.md` — 로그아웃 뒤 수집 유지·Decisions 무관 제외·기존 LangGraph 초안·React 메일함·승인 발송의 계획/구현 범위(실제 검증 구분) [과제별]
 - `docs/plans/master-agent.md` — 기존 마스터의 업무 도구 반복·PostgreSQL 저장/API·React 연결 계획과 검증 경계 [과제별]
 - `docs/plans/agent-document-search.md` — 업무 도우미의 발급 무역 문서 검색과 문서함 조항 검색 계획 [과제별]
+- `docs/plans/chat-workflows.md` — 업무 채팅 Markdown·결과 카드와 남은 업무 도구 단계별 계획 [과제별]
 - `docs/plans/calendar-port.md` — Google Calendar 실연동(호출기·어댑터·영수증·업무 도우미 노출) 계획 [과제별]
 - `docs/plans/react-supabase/` — React·JavaScript·Vite와 Supabase 전환 문서 모음(안내·상세 계획·단계별 새 작업 요청문). 하위 작업은 PLAN.md의 자기 절만 읽는다 [과제별]
 - `docs/plans/kekorea-port.md` — 완료한 KE KOREA 무역서류(PI/PO/CI/PL) 이식 계획 이력 [과제별]

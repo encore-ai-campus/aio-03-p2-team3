@@ -207,7 +207,7 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 - 운영·실제 API 확인은 #157, [로컬 실행 계획](plans/local-openai-execution.md) 5절과 gmail-quote-mvp 16·18절에 남아 있다. Codex의 역할은 코드/병합 근거·자동/모의 검사·실행 절차 준비까지이며, 테스트용 Google 계정·가상 메일을 쓰고 실제 키 입력·Google 동의/장치 승인·본인 PC 실행·과금/운영 변경은 사람이 한다.
 
 ## 8. 문서·산출물 위치
-마지막 갱신: 2026-11-18 · 업무 도우미의 문서 검색 두 단계 구현·Calendar 실연동 계획
+마지막 갱신: 2026-11-19 · 업무 채팅 결과 화면과 후속 도구 계획
 
 | 무엇 | 위치 | 상태 |
 |---|---|---|
@@ -219,6 +219,7 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 | 시험 실행 기록(실행마다 한 파일)·실제 API 확인 결과 | `docs/test-records/` | 있음(2026-11-10, #62 1번 일반 문의 흐름: 실행 기록 3개와 결과 문서) |
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 대화형 마스터 업무 도우미 | `docs/plans/master-agent.md`·계약 17.4절·`app/graph/`·`frontend/src/agent/` | 기존 마스터의 도구 반복·본인 API·PostgreSQL 저장·대화/질문/승인 화면을 로컬 연결. 실제/모의 검증 경계는 계획 3절에서 구분 |
+| 업무 채팅 다음 기능 | `docs/plans/chat-workflows.md` | 채팅 Markdown과 기능별 화면, 메일·일정·무역 후속 도구를 9절로 계획. |
 | 업무 도우미의 문서 검색 | `docs/plans/agent-document-search.md` | 1절 발급 무역 문서 DB 검색과 2절 문서함 파일·조항 검색 구현 |
 | Google Calendar 실연동(조회·등록) | `docs/plans/calendar-port.md` | 1~3절 구현 완료. 설정 연결 토큰으로 ExistingCalendar 어댑터가 freebusy·등록·확인을 실제 Google에 실행하고(main 주입), 영수증 표로 멱등·타임아웃 복구를 지키며 업무 도우미의 find_slots·create_event 도구로 대화에서 쓴다. 실제 Google·운영 확인은 요청자 브라우저·#157에 남음 |
 | 회사 메일함·업무 분류·로그아웃 후 수집 | `docs/plans/mailbox.md` | 1~5절 로컬 구현·검증 완료. 로그아웃 후 수집 유지, 확실한 무관 메일만 Decisions 제외, 나머지는 기존 그래프, Bearer API·React 원문/초안/최종 수신자 확인·기존 승인 발송을 연결했다. 그래프 상태/엣지·수집기·React 3000/FastAPI 8000은 유지한다. 실제 Decisions 합성 시험·Gmail 연결/시험 발송과 외부 테스트 메일 수신·기존 그래프·후보 생성을 확인했다. 사용자 위임 뒤 가상 단가 확정·선택 후보의 실제 Gmail 답장/PDF·동일 스레드·중복 발송 방지를 확인했다. 운영 연결·FOB 문서 판단·분류 품질의 제한은 5절과 시험 기록에서 구분한다. |
