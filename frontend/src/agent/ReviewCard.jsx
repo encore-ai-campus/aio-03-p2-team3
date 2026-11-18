@@ -34,7 +34,7 @@ export default function ReviewCard({ waiting, results, busy, onResume }) {
         <p><b>받는 사람:</b> {payload.headers?.["reply-to"] || payload.headers?.from}</p>
         <p><b>제목:</b> {payload.subject}</p><p className="agent-text">{payload.body}</p>
         <p>답장 후보 #{payload.candidate_id} · 같은 메일 대화로 발송합니다.</p>
-        {payload.files?.map(file => <p key={file.id}>첨부: {file.filename}</p>)}
+        {payload.files?.map(file => <p className="agent-attach" key={file.id}>첨부: {file.filename}</p>)}
         {(payload.quote_id || payload.trade_doc_id) && <p>연결 문서를 함께 발송합니다. 아래 고정된 내용을 확인해 주세요.</p>}
         {payload.document && <details><summary>첨부 문서 내용</summary><pre>{JSON.stringify(payload.document, null, 2)}</pre></details>}
       </> : <>

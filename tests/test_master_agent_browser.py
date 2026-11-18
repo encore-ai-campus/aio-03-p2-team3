@@ -93,6 +93,7 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         approval.get_by_role('button', name='확인하고 승인').click()
         expect(page.get_by_text('PI 파일을 발급했습니다.', exact=True)).to_be_visible(timeout=20000)
+        page.locator('.work-row').first.click()  # 접힌 작업 타임라인을 펼친 뒤 단계를 연다(채팅 UI 개편).
         page.get_by_text('파일 발급 · 완료', exact=True).click()
         with page.expect_download() as download:
             page.get_by_role('button', name='다운로드').filter(has_text='.pdf').click()
