@@ -83,10 +83,10 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-18 · 발급 무역 문서·문서함 조항 검색 도구 연결·Calendar 호출기 확장
+마지막 갱신: 2026-11-18 · Calendar 실연동(어댑터·영수증)·업무 도우미 일정 도구 연결
 
-- 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정 `CalendarPort`는 미연결 기본 구현이 명시적으로 실패하고 가짜 공급자는 테스트에만 있다. 호출기 `CalendarClient`는 freebusy 조회·일정 등록·등록 확인 호출과 `check_calendars` 공용 오류 체계를 갖췄고, 등록 거부(400·409)는 `calendar_rejected` 확정 실패다(#245). 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
-- 대화형 업무 도구는 `master/tools.py`의 12개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다.
+- 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`·`calendar/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정은 설정에서 연결한 `calendar_tokens`를 `ExistingCalendar`가 실제 Google Calendar로 연결하며 `app/main.py`의 `agent_runtime`이 주입한다(미연결은 `calendar_not_connected`). 호출기 `CalendarClient`는 freebusy 조회·일정 등록·등록 확인 호출과 `check_calendars` 공용 오류 체계를 갖췄고, 등록 거부(400·409)는 `calendar_rejected` 확정 실패다(#245). 등록은 결정적 이벤트 ID와 `calendar_event_receipts` 영수증으로 멱등을 지키고 타임아웃·5xx는 `unknown` 뒤 조회로 복구한다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
+- 대화형 업무 도구는 `master/tools.py`의 14개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다. `find_slots`는 지정한 캘린더의 빈 시간 후보를 찾고 `create_event`는 사용자가 고른 시간만 등록 제안한다.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`은 전용 루프백 프로세스의 환경 키, `local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
 - 수신 전 `app/llm/mail_gate.py`는 같은 본인 키로 Decisions `gpt-6-luna`의 exclude/keep 한 질문을 호출한다. 명확한 무관 + confidence ≥ 0.95만 제외하고 애매함/회사 업무는 기존 그래프에 전달한다. 오류는 원문 보존 후 needs_review, local_worker는 미지원이다. no-reply/프로모션/소셜만으로 제외하지 않는다. 생성/분석 프롬프트는 기존 분기를 유지하며 analyze_email.v2로 회사 업무 전반을 다룬다.
 - 지식 문서 `DocumentExtractor`/`Embedder`는 위 구조화 호출로 가장하지 않고 OpenAI Responses 시각 입력/Embeddings API를 각각 감싼다. `UserKeyAccess`의 본인/실행 모드 검증은 재사용하며 미지원 local_worker·키 누락은 공용 키 대체 없이 실패한다. 비전 기본값은 현재 OpenAI 모델, 임베딩은 사용자 선택 text-embedding-3-small/1536이며 KNOWLEDGE_*로 따로 바꾼다. 비전 store=False·요청당 180초·SDK 재시도 최대 3회(최초 포함 4번), 임베딩은 기존 30초·재시도 0회이며 진행 시도 프로필 고정과 명시적 재처리를 적용한다. 업무 도우미의 내용 검색은 현재 호환 임베딩 프로필의 게시본을 읽는다.
@@ -175,7 +175,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-18 · Calendar 연결의 콜백 호스트 검사·복귀 출처 정렬
+마지막 갱신: 2026-11-18 · 일정 등록 영수증 마이그레이션 추가(Calendar 실연동 완성)
 
 - PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 1절의 공통 모바일 배치와 PI/PO 입력·검토 보완 및 브라우저 검증을 구현했다. 2절 CI 연결/단독도 공통 요약·오류/단계 포커스·입력 보존과 브라우저 발급 검증을 마쳤다. 3절 PL 포장/대조/검토 UI와 4종 브라우저 회귀도 구현했다. 실제 기기 키보드와 운영 연결은 미확인이다. 공통 높이·sticky 작업 버튼·스크롤/포커스 규칙과 재검증 방법은 계획 1절을 재사용한다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
 
@@ -187,6 +187,7 @@
 - 앱 DB는 PostgreSQL 전용이다. `DATABASE_URL`이 비었거나 비PostgreSQL이면 시작을 거부하며 SQLite 자동 생성은 없다. Alembic 대상은 `public`으로 고정해 Supabase `auth`·`storage`를 건드리지 않는다. `20261112_react_worker_merge`가 Supabase 전환/기존 worker 분기를 합친다. 운영 반영 전 DB 백업과 기존 `TOKEN_ENCRYPTION_KEY` 유지가 필요하다. SQLite 등 기존 원본은 `app.db.copy_data`, 회사 이미지/발급 바이너리는 backfill 명령으로 복사·해시 검증하며 원본·바이너리 열은 아직 삭제하지 않았다([전환 계획](plans/react-supabase/PLAN.md) 4·9·10·22절).
 - `20261116_mail_triage`는 캘린더 OAuth 변경 뒤 기존 메일 표에 nullable 분류 결과를 추가한다. 기존 메일은 자동 재분류하지 않으며 운영 DB 적용은 별도 확인한다.
 - `20261118_query_indexes`는 자주 읽는 조회 경로(메일함 스레드 집계·원문 조인, 스레드 후보, 실행 기록·무역 문서·문서함 목록, 거래 기억, PC 큐, 저장소 정리)에 복합 인덱스와 시작 복구용 부분 인덱스를 추가한다. 새 DB는 create_all이 같은 정의를 만들고 기존 운영 DB는 이 리비전이 채운다. 정의 원본은 `app/db/models.py`·`app/knowledge/repository.py`다.
+- `20261118_calendar_receipts`는 일정 등록 멱영수증 표(`calendar_event_receipts`, RLS 포함)를 추가한다. 앱 시작 Alembic이 만들며 실제 Google Calendar 등록 확인은 #157과 구분해 사람이 확인한다.
 - `20261113_knowledge_ingestion`은 문서·부모·자식 vector 표를 더하고 RLS/직접 공개 권한을 제한한다. vector 확장을 create_all보다 먼저 준비하며 기존 확장 스키마를 존중한다. CI PostgreSQL 16은 고정한 pgvector 이미지, Windows는 고정 소스 빌드를 사용한다. Office/TXT에는 LibreOffice가 필요하고 PDF/이미지는 고정 PDFium/Pillow로 읽는다. 설치/시험 명령·KNOWLEDGE_* 설정은 README/`.env.example`, 실제 운영 vector/버킷 제한·LibreOffice·모델 권한/정확도/과금 확인은 문서 수집 계획 2절/#178에 남아 있다. 운영 DB/배포·실제 문서 API 호출은 이번 구현에서 실행하지 않았다.
 - 무료 서버는 15분 미사용 시 잠들 수 있고 재시작/배포 때 로컬 파일을 잃으므로 운영 데이터는 Postgres에 둔다. 2026-11-10 생성한 무료 Postgres는 당시 안내상 12/10경 만료·14일 유예 후 삭제 예정이었다. 현재 요금제·보존 상태는 운영 담당자가 확인한다.
 - 서버 `stored_key`는 본인 로그인 후 `/settings`에서 키를 등록한다. 서버 `OPENAI_API_KEY` 대체는 차단돼 있다. `local_worker`는 개인 PC가 켜져 있고 같은 모델/설치 정의로 연결돼 있어야 한다. 메일·문서 입력과 AI 결과는 서버를 거치지만 PC 키는 서버에 전송/저장하지 않는다. 키를 지우거나 PC를 중지해도 이미 외부 API에 전송한 요청의 취소를 보장하지 않는다.
@@ -217,7 +218,7 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 | 큰 작업의 계획 파일 | `docs/plans/gmail-quote-mvp.md` (형식: `docs/plans/README.md`) | 있음(Gmail 견적 MVP 구현 계획) |
 | 대화형 마스터 업무 도우미 | `docs/plans/master-agent.md`·계약 17.4절·`app/graph/`·`frontend/src/agent/` | 기존 마스터의 도구 반복·본인 API·PostgreSQL 저장·대화/질문/승인 화면을 로컬 연결. 실제/모의 검증 경계는 계획 3절에서 구분 |
 | 업무 도우미의 문서 검색 | `docs/plans/agent-document-search.md` | 1절 발급 무역 문서 DB 검색과 2절 문서함 파일·조항 검색 구현 |
-| Google Calendar 실연동(조회·등록) | `docs/plans/calendar-port.md` | 1절 Calendar API 호출기 확장 구현(freebusy·일정 등록·등록 확인, #245). 2절 ExistingCalendar 어댑터·영수증 표·main 주입, 3절 업무 도우미 도구 노출은 후속 |
+| Google Calendar 실연동(조회·등록) | `docs/plans/calendar-port.md` | 1~3절 구현 완료. 설정 연결 토큰으로 ExistingCalendar 어댑터가 freebusy·등록·확인을 실제 Google에 실행하고(main 주입), 영수증 표로 멱등·타임아웃 복구를 지키며 업무 도우미의 find_slots·create_event 도구로 대화에서 쓴다. 실제 Google·운영 확인은 요청자 브라우저·#157에 남음 |
 | 회사 메일함·업무 분류·로그아웃 후 수집 | `docs/plans/mailbox.md` | 1~5절 로컬 구현·검증 완료. 로그아웃 후 수집 유지, 확실한 무관 메일만 Decisions 제외, 나머지는 기존 그래프, Bearer API·React 원문/초안/최종 수신자 확인·기존 승인 발송을 연결했다. 그래프 상태/엣지·수집기·React 3000/FastAPI 8000은 유지한다. 실제 Decisions 합성 시험·Gmail 연결/시험 발송과 외부 테스트 메일 수신·기존 그래프·후보 생성을 확인했다. 사용자 위임 뒤 가상 단가 확정·선택 후보의 실제 Gmail 답장/PDF·동일 스레드·중복 발송 방지를 확인했다. 운영 연결·FOB 문서 판단·분류 품질의 제한은 5절과 시험 기록에서 구분한다. |
 | 지식 문서 수집·pgvector 저장 | `docs/plans/document-ingestion.md`·계약 18절·`app/knowledge/`·`frontend/src/knowledge/` | 1·3~7절 구현. 사용자 선택 OpenAI 비전/현재 모델 + text-embedding-3-small, 조항 parent-child와 독립 모델 교체·페이지 대조/수정·저장/화면 포함. 실제 pgvector/합성 문서/가짜 AI의 브라우저 시험과 실제 운영 확인을 구분하며 #178은 사람 확인으로 남음. 채팅 검색은 업무 도우미 문서 검색 계획 2절에 연결 |
 | 설정의 Gmail·Google 캘린더 연동 | `docs/plans/settings-google-integrations.md` | 1절의 연동 메뉴·기존 Gmail 연결/해제/재연결/상태 UI 구현. 회사 설정 장애 경계·서비스별 조회/해제 계약과 가짜 Google/실제 임시 PostgreSQL 브라우저 검증을 포함한다. 2절 Calendar OAuth/카드 활성화 구현. 서버 일회성 state·별도 암호화 토큰·갱신/계정/실패 격리를 검증하며 사람의 콘솔·Render 확인은 #193에 남음 |
