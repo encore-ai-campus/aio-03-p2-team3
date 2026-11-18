@@ -47,3 +47,4 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["slow: LibreOffice, Chromium 또는 별도 프로세스를 실행하는 통합 테스트"]

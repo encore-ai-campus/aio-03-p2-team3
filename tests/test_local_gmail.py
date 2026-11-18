@@ -373,6 +373,7 @@ def test_real_google_profile_request_reads_position_without_watch(local):
     assert calls == [{"userId": "me"}, {"num_retries": 2}]
 
 
+@pytest.mark.slow
 def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_path, database_url):
     path = env_file(tmp_path, database_url)
     with socket.socket() as sock:
