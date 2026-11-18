@@ -16,6 +16,7 @@ function DocumentField({ label, value, onChange, multiline = false, error, ...pr
 }
 
 export default function PIForm({ token, draft, setDraft, step, fields = null, settings, missing = [], disabled = false, onDirty, onShowAll, kind = "pi" }) {
+  const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
   const wanted = (path) => fields === null || fields.includes(path)
   const invalid = (path) => missing.includes(path) || fields?.includes(path)
   function change(key, value) {
@@ -51,9 +52,10 @@ export default function PIForm({ token, draft, setDraft, step, fields = null, se
           <option value="">거래처 선택</option>{settings.counterparties.map((row) => <option key={row.company_key} value={row.company_key}>{row.legal_name}</option>)}
         </select>
       </div>}
-      {fields && draft[step]?.legal_name && <p className="pi-context">{draft[step].legal_name}</p>}
+      {fields && draft[step]?.legal_name && step !== "seller" && <p className="pi-context">{draft[step].legal_name}</p>}
+      {step === "seller" && <p className="section-note">판매자 회사명 (영문) · {issuerName || "회사 설정에 등록 필요"}. 설정값이 자동 적용됩니다.</p>}
       <div className="settings-fields pi-party-fields">
-        {[["legal_name","회사명 (영문)"],["address","주소 (영문)"]].filter(([key]) => wanted(`${step}.${key}`)).map(([key,label]) =>
+        {[["legal_name","회사명 (영문)"],["address","주소 (영문)"]].filter(([key]) => !(key === "legal_name" && step === "seller") && wanted(`${step}.${key}`)).map(([key,label]) =>
           <DocumentField key={key} label={label} value={draft[step]?.[key]} onChange={(value) => party(step,key,value)}
             error={invalid(`${step}.${key}`) && !draft[step]?.[key]} multiline={key === "address"} rows={2} />)}
       </div>
@@ -61,7 +63,7 @@ export default function PIForm({ token, draft, setDraft, step, fields = null, se
         {[["contact","담당자"],["phone","전화"],["email","이메일"],["registration_details","등록 정보"]].map(([key,label]) =>
           <DocumentField key={key} label={label} value={draft[step]?.[key]} onChange={(value) => party(step,key,value)} />)}
       </div></details>}
-      {step === "seller" && <p className="section-note">발행 회사{kind === "pi" ? "와 지급 계좌는" : "는"} <Link to="/settings">회사 설정</Link>에서 관리합니다.{kind === "pi" && " 원문에서 가져온 판매자도 수정할 수 있어요."}</p>}
+      {step === "seller" && <p className="section-note">발행 회사 정보는 <Link to="/settings">회사 설정</Link>에서 관리합니다.{kind === "pi" && " 회사명은 설정값으로 고정됩니다."}</p>}
     </>}
     {step === "terms" && <><div className="settings-fields">
       {wanted("product_family") &&

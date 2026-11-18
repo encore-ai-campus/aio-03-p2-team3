@@ -40,7 +40,7 @@ export function updateMissingField(value, path, nextValue) {
   target[parts.at(-1)] = nextValue
   if (parts[0] === "items") {
     if (parts.at(-1) === "quantity") target.paid_quantity = nextValue
-    if (["unit_price", "product_name", "product_code", "capacity", "unit"].includes(parts.at(-1))) target.confirm_price_override = false
+    if (["product_name", "product_code", "capacity", "unit"].includes(parts.at(-1))) target.confirm_price_override = false
   }
   return copy
 }
@@ -107,7 +107,12 @@ function issueDetails(raw, draft, kind) {
   match = /(?:exact catalog product match|product match) for (.+?)(?:;|$)/i.exec(message)
   if (match) {
     const index = matchProduct(`for ${match[1]}`, draft)
-    if (index !== null) fields.push(`items.${index}.product_name`, `items.${index}.capacity`, `items.${index}.product_code`)
+    if (index !== null) {
+      fields.push(`items.${index}.product_name`, `items.${index}.capacity`, `items.${index}.product_code`)
+      const name = draft.items?.[index]?.product_name || `품목 ${index + 1}`
+      const valid = fields.filter((path) => validPath(draft, path))
+      return { message: `${name}이(가) 등록 품목과 일치하지 않습니다. 등록된 품목명·용량/규격·상품 코드를 확인하세요.`, fields: valid, catalogMatch: true }
+    }
   }
   match = /^Product name is required for item (\d+)|^Product name for item (\d+) must be (?:English|translated)/i.exec(message)
   if (match) fields.push(`items.${Number(match[1] ?? match[2]) - 1}.product_name`)
@@ -224,11 +229,25 @@ export default function MissingFieldsDialog({ open, kind, draft, missing = [], i
       ...packingIssues.map((issue, index) => ({ key: `packing:${index}:${issue}`, raw: `Packing: ${issue}` })),
     ]
     return rows.map((row) => {
-      const detail = row.missing
+      const rawMessage = String(typeof row.raw === "string" ? row.raw : row.raw?.message ?? "").trim()
+      if (/^Issuing company name is not configured$/i.test(rawMessage)) {
+        return { ...row, message: "설정에서 당사 영문 회사명을 등록하세요.", fields: [], settings: "company" }
+      }
+      const issuerPath = kind === "PO" ? "buyer.legal_name" : "seller.legal_name"
+      let detail = row.missing
         ? row.raw === "items" ? { message: "품목 항목을 추가하세요.", fields: [], step: kind === "PL" ? "packing" : kind === "CI" ? null : "items", source: kind === "CI" }
           : { message: `${fieldLabel(row.raw, draft)} 항목${String(readPath(draft, row.raw) ?? "").trim() ? "을 수정하세요" : "의 값을 입력하세요"}.`, fields: validPath(draft, row.raw) ? [row.raw] : [] }
         : issueDetails(row.raw, draft, kind)
+      if (row.raw === issuerPath || detail.fields?.includes(issuerPath)) {
+        const fields = (detail.fields ?? []).filter((path) => path !== issuerPath)
+        if (!fields.length) return null
+        detail = { ...detail, fields }
+      }
       return { ...row, ...detail }
+    }).filter(Boolean).filter((entry, index, all) => {
+      if (!entry.fields?.length) return true
+      const signature = JSON.stringify([entry.message, entry.fields])
+      return all.findIndex((candidate) => JSON.stringify([candidate.message, candidate.fields]) === signature) === index
     })
   }, [draft, issues, kind, missing, packingIssues])
   const active = entries.find((entry) => entry.key === selected)
@@ -266,8 +285,13 @@ export default function MissingFieldsDialog({ open, kind, draft, missing = [], i
             : active.packing ? <>포장 합계 화면에서 값을 확인하고 승인하세요. <a href="#packing-review">포장 합계 확인으로 이동</a></>
               : active.source ? "원본 PI와 선택한 CI 내용을 대조해 주세요. 원본 문서는 해당 PI에서 수정하세요." : active.step ? "품목 입력 단계에서 품목을 추가하세요. 기존 문서 작성 규칙은 그대로 적용됩니다." : "관련 문서 정보와 설정을 확인해 주세요."}
         </p>
-        {active.step && onOpenStep && <button className="btn" type="button" disabled={busy} onClick={() => { onOpenStep(active.step); setSelected(null) }}>품목 입력으로 이동</button>}
+        {active.step && onOpenStep && <button className="btn" type="button" disabled={busy} onClick={() => { onOpenStep(active.step); setSelected(null) }}>관련 입력 단계로 이동</button>}
       </>}
+      {active.fields.length > 0 && <p className="section-note" role="status">
+        {dirty ? "변경사항을 저장하면 서버가 다시 검증합니다. 입력값이 조건을 충족하면 해당 오류가 사라집니다." : active.catalogMatch
+          ? "현재 값은 이미 저장되어 있습니다. 단가표에 등록된 품목 정보와 다르면 값을 수정해야 저장할 수 있습니다."
+          : "현재 값은 이미 저장되어 있습니다. 값을 바꾸면 저장 버튼이 활성화됩니다."}
+      </p>}
       <div className="form-actions"><button className="btn blue" type="button" disabled={busy || !dirty || !active.fields.length} onClick={onSave}>{busy ? "저장 중…" : "변경사항 저장"}</button></div>
     </div>}
   </section>

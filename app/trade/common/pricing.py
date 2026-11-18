@@ -265,8 +265,10 @@ def apply_verified_catalog_prices(draft, catalog=None):
         if is_manual_sample(draft, item):
             item['master_price'] = False
             continue
-        user_entered_price = str(item.get("price_source") or "").casefold().startswith(
-            ("user-entered", "user supplied", "user-provided"))
+        user_entered_price = (
+            item.get("price_override_confirmed") is True
+            or str(item.get("price_source") or "").casefold().startswith(
+                ("user-entered", "user supplied", "user-provided")))
         if is_purchase_order and not item.get("price_override_confirmed") and not user_entered_price:
             item["unit_price"] = None
             item["price_source"] = None
@@ -274,7 +276,8 @@ def apply_verified_catalog_prices(draft, catalog=None):
             item["master_price"] = False
             continue
         if match["status"] != "matched":
-            if (is_purchase_order and not user_entered_price) or item.get("master_price") is True:
+            if ((is_purchase_order and not user_entered_price)
+                    or (item.get("master_price") is True and not item.get("price_override_confirmed"))):
                 item["unit_price"] = None
                 item["price_source"] = None
                 item.pop("price_override_confirmed", None)
@@ -307,7 +310,7 @@ def apply_verified_catalog_prices(draft, catalog=None):
         if match.get("confirmation") and match["confirmation"] not in pending:
             pending.append(match["confirmation"])
         if not party_matches:
-            if item.get("master_price") is True:
+            if item.get("master_price") is True and not item.get("price_override_confirmed"):
                 item["unit_price"] = None
                 item["price_source"] = None
                 item.pop("price_override_confirmed", None)
@@ -315,7 +318,7 @@ def apply_verified_catalog_prices(draft, catalog=None):
             if item.get("source") and item.get("unit_price") not in (None, ""):
                 item["price_override_confirmed"] = True
                 item["price_source"] = "User-provided price; counterparty is outside the local catalog price profile"
-            else:
+            elif not item.get("price_override_confirmed"):
                 labels = _party_labels(price_rows, party_field, product.get("id"))
                 draft.setdefault("missing_fields", []).append(
                     f"Confirm a transaction-specific price for {product.get('item_name')}; local catalog price is only for {labels}")
@@ -329,8 +332,9 @@ def apply_verified_catalog_prices(draft, catalog=None):
                 item["price_source"] = None
                 item.pop("price_override_confirmed", None)
             item["master_price"] = False
-            draft.setdefault("missing_fields", []).append(
-                f"Verified {currency or 'currency'} catalog price for {product.get('item_name')}")
+            if not item.get("price_override_confirmed"):
+                draft.setdefault("missing_fields", []).append(
+                    f"Verified {currency or 'currency'} catalog price for {product.get('item_name')}")
             continue
         if not draft.get("currency"):
             # When an exact product/counterparty catalog lookup returns one

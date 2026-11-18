@@ -43,7 +43,7 @@ def finalize(draft, approved=False):
 def prepare_pl(values, context):
     draft = deepcopy(values)
     draft.update(document_type="PL", doc_kind="PL", currency=None, bank=None, issuer=deepcopy(context.issuer))
-    apply_issuer_defaults(draft, "PL", context.issuer)
+    apply_issuer_defaults(draft, "PL", context.issuer, fix_name=True)
     apply_company_profiles(draft, context.counterparties)
     return finalize(draft)
 

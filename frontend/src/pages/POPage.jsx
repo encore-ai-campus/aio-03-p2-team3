@@ -88,12 +88,16 @@ export default function POPage() {
     const controller = new AbortController()
     setSettings(null)
     apiFetch("/trade/settings", { token, signal: controller.signal }).then((data) => {
-      if (!controller.signal.aborted) { setSettings(data); setSettingsError("") }
+      if (!controller.signal.aborted) {
+        setSettings(data); setSettingsError("")
+        if (!documentId) setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer,
+          legal_name: data.company?.legal_name_en || data.company?.company_name || "" } }))
+      }
     }).catch((failure) => {
       if (!controller.signal.aborted) setSettingsError(failure.message)
     })
     return () => controller.abort()
-  }, [token])
+  }, [token, documentId])
 
   useEffect(() => {
     question.current?.focus()
@@ -106,17 +110,24 @@ export default function POPage() {
   function edit(key) {
     setNotice("")
     if (proposal?.status === "pending") setModifying(true)
+    const companyName = settings?.company?.legal_name_en || settings?.company?.company_name
+    if (companyName && draft.buyer?.legal_name !== companyName) {
+      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: companyName } }))
+      setDirty(true)
+    }
     setScreen({ key, fields: null })
   }
 
   function startManual() {
     const company = settings?.company ?? {}
+    const companyName = company.legal_name_en || company.company_name
     setDraft((previous) => ({ ...previous, buyer: {
       ...Object.fromEntries(["address", "contact", "phone", "email", "registration_details"].map((key) => [key, previous.buyer[key] || company[key] || ""])),
-      legal_name: previous.buyer.legal_name || company.legal_name_en || company.company_name || "",
+      legal_name: companyName,
     } }))
     setGuided(false)
-    edit("seller")
+    setNotice("")
+    setScreen({ key: "seller", fields: null })
   }
 
   function next() {
@@ -195,6 +206,13 @@ export default function POPage() {
   }
 
   const current = resource && String(resource.document_id) === documentId ? resource : null
+  const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
+  useEffect(() => {
+    if (current?.status === "needs_input" && !proposal && issuerName && draft.buyer?.legal_name !== issuerName) {
+      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: issuerName } }))
+      setDirty(true)
+    }
+  }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, draft.buyer?.legal_name])
   const pending = proposal?.status === "pending"
   const canEdit = !busy && !loading && (!documentId || current)
   const stepIndex = PO_STEPS.findIndex((entry) => entry.key === screen.key)
@@ -273,7 +291,7 @@ export default function POPage() {
       <MissingFieldsDialog open={Boolean(current && screen.key === "review" && !finalReview)} kind="PO" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
         onSave={save} onOpenStep={edit} />
-      {settingsError && <p className="section-note" role="status">기본 설정을 가져오지 못했어요. 직접 입력할 수 있습니다. {settingsError}</p>}
+      {settingsError && <p className="section-note" role="status">회사 설정을 불러오지 못해 당사 회사명을 자동 적용할 수 없습니다. <Link to="/settings">설정 확인</Link> · {settingsError}</p>}
       </div>
       {!["start", "source"].includes(screen.key) && <POSummary draft={draft} current={current} dirty={dirty} disabled={!canEdit} onEdit={edit} />}
       </div>

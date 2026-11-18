@@ -104,12 +104,16 @@ function PLEditor() {
     const controller = new AbortController()
     setSettings(null)
     apiFetch("/trade/settings", { token, signal: controller.signal }).then((data) => {
-      if (!controller.signal.aborted) { setSettings(data); setSettingsError("") }
+      if (!controller.signal.aborted) {
+        setSettings(data); setSettingsError("")
+        if (!documentId) setDraft((previous) => ({ ...previous, seller: { ...previous.seller,
+          legal_name: data.company?.legal_name_en || data.company?.company_name || "" } }))
+      }
     }).catch((failure) => {
       if (!controller.signal.aborted) setSettingsError(failure.message)
     })
     return () => controller.abort()
-  }, [token])
+  }, [token, documentId])
 
   useEffect(() => {
     question.current?.focus()
@@ -137,17 +141,24 @@ function PLEditor() {
   function edit(key) {
     setNotice("")
     if (proposal?.status === "pending") setModifying(true)
+    const companyName = settings?.company?.legal_name_en || settings?.company?.company_name
+    if (companyName && draft.seller?.legal_name !== companyName) {
+      setDraft((previous) => ({ ...previous, seller: { ...previous.seller, legal_name: companyName } }))
+      setDirty(true)
+    }
     setScreen({ key, fields: null })
   }
 
   function startManual() {
     const company = settings?.company ?? {}
+    const companyName = company.legal_name_en || company.company_name
     setDraft((previous) => ({ ...previous, seller: {
       ...Object.fromEntries(["address", "contact", "phone", "email", "registration_details"].map((key) => [key, previous.seller[key] || company[key] || ""])),
-      legal_name: previous.seller.legal_name || company.legal_name_en || company.company_name || "",
+      legal_name: companyName,
     } }))
     setGuided(false)
-    edit("buyer")
+    setNotice("")
+    setScreen({ key: "buyer", fields: null })
   }
 
   function next() {
@@ -240,6 +251,13 @@ function PLEditor() {
   }
 
   const current = resource && String(resource.document_id) === documentId ? resource : null
+  const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
+  useEffect(() => {
+    if (current?.status === "needs_input" && !proposal && issuerName && draft.seller?.legal_name !== issuerName) {
+      setDraft((previous) => ({ ...previous, seller: { ...previous.seller, legal_name: issuerName } }))
+      setDirty(true)
+    }
+  }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, draft.seller?.legal_name])
   const pending = proposal?.status === "pending"
   const canEdit = !busy && !loading && (!documentId || current)
   const stepIndex = PL_STEPS.findIndex((entry) => entry.key === screen.key)
@@ -325,7 +343,7 @@ function PLEditor() {
           ...(packing?.payload.document.packing_totals && !packing.payload.document.packing_totals.quantity_complete ? ["Source quantity total is invalid"] : [])]} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
         onSave={save} onOpenStep={edit} />
-      {settingsError && <p className="section-note" role="status">기본 설정을 가져오지 못했어요. 직접 입력할 수 있습니다. {settingsError}</p>}
+      {settingsError && <p className="section-note" role="status">회사 설정을 불러오지 못해 당사 회사명을 자동 적용할 수 없습니다. <Link to="/settings">설정 확인</Link> · {settingsError}</p>}
       </div>
       {!["start", "source"].includes(screen.key) && <PLSummary draft={draft} current={current} dirty={dirty} disabled={!canEdit} onEdit={edit} />}
       </div>

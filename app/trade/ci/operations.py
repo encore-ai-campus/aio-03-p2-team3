@@ -14,7 +14,7 @@ from app.trade.common.results import document_result, editable_values
 from app.trade.common.models import PricedItem
 
 
-def prepare_ci(command: CIInput, source, conflicts=()):
+def prepare_ci(command: CIInput, source, conflicts=(), issuer=None):
     draft = deepcopy(source)
     for key in ("trade_doc_id", "doc_no", "revision", "bank", "proposal_id", "files"):
         draft.pop(key, None)
@@ -29,6 +29,10 @@ def prepare_ci(command: CIInput, source, conflicts=()):
         if value is not None or key in {"shipment_reference", "country_of_origin"}:
             draft[key] = value
     draft = prepare_ci_import(draft, requested_type="CI", has_attachments=True)
+    issuer = issuer if issuer is not None else draft.get("issuer")
+    if issuer is not None:
+        draft["issuer"] = deepcopy(issuer)
+        apply_issuer_defaults(draft, "CI", issuer, fix_name=True)
     draft["bank"] = None
     draft["conflicts"] = list(conflicts)
     document = calculate(draft)
@@ -42,7 +46,7 @@ def prepare_standalone(command, context, values=None):
     draft = deepcopy(values if values is not None else command.model_dump(mode="json"))
     draft.pop("mode", None)
     draft.update(document_type="PI", doc_kind="PI", issuer=deepcopy(context.issuer), bank=None)
-    apply_issuer_defaults(draft, "PI", context.issuer)
+    apply_issuer_defaults(draft, "PI", context.issuer, fix_name=True)
     apply_company_profiles(draft, context.counterparties)
     for item in draft.get("items", []):
         confirmed = item.pop("confirm_price_override", False)
@@ -78,7 +82,8 @@ def create(command: CIInput | StandaloneCIInput, *, repository: CIRepository):
     if isinstance(command, StandaloneCIInput):
         return result(repository.create(prepare_standalone(command, repository.context(command.currency))))
     source = repository.source_pi(command.source_pi_id, command.source_revision)
-    return result(repository.create(prepare_ci(command, source)))
+    issuer = repository.context(source.get("currency")).issuer
+    return result(repository.create(prepare_ci(command, source, issuer=issuer)))
 
 
 def extract_standalone(text, *, repository: CIRepository, extractor):
@@ -96,7 +101,8 @@ def extract(text, *, repository: CIRepository, extractor, source_pi_id, source_r
     values = extractor(text)
     command = CIInput.model_validate({**{key: value for key, value in values.items() if key in CIInput.model_fields},
                                       "source_pi_id": source_pi_id, "source_revision": source_revision})
-    document = prepare_ci(command, source, values.get("conflicts", []))
+    issuer = repository.context(source.get("currency")).issuer
+    document = prepare_ci(command, source, values.get("conflicts", []), issuer)
     return result(repository.create(document))
 
 
@@ -114,7 +120,9 @@ def revise(document_id, revision, command: CIInput | StandaloneCIInput, *, repos
         raise DocumentError("CI_MODE_CHANGE_REQUIRES_NEW_CI", "다른 작성 방식은 새 CI로 작성하세요")
     if previous.get("source_pi_id") and (previous["source_pi_id"], previous["source_revision"]) != (command.source_pi_id, command.source_revision):
         raise DocumentError("SOURCE_PI_CHANGE_REQUIRES_NEW_CI", "다른 PI 버전은 새 CI로 작성하세요")
-    document = prepare_ci(command, repository.source_pi(command.source_pi_id, command.source_revision))
+    source = repository.source_pi(command.source_pi_id, command.source_revision)
+    issuer = repository.context(source.get("currency")).issuer
+    document = prepare_ci(command, source, issuer=issuer)
     return result(repository.replace(document_id, revision, document, review_reference))
 
 
@@ -130,7 +138,7 @@ def refresh_settings(document_id, revision, *, repository: CIRepository):
         source = repository.latest_approved_source_pi(previous["source_pi_id"])
         command = CIInput.model_validate({key: (source["revision"] if key == "source_revision" else previous.get(key))
                                           for key in CIInput.model_fields})
-        document = prepare_ci(command, source)
+        document = prepare_ci(command, source, issuer=context.issuer)
         old_issuer = source.get("issuer") or {}
         new_issuer = context.issuer or {}
         old_name = next((old_issuer.get(key) for key in ("legal_name_en", "legal_name", "company_name")

@@ -75,9 +75,9 @@ def apply_company_profiles(draft, profiles, *, prompt=''):
         return draft
     profile = matches[0]
     applied = {}
-    # The exact registered legal name replaces only a recognized name alias.
-    party['legal_name'] = profile['legal_name']
-    if supplied_name != profile['legal_name'] or role + '.legal_name' in previous.get('fields', {}):
+    # Explicit names stay as entered; only a name inferred from the prompt is filled from the profile.
+    if not supplied_name:
+        party['legal_name'] = profile['legal_name']
         applied[role + '.legal_name'] = profile['legal_name']
     for field in ('address', 'contact', 'phone', 'email', 'registration_details'):
         value = profile.get(field)

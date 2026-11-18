@@ -49,10 +49,12 @@ def missing_review_fields(data):
               ReviewField(("shipment_reference",), "Shipment reference", dtype in {"CI", "PL"})]
     if dtype != "PL":
         fields.append(ReviewField(("currency",), "Currency (USD / KRW / EUR / CNY)"))
+    issuer_role = "buyer" if dtype == "PO" else "seller"
     for role, party in (("seller", "Seller / supplier"), ("buyer", "Buyer / customer")):
         for key, label in (("legal_name", "legal name"), ("address", "address"),
                            ("contact", "contact / representative"), ("phone", "phone"), ("email", "email")):
-            fields.append(ReviewField((role, key), f"{party}: {label}", key in {"legal_name", "address"}))
+            required = key in {"legal_name", "address"} and not (role == issuer_role and key == "legal_name")
+            fields.append(ReviewField((role, key), f"{party}: {label}", required))
     for i, item in enumerate(data.get("items") or []):
         for key, label in (("product_name", "product name"), ("unit", "quantity unit"), ("quantity", "quantity")):
             if key == "quantity" and not _missing(item.get("paid_quantity"), True):

@@ -22,7 +22,7 @@ def prepare_priced(values, context, document_type):
     draft = deepcopy(values)
     draft.update(document_type=document_type, doc_kind=document_type,
                  issuer=deepcopy(context.issuer), bank=deepcopy(context.bank))
-    apply_issuer_defaults(draft, document_type, context.issuer)
+    apply_issuer_defaults(draft, document_type, context.issuer, fix_name=True)
     apply_company_profiles(draft, context.counterparties)
     for item in draft.get("items", []):
         override = item.pop("confirm_price_override", False)

@@ -99,7 +99,7 @@ function StandaloneEditor() {
         const company = data.company ?? {}
         setDraft((previous) => ({ ...previous, seller: {
           ...Object.fromEntries(["address", "contact", "phone", "email", "registration_details"].map((key) => [key, previous.seller[key] || company[key] || ""])),
-          legal_name: previous.seller.legal_name || company.legal_name_en || company.company_name || "",
+          legal_name: company.legal_name_en || company.company_name || "",
         } }))
       }
     }).catch((failure) => { if (!controller.signal.aborted) setSettingsError(failure.message) })
@@ -119,7 +119,13 @@ function StandaloneEditor() {
   }
 
   function edit(key) {
+    setNotice("")
     if (proposal?.status === "pending") setModifying(true)
+    const companyName = settings?.company?.legal_name_en || settings?.company?.company_name
+    if (companyName && draft.seller?.legal_name !== companyName) {
+      setDraft((previous) => ({ ...previous, seller: { ...previous.seller, legal_name: companyName } }))
+      setDirty(true)
+    }
     setFields(null); setScreen(key)
   }
   function save() {
@@ -172,6 +178,13 @@ function StandaloneEditor() {
   }
 
   const current = resource && String(resource.document_id) === documentId ? resource : null
+  const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
+  useEffect(() => {
+    if (current?.status === "needs_input" && !proposal && issuerName && draft.seller?.legal_name !== issuerName) {
+      setDraft((previous) => ({ ...previous, seller: { ...previous.seller, legal_name: issuerName } }))
+      setDirty(true)
+    }
+  }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, draft.seller?.legal_name])
   const enabled = !busy && !loading && (!documentId || current)
   const index = steps.findIndex(([key]) => key === screen)
   const nextStep = guided && index >= 0 ? standaloneCINext(draft, index).key : steps[index + 1]?.[0] ?? "review"
@@ -182,7 +195,7 @@ function StandaloneEditor() {
       {documentId && <button className="btn" type="button" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}</div>
     {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.message}</p>{error.status === 409 && <p>입력은 보존했습니다. 최신본을 다시 읽으면 현재 입력이 교체됩니다. 필요한 내용은 먼저 복사해 두세요.</p>}{error?.code === "RENDER_FAILED" && <RenderFailureHelp />}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
-    {settingsError && <p className="section-note" role="status">기본 설정을 불러오지 못했습니다. 직접 입력할 수 있습니다. {settingsError}</p>}
+    {settingsError && <p className="section-note" role="status">회사 설정을 불러오지 못해 당사 회사명을 자동 적용할 수 없습니다. <Link to="/settings">설정 확인</Link> · {settingsError}</p>}
     {loading && <p role="status">CI를 불러오는 중입니다.</p>}
     {!loading && (!documentId || current) && <>
       {screen !== "source" && <nav className="pi-progress" aria-label="CI 작성 단계"><ol>{steps.map(([key, label]) => <li key={key}><button type="button" disabled={!enabled} aria-current={screen === key ? "step" : undefined} onClick={() => edit(key)}>{label}</button></li>)}

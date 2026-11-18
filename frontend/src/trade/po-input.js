@@ -42,9 +42,8 @@ function blank(value) {
 // 질문할 빈칸만 고른다. 금액·가격 검증과 발급 가능 여부는 기존 서버가 판단한다.
 export function poMissing(draft) {
   const paths = ["product_family", "document_number", "currency", "incoterms", "payment_terms"]
-  for (const role of ["buyer", "seller"]) {
-    for (const key of ["legal_name", "address"]) paths.push(`${role}.${key}`)
-  }
+  for (const role of ["buyer", "seller"]) for (const key of ["legal_name", "address"])
+    if (role !== "buyer" || key !== "legal_name") paths.push(`${role}.${key}`)
   if (!draft.items.length) paths.push("items")
   draft.items.forEach((row, index) => {
     for (const key of ["product_name", "unit", "price_basis", "discount_percent"]) paths.push(`items.${index}.${key}`)
