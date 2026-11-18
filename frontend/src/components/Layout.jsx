@@ -8,7 +8,6 @@ const WORKSPACE_NAV = [
   { to: "/status", label: "작업현황", icon: "▦" },
   { to: "/inbox", label: "받은 메일", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
-  { to: "/activity", label: "실행 기록", icon: "◷" },
 ]
 const MANAGE_NAV = [{ to: "/settings", label: "설정", icon: "⚙" }]
 const BOTTOM_NAV = [
@@ -23,7 +22,6 @@ const PAGE_LABELS = {
   "/status": "작업현황",
   "/inbox": "받은 메일",
   "/documents": "문서함",
-  "/activity": "실행 기록",
   "/settings": "설정",
   "/agent": "업무 도우미",
 }

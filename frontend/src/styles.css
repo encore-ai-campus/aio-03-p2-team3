@@ -1,5 +1,5 @@
 /* 시안 'trade-agent ui_시안.html'의 색 토큰·로그인 화면·사이드바 레이아웃·모바일 하단탐색을 그대로 옮겼다.
-   아직 연결 전인 화면(받은 메일·문서작성 대화·견적서·설정·실행 기록)의 전용 CSS는 해당 절에서 추가한다. */
+   아직 연결 전인 화면(받은 메일·문서작성 대화·견적서·설정)의 전용 CSS는 해당 절에서 추가한다. */
 
 :root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1c2431;background:#f5f6f8;font-synthesis:none;--ink:#1c2431;--muted:#7e8795;--line:#e8ebef;--blue:#315df5;--green:#168052;--amber:#9a690d;--card:#fff;--mobile-nav-height:calc(63px + env(safe-area-inset-bottom,0px))}
 *{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select,textarea{font:inherit}button{cursor:pointer}

@@ -4,7 +4,6 @@ import { useAuth } from "./useAuth"
 import Layout from "./components/Layout"
 import DashboardPage from "./pages/DashboardPage"
 import LoginPage from "./pages/LoginPage"
-import PlaceholderPage from "./pages/PlaceholderPage"
 import MailboxPage from "./mail/MailboxPage"
 import AgentPage from "./agent/AgentPage"
 import StatusPage from "./status/StatusPage"
@@ -54,7 +53,6 @@ export default function App() {
               <Route path="agent" element={<AgentPage />} />
               <Route path="agent/:conversationId" element={<AgentPage />} />
               <Route path="documents" element={<DocumentsPage />} />
-              <Route path="activity" element={<PlaceholderPage sub="처리 단계와 오류를 확인하는 작업 이력입니다." title="실행 기록" />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="knowledge" element={<LegacyKnowledgeRedirect />} />
               <Route path="trade/pi" element={<PIPage />} />
