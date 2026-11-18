@@ -10,8 +10,9 @@ from uuid import uuid4
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text,
-    UniqueConstraint, delete, func, literal_column, select, union_all, update,
+    UniqueConstraint, delete, func, literal_column, or_, select, union_all, update,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -339,10 +340,20 @@ class SqlRepository:
 
     def claim(self) -> dict | None:
         with self._session() as session:
-            row = session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.status == "queued")
+            # 이전 버전에서 경고로 대기하던 미수정 전사만 이어서 처리한다.
+            waiting_transcription = (
+                (KnowledgeDocument.status == "needs_review")
+                & (KnowledgeDocument.pages == KnowledgeDocument.raw_pages)
+                & (func.jsonb_array_length(KnowledgeDocument.raw_pages) > 0)
+                & ~KnowledgeDocument.warnings.cast(JSONB).contains(["empty_transcription_requires_review"])
+            )
+            row = session.scalar(select(KnowledgeDocument).where(
+                or_(KnowledgeDocument.status == "queued", waiting_transcription))
                                  .order_by(KnowledgeDocument.created_at).with_for_update(skip_locked=True).limit(1))
             if row is None:
                 return None
+            if row.status == "needs_review":
+                row.approved = True
             row.status = "chunking" if row.approved else "extracting"
             row.lease_until = utcnow() + timedelta(seconds=LEASE_SECONDS)
             session.flush()
