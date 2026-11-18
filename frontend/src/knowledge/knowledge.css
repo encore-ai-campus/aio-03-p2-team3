@@ -4,11 +4,8 @@
 .knowledge-workspace h3 { font-size: 16px; margin-top: 24px; }
 .knowledge-workspace p { line-height: 1.7; }
 .knowledge-workspace .section-note { color: #566478; line-height: 1.7; }
-.knowledge-upload { margin-bottom: 24px; }
-.knowledge-upload input { padding: 14px 0; font-size: 15px; }
-.knowledge-upload li { margin: 8px 0; overflow-wrap: anywhere; }
-/* 문서함 v2: 목록은 documents.css의 doc- 패널을 쓰고, 상세는 아래에 이어 붙는다. */
-.knowledge-workspace .knowledge-detail, .knowledge-workspace .knowledge-empty { margin-top: 16px; }
+/* 문서함 v2: 업로드는 탭 줄 버튼(documents.css), 목록은 doc- 패널, 상세는 목록을 대체해 보여 준다. */
+.knowledge-workspace .knowledge-detail { margin-top: 4px; }
 .knowledge-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .knowledge-detail-head .btn { white-space: nowrap; }
 .knowledge-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
@@ -24,7 +21,6 @@
 .knowledge-workspace pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 14px; line-height: 1.8; background: #f7f8fa; padding: 14px; max-height: 450px; overflow: auto; }
 .knowledge-workspace summary { cursor: pointer; padding: 12px 0; font-size: 14px; }
 .knowledge-chunks { margin: 24px 0; border-top: 1px solid var(--line); }
-.knowledge-empty { color: #566478; }
 @media (max-width: 1200px) { .knowledge-compare { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 800px) { .knowledge-workspace .card { padding: 18px; } .knowledge-workspace textarea { font-size: 16px; min-height: 320px; } }
 

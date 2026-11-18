@@ -10,12 +10,24 @@
   --doc-pill-off-bg: #f1f2f4; --doc-pill-off-ink: #4c5563; }
 .doc-workspace .num { font-variant-numeric: tabular-nums }
 
-/* 탭 (밑줄 이동) */
-.doc-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 18px }
+/* 탭 줄 (밑줄 이동) + 오른쪽 끝 업로드 버튼 */
+.doc-tabbar { display: flex; align-items: stretch; gap: 14px; border-bottom: 1px solid var(--line); margin-bottom: 18px }
+.doc-tabs { display: flex; gap: 22px; flex: 1; min-width: 0 }
 .doc-tab { border: 0; background: none; padding: 9px 2px 11px; font-size: 14px; color: #606b7b;
   border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .18s, border-color .18s }
 .doc-tab:hover { color: var(--ink) }
 .doc-tab[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink) }
+.doc-upload-btn { margin: 6px 0 8px auto; border: 0; background: var(--blue); color: #fff; border-radius: 7px;
+  height: 32px; padding: 0 13px; font-size: 12.5px; font-weight: 650; white-space: nowrap;
+  transition: background .15s, transform .15s }
+.doc-upload-btn:not(:disabled):hover { background: var(--blue-ink, #2449d8); transform: translateY(-1px) }
+.doc-upload-btn:disabled { opacity: .55; cursor: default }
+.doc-upload-note { list-style: none; margin: 0 0 12px; padding: 0; font-size: 12.5px; color: var(--muted) }
+.doc-upload-note li { margin: 3px 0; overflow-wrap: anywhere }
+
+/* 문서 대조 화면으로 들어간 뒤 목록으로 돌아가기 */
+.doc-back { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 2px 0 12px; }
+.doc-back:hover { color: var(--ink) }
 
 /* 패널 전환 */
 .doc-panel { animation: doc-rise .35s cubic-bezier(.2,.7,.3,1) both }
@@ -87,7 +99,6 @@
 .doc-retry:hover { background: #fff5f5 }
 
 /* 문서함 패널 안 지식 문서(업로드 탭)의 안내 간격 */
-.doc-workspace .knowledge-upload { margin-bottom: 14px }
 .doc-workspace .knowledge-list-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px }
 .doc-workspace .knowledge-list-head h2 { margin: 0 }
 .doc-workspace .knowledge-list-head .doc-total { margin-left: auto }
