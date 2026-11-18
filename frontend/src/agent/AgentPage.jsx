@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useId, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { apiFetch, downloadFile } from "../api"
+import { apiFetch } from "../api"
 import { useAuth } from "../useAuth"
 import ReviewCard from "./ReviewCard"
+import DocCard, { FileButtons } from "./DocCard"
 import Markdown from "react-markdown"
 import remarkBreaks from "remark-breaks"
 import "./agent.css"
@@ -58,17 +59,13 @@ function CopyButton({ text }) {
 function MarkdownText({ text }) {
   return <Markdown remarkPlugins={[remarkBreaks]} components={{
     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
+    table: ({ children }) => <div className="table-scroll" tabIndex={0} role="region" aria-label="표 · 가로 스크롤"><table>{children}</table></div>,
     pre: ({ children }) => {
       const content = children?.props?.children
       const raw = Array.isArray(content) ? content.join("") : String(content ?? "")
       return <div className="codeblock"><CopyButton text={raw} /><pre>{children}</pre></div>
     },
   }}>{text}</Markdown>
-}
-
-function FileDownloads({ files, token, onError }) {
-  return files?.map(file => <button className="btn" key={file.id}
-    onClick={() => downloadFile(file, token).catch(error => onError(error.message))}>{file.filename} 다운로드</button>)
 }
 
 const KNOWLEDGE_STATUS = {
@@ -78,18 +75,37 @@ const KNOWLEDGE_STATUS = {
   no_evidence: "답변에 필요한 문서함 근거를 찾지 못했습니다.",
 }
 
+const FILE_ICON = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h4" /></svg>
+const QUOTE_ICON = <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10 7H6a3 3 0 0 0-3 3v4a3 3 0 0 0 3 3h2a1 1 0 0 0 1-1v-3H6v-3h4zm11 0h-4a3 3 0 0 0-3 3v4a3 3 0 0 0 3 3h2a1 1 0 0 0 1-1v-3h-3v-3h4z" /></svg>
+
 function KnowledgeResult({ data }) {
   return <>
     {KNOWLEDGE_STATUS[data.knowledge_status] && <p>{KNOWLEDGE_STATUS[data.knowledge_status]}</p>}
-    {data.knowledge_documents.map(document => <p key={document.document_id}>
-      <a href={document.url}>{document.filename} 열기</a>
-    </p>)}
-    {data.knowledge_clauses.map(clause => <article key={clause.clause_id}>
-      <a href={clause.url}>{clause.filename}</a>
-      <p>{clause.sources.map(source => source.source || `페이지 ${source.page}`).join(" · ")}</p>
-      <p className="agent-text">{clause.text}</p>
+    {data.knowledge_documents?.length > 0 && <div className="attach-row">{data.knowledge_documents.map(document =>
+      <a className="attach-chip" href={document.url} target="_blank" rel="noreferrer" key={document.document_id}>
+        {FILE_ICON}{document.filename}</a>)}</div>}
+    {data.knowledge_clauses?.map(clause => <article className="cite-card" key={clause.clause_id}>
+      <div className="cite-src">
+        <a className="file-chip" href={clause.url} target="_blank" rel="noreferrer">{FILE_ICON}{clause.filename}</a>
+        {clause.sources.map((source, index) => <span className="page-chip" key={index}>{source.source || `${source.page}p`}</span>)}
+      </div>
+      <p className="cite-text">{QUOTE_ICON}<span>{clause.text}</span></p>
     </article>)}
   </>
+}
+
+const FALLBACK_LABELS = { kind: "문서 종류", document_id: "문서 ID", status: "상태", revision: "버전", counterparty: "거래처",
+  updated_at: "마지막 수정", issued_on: "발급일", total: "합계", currency: "통화", run_id: "실행 ID",
+  end_reason: "종료 사유", needs_review: "확인 필요", candidate_id: "후보 ID" }
+
+function FallbackKV({ data }) {
+  const entries = Object.entries(data || {})
+  const simple = entries.length > 0 && entries.every(([, value]) => value === null || ["string", "number", "boolean"].includes(typeof value))
+  if (!simple) return <pre>{JSON.stringify(data, null, 2)}</pre>
+  return <dl className="kv">{entries.map(([key, value]) => <div className="kv-row" key={key}>
+    <dt>{FALLBACK_LABELS[key] || key}</dt>
+    <dd>{value === null ? "—" : typeof value === "boolean" ? (value ? "예" : "아니오") : String(value)}</dd>
+  </div>)}</dl>
 }
 
 function StepDetail({ item, token, onError }) {
@@ -99,22 +115,26 @@ function StepDetail({ item, token, onError }) {
     {item.data?.threads?.map(thread => <p key={thread.thread_id}><Link to={`/inbox?thread=${encodeURIComponent(thread.thread_id)}`}>{thread.subject}</Link> · {thread.from_addr}</p>)}
     {item.data?.messages?.map(message => <article key={message.gmail_message_id}><b>{message.subject}</b><p>{message.from_addr}</p>
       <p className="agent-text">{message.body_text}</p></article>)}
-    {item.data?.candidates?.map(candidate => candidate && <article key={candidate.id} className="agent-candidate"><b>#{candidate.id} {candidate.label}</b>
-      <p>{candidate.subject}</p><p className="agent-text">{candidate.body}</p></article>)}
+    {item.data?.candidates?.some(Boolean) && <div className="cand-list">{item.data.candidates.map(candidate => candidate &&
+      <article className="cand" key={candidate.id}>
+        <div className="cand-top"><span className="cand-no">#{candidate.id}</span><span className="cand-title">{candidate.label}</span></div>
+        {candidate.subject && <p className="cand-subject">{candidate.subject}</p>}
+        <p className="cand-preview">{candidate.body}</p>
+      </article>)}</div>}
     {item.data?.document_id && item.kind && <p><Link to={`/trade/${item.kind.toLowerCase()}/${item.data.document_id}`}>{item.kind} 문서 #{item.data.document_id} 열기</Link></p>}
     {item.data?.sent_message_id && <p role="status">메일을 보냈습니다.</p>}
-    <FileDownloads files={item.data?.files} token={token} onError={onError} />
+    {item.data?.files?.length > 0 && <div className="doc-files"><FileButtons files={item.data.files} token={token} onError={onError} /></div>}
     {issued?.length === 0 && <p>조건에 맞는 발급 문서가 없습니다.</p>}
-    {issued?.map(document => <article key={document.proposal_id}>
-      <b>{document.kind} {document.document_number}</b>
-      <p>{[document.counterparty, document.issued_on, `발급 버전 ${document.revision}`].filter(Boolean).join(" · ")}</p>
-      <FileDownloads files={document.files} token={token} onError={onError} />
-    </article>)}
+    {issued?.map(document => <DocCard key={document.proposal_id} chip={document.kind} chipClass={document.kind?.toLowerCase()}
+      number={document.document_number}
+      meta={[document.counterparty, document.issued_on && `${document.issued_on} 발급`, document.revision && `버전 ${document.revision}`].filter(Boolean).join(" · ")}
+      link={`/trade/${document.kind.toLowerCase()}/${document.document_id}`}
+      files={document.files} token={token} onError={onError} />)}
     {item.data?.knowledge_status && <KnowledgeResult data={item.data} />}
     {item.operation === "schema" && <p>문서 작성에 필요한 입력 조건을 확인했습니다.</p>}
     {!item.data?.threads && !item.data?.messages && !item.data?.candidates && !item.data?.files && !issued &&
       !item.data?.knowledge_status && item.operation !== "schema" &&
-      <pre>{JSON.stringify(item.data, null, 2)}</pre>}
+      <FallbackKV data={item.data} />}
   </>
 }
 

@@ -155,6 +155,16 @@ def complete_callback(request, pending, state, code, error):
     return _to_app(request, "connected")
 
 
+def calendar_access_token(session, access, stored: CalendarToken) -> str:
+    """CalendarToken의 접근 토큰. 만료가 가까우면 갱신해 같은 행에 저장한다.
+    상태 조회와 그래프 어댑터가 같은 갱신 로직을 쓴다(계획 2절)."""
+    if stored.expires_at - ACCESS_TOKEN_MARGIN <= utcnow():
+        fresh = access.google.refresh(access.cipher.decrypt(stored.refresh_token_enc))
+        stored.access_token_enc = access.cipher.encrypt(fresh.token)
+        stored.expires_at = fresh.expires_at
+    return access.cipher.decrypt(stored.access_token_enc)
+
+
 def calendar_status(request, user_id):
     """매 조회마다 공급자로 확인. 장애는 토큰을 보존하되 연결 성공으로 표시하지 않는다."""
     access = request.app.state.calendar_access
@@ -169,11 +179,8 @@ def calendar_status(request, user_id):
         try:
             if missing_calendar_scopes(stored.scopes):
                 raise CalendarDenied("stored_scope_missing")
-            if stored.expires_at - ACCESS_TOKEN_MARGIN <= utcnow():
-                fresh = access.google.refresh(access.cipher.decrypt(stored.refresh_token_enc))
-                stored.access_token_enc = access.cipher.encrypt(fresh.token)
-                stored.expires_at = fresh.expires_at
-            access.google.check_calendars(access.cipher.decrypt(stored.access_token_enc))
+            token = calendar_access_token(session, access, stored)
+            access.google.check_calendars(token)
         except (TokenExpired, InvalidToken, CalendarDenied):
             session.delete(stored)
             return {"connected": False}

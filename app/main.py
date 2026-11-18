@@ -29,6 +29,7 @@ from app.knowledge import router as knowledge_routes
 from app.knowledge.repository import SqlRepository
 from app.knowledge.schemas import KnowledgeError
 from app.knowledge.worker import IngestionWorker
+from app.graph.calendar.adapters import ExistingCalendar
 from app.graph.run import get_graph
 from app.graph import api as agent_api
 from app.graph.wiring import make_workflow
@@ -121,7 +122,8 @@ def create_app(settings: Settings | None = None, google=None,
             with checkpoints(database) as saver:
                 yield make_workflow(database=database, checkpointer=saver, access=app.state.google_access,
                     storage=app.state.storage, key_cipher=make_cipher(config), interactive=True, choose=agent_choose,
-                    knowledge_adapters=app.state.knowledge_adapters)
+                    knowledge_adapters=app.state.knowledge_adapters,
+                    calendar=ExistingCalendar(app.state.calendar_access))
 
         app.state.agent = AgentService(ConversationStore(database), agent_runtime)
         collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database)) if config.ai_runtime == "local" else None

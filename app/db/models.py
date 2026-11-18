@@ -88,6 +88,17 @@ class CalendarToken(Base, Updated):
     scopes: Mapped[list] = mapped_column(JSON_VALUE, default=list)
 
 
+class CalendarEventReceipt(Base, Created):
+    """calendar_event_receipts — 일정 등록 멱영수증(계획 2절). 같은 action의 재실행은 이 표로
+    같은 결과를 돌려주고 다른 content_hash는 거부한다. 이벤트 ID는 등록 때 결정적으로 정한다."""
+    __tablename__ = "calendar_event_receipts"
+    action_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(128))
+    calendar_id: Mapped[str] = mapped_column(String)
+    content_hash: Mapped[str] = mapped_column(String(64))
+
+
 class CalendarOAuthAttempt(Base):
     """서명 쿠키를 복원해도 재사용하지 못하는 일회성 서버 state·암호화 PKCE."""
     __tablename__ = "calendar_oauth_attempts"

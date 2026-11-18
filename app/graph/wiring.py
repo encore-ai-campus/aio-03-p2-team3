@@ -89,7 +89,8 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
             "반환된 문서함 링크로 파일을 안내한다. 후보가 여러 개면 이름을 보여주고 선택을 요청한다. "
             "내용 질문에는 query를 사용한다. 반환된 조항만 근거로 답하고 문서명과 페이지 또는 렌더 위치를 인용한다. "
             "조항이 질문을 뒷받침하지 않거나 검색이 실패하면 근거를 확인할 수 없다고 답한다. "
-            "일정 조회/등록은 아직 지원하지 않는다. 원문/후보/문서 전체를 답변에 반복하지 말고 결과를 요약한다. "
+            "일정은 find_slots로 후보를 찾아 사용자에게 보여주고, 사용자가 고른 시간만 create_event의 "
+            "selected_start로 등록을 제안한다. 원문/후보/문서 전체를 답변에 반복하지 말고 결과를 요약한다. "
             "사용자 설정/기억(현재 요청 우선): " + json.dumps(context.memory, ensure_ascii=False, default=str)))
         with user_openai(database, context.actor_id, cipher=key_cipher) as ai:
             if ai.issue is not None:
