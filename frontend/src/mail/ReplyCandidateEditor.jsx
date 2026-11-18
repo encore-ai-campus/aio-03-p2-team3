@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { apiFetch } from "../api"
 
 /** Candidate editing is persisted before the existing approval flow can send anything. */
 export default function ReplyCandidateEditor({ candidate, token, busy, onSaved, onError, onEditingChange }) {
@@ -14,7 +15,6 @@ export default function ReplyCandidateEditor({ candidate, token, busy, onSaved, 
     setSaving(true)
     try {
       // Use the same bearer client as the mailbox page; never send a message from the editor.
-      const { apiFetch } = await import("../api")
       await apiFetch(`/mail/candidates/${candidate.id}`, {
         token, method: "PUT", body: {
           subject, body, expected_subject: candidate.subject, expected_body: candidate.body,
