@@ -245,5 +245,30 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         page.emulate_media(reduced_motion="reduce")
         mail_results.evaluate("(element) => element.scrollIntoView({block: 'center'})")
         mail_results.screenshot(path=str(tmp_path / "agent-mail-results-mobile.png"), animations="disabled")
+        from app.db.models import Counterparty, PriceListItem
+        with app.state.database.session() as session:
+            session.add(Counterparty(user_id=owner, company_key="fictionalpha", legal_name="Fiction Alpha",
+                                     aliases=["알파"], contact="가상 담당자", email="alpha@example.invalid"))
+            session.add(PriceListItem(user_id=owner, item_name="V-Cera Serum", product_code="SC-110",
+                party_key="fictionalpha", role="sale", currency="USD", unit_price_text="12.50", unit="each"))
+        choices.calls.extend([
+            ("search_trade_prices", {"product": "SC-110", "counterparty": "알파", "role": "sale", "currency": "USD"}),
+            ("search_counterparties", {"query": "알파"}),
+            "등록 단가와 거래처 연락처를 확인했습니다.",
+        ])
+        page.get_by_label("업무 요청", exact=True).fill("알파의 SC-110 판매 단가와 담당자 이메일 알려줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(page.get_by_text("등록 단가와 거래처 연락처를 확인했습니다.")).to_be_visible(timeout=20000)
+        row.click()
+        page.get_by_role("button", name="등록 단가 조회 완료").click()
+        page.get_by_role("button", name="거래처 정보 조회 완료").click()
+        price_result = page.get_by_role("region", name="등록 단가 조회 결과")
+        contact_result = page.get_by_role("region", name="등록 거래처 조회 결과")
+        expect(price_result.get_by_text("USD 12.50", exact=False)).to_be_visible()
+        expect(price_result.get_by_text("Fiction Alpha", exact=True)).to_be_visible()
+        expect(contact_result.get_by_text("alpha@example.invalid", exact=True)).to_be_visible()
+        expect(contact_result.get_by_text("가상 담당자", exact=True)).to_be_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.screenshot(path=str(tmp_path / "agent-trade-directory-mobile.png"), full_page=True)
         assert not errors
         browser.close()

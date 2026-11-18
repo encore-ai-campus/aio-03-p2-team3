@@ -23,6 +23,7 @@ from app.prompts import Prompt
 from app.services.openai_keys import user_openai
 
 PLAN_PROMPT = Prompt("workflow_plan", "v1", """요청을 mail/documents/calendar 작업 계획으로 변환한다.
+등록 단가표는 documents: search_trade_prices(product, role, currency, counterparty), 거래처 카드는 search_counterparties(query).
 mail: search(query, field, received_from, received_before, reply_status, cursor), query/draft(thread_id), send(candidate_id, 발급 첨부가 있으면 file_ids). documents: get/draft/approve_packing/issue(kind=PI|PO|CI|PL,
 document_id/revision/values/text/formats). calendar: list_events(start/end만, 시간대 offset 포함) 또는 find_slots/create(start/end은 시간대 offset 포함,
 timezone, duration_minutes, calendar_ids, participants, title, selected_start).
@@ -89,6 +90,8 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
             "미답장은 앱에 수집된 발송 이력 기준이다. next_cursor가 있으면 결과가 더 있음을 알린다. "
             "메일 답장 후보는 사용자 선택이 필요하며 발송/문서 발급은 각각 화면 승인 뒤 실행된다. "
             "사용자 취소나 결과 unknown이면 재실행하지 않는다. 도구가 지원하지 않는 작업은 한계를 설명한다. "
+            "등록 단가표의 품목 판매가·매입가는 search_trade_prices, 등록 거래처의 전화·담당자·메일은 search_counterparties를 먼저 호출한다. "
+            "거래처별 가격과 공통 가격을 구분하고 원래 통화·단위를 인용한다. 복수 품목이나 거래처는 후보를 보여준다. "
             "문서함 업로드 파일은 search_knowledge_documents로 찾는다. 파일 열기에는 filename만 넣고 PI/PO/CI/PL 종류나 번호를 묻지 않는다. "
             "반환된 문서함 링크로 파일을 안내한다. 후보가 여러 개면 이름을 보여주고 선택을 요청한다. "
             "내용 질문에는 query를 사용한다. 반환된 조항만 근거로 답하고 문서명과 페이지 또는 렌더 위치를 인용한다. "

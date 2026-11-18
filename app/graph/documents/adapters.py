@@ -25,6 +25,8 @@ from app.trade.ci.rendering import render_ci_files
 from app.trade.pl import agent as pl_agent, operations as pl
 from app.trade.pl.models import PLInput, PackingDecision
 from app.trade.pl.repository import pl_repository
+from app.trade.settings import lookup
+from app.trade.settings.repository import counterparty_profiles, trade_price_rows
 
 IMPLEMENTATIONS = {
     "PI": (pi, PIInput, pi_repository, pi_agent.extract_pi, render_pi_files),
@@ -41,6 +43,16 @@ class ExistingDocuments:
 
     def schema(self, kind):
         return {"kind": kind, "input_schema": IMPLEMENTATIONS[kind][1].model_json_schema()}
+
+    def search_trade_prices(self, actor_id, command):
+        with self.database.session() as session:
+            prices = trade_price_rows(session, actor_id)
+            profiles = counterparty_profiles(session, actor_id)
+        return lookup.catalog_prices(**command.model_dump(), prices=prices, profiles=profiles)
+
+    def search_counterparties(self, actor_id, command):
+        with self.database.session() as session:
+            return lookup.contacts(command.query, counterparty_profiles(session, actor_id))
 
     def search_issued(self, actor_id, command):
         repository = SQLReviews(self.database, actor_id, command.kind)
