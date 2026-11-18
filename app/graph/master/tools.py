@@ -5,7 +5,9 @@ from copy import deepcopy
 from langchain_core.tools import tool
 from pydantic import AwareDatetime, Field
 
-from app.graph.documents.schemas import DocumentInput, DocumentKind, IssuedDocumentSearch, KnowledgeDocumentSearch
+from app.graph.documents.schemas import (
+    CounterpartySearch, DocumentInput, DocumentKind, IssuedDocumentSearch, KnowledgeDocumentSearch, TradePriceSearch,
+)
 
 from app.graph.mail.schemas import SearchInput
 
@@ -41,6 +43,23 @@ def prepare_reply(thread_id: str) -> dict:
 def get_document(kind: DocumentKind, document_id: Positive) -> dict:
     """본인의 PI/PO/CI/PL 문서와 현재 revision을 조회한다."""
     return task("documents", "get", kind=kind, document_id=document_id)
+
+
+@tool(args_schema=TradePriceSearch)
+def search_trade_prices(**inputs) -> dict:
+    """등록된 단가표의 품목 판매가·매입가를 확인한다. 계약서 검색이나 문서 작성과 별개다.
+    반환된 unit_price·currency·unit·price_basis를 그대로 쓴다. scope가 common이면 공통 단가라고 알린다.
+    거래처 후보가 여러 개면 선택받고, 품목 후보가 여러 개면 실제 SKU와 조건을 표시한다.
+    """
+    return task("documents", "search_trade_prices", **TradePriceSearch.model_validate(inputs).model_dump(mode="json"))
+
+
+@tool(args_schema=CounterpartySearch)
+def search_counterparties(**inputs) -> dict:
+    """등록된 거래처 카드에서 담당자·이메일·전화·주소를 확인한다. 이름·별칭·이메일을 검색한다.
+    여러 카드가 일치하면 후보를 보여주고 선택을 받는다. 빈 필드를 추측하지 않는다.
+    """
+    return task("documents", "search_counterparties", **CounterpartySearch.model_validate(inputs).model_dump(mode="json"))
 
 
 @tool(args_schema=IssuedDocumentSearch)
@@ -143,7 +162,7 @@ def ask_user(question: str) -> dict:
     return {"question": question}
 
 
-AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, search_trade_documents,
+AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, search_trade_documents, search_trade_prices, search_counterparties,
     search_knowledge_documents, document_schema,
     prepare_document, prepare_issue, prepare_packing, prepare_send,
     list_calendar_events, find_slots, create_event, ask_user)}

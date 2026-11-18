@@ -449,3 +449,59 @@ def test_mail_search_filters_body_date_and_sent_reply_before_paging(database):
     assert page_two["next_cursor"] is None
     with pytest.raises(ValueError, match="invalid_mail_search_window"):
         SearchInput(received_from=end, received_before=start)
+
+
+def test_registered_trade_directory_resolves_code_currency_and_party_scope(database):
+    from app.db.models import Counterparty, PriceListItem, User
+    from app.graph.documents.adapters import ExistingDocuments
+    from app.graph.documents.schemas import CounterpartySearch, TradePriceSearch
+    from app.graph.master.tools import AGENT_TOOLS
+
+    with database.session() as session:
+        other = User(email="other-dir@example.invalid", google_sub="other-dir")
+        session.add(other)
+        session.flush()
+        session.add_all([
+            Counterparty(user_id=1, company_key="fictionalpha", legal_name="Fiction Alpha",
+                         aliases=["알파", "공동 별칭"], email="alpha@example.invalid", phone="010-0000-0001"),
+            Counterparty(user_id=1, company_key="fictionbeta", legal_name="Fiction Beta",
+                         aliases=["공동 별칭"], email="beta@example.invalid"),
+            Counterparty(user_id=other.id, company_key="secret", legal_name="Private Other",
+                         aliases=["알파"], email="private@example.invalid"),
+        ])
+
+        def price(amount, *, party="", currency="USD", role="sale", code="SC-110",
+                  name="V-Cera Serum", owner=1):
+            session.add(PriceListItem(user_id=owner, item_name=name, product_code=code, party_key=party,
+                role=role, currency=currency, unit_price_text=amount, unit="each", price_basis="FOB"))
+
+        price("15.50")
+        price("12.50", party="fictionalpha")
+        price("11.00", party="fictionbeta")
+        price("1300", currency="KRW")
+        price("8.01", role="purchase")
+        price("27.00", currency="EUR", code="SC-111", name="SC110 misleading listing")
+        price("0.01", owner=other.id)
+
+    documents = ExistingDocuments(database=database)
+    task = AGENT_TOOLS["search_trade_prices"].invoke({
+        "product": "sc110", "currency": "usd", "role": "sale", "counterparty": "알파",
+    })
+    result = documents.search_trade_prices(1, TradePriceSearch.model_validate(task["inputs"]))
+    row, = result["prices"]
+    assert row["unit_price"] == "12.50" and row["currency"] == "USD"
+    assert row["scope"] == "counterparty" and row["counterparty"] == "Fiction Alpha"
+    assert row["unit"] == "each" and row["price_basis"] == "FOB"
+
+    def lookup(**overrides):
+        return documents.search_trade_prices(1, TradePriceSearch(
+            **{**task["inputs"], **overrides}))
+
+    assert lookup(currency="KRW")["prices"][0]["scope"] == "common"
+    assert lookup(role="purchase")["prices"][0]["unit_price"] == "8.01"
+    assert lookup(currency="EUR")["price_status"] == "not_found"
+    conflict = lookup(counterparty="공동 별칭")
+    assert conflict["price_status"] == "choose_counterparty" and conflict["prices"] == []
+    assert {card["legal_name"] for card in conflict["counterparties"]} == {"Fiction Alpha", "Fiction Beta"}
+    assert documents.search_counterparties(1, CounterpartySearch(query="알파"))["counterparties"][0]["email"] == "alpha@example.invalid"
+    assert documents.search_counterparties(1, CounterpartySearch(query="private@example.invalid"))["total"] == 0

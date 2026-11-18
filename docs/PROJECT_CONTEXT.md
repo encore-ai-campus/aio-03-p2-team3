@@ -42,7 +42,7 @@
 작업 등록(Issue) → 브랜치 → PR과 설명 → 검토·병합. 상태 객체·도구 스키마·그래프는 고치기 전에 관련 팀원과 조율한다. 이 레포의 구체적 규칙은 `AGENTS.md`에서 시작한다.
 
 ## 2. 서비스와 대표 입력·출력
-마지막 갱신: 2026-11-19 · 채팅 메일 검색 결과 화면
+마지막 갱신: 2026-11-19 · 등록 단가 및 거래처 정보 카드
 
 - PI·PO·PL·CI의 `최신 설정 정보 적용`은 공통 refresh-settings 경로에서 새 revision을 만들고 회사·계좌, 저장 이름이 일치하는 거래처 프로필, 최신 단가표 가격을 적용한다. 수기·확정 단가는 보존하고 기존 발급 파일은 유지한다. PI 연결 CI는 같은 PI 문서의 최신 승인 revision 거래 정보를 반영한다. 누락 입력은 팝업에서 바로 저장하며 PL 포장 행 오류도 해당 입력을 연다. 기능 검증은 별도 요청 전까지 보류한다.
 
@@ -65,6 +65,7 @@
 - 독립 문서 API `/api/trade/{pi|po|ci|pl}`는 직접 입력/AI 추출 → 수정 → 검토 → 승인·취소 → PDF/XLSX 발급을 제공한다. 이 승인은 Gmail을 발송하지 않는다. React 로그인·설정·PI에 이어 PO·CI·PL 화면을 구현했다. CI의 PI 목록은 본인 PI마다 최신 버전 한 건만 표시한다. PI 연결 CI의 서버 생성/추출은 선택 버전 승인 후에 가능하다. PI 없이 직접 작성하는 CI는 거래 정보와 선적 정보를 입력하고 기존 판매 단가표·단가 직접 확인 규칙으로 계산해 검토·발급한다. 브라우저에서 가상 데이터로 두 경로를 확인했으며 실제 운영 연결은 확인하지 않았다. PL은 합계 승인과 최종 발급 승인을 따로 수행한다(7절·[API 안내](trade-api.md)). 문서별 `agent.py`는 구조화 추출 함수이며 독립 StateGraph나 마스터 챗봇은 아니다.
 - 문서함(지식 문서) `/app/documents`·`/api/knowledge/documents`는 PDF/DOCX/XLSX/TXT/PNG/JPEG 업로드 → 전량 비전 전사 → 의심 원문 대조/수정·확정 → 조항 parent-child → 자식 임베딩/pgvector 저장을 제공한다. 원본은 기존 private Storage, 본문·부모·벡터는 기존 PostgreSQL이며 두 모델은 독립 주입/설정이다. 본인만 조회/처리하고 재처리 실패는 이전 성공 인덱스를 보존한다. 업무 도우미는 파일명으로 본인의 업로드 파일을 찾아 원본 링크를 안내하고, 내용 질문에는 게시된 조항 원문과 페이지 출처를 반환한다(계약 17.4·18절). 지식 문서 메뉴는 문서함으로 통합했고 `/app/knowledge`는 선택 문서 query/hash를 보존해 이동한다. 업로드 목록·원본 보기(기존 페이지 렌더러·전체 페이지 수 헤더·이전/다음 탐색)·다운로드는 추출 실패 때도 사용할 수 있다.
 - React 문서함은 탭 2개(생성된 문서·업로드된 문서)로 메타데이터 목록을 보여 준다(2026-11-18 개편). 생성된 문서 탭은 무역 4종 목록 API(`/api/trade/{pi|po|ci|pl}`)를 프런트에서 병렬 조합하며 `DocumentSummary`에 거래처(PI·CI·PL은 buyer, PO는 seller)와 등록일을 더했다. 행 클릭은 기존 `/app/trade/{kind}/{id}` 문서 화면으로 간다. 업로드된 문서 탭은 탭 줄 오른쪽 '문서 업로드' 버튼 하나로 올리고(형식·제약 안내는 버튼 결과 줄에) 형식·상태 알약·크기·날짜 목록표를 쓰며, 행 클릭 시 목록을 대체하는 원문 대조·확정 화면으로 들어간다 뒤로 가기로 목록에 돌아온다(대조·확정 플로우 무변경, 수동 새로고침 없음). 도메인 간 aggregation API는 만들지 않았다. 계획: `docs/plans/documents-ui/documents-v2.md`.
+- 채팅의 등록 단가 카드는 품목명·SKU·통화·단위·가격 기준과 적용 대상을 표시한다. 거래처 카드에는 본인 설정의 등록 이름과 연락처를 표시한다.
 - 채팅의 메일 검색 카드는 검색 위치·기간·답장 조건과 매칭된 본문 미리보기, 발신자, 받은 시각, 원문 링크를 표시한다. 앱에 수집된 발송 이력의 범위를 안내한다.
 - 업무 채팅의 `AssistantMarkdown`은 모델 답변의 일반 Markdown과 GFM 표를 렌더링한다. 답변 전체를 감싼 `md`·`markdown` 펜스는 문서로 펼치고, 코드 예제는 복사 가능한 코드 블록으로 유지한다. 표·코드는 내부에서 스크롤하고 원시 HTML과 외부 이미지를 로드하지 않는다. 후속 결과 카드의 표시 규약은 `docs/plans/chat-workflows.md` 1절에 있다.
 - React `/app/calendar` 일정 탭은 본인 주 캘린더 일정을 읽기 전용으로 월간 격자+선택 날짜 목록(종일 먼저·시작 순)으로 보여 준다. `GET /api/calendar/events`(Bearer, offset 포함 ISO start·end, 범위 ≤62일)가 일정 시각을 Google 원문 표기로 돌려주고 화면이 현지 시간대로 날짜 칸을 나눈다(종일 end는 배타적으로 계산). 같은 달은 캐시로 먼저 보여 주고 새로고침·월 이동 때 다시 받으며, 자정 넘김·여러 날 종일도 하루씩 펼친다. 미연결 사용자에게는 설정 연동 카드로 안내한다. 일정 등록·수정·삭제는 범위 밖이며 등록은 업무 도우미 대화 승인 경로를 쓴다.
@@ -87,11 +88,12 @@
 - 원문·확인 조건·직전 결과는 `save_pending`에서 저장한다. 장기 거래/문체 기억은 본인 승인·발송 성공 뒤 실제 수신자를 기준으로 저장한다. 기억 저장만 실패하면 발송 성공을 유지하고 자동 재발송하지 않는다.
 
 ## 4. 도구(API 연동) (공통 부분: 도구 스키마)
-마지막 갱신: 2026-11-19 · 메일 검색에 본문·수신 기간·실제 답장 여부 추가
+마지막 갱신: 2026-11-19 · 채팅에서 등록 단가표와 거래처 직접 조회
 
 - 업무 노드의 SQL/HTTP 경계는 `app/graph/mail/adapters.py`·`documents/adapters.py`·`calendar/adapters.py`다. 기존 서비스/문서 정책을 재사용한다. 발급의 실제 file_ids를 다음 메일에 연결하며 Storage bytes 해시와 MIME 첨부 일치를 검증한다. 원래 후보 claim·발송 1회 규칙을 유지한다. 일정은 설정에서 연결한 `calendar_tokens`를 `ExistingCalendar`가 실제 Google Calendar로 연결하며 `app/main.py`의 `agent_runtime`이 주입한다(미연결은 `calendar_not_connected`). 호출기 `CalendarClient`는 freebusy 조회·일정 등록·등록 확인 호출과 `check_calendars` 공용 오류 체계를 갖췄고, 등록 거부(400·409)는 `calendar_rejected` 확정 실패다(#245). 일정 탭과 채팅이 공유하는 읽기 전용 `list_events`(기간 내 일정 목록, 페이지네이션 상한 초과는 잘린 목록 대신 실패)는 `app/services/calendar.py`를 통해 `GET /api/calendar/events`와 채팅이 쓰며 토큰 갱신·실패 분류는 `calendar_access_token` 헬퍼와 연결 상태 조회 체계를 재사용한다(미연결 409·범위 검증 400). 등록은 결정적 이벤트 ID와 `calendar_event_receipts` 영수증으로 멱등을 지키고 타임아웃·5xx는 `unknown` 뒤 조회로 복구한다. 새 자연어 planner/repair는 기존 사용자 AI 호출 경계를 쓰며 PC v1에 없는 스키마는 서버 키 대체 없이 실패한다. 명시적 Plan은 planner를 호출하지 않는다. 상세: 계약 17절.
-- 대화형 업무 도구는 `master/tools.py`의 15개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다. `list_calendar_events`는 본인 주 캘린더의 제목과 시각을 읽으며 최대 30건과 전체 건수를 반환한다. `find_slots`는 지정한 캘린더의 빈 시간 후보를 찾고 `create_event`는 사용자가 고른 시간만 등록 제안한다.
+- 대화형 업무 도구는 `master/tools.py`의 17개 @tool이며 기존 사용자 키 Responses 모델에 바인딩한다. 문서 입력 스키마/기존 input을 조회해 보완하고 모델의 단가 강제 변경 승인은 막는다. 발송 후보는 사용자가 직접 선택한다. `search_trade_documents`는 본인의 승인 기록과 발급 파일로 범위를 제한하고 최근 10건의 링크를 반환한다. `search_knowledge_documents`는 기존 임베더와 pgvector에서 검색한 조항을 파일명·페이지 근거와 함께 반환한다. `list_calendar_events`는 본인 주 캘린더의 제목과 시각을 읽으며 최대 30건과 전체 건수를 반환한다. `find_slots`는 지정한 캘린더의 빈 시간 후보를 찾고 `create_event`는 사용자가 고른 시간만 등록 제안한다.
 - `search_mail`은 본인 앱에 수집된 수신 메일의 제목·발신자·본문, 수신 기간과 실제 답장 발송 여부로 검색한다. 받은 시각 이후 같은 스레드의 앱 발송 기록을 사용하며 초안은 발송으로 세지 않는다. 조건에 맞는 수신 메일을 스레드별로 묶고 최대 10건과 다음 커서를 반환한다. 기존 메일함의 검색 계약은 유지한다.
+- `search_trade_prices`와 `search_counterparties`는 본인 무역 설정의 등록 행을 읽는다. 거래처 이름·별칭을 대조하고 SKU가 알려졌으면 정확한 코드를 먼저 사용한다. 거래처 단가와 공통 단가를 표시하며 동명 후보와 미등록 결과를 구별한다.
 - 공통 AI 진입점은 `app/llm/client.py`의 `call_structured()`와 `app/services/openai_keys.py`의 `user_openai()`다. 메일·요약·성찰과 네 문서 추출이 같은 OpenAI 모델/구조화 출력을 쓴다. `stored_key`는 Fernet으로 암호화한 본인의 OpenAI 키를 읽고, `local`은 전용 루프백 프로세스의 환경 키, `local_worker`는 지정 소유자의 개인 파일 키를 사용한다. 키 누락·복호화 실패·PC 오류 때 다른 사용자/서버 환경 키로 대체하지 않는다(#127·#152·#159·#162).
 - 수신 전 `app/llm/mail_gate.py`는 같은 본인 키로 Decisions `gpt-6-luna`의 exclude/keep 한 질문을 호출한다. 명확한 무관 + confidence ≥ 0.95만 제외하고 애매함/회사 업무는 기존 그래프에 전달한다. 오류는 원문 보존 후 needs_review, local_worker는 미지원이다. no-reply/프로모션/소셜만으로 제외하지 않는다. 생성/분석 프롬프트는 기존 분기를 유지하며 analyze_email.v2로 회사 업무 전반을 다룬다.
 - 지식 문서 `DocumentExtractor`/`Embedder`는 위 구조화 호출로 가장하지 않고 OpenAI Responses 시각 입력/Embeddings API를 각각 감싼다. `UserKeyAccess`의 본인/실행 모드 검증은 재사용하며 미지원 local_worker·키 누락은 공용 키 대체 없이 실패한다. 비전 기본값은 현재 OpenAI 모델, 임베딩은 사용자 선택 text-embedding-3-small/1536이며 KNOWLEDGE_*로 따로 바꾼다. 비전 store=False·요청당 180초·SDK 재시도 최대 3회(최초 포함 4번), 임베딩은 기존 30초·재시도 0회이며 진행 시도 프로필 고정과 명시적 재처리를 적용한다. 업무 도우미의 내용 검색은 현재 호환 임베딩 프로필의 게시본을 읽는다.

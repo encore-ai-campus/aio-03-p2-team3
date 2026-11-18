@@ -7,6 +7,7 @@ import ReviewCard from "./ReviewCard"
 import DocCard, { FileButtons } from "./DocCard"
 import AssistantMarkdown from "./AssistantMarkdown"
 import MailSearchResult from "./MailSearchResult"
+import { CounterpartyResult, TradePriceResult } from "./TradeDirectoryResult"
 import "./agent.css"
 
 const STATUS = { running: "처리 중", needs_input: "답변 대기", needs_approval: "승인 대기", completed: "응답 완료",
@@ -22,7 +23,8 @@ Object.assign(ERRORS, { agent_model_network: "AI 연결이 끊겼습니다. 저�
   agent_model_internal: "AI 요청을 처리하지 못했습니다. 저장된 결과를 확인해 주세요." })
 const OPERATIONS = { search: "메일 검색", query: "원문 조회", draft: "초안 작성", get: "문서 조회", schema: "입력 조건 확인",
   issue: "파일 발급", approve_packing: "포장 합계 승인", send: "답장 발송", search_issued: "발급 문서 검색",
-  search_knowledge: "문서함 검색", list_events: "캘린더 일정 조회" }
+  search_knowledge: "문서함 검색", search_trade_prices: "등록 단가 조회",
+  search_counterparties: "거래처 정보 조회", list_events: "캘린더 일정 조회" }
 const OUTCOMES = { completed: "완료", failed: "실패", cancelled: "취소", needs_review: "확인 필요", unknown: "결과 확인 필요", blocked: "선행 작업 확인 필요" }
 const PROGRESS_STATUS = { running: "진행 중", completed: "완료", failed: "실패",
   review: "확인 필요", interrupted: "중단" }
@@ -84,6 +86,8 @@ function FallbackKV({ data }) {
 function StepDetail({ item, token, onError }) {
   const issued = item.data?.issued_documents
   const events = item.data?.events
+  const prices = item.data?.prices
+  const counterparties = item.data?.counterparties
   return <>
     {item.code && <p>{item.code}</p>}
     {Array.isArray(item.data?.threads) && <MailSearchResult data={item.data} />}
@@ -104,6 +108,7 @@ function StepDetail({ item, token, onError }) {
       meta={[document.counterparty, document.issued_on && `${document.issued_on} 발급`, document.revision && `버전 ${document.revision}`].filter(Boolean).join(" · ")}
       link={`/trade/${document.kind.toLowerCase()}/${document.document_id}`}
       files={document.files} token={token} onError={onError} />)}
+    {prices ? <TradePriceResult data={item.data} /> : counterparties && <CounterpartyResult data={item.data} />}
     {item.data?.knowledge_status && <KnowledgeResult data={item.data} />}
     {events?.length === 0 && <p>이 기간에 등록된 일정이 없습니다.</p>}
     {item.data?.total > events?.length && <p>전체 {item.data.total}건 중 {events.length}건을 표시합니다.</p>}
@@ -112,7 +117,7 @@ function StepDetail({ item, token, onError }) {
     </li>)}</ul>}
     {item.operation === "schema" && <p>문서 작성에 필요한 입력 조건을 확인했습니다.</p>}
     {!item.data?.threads && !item.data?.messages && !item.data?.candidates && !item.data?.files && !issued &&
-      !item.data?.knowledge_status && !events && item.operation !== "schema" &&
+      !item.data?.knowledge_status && !events && !prices && !counterparties && item.operation !== "schema" &&
       <FallbackKV data={item.data} />}
   </>
 }
