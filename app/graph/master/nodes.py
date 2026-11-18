@@ -6,6 +6,7 @@ from langgraph.types import interrupt
 from pydantic import ValidationError
 
 from app.graph.master.context import Dependencies, WorkContext, execution_grant
+from app.graph.master import agent
 from app.graph.schemas import (
     Answer, Approval, ExecutionResult, Plan, PreparedAction, Task, TaskResult,
     WorkResult, WorkflowError,
@@ -19,7 +20,8 @@ def current_task(state) -> Task:
 def work_context(state) -> WorkContext:
     return WorkContext(state["actor_id"], state["thread_id"],
                        state["rounds"].get(state["current"], 0),
-                       deepcopy(state["memory"]), deepcopy(state["results"]))
+                       {**deepcopy(state["memory"]), "agent_mode": state.get("agent_mode", False)},
+                       deepcopy(state["results"]))
 
 
 def safe_failure(error: Exception) -> WorkResult:
@@ -56,6 +58,10 @@ class MasterNodes:
             return {"error": safe_failure(error).code}
 
     def plan(self, state):
+        if state.get("agent_mode"):
+            if state["error"]:
+                return {"next": "finish"}
+            return agent.decide(state, self.dependencies.choose, work_context(state))
         if state["error"] or state["tasks"]:
             return {}
         try:
@@ -82,6 +88,10 @@ class MasterNodes:
             return {"error": safe_failure(error).code, "next": "finish"}
 
     def select_task(self, state):
+        if state.get("agent_mode"):
+            observed = agent.observe(state)
+            if observed is not None:
+                return observed
         results = deepcopy(state["results"])
         # 계획 순서와 무관하게 실패/취소/불명 의존성을 전파한다.
         while True:
@@ -113,6 +123,9 @@ class MasterNodes:
                 return {"current": task.id, "tasks": tasks, "results": results, "work": None,
                         "next": f"{task.domain}_prepare"}
         return {"results": results, "current": None, "next": "finish"}
+
+    def agent_question(self, state):
+        return agent.question(state)
 
     def prepare(self, state):
         task = current_task(state)

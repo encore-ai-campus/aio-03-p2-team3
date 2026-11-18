@@ -1,0 +1,20 @@
+.agent-layout { display:grid; grid-template-columns:minmax(180px,240px) minmax(0,1fr); gap:24px; align-items:start }
+.agent-layout > *, .agent-conversation > * { min-width:0 }
+.agent-history { padding:20px }
+.agent-history-item { display:flex; flex-direction:column; gap:4px; padding:12px 0; border-bottom:1px solid #e5e7eb; overflow-wrap:anywhere; color:inherit; text-decoration:none }
+.agent-history-item.active { color:#3155ed }
+.agent-history-item small { color:#687387 }
+.agent-conversation { display:flex; flex-direction:column; gap:16px }
+.agent-message.user { background:#f3f5ff }
+.agent-text { white-space:pre-wrap; overflow-wrap:anywhere }
+.agent-review { border:2px solid #3155ed; scroll-margin:100px }
+.agent-field { display:flex; flex-direction:column; gap:8px; margin:16px 0 }
+.agent-compose { display:flex; flex-direction:column; gap:12px }
+.agent-compose textarea, .agent-field textarea, .agent-field select { width:100%; box-sizing:border-box; padding:12px; border:1px solid #d6dce6; border-radius:8px; font:inherit; resize:vertical }
+.agent-compose .btn { align-self:flex-end }
+.agent-results details { padding:16px; border:1px solid #d6dce6; border-radius:10px; margin-bottom:12px; background:#fff }
+.agent-results summary { cursor:pointer; overflow-wrap:anywhere }
+.agent-results article { padding:12px 0; border-bottom:1px solid #e5e7eb }
+.agent-results a { overflow-wrap:anywhere }
+.agent-review pre, .agent-results pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:360px; overflow:auto; font-size:13px }
+@media(max-width:800px) { .agent-layout { grid-template-columns:1fr; gap:16px } .agent-history { max-height:180px; overflow:auto } }

@@ -17,6 +17,7 @@ from app.services.locks import user_lock
 from app.runlog.logger import log_event
 from app.trade.review.repository import SQLReviews
 from app.trade.common.models import DocumentError
+from app.db.mailbox import MailStore
 
 
 class _ApprovedGmail:
@@ -46,9 +47,14 @@ class _ApprovedGmail:
 
 
 class ExistingMail:
-    def __init__(self, *, database, access=None, storage=None):
+    def __init__(self, *, database, access=None, storage=None, key_cipher=None):
         self.database, self.access = database, access
         self.storage = storage
+        self.key_cipher = key_cipher
+
+    def search(self, actor_id, query, cursor=None):
+        data = MailStore(self.database).threads(actor_id, query=query, cursor=cursor, limit=10)
+        return {"threads": data["items"], "next_cursor": data["next_cursor"]}
 
     def thread(self, actor_id, thread_id):
         with self.database.session() as session:
@@ -57,7 +63,8 @@ class ExistingMail:
             ).order_by(ThreadMessage.sent_at, ThreadMessage.id)).all()
             if not rows:
                 raise WorkflowError("thread_not_found")
-            return {"messages": [{"gmail_message_id": row.gmail_message_id, "thread_id": row.thread_id,
+            return {"candidates": (MailStore(self.database).thread(actor_id, thread_id) or {}).get("candidates", []),
+                    "messages": [{"gmail_message_id": row.gmail_message_id, "thread_id": row.thread_id,
                                   "rfc_message_id": None, "from_addr": row.from_addr, "from_name": None,
                                   "to_addrs": row.to_addrs, "subject": row.subject, "body_text": row.body_text,
                                   "received_at": row.sent_at.isoformat(), "direction": row.direction} for row in rows]}
@@ -69,12 +76,13 @@ class ExistingMail:
         email = next((message for message in reversed(messages) if message["direction"] == "in"), None)
         if email is None:
             raise WorkflowError("inbound_message_required")
-        result = start_run(user_id=actor_id, email=email, database=self.database)
+        result = start_run(user_id=actor_id, email=email, database=self.database, key_cipher=self.key_cipher)
         with self.database.session() as session:
             ids = list(session.scalars(select(ReplyCandidate.id).where(
                 ReplyCandidate.user_id == actor_id, ReplyCandidate.run_id == result["run_id"],
             ).order_by(ReplyCandidate.id)))
-        return {"candidate_ids": ids, "run_id": result["run_id"], "end_reason": result["end_reason"],
+        return {"candidate_ids": ids, "candidates": [MailStore(self.database).candidate(actor_id, key) for key in ids],
+                "run_id": result["run_id"], "end_reason": result["end_reason"],
                 "needs_review": result["needs_review"]}
 
     def snapshot(self, actor_id, candidate_id, *, file_ids=None):
