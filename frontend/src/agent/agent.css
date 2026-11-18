@@ -1,20 +1,145 @@
-.agent-layout { display:grid; grid-template-columns:minmax(180px,240px) minmax(0,1fr); gap:24px; align-items:start }
-.agent-layout > *, .agent-conversation > * { min-width:0 }
-.agent-history { padding:20px }
-.agent-history-item { display:flex; flex-direction:column; gap:4px; padding:12px 0; border-bottom:1px solid #e5e7eb; overflow-wrap:anywhere; color:inherit; text-decoration:none }
-.agent-history-item.active { color:#3155ed }
-.agent-history-item small { color:#687387 }
-.agent-conversation { display:flex; flex-direction:column; gap:16px }
-.agent-message.user { background:#f3f5ff }
-.agent-text { white-space:pre-wrap; overflow-wrap:anywhere }
-.agent-review { border:2px solid #3155ed; scroll-margin:100px }
-.agent-field { display:flex; flex-direction:column; gap:8px; margin:16px 0 }
-.agent-compose { display:flex; flex-direction:column; gap:12px }
-.agent-compose textarea, .agent-field textarea, .agent-field select { width:100%; box-sizing:border-box; padding:12px; border:1px solid #d6dce6; border-radius:8px; font:inherit; resize:vertical }
-.agent-compose .btn { align-self:flex-end }
-.agent-results details { padding:16px; border:1px solid #d6dce6; border-radius:10px; margin-bottom:12px; background:#fff }
-.agent-results summary { cursor:pointer; overflow-wrap:anywhere }
-.agent-results article { padding:12px 0; border-bottom:1px solid #e5e7eb }
-.agent-results a { overflow-wrap:anywhere }
-.agent-review pre, .agent-results pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:360px; overflow:auto; font-size:13px }
-@media(max-width:800px) { .agent-layout { grid-template-columns:1fr; gap:16px } .agent-history { max-height:180px; overflow:auto } }
+/* 업무 도우미 채팅 개편: 문서형 대화·작업 타임라인·컴포저(docs/plans/agent-chat-ui/ 시안)
+   색은 styles.css의 토큰(--blue·--ink·--line·--muted 등)을 그대로 쓴다. */
+
+.agent-layout { display: grid; grid-template-columns: minmax(0, 1fr); position: relative; }
+.agent-layout > *, .agent-conversation > * { min-width: 0 }
+
+/* 상단 도구줄: 대화 목록(햄버거)·새 대화 */
+.chat-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 14px }
+.icon-btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #e0e4e9; background: #fff; border-radius: 9px; padding: 8px 12px; font-size: 11.5px; font-weight: 650; color: #4e5b6b; text-decoration: none; transition: background .18s cubic-bezier(.2,0,0,1), color .18s cubic-bezier(.2,0,0,1), transform .18s cubic-bezier(.2,0,0,1) }
+.icon-btn:hover { background: #f1f3f7 }
+.icon-btn:active { transform: scale(.96) }
+.icon-btn svg { width: 15px; height: 15px }
+.icon-btn[aria-expanded="true"] { background: #eef2ff; border-color: #d7defc; color: var(--blue) }
+
+/* 최근 대화 서랍: 기본 숨김, 열리면 왼쪽에서 슬라이드 */
+.history-backdrop { position: absolute; inset: 0; z-index: 10; border-radius: 12px; background: #1c24310d; opacity: 0; visibility: hidden; transition: opacity .24s cubic-bezier(.2,0,0,1), visibility .24s }
+.agent-history { position: absolute; top: 0; left: 0; z-index: 20; width: 268px; max-width: 84vw; max-height: calc(100vh - 180px); overflow: auto; padding: 18px; transform: translateX(-12px); opacity: 0; visibility: hidden; box-shadow: 0 12px 40px #26324824; transition: transform .24s cubic-bezier(.2,0,0,1), opacity .24s cubic-bezier(.2,0,0,1), visibility .24s }
+.agent-layout.history-open .history-backdrop { opacity: 1; visibility: visible }
+.agent-layout.history-open .agent-history { transform: none; opacity: 1; visibility: visible }
+.agent-history-item { display: flex; flex-direction: column; gap: 3px; padding: 11px 0; border-bottom: 1px solid #eef0f4; overflow-wrap: anywhere; color: inherit; text-decoration: none; border-radius: 6px }
+.agent-history-item span { font-size: 12px }
+.agent-history-item.active span { color: var(--blue); font-weight: 700 }
+.agent-history-item small { color: #687387; font-size: 10px; display: inline-flex; align-items: center; gap: 5px }
+.agent-history-item .dot { width: 6px; height: 6px; border-radius: 50%; background: #b6bdc9 }
+.agent-history-item .s-completed .dot { background: var(--green) }
+.agent-history-item .s-needs_input .dot, .agent-history-item .s-needs_approval .dot { background: #9a690d }
+.agent-history-item .s-running .dot { background: var(--blue); animation: agent-pulse 1.4s ease-in-out infinite }
+
+/* 대화 흐름 */
+.thread { display: flex; flex-direction: column; gap: 18px; padding: 6px 2px 10px }
+.agent-intro { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 22px; max-width: 680px; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
+.agent-intro p { font-size: 13px; margin: 8px 0 0 }
+
+/* 사용자 말풍선(우측)·어시스턴트 문서형(좌측) */
+.msg-user { align-self: flex-end; max-width: min(78%, 560px); background: #eef2ff; color: var(--ink); border-radius: 18px 18px 6px 18px; padding: 12px 16px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
+.msg-agent { max-width: 680px; line-height: 1.75; color: var(--ink); animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
+.thread > :nth-child(1) { animation-delay: 0ms }
+.thread > :nth-child(2) { animation-delay: 50ms }
+.thread > :nth-child(3) { animation-delay: 100ms }
+.msg-agent > :last-child { margin-bottom: 0 }
+.msg-agent p { margin: 0 0 10px; white-space: pre-wrap }
+.msg-agent ul, .msg-agent ol { margin: 0 0 10px; padding-left: 20px }
+.msg-agent li { margin: 4px 0 }
+.msg-agent h1, .msg-agent h2, .msg-agent h3 { font-size: 15px; margin: 16px 0 8px; letter-spacing: -.01em }
+.msg-agent code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86em; background: #f7f8fa; border-radius: 5px; padding: 2px 6px; color: #3a4666 }
+.codeblock { position: relative; background: #f7f8fa; border-radius: 10px; margin: 4px 0 12px; overflow: hidden; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
+.codeblock pre { margin: 0; padding: 14px 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: #39415c }
+.codeblock .copy { position: absolute; top: 8px; right: 8px; font-size: 11px; color: #687387; background: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; transition: background .18s cubic-bezier(.2,0,0,1) }
+.codeblock .copy:hover { background: #f1f3f7 }
+.agent-text { white-space: pre-wrap; overflow-wrap: anywhere }
+
+/* 작업 타임라인 */
+.work { max-width: 680px }
+.work-row { position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font-size: 12.5px; color: #5b6575; border-radius: 9px; padding: 9px 11px; transition: background .18s cubic-bezier(.2,0,0,1) }
+.work-row:hover { background: #f7f8fa }
+.work-row .chev { width: 14px; height: 14px; flex: none; color: #9aa2b1; transition: transform .24s cubic-bezier(.2,0,0,1) }
+.work.open .work-row .chev { transform: rotate(180deg) }
+.work-state { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; color: var(--ink) }
+.work.running .work-state { color: var(--blue) }
+.work-state.warn { color: #9a690d }
+.work-state .ok-ic { width: 15px; height: 15px; flex: none; color: var(--green) }
+.work-state.warn .ok-ic { color: #9a690d }
+.work:not(.running) .work-state .ok-ic { animation: agent-pop .45s cubic-bezier(.34,1.56,.64,1) both }
+.work-meta { color: #98a0ad; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.spinner { width: 14px; height: 14px; flex: none; color: var(--blue); animation: agent-spin 1s linear infinite }
+.work.running .work-row::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(100deg, transparent 32%, rgba(49,93,245,.09) 50%, transparent 68%); background-size: 220% 100%; animation: agent-sheen 1.6s cubic-bezier(.4,0,.2,1) infinite; pointer-events: none }
+.work-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .24s cubic-bezier(.2,0,0,1) }
+.work.open .work-body { grid-template-rows: 1fr }
+.work-body > div { overflow: hidden; min-height: 0 }
+.work-body ol { list-style: none; margin: 2px 0 0; padding: 0 0 0 4px; display: flex; flex-direction: column; gap: 2px }
+.step { animation: agent-rise .24s cubic-bezier(.2,0,0,1) both; transition: opacity .28s cubic-bezier(.2,0,0,1) }
+.work.open .step:nth-child(1) { animation-delay: 0ms }
+.work.open .step:nth-child(2) { animation-delay: 50ms }
+.work.open .step:nth-child(3) { animation-delay: 100ms }
+.work.open .step:nth-child(4) { animation-delay: 150ms }
+.work.open .step:nth-child(n+5) { animation-delay: 180ms }
+.step.dim { opacity: .55 }
+.step-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px; font-size: 12.5px; color: #5b6575; transition: background .18s cubic-bezier(.2,0,0,1) }
+.step-head:hover { background: #f7f8fa }
+.step-head .op-ic { width: 15px; height: 15px; flex: none; color: #8a93a3 }
+.step-head .step-name { color: var(--ink) }
+.step-head .step-outcome { margin-left: auto; font-size: 11px; color: #98a0ad; flex: none }
+.step-head .step-outcome.completed { color: var(--green) }
+.step-head .step-outcome.failed { color: #b02e3a }
+.step-head .step-outcome.needs_review, .step-head .step-outcome.blocked, .step-head .step-outcome.unknown { color: #9a690d }
+.step-head .chev { width: 13px; height: 13px; flex: none; color: #aab1bf; transition: transform .24s cubic-bezier(.2,0,0,1) }
+.step.open .step-head .chev { transform: rotate(180deg) }
+.step-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .24s cubic-bezier(.2,0,0,1) }
+.step.open .step-body { grid-template-rows: 1fr }
+.step-body > div { overflow: hidden; min-height: 0 }
+.step-detail { margin: 0 0 6px 25px; padding: 2px 14px; font-size: 12px; line-height: 1.7; color: #687387; border-left: 2px solid #eef0f4 }
+.step-detail b { color: var(--ink) }
+.step-detail p { margin: 4px 0 }
+.step-detail article { padding: 8px 0 }
+.step-detail a { overflow-wrap: anywhere }
+.step-detail .btn { font-size: 11px; padding: 7px 10px; margin: 4px 6px 0 0 }
+.step-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; font-size: 13px; background: #f7f8fa; border-radius: 8px; padding: 10px 12px; margin: 6px 0 }
+
+/* 승인·추가 입력 카드: 스프링 등장 */
+.agent-review { max-width: 680px; border: 1.5px solid var(--blue) !important; scroll-margin: 110px; animation: agent-rise-spring .32s cubic-bezier(.34,1.56,.64,1) both }
+.agent-review .agent-text { max-height: 300px; overflow: auto; background: #f7f8fa; border-radius: 9px; padding: 12px 14px; font-size: 12.5px; line-height: 1.7; color: #4c586b }
+.agent-field { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 }
+.agent-field textarea, .agent-field select { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #d6dce6; border-radius: 8px; font: inherit; resize: vertical; transition: border-color .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1) }
+.agent-field textarea:focus-visible, .agent-field select:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px #315df51f; outline: none }
+.agent-review pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; font-size: 13px }
+.agent-attach { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; background: #f7f8fa; font-size: 12.5px; overflow-wrap: anywhere }
+.agent-recover { max-width: 680px; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
+
+/* 진행 상태줄 */
+.runline { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #98a0ad; padding: 4px 4px 0; min-height: 22px; margin: 0 }
+.runline.on { color: var(--blue); animation: agent-pulse 1.6s ease-in-out infinite }
+
+/* 컴포저 */
+.agent-compose { position: sticky; bottom: 12px; margin-top: 6px; display: flex; align-items: flex-end; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 16px; box-shadow: 0 8px 28px #26324812; transition: border-color .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1), transform .18s cubic-bezier(.2,0,0,1) }
+.agent-compose:focus-within { border-color: #b9c6ff; box-shadow: 0 8px 28px #26324812, 0 0 0 3px #315df51f; transform: translateY(-1px) }
+.agent-compose textarea { flex: 1; border: 0; resize: none; outline: none; font: inherit; font-size: 13.5px; line-height: 1.6; padding: 10px 0; background: transparent; color: var(--ink) }
+.agent-compose textarea::placeholder { color: #9aa2b1 }
+.agent-compose .btn.blue { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 10px 16px; flex: none; transition: background .18s cubic-bezier(.2,0,0,1), transform .18s cubic-bezier(.2,0,0,1) }
+.agent-compose .btn.blue svg { width: 14px; height: 14px }
+.agent-compose .btn.blue:active { transform: scale(.95) }
+.agent-conversation .btn { transition: background .18s cubic-bezier(.2,0,0,1), transform .18s cubic-bezier(.2,0,0,1) }
+.agent-conversation .btn:active { transform: scale(.97) }
+
+/* 모션 */
+@keyframes agent-rise { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: none } }
+@keyframes agent-rise-spring { from { opacity: 0; transform: translateY(20px) scale(.985) } to { opacity: 1; transform: none } }
+@keyframes agent-pop { 0% { transform: scale(.4); opacity: 0 } 60% { transform: scale(1.2) } 100% { transform: scale(1); opacity: 1 } }
+@keyframes agent-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+@keyframes agent-spin { to { transform: rotate(360deg) } }
+@keyframes agent-sheen { 0% { background-position: 200% 0 } 100% { background-position: -120% 0 } }
+
+/* 모션 최소화 설정 */
+@media (prefers-reduced-motion: reduce) {
+  .agent-layout *, .agent-layout *::before, .agent-layout *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important }
+}
+
+/* 모바일: 서랍 폭·컴포저 위치(하단 탐색 위) */
+@media(max-width:800px) {
+  .agent-layout { gap: 0 }
+  .agent-history { max-height: 60vh; width: min(300px, 88vw) }
+  .msg-user { max-width: 92% }
+  .work, .msg-agent, .agent-review, .agent-recover, .agent-intro { max-width: none }
+  .agent-compose { position: sticky; bottom: calc(var(--mobile-nav-height, 0px) + 10px) }
+  .page-head { margin-bottom: 14px }
+}

@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ko" data-zcode-design>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>업무 도우미 채팅 개편 시안</title>
+<style>
+/* ===== 토큰 (실제 앱 styles.css 토큰 + 채팅 개편 추가분) ===== */
+:root{
+  --ink:#1c2431; --muted:#7e8795; --line:#e8ebef; --blue:#315df5; --blue-ink:#284ee8;
+  --green:#168052; --amber:#9a690d; --red:#b02e3a; --card:#fff;
+  --panel:#f7f8fa;            /* 채팅 톤 단계 패널 */
+  --bubble:#eef2ff;           /* 사용자 말풍선(브랜드 블루 틴트) */
+  --muted-2:#9aa2b1; --hover:#f1f3f7; --hairline:#eef0f4;
+  --shadow-1:#26324812; --shadow-2:#26324824; --ring:#315df51f; --focus-blue:#b9c6ff;
+  --radius-lg:16px; --radius-md:12px; --radius-sm:8px;
+  --ease:cubic-bezier(.2,0,0,1);
+  --t-fast:180ms; --t:240ms; --t-slow:280ms;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink);background:#f5f6f8;font-size:14px;min-height:100vh}
+button{cursor:pointer;font:inherit;border:0;background:none;color:inherit;padding:0}
+button:disabled{cursor:not-allowed;opacity:.55}
+a{color:var(--blue)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.card{border:1px solid var(--line);border-radius:12px;background:#fff;padding:15px}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* ===== 목업 컨트롤 바 (제품 아님, 발표용) ===== */
+.mock-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#fff;border-bottom:1px dashed #c9cfda;font-size:12px;color:#5b6575}
+.mock-bar strong{font-size:12px;color:var(--ink)}
+.mock-bar .chip{border:1px solid #d6dce6;border-radius:999px;padding:6px 13px;background:#fff;color:#5b6575;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.mock-bar .chip:hover{background:var(--hover)}
+.mock-bar .chip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.mock-bar .note{color:#98a0ad}
+
+/* ===== 앱 셸 (기존 앱 그대로: 사이드바·상단바) ===== */
+.shell{max-width:1280px;min-height:calc(100vh - 45px);margin:auto;background:#fff;display:grid;grid-template-columns:218px minmax(0,1fr);box-shadow:0 0 50px #2632480c}
+.side{border-right:1px solid var(--line);padding:23px 14px;position:relative}
+.logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:750;color:var(--ink);padding:0 9px 23px}
+.logo-mark{display:grid;place-items:center;width:31px;height:31px;border-radius:10px;background:var(--blue);color:#fff;font-size:15px;font-weight:700}
+.nav-label{font-size:9px;letter-spacing:.12em;color:#a0a8b3;font-weight:750;padding:13px 10px 7px}
+.nav{width:100%;display:flex;align-items:center;gap:11px;border-radius:9px;padding:10px 11px;text-align:left;font-size:12px;color:#606b7b;margin:2px 0}
+.nav svg{width:16px;height:16px;flex:none}
+.nav.active{background:#eef2ff;color:var(--blue-ink);font-weight:700}
+.side-user{position:absolute;left:16px;right:16px;bottom:18px;border-top:1px solid var(--line);padding:14px 4px 0;display:flex;align-items:center;gap:9px;font-size:10px;color:#667181}
+.avatar{height:29px;width:29px;border-radius:50%;display:grid;place-items:center;background:#e9edf7;color:#425477;font-weight:700;font-size:11px}
+.shell-main{min-width:0;display:flex;flex-direction:column;min-height:calc(100vh - 45px)}
+.top{height:61px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 27px}
+.crumb{font-size:11px;color:var(--muted)}
+.top-actions{display:flex;align-items:center;gap:13px;color:#677384;font-size:10px}
+.content{padding:26px 29px 36px;flex:1;min-width:0}
+
+/* ===== 채팅 개편: 페이지 머리 ===== */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:18px;gap:12px}
+.page-title{font-size:21px;letter-spacing:-.035em;margin:0}
+.page-sub{font-size:11px;color:var(--muted);margin:6px 0 0}
+.link-button{color:#738091;font-size:10px;display:inline-flex;align-items:center;gap:5px;padding:8px 10px;border-radius:8px;border:1px solid #e0e4e9;background:#fff;transition:background var(--t-fast) var(--ease)}
+.link-button:hover{background:var(--hover)}
+
+/* ===== 채팅 레이아웃: 대화 영역이 전체 폭, 목록은 햄버거 서랍 ===== */
+.agent-layout{display:grid;grid-template-columns:minmax(0,1fr);position:relative}
+.chat-bar{display:flex;align-items:center;gap:6px;margin-bottom:14px}
+.icon-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid #e0e4e9;background:#fff;border-radius:8px;padding:8px 12px;font-size:11.5px;font-weight:650;color:#4e5b6b;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.icon-btn:hover{background:var(--hover)}
+.icon-btn:active{transform:scale(.97)}
+.icon-btn svg{width:15px;height:15px}
+.icon-btn[aria-expanded="true"]{background:#eef2ff;border-color:#d7defc;color:var(--blue-ink)}
+.history-drawer{position:absolute;top:0;left:0;z-index:20;width:268px;max-width:84vw;max-height:calc(100vh - 160px);overflow:auto;transform:translateX(-10px);opacity:0;visibility:hidden;box-shadow:0 12px 40px var(--shadow-2);transition:transform var(--t) var(--ease),opacity var(--t) var(--ease),visibility var(--t) var(--ease)}
+.agent-layout[data-history="open"] .history-drawer{transform:none;opacity:1;visibility:visible}
+.history-backdrop{position:absolute;inset:0;z-index:10;background:#1c24310d;border-radius:12px;opacity:0;visibility:hidden;transition:opacity var(--t) var(--ease),visibility var(--t) var(--ease)}
+.agent-layout[data-history="open"] .history-backdrop{opacity:1;visibility:visible}
+.agent-history{padding:18px}
+.agent-history h2{font-size:12px;font-weight:750;margin:0 0 6px}
+.agent-history-item{display:flex;flex-direction:column;gap:3px;padding:11px 0;border-bottom:1px solid #eef0f4;overflow-wrap:anywhere;color:inherit;text-decoration:none;border-radius:6px}
+.agent-history-item span{font-size:12px}
+.agent-history-item small{color:#687387;font-size:10px;display:inline-flex;align-items:center;gap:5px}
+.agent-history-item small .dot{width:6px;height:6px;border-radius:50%;background:#b6bdc9}
+.agent-history-item small.ok .dot{background:var(--green)}
+.agent-history-item small.wait .dot{background:var(--amber)}
+.agent-history-item small.run .dot{background:var(--blue);animation:pulse-dot 1.4s ease-in-out infinite}
+.agent-history-item.active span{color:var(--blue-ink);font-weight:700}
+
+/* 대화 컬럼: 문서형 중앙 폭 */
+.agent-conversation{display:flex;flex-direction:column;gap:0;min-width:0}
+.thread{display:flex;flex-direction:column;gap:22px;padding:6px 2px 10px}
+
+/* 턴 묶음: 한 요청 = 사용자 말풍선 + 작업 타임라인 + 답변 */
+.turn{display:flex;flex-direction:column;gap:14px}
+.turn.resolved{gap:18px}
+
+/* 사용자 말풍선: 우측 정렬, 브랜드 틴트, 이름 라벨 없음 */
+.msg-user{align-self:flex-end;max-width:min(78%,560px);background:var(--bubble);color:var(--ink);border-radius:18px 18px 6px 18px;padding:12px 16px;line-height:1.6;overflow-wrap:anywhere}
+
+/* 어시스턴트 답변: 말풍선 없는 문서형 + 마크다운 */
+.msg-agent{max-width:680px;line-height:1.75;color:var(--ink)}
+.msg-agent h3{font-size:15px;margin:18px 0 8px;letter-spacing:-.01em}
+.msg-agent h3:first-child{margin-top:0}
+.msg-agent p{margin:0 0 10px}
+.msg-agent ul,.msg-agent ol{margin:0 0 10px;padding-left:20px}
+.msg-agent li{margin:4px 0}
+.msg-agent code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86em;background:var(--panel);border-radius:5px;padding:2px 6px;color:#3a4666}
+.codeblock{position:relative;background:var(--panel);border-radius:10px;margin:4px 0 12px;overflow:hidden}
+.codeblock pre{margin:0;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;color:#39415c}
+.codeblock .copy{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#687387;background:#fff;border:1px solid var(--line);border-radius:7px;padding:5px 9px;transition:background var(--t-fast) var(--ease)}
+.codeblock .copy:hover{background:var(--hover)}
+.codeblock .copy svg{width:12px;height:12px}
+.msg-agent .msg-actions{display:flex;gap:6px;margin-top:2px}
+.msg-actions button{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#8a93a3;border-radius:7px;padding:6px 8px;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.msg-actions button:hover{background:var(--panel);color:var(--ink)}
+.msg-actions svg{width:13px;height:13px}
+
+/* ===== 작업 타임라인 (Codex식 연출의 핵심) ===== */
+.work{max-width:680px}
+.work-row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font-size:12.5px;color:#5b6575;border-radius:9px;padding:9px 11px;transition:background var(--t-fast) var(--ease)}
+.work-row:hover{background:var(--panel)}
+.work-row .chev{width:14px;height:14px;flex:none;color:var(--muted-2);transition:transform var(--t) var(--ease)}
+.work[data-open] .work-row .chev{transform:rotate(180deg)}
+.work-row .st{display:inline-flex;align-items:center;gap:6px;font-weight:650;color:var(--ink)}
+.work-row .st svg{width:15px;height:15px;flex:none}
+.work-row .meta{color:#98a0ad;font-size:11.5px}
+.work-row .spinner{width:14px;height:14px;flex:none;color:var(--blue);animation:spin 1s linear infinite}
+.work-row.running .st{color:var(--blue-ink)}
+.work-row .ok-ic{color:var(--green)}
+.work-row .warn-ic{color:var(--amber)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* 타임라인 본문: grid-rows 높이 전환 */
+.work-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--t) var(--ease)}
+.work[data-open] .work-body{grid-template-rows:1fr}
+.work-body>div{overflow:hidden;min-height:0}
+.work-body ol{list-style:none;margin:2px 0 0;padding:0 0 0 4px;display:flex;flex-direction:column;gap:2px}
+/* 단계 행: 접힌 한 줄. 오래된 단계는 dim, 최근 단계는 선명 */
+.step{border:0;text-align:left;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;font-size:12.5px;color:#5b6575;transition:opacity var(--t-slow) var(--ease),background var(--t-fast) var(--ease)}
+.step:hover{background:var(--panel)}
+.step.dim{opacity:.5}
+.step .st-ic{width:15px;height:15px;flex:none;color:#8a93a3}
+.step .outcome{margin-left:auto;font-size:11px;color:#98a0ad;flex:none;display:inline-flex;align-items:center;gap:5px}
+.step .outcome.ok{color:var(--green)}
+.step .outcome.bad{color:var(--red)}
+.step .outcome svg{width:12px;height:12px}
+.step .chev{width:13px;height:13px;flex:none;color:#aab1bf;transition:transform var(--t) var(--ease)}
+.step[data-open]>.chev{transform:rotate(180deg)}
+.step-live{margin-left:auto;font-size:11px;color:var(--blue-ink);display:inline-flex;align-items:center;gap:6px;flex:none}
+.step-live .spinner{width:12px;height:12px;animation:spin 1s linear infinite;color:var(--blue)}
+.step-live .dots::after{content:"…";animation:pulse-dot 1.4s ease-in-out infinite}
+/* 단계 상세 */
+.step-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--t) var(--ease);flex:1 1 100%;min-width:0}
+.step-body>div{overflow:hidden;min-height:0}
+.step[data-open] .step-body{grid-template-rows:1fr}
+.step-detail{overflow:hidden;min-height:0;margin:0 0 4px 25px;padding:0 14px;font-size:12px;line-height:1.7;color:#687387;border-left:2px solid #eef0f4}
+.step-detail b{color:var(--ink)}
+.step-detail a{font-size:12px}
+.step-detail .kv{display:grid;grid-template-columns:76px minmax(0,1fr);gap:4px 10px;margin:6px 0}
+.step-detail .kv dt{color:#98a0ad}
+.step-detail .kv dd{margin:0;overflow-wrap:anywhere}
+.step{flex-wrap:wrap}
+
+/* 진행 중 상태줄(컴포저 위) */
+.runline{display:none;align-items:center;gap:8px;font-size:12px;color:var(--blue-ink);padding:2px 4px}
+.runline .spinner{width:13px;height:13px;animation:spin 1s linear infinite;color:var(--blue)}
+.agent-conversation[data-state="running"] .runline{display:inline-flex}
+
+/* ===== 승인 카드 ===== */
+.review{max-width:680px;background:#fff;border:1.5px solid var(--blue);border-radius:var(--radius-md);padding:18px 20px;box-shadow:0 6px 22px #315df514;animation:rise var(--t-slow) var(--ease);scroll-margin:110px}
+.review h3{margin:0 0 4px;font-size:13.5px}
+.review .sub{font-size:11.5px;color:var(--muted);margin:0 0 12px}
+.review .kv{display:grid;grid-template-columns:82px minmax(0,1fr);gap:6px 12px;font-size:12.5px;margin:0 0 12px}
+.review .kv dt{color:var(--muted)}
+.review .kv dd{margin:0;overflow-wrap:anywhere}
+.review .preview{background:var(--panel);border-radius:9px;padding:12px 14px;font-size:12.5px;line-height:1.7;color:#4c586b;margin:0 0 10px;white-space:pre-wrap;max-height:300px;overflow:auto}
+.review .attach{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:12.5px;margin:0 0 6px;background:var(--panel);overflow-wrap:anywhere}
+.review .attach svg{width:16px;height:16px;color:#687387;flex:none}
+.review .attach .size{color:var(--muted);font-size:11px;flex:none}
+.review .attach a{margin-left:auto;font-size:11.5px;flex:none}
+.review .attach-note{font-size:11.5px;color:var(--muted);margin:0 0 14px}
+.review-actions{display:flex;justify-content:flex-end;gap:8px}
+.btn{border:1px solid #e0e4e9;background:#fff;color:#4e5b6b;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:650;display:inline-flex;align-items:center;gap:6px;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.btn:hover{background:var(--hover)}
+.btn:active{transform:scale(.97)}
+.btn.blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.blue:hover{background:var(--blue-ink)}
+
+/* ===== 컴포저 ===== */
+.agent-compose{position:sticky;bottom:12px;margin-top:6px;background:#fff;border:1px solid var(--line);border-radius:var(--radius-lg);padding:10px 12px 10px 16px;display:flex;align-items:flex-end;gap:12px;box-shadow:0 8px 28px var(--shadow-1);transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.agent-compose:focus-within{border-color:var(--focus-blue);box-shadow:0 8px 28px var(--shadow-1),0 0 0 3px var(--ring)}
+.agent-compose textarea{flex:1;border:0;resize:none;outline:none;font:inherit;font-size:13.5px;line-height:1.6;max-height:140px;padding:8px 0;background:transparent;color:var(--ink)}
+.agent-compose textarea::placeholder{color:var(--muted-2)}
+.send{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--blue);color:#fff;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease)}
+.send svg{width:17px;height:17px}
+.send:hover{background:var(--blue-ink)}
+.send:active{transform:scale(.94)}
+.agent-conversation[data-state="running"] .send{background:var(--panel);color:var(--muted-2);pointer-events:none}
+.compose-hint{font-size:10.5px;color:#a6adba;margin:8px 2px 0}
+
+/* ===== 등장 모션 ===== */
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.enter{animation:rise var(--t) var(--ease) both}
+.stagger>*{animation:rise var(--t) var(--ease) both}
+.stagger>*:nth-child(1){animation-delay:0ms}
+.stagger>*:nth-child(2){animation-delay:60ms}
+.stagger>*:nth-child(3){animation-delay:120ms}
+.stagger>*:nth-child(4){animation-delay:180ms}
+
+/* 완료로 수축할 때 타임라인 접힘은 [data-open] 제거로 처리(스크립트) */
+
+/* ===== 모션 끔 ===== */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+html.no-motion *,html.no-motion *::before,html.no-motion *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+
+/* ===== 모바일 (기존 앱 800px 전환과 동일 발상) ===== */
+@media(max-width:880px){
+  .shell{display:block}
+  .side,.top{display:none}
+  .mock-bar{padding:8px 16px}
+  .content{padding:18px 16px 24px}
+  .agent-layout{grid-template-columns:1fr}
+  .history-drawer{max-height:60vh}
+  .msg-user{max-width:92%}
+  .work,.msg-agent,.review{max-width:none}
+  .page-head{align-items:flex-start;flex-direction:column;gap:8px}
+}
+</style>
+</head>
+<body>
+<!-- 목업 컨트롤 (발표용, 실제 화면엔 없음) -->
+<div class="mock-bar" role="toolbar" aria-label="시안 컨트롤">
+  <strong>업무 도우미 채팅 개편 시안</strong>
+  <button class="chip" id="replay" type="button"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5v14l12-7z"/></svg>처음부터 재생</button>
+  <span aria-hidden="true" style="width:1px;height:16px;background:#dfe3ea"></span>
+  <button class="chip state-chip" type="button" data-state="running" aria-pressed="false">진행 중</button>
+  <button class="chip state-chip" type="button" data-state="waiting" aria-pressed="true">승인 대기</button>
+  <button class="chip state-chip" type="button" data-state="done" aria-pressed="false">완료</button>
+  <span aria-hidden="true" style="width:1px;height:16px;background:#dfe3ea"></span>
+  <button class="chip" id="motion-toggle" type="button" aria-pressed="false">모션 끔</button>
+  <span class="note">위 칩은 목업용 (실제 화면에 없음) · 타임라인·단계는 클릭으로 펼침 · 대화 목록은 왼쪽 햄버거</span>
+</div>
+
+<div class="shell">
+  <!-- 기존 앱 사이드바(그대로) -->
+  <aside class="side">
+    <div class="logo"><span class="logo-mark" aria-hidden="true">T</span>TradeMate</div>
+    <div class="nav-label">작업</div>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>문서작성</button>
+    <button class="nav active" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l2.5-2.5A8 8 0 1 1 21 12z"/></svg>업무 도우미</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l4-6 4 3 5-8 3 4"/><path d="M4 21h16"/></svg>작업현황</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>받은 메일</button>
+    <div class="nav-label">관리</div>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>문서함</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>실행 기록</button>
+    <button class="nav" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6A7 7 0 0 0 19 12z"/></svg>설정</button>
+    <div class="side-user"><span class="avatar" aria-hidden="true">정</span>정원철 님</div>
+  </aside>
+
+  <div class="shell-main">
+    <header class="top"><span class="crumb">작업 · 업무 도우미</span><span class="top-actions">대화 #48</span></header>
+    <main class="content">
+      <div class="page-head">
+        <div><h1 class="page-title">업무 도우미</h1><p class="page-sub">메일과 문서 작업을 요청하고, 실행할 내용을 확인하세요.</p></div>
+      </div>
+
+      <div class="agent-layout" id="agent-layout">
+        <!-- 최근 대화: 햄버거로 여는 서랍 -->
+        <div class="history-backdrop" id="history-backdrop"></div>
+        <aside class="card agent-history history-drawer" id="history-drawer" aria-label="최근 대화">
+          <h2>최근 대화</h2>
+          <a class="agent-history-item active" href="#"><span>부산 K&S 견적 요청 답장</span><small class="ok"><i class="dot"></i>응답 완료</small></a>
+          <a class="agent-history-item" href="#"><span>FI 오더 PI 초안 작성</span><small class="wait"><i class="dot"></i>승인 대기</small></a>
+          <a class="agent-history-item" href="#"><span>이번 주 수출 문서 정리</span><small class="run"><i class="dot"></i>처리 중</small></a>
+          <a class="agent-history-item" href="#"><span>새 거래처 문의 분류</span><small><i class="dot"></i>확인 필요</small></a>
+        </aside>
+
+        <!-- 개편되는 대화 영역 -->
+        <section class="agent-conversation" id="conversation" data-state="waiting" aria-label="업무 대화">
+          <div class="chat-bar">
+            <button class="icon-btn" id="history-toggle" type="button" aria-expanded="false" aria-controls="history-drawer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>대화 목록
+            </button>
+            <button class="icon-btn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>새 대화
+            </button>
+          </div>
+          <div class="thread">
+
+            <!-- 과거 턴: 접힌 타임라인 + 문서형 답변 -->
+            <div class="turn resolved">
+              <div class="msg-user">지난주에 작성한 PI 문서 다시 발급해 줘. 수정 없이 그대로.</div>
+              <div class="work">
+                <button class="work-row" type="button" aria-expanded="false" aria-controls="work-old">
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                  <span class="st"><svg class="ok-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>업무 완료 · 2단계</span>
+                  <span class="meta">문서 조회 · 파일 발급 · 5초</span>
+                </button>
+                <div class="work-body" id="work-old"><div><ol>
+                  <li class="step">
+                    <svg class="st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>
+                    <span>문서 조회</span><span class="outcome ok">완료</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    <div class="step-body"><div><dl class="step-detail"><div class="kv"><dt>문서</dt><dd>PI #8 · 버전 3 (최신)</dd><dt>내용</dt><dd>KE KOREA · SUPERLIGHT2 500개 · 총액 $6,200</dd></div></dl></div></div>
+                  </li>
+                  <li class="step">
+                    <svg class="st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+                    <span>파일 발급</span><span class="outcome ok">완료 · PI-2026-008.pdf</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    <div class="step-body"><div><div class="step-detail">같은 내용 해시의 기존 발급 파일을 재사용했습니다. <a href="#">다운로드</a></div></div></div>
+                  </li>
+                </ol></div></div>
+              </div>
+              <div class="msg-agent">
+                <p><b>PI-2026-008</b> 발급 파일을 다시 내려받을 수 있게 했습니다. 수정 없이 버전 3 원본 그대로입니다.</p>
+              </div>
+            </div>
+
+            <!-- 현재 턴 -->
+            <div class="turn" id="turn2">
+              <div class="msg-user" id="q2">부산 K&S에서 온 견적 요청 메일 찾아서 답장 초안 만들어 줘. SUPERLIGHT2 규격이랑 30일 납기 조건으로.</div>
+
+              <!-- 작업 타임라인: 상태별로 스크립트가 모습을 바꾼다 -->
+              <div class="work" id="work2">
+                <button class="work-row" type="button" aria-expanded="false" aria-controls="work2-body">
+                  <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                  <span class="st" id="work2-summary">
+                    <svg class="ok-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>업무 완료 · 3단계
+                  </span>
+                  <span class="meta" id="work2-meta">메일 검색 · 원문 조회 · 초안 작성 · 8초</span>
+                </button>
+                <div class="work-body" id="work2-body"><div><ol>
+                  <li class="step" id="step-search">
+                    <svg class="st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                    <span>메일 검색</span><span class="outcome ok" id="step-search-out">완료 · 2건</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    <div class="step-body"><div><dl class="step-detail"><div class="kv">
+                      <dt>스레드</dt><dd><a href="#">RE: SUPERLIGHT2 견적 요청</a> · purchases@busanks.example.com</dd>
+                      <dt>스레드</dt><dd>[외부] LED 조명 샘플 문의 · marketing@lightplus.example.com</dd>
+                      <dt>범위</dt><dd>최근 30일 · 회사 업무 메일</dd>
+                    </div></dl></div></div>
+                  </li>
+                  <li class="step" id="step-query">
+                    <svg class="st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 6v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6M3 6l9 7 9-7"/></svg>
+                    <span>원문 조회</span><span class="outcome ok" id="step-query-out">완료</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    <div class="step-body"><div><dl class="step-detail"><div class="kv">
+                      <dt>발신인</dt><dd>부산 K&S 구매팀</dd>
+                      <dt>수신</dt><dd>2026-11-17 09:42</dd>
+                      <dt>요청</dt><dd>SUPERLIGHT2 500개 견적 · 규격 조건 확인 요청 · 납기 문의</dd>
+                    </div></dl></div></div>
+                  </li>
+                  <li class="step" id="step-draft">
+                    <svg class="st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                    <span>초안 작성</span><span class="outcome ok" id="step-draft-out">완료 · 후보 #14</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    <div class="step-body"><div><dl class="step-detail"><div class="kv">
+                      <dt>후보</dt><dd>#14 SUPERLIGHT2 견적 안내</dd>
+                      <dt>조건</dt><dd>단가 $12.40 · 수량 500 · 총액 $6,200 · 납기 착수 후 30일</dd>
+                      <dt>출처</dt><dd>본인 판매 단가표(SUPERLIGHT2)와 원문 요청 조건</dd>
+                      <dt>첨부</dt><dd>PI-2026-008.pdf (발급 파일 재사용)</dd>
+                    </div></dl></div></div>
+                  </li>
+                  <li class="step" id="step-send" hidden>
+                    <svg class="st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+                    <span>답장 발송</span><span class="outcome ok">완료 · 후보 #14 발송</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    <div class="step-body"><div><div class="step-detail">사용자가 확인하고 보냈습니다. 같은 메일 대화로 발송했고 PI-2026-008.pdf 1건을 첨부했습니다.</div></div></div>
+                  </li>
+                </ol></div></div>
+              </div>
+
+              <!-- 어시스턴트 답변 (마크다운 렌더 결과) -->
+              <div class="msg-agent" id="answer2">
+                <p><b>부산 K&S</b>의 견적 요청 메일을 찾아 조건을 확인하고, 답장 후보를 작성했습니다.</p>
+                <h3>확인된 요청 조건</h3>
+                <ul>
+                  <li>품목 — SUPERLIGHT2 LED 라이트 (규격 <code>SL2-400</code>)</li>
+                  <li>수량 — 500개</li>
+                  <li>납기 — 착수 후 30일 (요청 조건과 일치)</li>
+                </ul>
+                <h3>답장 후보 #14</h3>
+                <p>본인 판매 단가표 기준 단가 $12.40 · 총액 $6,200으로 초안을 작성했습니다. 앞서 발급해 둔 <b>PI-2026-008.pdf</b>를 함께 첨부했습니다. 아래 미리보기를 확인한 뒤 발송을 승인해 주세요.</p>
+                <div class="codeblock">
+                  <button class="copy" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>복사</button>
+                  <pre>안녕하세요, 부산 K&S 구매팀 담당자님.
+
+요청 주신 SUPERLIGHT2 (SL2-400) 견적을 아래와 같이 안내드립니다.
+
+- 품목: SUPERLIGHT2 LED 라이트 (SL2-400)
+- 수량: 500개
+- 단가: USD 12.40
+- 총액: USD 6,200
+- 납기: 주문 확인 후 30일
+
+견적 유효기간은 발행일로부터 30일입니다.</pre>
+                </div>
+                <div class="msg-actions">
+                  <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>답변 복사</button>
+                  <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>받은 메일함에서 열기</button>
+                </div>
+              </div>
+
+              <!-- 승인 카드: 승인 대기 상태에서만 표시 -->
+              <section class="review" id="review2" aria-label="작업 최종 확인" tabindex="-1">
+                <h3>실행 전 확인해 주세요</h3>
+                <p class="sub">답장 후보 #14 · 같은 메일 대화로 발송합니다.</p>
+                <dl class="kv">
+                  <dt>받는 사람</dt><dd>purchases@busanks.example.com</dd>
+                  <dt>제목</dt><dd>RE: SUPERLIGHT2 견적 요청</dd>
+                </dl>
+                <p class="preview">안녕하세요, 부산 K&S 구매팀 담당자님.
+
+요청 주신 SUPERLIGHT2 (SL2-400) 견적을 아래와 같이 안내드립니다.
+
+- 품목: SUPERLIGHT2 LED 라이트 (SL2-400)
+- 수량: 500개
+- 단가: USD 12.40
+- 총액: USD 6,200
+- 납기: 주문 확인 후 30일
+
+견적 유효기간은 발행일로부터 30일입니다. 추가 문의나 샘플 요청이 필요하시면 회신 부탁드립니다.
+
+감사합니다.
+KE KOREA 수출팀 드림</p>
+                <div class="attach">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>
+                  PI-2026-008.pdf <span class="size">148 KB</span>
+                  <a href="#">미리보기</a>
+                </div>
+                <p class="attach-note">연결 문서 PI #8(버전 3)의 발급 파일을 첨부합니다. 첨부 내용은 발송 전에 고정됩니다.</p>
+                <div class="review-actions">
+                  <button class="btn" type="button" id="review-cancel">취소</button>
+                  <button class="btn blue" type="button" id="review-ok">확인하고 보내기</button>
+                </div>
+              </section>
+
+              <!-- 발송 완료 답변: 완료 상태에서만 표시 -->
+              <div class="msg-agent" id="final2" hidden>
+                <p role="status">메일을 보냈습니다. 후보 #14 답장이 같은 스레드로 발송됐고, 첨부 파일은 없습니다. 발송 결과는 <a href="#">받은 메일함</a>에서 확인할 수 있습니다.</p>
+                <div class="msg-actions">
+                  <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>답변 복사</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 진행 중 상태줄 -->
+          <p class="runline" id="runline"><svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg><span id="runline-text">업무를 처리하고 있습니다. 이 화면을 나가도 접수된 작업은 계속됩니다.</span></p>
+
+          <!-- 컴포저 -->
+          <form class="agent-compose" id="compose" onsubmit="return false">
+            <label class="sr-only" for="agent-request">업무 요청</label>
+            <textarea id="agent-request" rows="1" maxlength="8000" placeholder="메일이나 문서 작업을 요청해 주세요."></textarea>
+            <button class="send" type="submit" id="send" aria-label="요청 보내기" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+            </button>
+          </form>
+          <p class="compose-hint">Enter로 전송 · Shift+Enter로 줄바꿈 · 처리 중에는 새 요청을 받지 않습니다</p>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var conv = document.getElementById("conversation");
+  var work = document.getElementById("work2");
+  var summary = document.getElementById("work2-summary");
+  var meta = document.getElementById("work2-meta");
+  var answer = document.getElementById("answer2");
+  var review = document.getElementById("review2");
+  var finalMsg = document.getElementById("final2");
+  var sendStep = document.getElementById("step-send");
+  var steps = ["step-search","step-query","step-draft"].map(document.getElementById.bind(document));
+  var runlineText = document.getElementById("runline-text");
+  var compose = document.getElementById("compose");
+  var input = document.getElementById("agent-request");
+  var sendBtn = document.getElementById("send");
+  var timers = [];
+
+  var ICON_CHECK = '<svg class="ok-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+  var ICON_CLOCK = '<svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>';
+
+  function later(fn,ms){ timers.push(setTimeout(fn,ms)); }
+  function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+  function show(el,on,replayAnim){
+    if(!el) return;
+    if(on && el.hidden){ el.hidden=false; if(replayAnim!==false){ el.classList.remove("enter"); void el.offsetWidth; el.classList.add("enter"); } }
+    else if(!on && !el.hidden){ el.hidden=true; el.classList.remove("enter"); }
+  }
+  function setWork(open){
+    if(open) work.setAttribute("data-open",""); else work.removeAttribute("data-open");
+    work.querySelector(".work-row").setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  function scrollIntoView(el){ try{ el.scrollIntoView({behavior:"smooth", block:"center"}); }catch(e){} }
+
+  /* ---- 상태 ---- */
+  function stateRunning(active){ /* active: 현재 진행 단계(0..2) */
+    conv.dataset.state = "running";
+    setWork(true);
+    summary.innerHTML = '<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>업무 처리 중 · ' + (active+1) + '단계';
+    meta.textContent = "메일 검색 · 원문 조회 · 초안 작성";
+    runlineText.textContent = "업무를 처리하고 있습니다. 이 화면을 나가도 접수된 작업은 계속됩니다.";
+    show(sendStep,false,false);
+    steps.forEach(function(li,i){
+      li.hidden = i > active;
+      li.classList.toggle("dim", i < active);
+      var out = li.querySelector(".outcome");
+      if(i < active){ out.className="outcome ok"; out.textContent = out.dataset.done; }
+      else if(i === active){ out.className="outcome"; out.style.color=""; out.innerHTML = '<span class="step-live"><svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>처리 중</span>'; }
+    });
+    show(answer,false); show(review,false); show(finalMsg,false);
+  }
+  function stateWaiting(){
+    conv.dataset.state = "waiting";
+    setWork(false);
+    summary.innerHTML = ICON_CHECK + '업무 완료 · 3단계';
+    meta.innerHTML = "메일 검색 · 원문 조회 · 초안 작성 · " + ICON_CLOCK + " 8초";
+    show(sendStep,false,false);
+    steps.forEach(function(li){
+      li.hidden = false; li.classList.remove("dim");
+      var out = li.querySelector(".outcome");
+      out.className="outcome ok"; out.textContent = out.dataset.done;
+    });
+    show(answer,true); show(review,true);
+    show(finalMsg,false);
+    later(function(){ scrollIntoView(review); }, 60);
+  }
+  function stateDone(cancelled){
+    conv.dataset.state = "done";
+    setWork(false);
+    summary.innerHTML = ICON_CHECK + '업무 완료 · 4단계';
+    meta.innerHTML = (cancelled ? "취소" : "메일 검색 · 원문 조회 · 초안 작성 · 답장 발송") + " · " + ICON_CLOCK + " 12초";
+    show(sendStep,true,false);
+    var sendOut = sendStep.querySelector(".outcome");
+    sendOut.className = cancelled ? "outcome bad" : "outcome ok";
+    sendOut.textContent = cancelled ? "취소" : "완료 · 후보 #14 발송";
+    steps.forEach(function(li){ li.hidden=false; li.classList.remove("dim"); });
+    show(answer,true,false); show(review,false); show(finalMsg,true);
+    finalMsg.querySelector("p").innerHTML = cancelled
+      ? '발송을 취소했습니다. 답장 후보 #14와 첨부 파일은 저장돼 있으니 <a href="#">받은 메일함</a>에서 다시 승인할 수 있습니다.'
+      : '메일을 보냈습니다. 후보 #14 답장이 같은 스레드로 발송됐고, PI-2026-008.pdf 1건이 첨부됐습니다. 발송 결과는 <a href="#">받은 메일함</a>에서 확인할 수 있습니다.';
+    later(function(){ scrollIntoView(finalMsg); }, 60);
+  }
+
+  /* ---- 재생 ---- */
+  function replay(){
+    clearTimers();
+    conv.scrollIntoView({behavior:"smooth", block:"start"});
+    stateRunning(0);
+    later(function(){ stateRunning(1); }, 1100);
+    later(function(){ stateRunning(2); }, 2200);
+    later(stateWaiting, 3500);
+  }
+
+  /* ---- 접힘/펼침 (타임라인·단계·과거 턴 공통) ---- */
+  document.querySelectorAll(".work-row").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var w = btn.closest(".work");
+      setWorkOn(w, !w.hasAttribute("data-open"));
+    });
+  });
+  function setWorkOn(w, open){
+    if(open) w.setAttribute("data-open",""); else w.removeAttribute("data-open");
+    w.querySelector(".work-row").setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  document.querySelectorAll(".step").forEach(function(li){
+    li.setAttribute("role","button"); li.setAttribute("tabindex","0");
+    li.setAttribute("aria-expanded","false");
+    var out = li.querySelector(".outcome");
+    if(out) out.dataset.done = out.textContent;
+    function toggle(){
+      var open = li.hasAttribute("data-open");
+      if(open) li.removeAttribute("data-open"); else li.setAttribute("data-open","");
+      li.setAttribute("aria-expanded", open ? "false" : "true");
+    }
+    li.addEventListener("click", function(e){ if(e.target.closest("a,button")) return; toggle(); });
+    li.addEventListener("keydown", function(e){
+      if((e.key==="Enter"||e.key===" ") && !e.target.closest("a,button")){ e.preventDefault(); toggle(); }
+    });
+  });
+  steps.concat([sendStep]).forEach(function(li){
+    if(!li) return;
+    var out = li.querySelector(".outcome");
+    if(out) out.dataset.done = out.textContent;
+  });
+
+  /* ---- 승인 ---- */
+  document.getElementById("review-ok").addEventListener("click", function(){ clearTimers(); stateDone(false); });
+  document.getElementById("review-cancel").addEventListener("click", function(){ clearTimers(); stateDone(true); });
+
+  /* ---- 상태 칩 ---- */
+  document.querySelectorAll(".state-chip").forEach(function(chip){
+    chip.addEventListener("click", function(){
+      clearTimers();
+      document.querySelectorAll(".state-chip").forEach(function(c){ c.setAttribute("aria-pressed","false"); });
+      chip.setAttribute("aria-pressed","true");
+      var s = chip.dataset.state;
+      if(s==="running") stateRunning(2);
+      else if(s==="waiting") stateWaiting();
+      else stateDone(false);
+    });
+  });
+  document.getElementById("replay").addEventListener("click", function(){
+    document.querySelectorAll(".state-chip").forEach(function(c){ c.setAttribute("aria-pressed","false"); });
+    replay();
+  });
+
+  /* ---- 모션 끔 ---- */
+  var motionBtn = document.getElementById("motion-toggle");
+  motionBtn.addEventListener("click", function(){
+    var off = document.documentElement.classList.toggle("no-motion");
+    motionBtn.setAttribute("aria-pressed", off ? "true" : "false");
+  });
+
+  /* ---- 복사 ---- */
+  function flash(btn, done){
+    var orig = btn.innerHTML;
+    btn.innerHTML = done ? "복사됨" : "복사 실패";
+    setTimeout(function(){ btn.innerHTML = orig; }, 1400);
+  }
+  document.querySelectorAll(".copy, .msg-actions button").forEach(function(btn){
+    if(!/복사/.test(btn.textContent)) return;
+    btn.addEventListener("click", function(){
+      var block = btn.closest(".codeblock");
+      var text = block ? block.querySelector("pre").textContent : (btn.closest(".msg-agent")||document.body).innerText;
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){ flash(btn,true); }, function(){ flash(btn,false); });
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try{ document.execCommand("copy"); flash(btn,true); }catch(e){ flash(btn,false); }
+        document.body.removeChild(ta);
+      }
+    });
+  });
+
+  /* ---- 컴포저 ---- */
+  function grow(){ input.style.height="auto"; input.style.height=Math.min(input.scrollHeight,140)+"px"; }
+  input.addEventListener("input", function(){ sendBtn.disabled = !input.value.trim() || conv.dataset.state==="running"; grow(); });
+  input.addEventListener("keydown", function(e){
+    if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); compose.requestSubmit ? compose.requestSubmit() : sendBtn.click(); }
+  });
+  compose.addEventListener("submit", function(e){
+    e.preventDefault();
+    if(!input.value.trim() || conv.dataset.state==="running") return;
+    input.value=""; sendBtn.disabled=true; grow();
+    document.getElementById("replay").click();
+  });
+
+  /* ---- 대화 목록 서랍(햄버거) ---- */
+  var layout = document.getElementById("agent-layout");
+  var historyBtn = document.getElementById("history-toggle");
+  var backdrop = document.getElementById("history-backdrop");
+  function setHistory(open){
+    if(open) layout.setAttribute("data-history","open"); else layout.removeAttribute("data-history");
+    historyBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  historyBtn.addEventListener("click", function(){ setHistory(layout.getAttribute("data-history")!=="open"); });
+  backdrop.addEventListener("click", function(){ setHistory(false); });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape") setHistory(false); });
+  document.querySelectorAll(".agent-history-item").forEach(function(a){ a.addEventListener("click", function(){ setHistory(false); }); });
+
+  /* ---- 첫 화면: 승인 대기 상태 (URL 해시로 다른 상태 바로 열기: #state=running|waiting|done, #history=open) ---- */
+  var initial = (location.hash.match(/state=(\w+)/)||[])[1];
+  if(/history=open/.test(location.hash)) setHistory(true);
+  if(initial==="running") stateRunning(2);
+  else if(initial==="done") stateDone(false);
+  else stateWaiting();
+})();
+</script>
+</body>
+</html>
