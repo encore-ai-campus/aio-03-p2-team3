@@ -175,7 +175,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-18 · 대화형 마스터 도구·저장·API·React 연결·무역 문서 설정 갱신
+마지막 갱신: 2026-11-18 · 조회 인덱스 보강 마이그레이션 추가
 
 - PI·PO·CI·PL 모바일 후속 범위는 [모바일 전환 계획](plans/trade-mobile-workspaces.md)에 공통 배치/PI·PO → CI 연결·단독 → PL/4종 회귀의 3개 순차 작업으로 나눴다. PR #205의 보류 기록과 기존 600/800/1100px 반응형을 출발점으로 삼는다. 1절의 공통 모바일 배치와 PI/PO 입력·검토 보완 및 브라우저 검증을 구현했다. 2절 CI 연결/단독도 공통 요약·오류/단계 포커스·입력 보존과 브라우저 발급 검증을 마쳤다. 3절 PL 포장/대조/검토 UI와 4종 브라우저 회귀도 구현했다. 실제 기기 키보드와 운영 연결은 미확인이다. 공통 높이·sticky 작업 버튼·스크롤/포커스 규칙과 재검증 방법은 계획 1절을 재사용한다. 기존 #143의 PL 업무 검증·#149의 전체 앱 통합 검증·#150의 실제 운영 전환을 완료 처리하지 않는다.
 
@@ -186,6 +186,7 @@
 - 배포 기반 검증은 전체 PostgreSQL `uv run pytest` 923 passed·2 skipped, 규칙 검사 경고 0개, 프론트 lint/test/공개값 검사·실제 빌드와 Chromium smoke를 통과했다. 상세 주소/자산·콜백/알림 경로와 서버 비밀값 제외 근거는 [진행 현황](plans/react-supabase/PROGRESS.md)의 21.1절에 있다. 전체 UI 완주·실제 운영 성공과 구분한다.
 - 앱 DB는 PostgreSQL 전용이다. `DATABASE_URL`이 비었거나 비PostgreSQL이면 시작을 거부하며 SQLite 자동 생성은 없다. Alembic 대상은 `public`으로 고정해 Supabase `auth`·`storage`를 건드리지 않는다. `20261112_react_worker_merge`가 Supabase 전환/기존 worker 분기를 합친다. 운영 반영 전 DB 백업과 기존 `TOKEN_ENCRYPTION_KEY` 유지가 필요하다. SQLite 등 기존 원본은 `app.db.copy_data`, 회사 이미지/발급 바이너리는 backfill 명령으로 복사·해시 검증하며 원본·바이너리 열은 아직 삭제하지 않았다([전환 계획](plans/react-supabase/PLAN.md) 4·9·10·22절).
 - `20261116_mail_triage`는 캘린더 OAuth 변경 뒤 기존 메일 표에 nullable 분류 결과를 추가한다. 기존 메일은 자동 재분류하지 않으며 운영 DB 적용은 별도 확인한다.
+- `20261118_query_indexes`는 자주 읽는 조회 경로(메일함 스레드 집계·원문 조인, 스레드 후보, 실행 기록·무역 문서·문서함 목록, 거래 기억, PC 큐, 저장소 정리)에 복합 인덱스와 시작 복구용 부분 인덱스를 추가한다. 새 DB는 create_all이 같은 정의를 만들고 기존 운영 DB는 이 리비전이 채운다. 정의 원본은 `app/db/models.py`·`app/knowledge/repository.py`다.
 - `20261113_knowledge_ingestion`은 문서·부모·자식 vector 표를 더하고 RLS/직접 공개 권한을 제한한다. vector 확장을 create_all보다 먼저 준비하며 기존 확장 스키마를 존중한다. CI PostgreSQL 16은 고정한 pgvector 이미지, Windows는 고정 소스 빌드를 사용한다. Office/TXT에는 LibreOffice가 필요하고 PDF/이미지는 고정 PDFium/Pillow로 읽는다. 설치/시험 명령·KNOWLEDGE_* 설정은 README/`.env.example`, 실제 운영 vector/버킷 제한·LibreOffice·모델 권한/정확도/과금 확인은 문서 수집 계획 2절/#178에 남아 있다. 운영 DB/배포·실제 문서 API 호출은 이번 구현에서 실행하지 않았다.
 - 무료 서버는 15분 미사용 시 잠들 수 있고 재시작/배포 때 로컬 파일을 잃으므로 운영 데이터는 Postgres에 둔다. 2026-11-10 생성한 무료 Postgres는 당시 안내상 12/10경 만료·14일 유예 후 삭제 예정이었다. 현재 요금제·보존 상태는 운영 담당자가 확인한다.
 - 서버 `stored_key`는 본인 로그인 후 `/settings`에서 키를 등록한다. 서버 `OPENAI_API_KEY` 대체는 차단돼 있다. `local_worker`는 개인 PC가 켜져 있고 같은 모델/설치 정의로 연결돼 있어야 한다. 메일·문서 입력과 AI 결과는 서버를 거치지만 PC 키는 서버에 전송/저장하지 않는다. 키를 지우거나 PC를 중지해도 이미 외부 API에 전송한 요청의 취소를 보장하지 않는다.

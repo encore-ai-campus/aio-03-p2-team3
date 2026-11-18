@@ -27,6 +27,8 @@ class KnowledgeDocument(Base, Created):
         CheckConstraint("status IN ('queued','extracting','needs_review','chunking','embedding','ready','failed')",
                         name="ck_knowledge_status"),
         Index("ix_knowledge_queue", "status", "created_at"),
+        # 문서함 목록이 본인 문서를 최신 순으로 읽는다.
+        Index("ix_knowledge_documents_user_created", "user_id", "created_at"),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
