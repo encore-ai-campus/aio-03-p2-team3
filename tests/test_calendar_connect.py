@@ -1,4 +1,5 @@
 """#192: 실제 PostgreSQL과 가짜 Google의 서비스 격리·OAuth·갱신·실패 검사."""
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -66,6 +67,43 @@ def start_calendar(client, token):
 def finish(client, token):
     response = complete(client, start_calendar(client, token))
     assert response.headers['location'] == '/app/settings?calendar=connected'
+
+
+@contextmanager
+def calendar_client(database_url, settings):
+    jwks, gmail, calendar = FakeJwks(), FakeGoogle(), FakeCalendar()
+    app = create_app(settings, google=gmail, calendar=calendar, supabase_auth=TokenVerifier(
+        SUPABASE_URL, fetch_jwks=jwks.serve, secret_key="fake-secret", fetch_admin_user=jwks.admin_serve))
+    with TestClient(app) as client:
+        yield client, jwks, calendar
+
+
+@pytest.mark.parametrize("origin", ["http://localhost:3000", "http://[", "http://127.0.0.1:3000"])
+def test_calendar_connect_checks_browser_host_before_google_consent(database_url, origin):
+    # 세션 쿠키는 호스트 단위라 localhost↔127.0.0.1 혼용 시 콜백에서 state를 잃는다.
+    # Gmail과 같이 Google 동의 화면으로 가기 전에 막는다.
+    settings = replace(settings_of(database_url), gmail_pubsub_topic="",
+                       google_oauth_redirect_uri="http://127.0.0.1:8000/auth/google/callback")
+    with calendar_client(database_url, settings) as (client, jwks, calendar):
+        client.base_url = "http://127.0.0.1:3000"
+        response = client.post("/api/calendar/connect", headers={**bearer(jwks.token()), "Origin": origin})
+        if origin != "http://127.0.0.1:3000":
+            assert response.status_code == 400
+            assert response.json()["error"]["code"] == "callback_host_mismatch"
+            assert calendar.called("authorize") == calendar.called("exchange") == []
+            assert not client.cookies.get("gq_session")
+        else:
+            assert response.status_code == 200, response.text
+            assert len(calendar.called("authorize")) == 1
+
+
+def test_calendar_callback_returns_to_configured_frontend_origin(database_url):
+    # 별도 React 출처가 설정되면 콜백 결과는 그 출처로 돌아간다(빈 값이면 상대 주소).
+    settings = replace(settings_of(database_url), gmail_pubsub_topic="",
+                       frontend_origins="http://127.0.0.1:3000")
+    with calendar_client(database_url, settings) as (client, jwks, _calendar):
+        result = complete(client, start_calendar(client, jwks.token()))
+        assert result.headers["location"] == "http://127.0.0.1:3000/app/settings?calendar=connected"
 
 
 def test_calendar_only_refresh_disconnect_reconnect_and_encryption(connected_app):
