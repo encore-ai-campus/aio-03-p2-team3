@@ -48,7 +48,12 @@ def resume(client, token, key, state, response):
     result = client.post(f"/api/agent/conversations/{key}/resume", headers=auth(token),
                          json={"revision": state["revision"], "response": response})
     assert result.status_code == 202, result.text
-    return read(client, token, key)
+    progress = result.json()["progress"]
+    assert progress["started_at"] >= state["progress"]["finished_at"] and progress["steps"] == []
+    state = read(client, token, key)
+    assert state["progress"]["started_at"] == progress["started_at"]
+    assert state["progress"]["finished_at"] >= progress["started_at"]
+    return state
 
 
 def test_api_real_tools_persist_question_choose_candidate_approve_once(database_url):
@@ -69,9 +74,16 @@ def test_api_real_tools_persist_question_choose_candidate_approve_once(database_
         choices.calls[3] = ("prepare_send", {"candidate_id": ids[0]})
         response = client.post('/api/agent/conversations', headers=auth(token), json={"message": "가상 메일 확인"})
         assert response.status_code == 202, response.text
-        key = response.json()['id']
+        accepted = response.json()
+        key = accepted['id']
         state = read(client, token, key)
         assert state['status'] == 'needs_input' and state['waiting']['task_id'] == 'agent', state
+        assert accepted['progress']['steps'] == []
+        progress = state['progress']
+        assert progress['started_at'] == accepted['progress']['started_at']
+        assert progress['finished_at'] >= progress['started_at']
+        assert {'label': '메일 검색', 'status': 'completed'} in progress['steps']
+        assert all(set(step) == {'label', 'status'} for step in progress['steps'])
         assert state['results'][0]['data']['threads'][0]['thread_id'] == 'fake-thread'
         assert state['results'][1]['data']['messages'][0]['body_text'] == '테스트용 가상 문의입니다.'
         assert not google.mailbox.called('send')
@@ -89,11 +101,13 @@ def test_api_real_tools_persist_question_choose_candidate_approve_once(database_
         state = resume(client, token, key, state, {"task_id": state['waiting']['task_id'],
                                                 "answers": {"candidate_id": ids[1]}})
         assert state['status'] == 'needs_approval' and state['waiting']['action']['payload']['candidate_id'] == ids[1]
+        assert {'label': '답장 발송 준비', 'status': 'completed'} in state['progress']['steps']
         assert not google.mailbox.called('send')
         waiting, revision = state['waiting'], state['revision']
         decision = {"action_id": waiting['action']['id'], "content_hash": waiting['content_hash'], "decision": "approve"}
         state = resume(client, token, key, state, decision)
         assert state['status'] == 'completed', state
+        assert {'label': '답장 발송', 'status': 'completed'} in state['progress']['steps']
         assert len(google.mailbox.called('send')) == 1
         assert state['results'][-1]['data']['sent_message_id']
         again = client.post(f'/api/agent/conversations/{key}/resume', headers=auth(token),
@@ -111,6 +125,8 @@ def test_model_loop_is_bounded_and_owner_cannot_be_tool_input(database_url):
         response = client.post('/api/agent/conversations', headers=auth(token), json={'message': '메일 확인'})
         state = read(client, token, response.json()['id'])
         assert state['status'] == 'error' and state['error'] == 'agent_step_limit'
+        assert state['progress']['finished_at'] >= state['progress']['started_at']
+        assert state['progress']['steps'][-1] == {'label': '다음 작업 판단', 'status': 'failed'}
         assert not google.mailbox.called('send')
 
 

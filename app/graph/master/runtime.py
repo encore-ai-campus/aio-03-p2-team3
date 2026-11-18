@@ -30,8 +30,16 @@ class Workflow:
             raise WorkflowError("workflow_not_found")
         return snapshot
 
+    def _invoke(self, value, config, on_task):
+        if on_task is None:
+            return self._graph.invoke(value, config=config, durability="sync")
+        # 대화 API는 실행 뒤 기존 snapshot 경계에서 최종 상태를 읽는다.
+        for event in self._graph.stream(value, config=config, durability="sync",
+                                        stream_mode="tasks", version="v2"):
+            on_task(event["data"])
+
     def start(self, *, actor_id: int, thread_id: str, request: str = "", plan: Plan | None = None,
-              reflection_enabled: bool = True):
+              reflection_enabled: bool = True, on_task=None):
         """actor_id는 인증 경계에서 공급한다. 요청 본문/모델이 정한 소유자를 받지 않는다."""
         config = self._config(thread_id)
         with self._locks[thread_id]:
@@ -45,13 +53,13 @@ class Workflow:
             initial.update(agent_mode=plan is None and self.dependencies_choose,
                            agent_calls=0, turn=1, messages=[message_to_dict(HumanMessage(request))],
                            tool_call=None, dialog_question=None)
-            return self._graph.invoke(initial, config=config, durability="sync")
+            return self._invoke(initial, config, on_task)
 
     def inspect(self, *, actor_id: int, thread_id: str):
         with self._locks[thread_id]:
             return deepcopy(self._owned(actor_id, thread_id).values)
 
-    def resume(self, *, actor_id: int, thread_id: str, response: dict):
+    def resume(self, *, actor_id: int, thread_id: str, response: dict, on_task=None):
         with self._locks[thread_id]:
             snapshot = self._owned(actor_id, thread_id)
             state = snapshot.values
@@ -81,22 +89,22 @@ class Workflow:
                 raise WorkflowError("use_recover_for_interrupted_execution")
             token = execution_grant.set(grant)
             try:
-                return self._graph.invoke(Command(resume=response), config=self._config(thread_id), durability="sync")
+                return self._invoke(Command(resume=response), self._config(thread_id), on_task)
             finally:
                 execution_grant.reset(token)
 
-    def message(self, *, actor_id: int, thread_id: str, request: str):
+    def message(self, *, actor_id: int, thread_id: str, request: str, on_task=None):
         """완료된 본인 대화에 새 요청을 잇는다. 대기 중 질문/승인은 resume만 사용한다."""
         with self._locks[thread_id]:
             snapshot = self._owned(actor_id, thread_id)
             if snapshot.next or not snapshot.values.get("agent_mode"):
                 raise WorkflowError("workflow_waiting")
             messages = [*snapshot.values["messages"], message_to_dict(HumanMessage(request))]
-            return self._graph.invoke(dict(request=request, messages=messages, tasks=[], results={},
+            return self._invoke(dict(request=request, messages=messages, tasks=[], results={},
                 current=None, work=None, rounds={}, repairs={}, attempts={}, actions={}, evidence={},
                 agent_calls=0, turn=snapshot.values.get("turn", 1) + 1,
                 tool_call=None, dialog_question=None, error=None, summary={}, next=""),
-                config=self._config(thread_id), durability="sync")
+                self._config(thread_id), on_task)
 
     def snapshot(self, *, actor_id: int, thread_id: str):
         """응답 생성용 상태·중단 값. 서비스 객체/실행 권한은 반환하지 않는다."""
@@ -106,7 +114,7 @@ class Workflow:
             return {"state": deepcopy(snapshot.values), "waiting": interrupts[0] if interrupts else None,
                     "pending": bool(snapshot.next)}
 
-    def recover(self, *, actor_id: int, thread_id: str):
+    def recover(self, *, actor_id: int, thread_id: str, on_task=None):
         """새 승인 없이 쓰지 않는다. 완료 불명 작업은 같은 action의 영수증만 다시 읽는다."""
         with self._locks[thread_id]:
             snapshot = self._owned(actor_id, thread_id)
@@ -127,6 +135,6 @@ class Workflow:
                     as_node="mark_execution")
             token = execution_grant.set(None)
             try:
-                return self._graph.invoke(None, config=config, durability="sync")
+                return self._invoke(None, config, on_task)
             finally:
                 execution_grant.reset(token)

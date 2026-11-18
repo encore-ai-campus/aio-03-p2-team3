@@ -1,5 +1,5 @@
 """대화 소유권·실행 접수·화면 투영. 실제 그래프 상태는 공식 체크포인터에 저장한다."""
-from sqlalchemy import Index, String, select, update
+from sqlalchemy import Index, String, select
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models import Base, Created, Owned, Updated, JSON_VALUE, User, utcnow
@@ -19,6 +19,12 @@ class AgentConversation(Base, Owned, Created, Updated):
 def data(row):
     return {**row.view, "id": row.id, "title": row.title, "status": row.status,
             "revision": row.revision, "updated_at": row.updated_at.isoformat()}
+
+
+def stop_progress(progress, stopped_at):
+    steps = [{**step, "status": "interrupted"} if step["status"] == "running" else step
+             for step in progress["steps"]]
+    return {**progress, "finished_at": stopped_at.isoformat(), "steps": steps}
 
 
 class ConversationStore:
@@ -60,16 +66,33 @@ class ConversationStore:
                     raise WorkflowError("stale_conversation")
                 row.revision += 1
                 row.status = "running"
+            row.view = {**row.view, "progress": {"started_at": utcnow().isoformat(), "steps": []}}
             s.flush()
             return data(row)
 
-    def finish(self, owner, conversation_id, view, status):
+    def update_progress(self, owner, conversation_id, revision, steps):
         with self.database.session() as s:
-            s.execute(update(AgentConversation).where(AgentConversation.id == conversation_id,
-                AgentConversation.user_id == owner).values(view=view, status=status, updated_at=utcnow()))
+            row = self._running(s, owner, conversation_id, revision)
+            if row is not None:
+                row.view = {**row.view, "progress": {**row.view["progress"], "steps": steps}}
+
+    def finish(self, owner, conversation_id, revision, view, status):
+        with self.database.session() as s:
+            row = self._running(s, owner, conversation_id, revision)
+            if row is not None:
+                row.view = {**view, "progress": stop_progress(row.view["progress"], utcnow())}
+                row.status = status
+
+    @staticmethod
+    def _running(session, owner, conversation_id, revision):
+        return session.scalar(select(AgentConversation).where(AgentConversation.id == conversation_id,
+            AgentConversation.user_id == owner, AgentConversation.revision == revision,
+            AgentConversation.status == "running").with_for_update())
 
     def interrupt_running(self):
         # ponytail: 단일 앱 프로세스. 다중 프로세스 지원 시 공유 임대로 교체한다.
         with self.database.session() as s:
-            s.execute(update(AgentConversation).where(AgentConversation.status == "running")
-                      .values(status="interrupted"))
+            for row in s.scalars(select(AgentConversation).where(AgentConversation.status == "running")):
+                if "progress" in row.view:
+                    row.view = {**row.view, "progress": stop_progress(row.view["progress"], row.updated_at)}
+                row.status = "interrupted"

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from threading import Event
 import time
 from uuid import uuid4
 
@@ -18,6 +19,7 @@ from tests.fakes.google import fake_login
 from tests.test_approval import add_mail
 from tests.test_knowledge_browser import serve
 from tests.test_supabase_auth import SUPABASE_URL, FakeJwks
+from app.graph.mail.adapters import ExistingMail
 from app.web import frontend
 
 
@@ -33,9 +35,18 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
     monkeypatch.setattr(frontend, 'DIST', dist)
     jwks, google, subject = FakeJwks(), FakeGmailGoogle(), uuid4()
     token = jwks.token(sub=subject)
-    choices = Choices([('get_mail', {'thread_id': 'fake-thread'}),
+    choices = Choices([('search_mail', {'query': '가상 문의'}), ('get_mail', {'thread_id': 'fake-thread'}),
         ('ask_user', {'question': '답장을 진행할까요?'}),
         ('prepare_send', {'candidate_id': 1}), '승인한 답장을 발송했습니다.', '앞선 발송 결과를 확인했습니다.'])
+    release_search = Event()
+    search = ExistingMail.search
+
+    def delayed_search(self, actor_id, query, cursor=None):
+        if not release_search.wait(timeout=25):
+            raise RuntimeError('가상 검색 대기 시간 초과')
+        return search(self, actor_id, query, cursor)
+
+    monkeypatch.setattr(ExistingMail, 'search', delayed_search)
     app = app_for(database_url, jwks, google, choices, storage=FakeStorage())
     session = {'access_token': token, 'refresh_token': 'fake-refresh', 'token_type': 'bearer',
         'expires_at': int(time.time()) + 3600, 'expires_in': 3600,
@@ -47,7 +58,7 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
             from app.services.auth import store_login, utcnow
             store_login(s, app.state.google_access, s.get(User, owner), fake_login(), utcnow())
         ids = add_mail(type('Client', (), {'app': app})(), owner)
-        choices.calls[2] = ('prepare_send', {'candidate_id': ids[0]})
+        choices.calls[3] = ('prepare_send', {'candidate_id': ids[0]})
         browser = p.chromium.launch()
         context = browser.new_context(viewport={'width': 1440, 'height': 1000})
         context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(base + '/') else route.abort())
@@ -59,8 +70,40 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         expect(page.get_by_role('heading', name='업무 도우미', exact=True)).to_be_visible()
         page.get_by_label('업무 요청', exact=True).fill('가상 메일 확인하고 답장 준비해 줘')
         page.get_by_role('button', name='요청하기', exact=True).click()
+        row = page.locator('.work-row')
+        elapsed = row.locator('time')
+
+        def seconds():
+            return int(elapsed.get_attribute('datetime')[2:-1])
+
+        def expect_stopped(label):
+            expect(row).to_contain_text(label)
+            expect(page.locator('.work.running')).to_have_count(0)
+            stopped = seconds()
+            # 진행 중 타이머의 1초 주기를 넘긴 뒤에도 최종 시간이 고정된다.
+            page.wait_for_timeout(1100)
+            assert seconds() == stopped
+
+        try:
+            page.wait_for_url('**/app/agent/*')
+            expect(row).to_contain_text('동안 작업 중')
+            expect(row).to_have_attribute('aria-expanded', 'false')
+            row.press('Enter')
+            timeline = page.get_by_role('list', name='이번 요청의 작업 단계')
+            expect(timeline.locator('li.running')).to_have_text('메일 검색진행 중', timeout=10000)
+            expect(timeline.locator('li.completed').first).to_have_text('대화 맥락 불러오기완료')
+            expect(elapsed).not_to_have_text(elapsed.inner_text(), timeout=5000)
+            before_reload = seconds()
+            page.reload()
+            expect(row).to_contain_text('동안 작업 중')
+            assert seconds() >= before_reload
+            row.click()
+            expect(timeline.locator('li.running')).to_contain_text('메일 검색')
+        finally:
+            release_search.set()
         region = page.get_by_role('region', name='추가 정보 입력')
         expect(region).to_be_visible(timeout=20000)
+        expect_stopped('답변 대기')
         expect(region).to_be_focused()
         page.reload()
         expect(region).to_be_visible()
@@ -71,6 +114,7 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         region.get_by_role('button', name='답변하고 계속').click()
         approval = page.get_by_role('region', name='작업 최종 확인')
         expect(approval).to_be_visible(timeout=20000)
+        expect_stopped('승인 대기')
         expect(approval.get_by_text('받는 사람: sender@example.invalid', exact=True)).to_be_visible()
         expect(approval.get_by_text('가상 답장 본문 2', exact=True)).to_be_visible()
         assert not google.mailbox.called('send')
@@ -78,6 +122,7 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         approval.get_by_role('button', name='확인하고 보내기').click()
         expect(page.get_by_text('승인한 답장을 발송했습니다.', exact=True)).to_be_visible(timeout=20000)
+        expect_stopped('응답 완료')
         assert len(google.mailbox.called('send')) == 1
         page.get_by_label('업무 요청', exact=True).fill('결과 알려 줘')
         page.get_by_role('button', name='요청하기', exact=True).click()
@@ -104,4 +149,9 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         assert download.value.suggested_filename.endswith('.pdf')
         assert len(google.mailbox.called('send')) == 1 and not errors
         page.screenshot(path=str(tmp_path / 'agent-mobile.png'), full_page=True)
+        page.get_by_label('업무 요청', exact=True).fill('가상 모델 오류를 확인해 줘')
+        page.get_by_role('button', name='요청하기', exact=True).click()
+        expect(page.get_by_role('alert')).to_contain_text('AI 요청을 처리하지 못했습니다.', timeout=20000)
+        expect_stopped('확인 필요')
+        assert not errors
         browser.close()
