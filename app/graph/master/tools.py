@@ -5,9 +5,8 @@ from copy import deepcopy
 from langchain_core.tools import tool
 from pydantic import Field
 
-from app.graph.documents.schemas import DocumentInput
+from app.graph.documents.schemas import DocumentInput, DocumentKind, IssuedDocumentSearch
 
-Kind = Literal["PI", "PO", "CI", "PL"]
 Positive = Annotated[int, Field(gt=0, strict=True)]
 
 
@@ -34,13 +33,20 @@ def prepare_reply(thread_id: str) -> dict:
 
 
 @tool
-def get_document(kind: Kind, document_id: Positive) -> dict:
+def get_document(kind: DocumentKind, document_id: Positive) -> dict:
     """본인의 PI/PO/CI/PL 문서와 현재 revision을 조회한다."""
     return task("documents", "get", kind=kind, document_id=document_id)
 
 
+@tool(args_schema=IssuedDocumentSearch)
+def search_trade_documents(**inputs) -> dict:
+    """발급된 본인 PI/PO/CI/PL을 찾는다. 종류, 문서번호, 거래처명, 발급일(한국 날짜, 양끝 포함) 중
+    최소 한 조건을 넣는다. issued_from/issued_to는 YYYY-MM-DD다. 발급 당시 버전과 다운로드 파일을 반환한다."""
+    return task("documents", "search_issued", **IssuedDocumentSearch.model_validate(inputs).model_dump(mode="json"))
+
+
 @tool
-def document_schema(kind: Kind) -> dict:
+def document_schema(kind: DocumentKind) -> dict:
     """문서 values의 실제 입력 스키마를 확인한다. 구조를 추측하지 말고 작성 전에 조회한다."""
     return task("documents", "schema", kind=kind)
 
@@ -58,7 +64,7 @@ def prepare_document(**inputs) -> dict:
 
 
 @tool
-def prepare_issue(kind: Kind, document_id: Positive, revision: Positive,
+def prepare_issue(kind: DocumentKind, document_id: Positive, revision: Positive,
                   formats: list[Literal["pdf", "xlsx"]] | None = None) -> dict:
     """현재 문서 버전의 PDF/XLSX 발급을 제안한다. 실제 발급은 사용자 승인 후 수행한다."""
     return task("documents", "issue", kind=kind, document_id=document_id, revision=revision,
@@ -85,5 +91,5 @@ def ask_user(question: str) -> dict:
     return {"question": question}
 
 
-AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, document_schema,
+AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, search_trade_documents, document_schema,
     prepare_document, prepare_issue, prepare_packing, prepare_send, ask_user)}

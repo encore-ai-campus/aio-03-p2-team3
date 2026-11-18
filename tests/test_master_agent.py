@@ -181,6 +181,85 @@ def test_document_tool_missing_facts_revises_same_document_and_issues_real_files
         assert not google.mailbox.called('send')
 
 
+def test_issued_search_finds_the_original_files_for_the_authenticated_owner(database_url):
+    from datetime import datetime, timezone
+
+    from app.db.models import TradeArtifact, TradeProposal
+    from app.trade.review.repository import SQLReviews
+    from tests.fakes.storage import FakeStorage
+    from tests.test_pi_domain import pi_input
+
+    jwks = FakeJwks()
+    token, other_token = jwks.token(), jwks.token(sub=uuid4())
+    filters = {"kind": "PI", "counterparty": "acme", "issued_from": "2026-10-01", "issued_to": "2026-10-31"}
+    choices = Choices([("search_trade_documents", filters), "지난달 발급본입니다."])
+    with TestClient(app_for(database_url, jwks, FakeGmailGoogle(), choices, storage=FakeStorage())) as client:
+        database = client.app.state.database
+        account = client.get("/api/me", headers=auth(token)).json()["user_id"]
+        for member_token in (token, other_token):
+            company(client, member_token)
+
+        def create_pi(headers, number):
+            response = client.post("/api/trade/pi", headers=headers, json=pi_input(document_number=number).model_dump(mode="json"))
+            assert response.status_code == 201, response.text
+            return response.json()["document_id"]
+
+        def issue_pi(headers, document_id, date):
+            url = f"/api/trade/pi/{document_id}/reviews"
+            response = client.post(url, headers=headers, json={"revision": 1, "formats": ["pdf"]})
+            assert response.status_code == 201, response.text
+            proposal = response.json()
+            response = client.post(f"{url}/{proposal['id']}/decisions", headers=headers, json={
+                "action": "approve", "revision": 1, "content_hash": proposal["content_hash"]})
+            assert response.status_code == 200, response.text
+            with database.session() as session:
+                session.get(TradeProposal, proposal["id"]).decided_at = datetime.fromisoformat(date)
+            return response.json()
+
+        headers = auth(token)
+        first = create_pi(headers, "PI-ORIGINAL")
+        original = issue_pi(headers, first, "2026-09-30T15:00:00+00:00")
+        last = issue_pi(headers, create_pi(headers, "PI-LATEST"), "2026-10-31T14:59:59+00:00")
+        issue_pi(headers, create_pi(headers, "PI-NOV"), "2026-10-31T15:00:00+00:00")
+        issue_pi(auth(other_token), create_pi(auth(other_token), "PI-OTHER"), "2026-10-28T00:00:00+00:00")
+        create_pi(headers, "PI-UNISSUED")
+        change = pi_input(document_number="PI-EDITED").model_dump(mode="json")
+        response = client.put(f"/api/trade/pi/{first}", headers=headers, json={"revision": 1, "document": change})
+        assert response.status_code == 200 and response.json()["revision"] == 2, response.text
+
+        response = client.post("/api/agent/conversations", headers=headers, json={"message": "지난달 Acme에 발급한 PI를 찾아줘"})
+        assert response.status_code == 202, response.text
+        state = read(client, token, response.json()["id"])
+        assert state["status"] == "completed"
+        matches = state["results"][0]["data"]["issued_documents"]
+        assert [(hit["document_number"], hit["revision"], hit["issued_on"]) for hit in matches] == [
+            ("PI-LATEST", 1, "2026-10-31"), ("PI-ORIGINAL", 1, "2026-10-01")]
+        assert [hit["files"] for hit in matches] == [last["files"], original["files"]]
+        assert client.get(matches[1]["files"][0]["download_url"], headers=headers).content.startswith(b"%PDF")
+        assert client.get(matches[1]["files"][0]["download_url"], headers=auth(other_token)).status_code == 404
+        assert any("PI-ORIGINAL" in message.content for message in choices.observed if message.type == "tool")
+        assert {"label": "발급 문서 검색", "status": "completed"} in state["progress"]["steps"]
+
+        repo = SQLReviews(database, account, None)
+        assert repo.search_issued(document_number="%", counterparty=None, issued_from=None,
+                                  issued_to=None) == {"issued_documents": []}
+        # 실제 승인 흐름과 별개로 검색 상한을 검사할 승인 기록을 준비한다.
+        with database.session() as session:
+            snapshot = session.get(TradeProposal, original["id"])
+            for day in range(2, 13):
+                proposal_id = uuid4().hex
+                session.add(TradeProposal(id=proposal_id, user_id=account, document_id=first, revision=1,
+                    payload=snapshot.payload, content_hash=snapshot.content_hash, status="approved", decision="approve",
+                    decided_at=datetime(2026, 10, day, tzinfo=timezone.utc)))
+                session.flush()
+                file = original["files"][0]
+                session.add(TradeArtifact(id=uuid4().hex, user_id=account, proposal_id=proposal_id,
+                    filename=file["filename"], file_format="pdf", media_type=file["media_type"], content_hash=file["content_hash"]))
+        limited = repo.search_issued(document_number="PI-ORIG", counterparty=None, issued_from=None, issued_to=None)
+        assert [match["issued_on"] for match in limited["issued_documents"]] == [
+            f"2026-10-{day:02}" for day in range(12, 2, -1)]
+
+
 def test_native_tool_binding_uses_owner_key_and_refuses_worker_fallback(database, monkeypatch):
     import json
     import httpx

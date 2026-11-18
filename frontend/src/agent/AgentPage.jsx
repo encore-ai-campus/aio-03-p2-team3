@@ -19,7 +19,7 @@ Object.assign(ERRORS, { agent_model_network: "AI 연결이 끊겼습니다. 저�
   agent_model_invalid_input: "AI 모델이 도구 요청을 거절했습니다. 모델 설정과 도구 지원 여부를 확인해 주세요.",
   agent_model_internal: "AI 요청을 처리하지 못했습니다. 저장된 결과를 확인해 주세요." })
 const OPERATIONS = { search: "메일 검색", query: "원문 조회", draft: "초안 작성", get: "문서 조회", schema: "입력 조건 확인",
-  issue: "파일 발급", approve_packing: "포장 합계 승인", send: "답장 발송" }
+  issue: "파일 발급", approve_packing: "포장 합계 승인", send: "답장 발송", search_issued: "발급 문서 검색" }
 const OUTCOMES = { completed: "완료", failed: "실패", cancelled: "취소", needs_review: "확인 필요", unknown: "결과 확인 필요", blocked: "선행 작업 확인 필요" }
 const PROGRESS_STATUS = { running: "진행 중", completed: "완료", failed: "실패",
   review: "확인 필요", interrupted: "중단" }
@@ -65,7 +65,13 @@ function MarkdownText({ text }) {
   }}>{text}</Markdown>
 }
 
+function FileDownloads({ files, token, onError }) {
+  return files?.map(file => <button className="btn" key={file.id}
+    onClick={() => downloadFile(file, token).catch(error => onError(error.message))}>{file.filename} 다운로드</button>)
+}
+
 function StepDetail({ item, token, onError }) {
+  const issued = item.data?.issued_documents
   return <>
     {item.code && <p>{item.code}</p>}
     {item.data?.threads?.map(thread => <p key={thread.thread_id}><Link to={`/inbox?thread=${encodeURIComponent(thread.thread_id)}`}>{thread.subject}</Link> · {thread.from_addr}</p>)}
@@ -75,9 +81,15 @@ function StepDetail({ item, token, onError }) {
       <p>{candidate.subject}</p><p className="agent-text">{candidate.body}</p></article>)}
     {item.data?.document_id && item.kind && <p><Link to={`/trade/${item.kind.toLowerCase()}/${item.data.document_id}`}>{item.kind} 문서 #{item.data.document_id} 열기</Link></p>}
     {item.data?.sent_message_id && <p role="status">메일을 보냈습니다.</p>}
-    {item.data?.files?.map(file => <button className="btn" key={file.id} onClick={() => downloadFile(file, token).catch(error => onError(error.message))}>{file.filename} 다운로드</button>)}
+    <FileDownloads files={item.data?.files} token={token} onError={onError} />
+    {issued?.length === 0 && <p>조건에 맞는 발급 문서가 없습니다.</p>}
+    {issued?.map(document => <article key={document.proposal_id}>
+      <b>{document.kind} {document.document_number}</b>
+      <p>{[document.counterparty, document.issued_on, `발급 버전 ${document.revision}`].filter(Boolean).join(" · ")}</p>
+      <FileDownloads files={document.files} token={token} onError={onError} />
+    </article>)}
     {item.operation === "schema" && <p>문서 작성에 필요한 입력 조건을 확인했습니다.</p>}
-    {!item.data?.threads && !item.data?.messages && !item.data?.candidates && !item.data?.files && item.operation !== "schema" &&
+    {!item.data?.threads && !item.data?.messages && !item.data?.candidates && !item.data?.files && !issued && item.operation !== "schema" &&
       <pre>{JSON.stringify(item.data, null, 2)}</pre>}
   </>
 }
