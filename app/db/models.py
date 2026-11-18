@@ -137,6 +137,8 @@ class WorkerDevice(Base, Owned, Created):
 
 class WorkerJob(Base, Owned, Created):
     __tablename__ = "worker_jobs"
+    # PC 폴링 claim과 대기열 용량 확인이 (user_id, status)로 걸러 만든 순서대로 찾는다.
+    __table_args__ = (Index("ix_worker_jobs_user_status", "user_id", "status"),)
     id: Mapped[str] = mapped_column(String, primary_key=True)
     attempt_id: Mapped[str] = mapped_column(String, unique=True)
     device_id: Mapped[str] = mapped_column(ForeignKey("worker_devices.id"), index=True)
@@ -175,7 +177,13 @@ class GmailWatch(Base):
 
 class ProcessedMessage(Base, Owned, Created):
     __tablename__ = "processed_messages"
-    __table_args__ = (UniqueConstraint("user_id", "gmail_message_id"),)
+    # 메일함 목록의 스레드별 최신 처리(max id) 집계와 스레드 상세가 (user_id, thread_id)로 읽는다.
+    # recovery는 시작 복구 pending()이 처리 중이면서 분류 결과가 있는 행만 골라내는 부분 인덱스다.
+    __table_args__ = (UniqueConstraint("user_id", "gmail_message_id"),
+                      Index("ix_processed_messages_user_thread", "user_id", "thread_id", "id"),
+                      Index("ix_processed_messages_recovery", "id",
+                            sqlite_where=text("status = 'processing' AND triage IS NOT NULL"),
+                            postgresql_where=text("status = 'processing' AND triage IS NOT NULL")),)
     id: Mapped[int] = mapped_column(primary_key=True)
     gmail_message_id: Mapped[str] = mapped_column(String)
     thread_id: Mapped[str] = mapped_column(String, index=True)
@@ -190,6 +198,10 @@ class ProcessedMessage(Base, Owned, Created):
 
 class ThreadMessage(Base, Owned):
     __tablename__ = "thread_messages"
+    # 메일함 목록·상세가 (user_id, gmail_message_id)로 원문을 조인하고, 스레드 조회·장기 기억
+    # 요약이 (user_id, thread_id)의 원문을 보낸 시각 순으로 읽는다.
+    __table_args__ = (Index("ix_thread_messages_user_gmail", "user_id", "gmail_message_id"),
+                      Index("ix_thread_messages_user_thread_sent", "user_id", "thread_id", "sent_at"))
     id: Mapped[int] = mapped_column(primary_key=True)
     thread_id: Mapped[str] = mapped_column(String, index=True)
     gmail_message_id: Mapped[str] = mapped_column(String)
@@ -214,6 +226,10 @@ class ThreadMemory(Base, Updated):
 
 class ReplyCandidate(Base, Owned, Created):
     __tablename__ = "reply_candidates"
+    # 스레드 상세가 (user_id, thread_id)의 후보를 만든 순서로 읽고, 메일함 폴링이
+    # 대기 중 후보 집계를 (user_id, status)로 센다.
+    __table_args__ = (Index("ix_reply_candidates_user_thread", "user_id", "thread_id"),
+                      Index("ix_reply_candidates_user_status", "user_id", "status"))
     id: Mapped[int] = mapped_column(primary_key=True)
     run_id: Mapped[str] = mapped_column(String, index=True)
     thread_id: Mapped[str] = mapped_column(String)
@@ -268,7 +284,10 @@ class TradeDocument(Base, Owned, Created):
     """CONTRACT 15.7절 trade_documents — 무역서류(kekorea-port 2~6). draft는 `TradeDocDraft`
     (계약 15.5절) JSON이고 PL은 그 안 `packing_totals`에 원본/계산 합계 비교·승인 상태를 담는다."""
     __tablename__ = "trade_documents"
-    __table_args__ = (UniqueConstraint("user_id", "doc_no"),)
+    # 문서 목록이 (user_id, doc_kind)의 최근 문서를, 작업현황이 본인 문서 전체를 만든 순서로 읽는다.
+    __table_args__ = (UniqueConstraint("user_id", "doc_no"),
+                      Index("ix_trade_documents_user_kind_id", "user_id", "doc_kind", "id"),
+                      Index("ix_trade_documents_user_created", "user_id", "created_at"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     thread_id: Mapped[str] = mapped_column(String)
     run_id: Mapped[str] = mapped_column(String, index=True)
@@ -318,7 +337,9 @@ class TradeArtifact(Base, Owned, Created):
     뒤 22절에서 삭제한다. 기존 파일 ID·형식·해시·승인 관계는 그대로 유지한다.
     """
     __tablename__ = "trade_artifacts"
-    __table_args__ = (UniqueConstraint("proposal_id", "file_format"),)
+    # 저장소 정리가 객체 키로 남은 참조를 확인한다.
+    __table_args__ = (UniqueConstraint("proposal_id", "file_format"),
+                      Index("ix_trade_artifacts_object_key", "object_key"),)
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     proposal_id: Mapped[str] = mapped_column(ForeignKey("trade_proposals.id"), index=True)
     file_format: Mapped[str] = mapped_column(String)
@@ -337,6 +358,8 @@ class FileAsset(Base, Owned, Created):
     `content_type`은 확장자·클라이언트 값이 아니라 서버가 파일 시그니처로 확인한 실제 형식이다.
     """
     __tablename__ = "file_assets"
+    # 저장소 정리가 객체 키로 남은 참조를 확인한다.
+    __table_args__ = (Index("ix_file_assets_object_key", "object_key"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     original_filename: Mapped[str] = mapped_column(String)
     content_type: Mapped[str] = mapped_column(String)
@@ -456,6 +479,9 @@ class Counterparty(Base, Owned, Updated):
 
 class CounterpartyHistory(Base, Owned):
     __tablename__ = "counterparty_history"
+    # 장기 거래 기억이 같은 상대의 최근 5건을 발송 시각 역순으로 읽는다.
+    __table_args__ = (Index("ix_counterparty_history_user_email_sent", "user_id", "counterparty_email",
+                            "sent_at"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     counterparty_email: Mapped[str] = mapped_column(String)
     thread_id: Mapped[str] = mapped_column(String)
@@ -467,6 +493,8 @@ class CounterpartyHistory(Base, Owned):
 
 class Run(Base, Owned):
     __tablename__ = "runs"
+    # 실행 기록 목록이 본인 실행을 최신 순으로 읽는다.
+    __table_args__ = (Index("ix_runs_user_started", "user_id", "started_at"),)
     run_id: Mapped[str] = mapped_column(String, primary_key=True)
     mode: Mapped[str] = mapped_column(String)
     message_id: Mapped[str] = mapped_column(String)
