@@ -1117,11 +1117,13 @@ LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 �
 
 - `/app/agent`·`/app/agent/{id}`와 Bearer 전용 `/api/agent/conversations` GET/POST, `/{id}` GET, `/{id}/messages`·`resume`·`recover` POST를 제공한다. 소유자는 JWT에서 매핑한 내부 사용자이며 타인/없는 ID는 404, 인증 누락은 401이다. 변경 요청은 대화 revision을 확인하고 사용자별 동시 실행 1건만 접수한다. 실행은 기존 BackgroundTasks·단일 앱 프로세스 범위다.
 - `make_workflow(interactive=True)`만 순차 tool calling을 사용한다. `plan`이 기존 본인 키의 Responses 모델에 도구를 바인딩하고, `@tool` 입력을 검증한 뒤 기존 prepare/질문/승인/실행 노드로 전달한다. 실제 `TaskResult`를 ToolMessage로 돌려 다음 행동을 정한다. 한 요청에 모델 호출 최대 12번, 도구 결과의 모델 문맥은 건당 24,000자로 제한한다. 과거 Gmail/명시적 Plan 동작은 유지한다.
-- 도구: `search_mail`, `get_mail`, `prepare_reply`, `get_document`, `document_schema`, `prepare_document`, `prepare_packing`, `prepare_issue`, `prepare_send`, `ask_user`. 모델 입력에 user_id/키/승인은 없다. 문서 입력 스키마·계산·원본·단가·발급 검증은 기존 문서 서비스를 사용하고 AI가 confirm_price_override를 켜지 못하게 한다. 초안의 실제 누락/기존 input/ID/revision을 다음 판단에 돌려 자연어 보완 후 같은 문서를 수정한다.
+- 도구: `search_mail`, `get_mail`, `prepare_reply`, `get_document`, `search_trade_documents`, `document_schema`, `prepare_document`, `prepare_packing`, `prepare_issue`, `prepare_send`, `ask_user`. 모델 입력에 user_id/키/승인은 없다. 문서 입력 스키마·계산·원본·단가·발급 검증은 기존 문서 서비스를 사용하고 AI가 confirm_price_override를 켜지 못하게 한다. 초안의 실제 누락/기존 input/ID/revision을 다음 판단에 돌려 자연어 보완 후 같은 문서를 수정한다.
 - 메일 발송은 모델의 제안 후보와 무관하게 사용자가 후보를 직접 선택한 뒤 실제 Reply-To·본문·첨부를 보고 별도 승인한다. 발급/PL 합계/메일 발송 승인은 분리한다. 취소/unknown은 자동 재시도 없이 끝내고 기존 action/hash/revision·claim·영수증 검증을 재사용한다. 모델의 자유 텍스트와 실제 실행 결과는 화면에서 구분한다.
 - `20261118_master_agent`는 `agent_conversations`에 소유권·revision·실행 상태·화면 투영을 저장한다. 공식 `langgraph-checkpoint-postgres==3.2.1`의 PostgresSaver가 최초 대화 실행 때 기존 DATABASE_URL의 public에 체크포인트 표 4개를 준비한다. 저장소 연결은 autocommit·dict_row·prepare_threshold=0, pool 최대 3개다. 새 대화/체크포인트 표는 RLS·PUBLIC/anon/authenticated 직접 접근 제한을 적용한다. Supabase auth/storage는 변경하지 않는다.
 - 새로고침/재시작 후 질문·승인은 그대로 이어간다. 시작 시 running은 interrupted로 표시하며 외부 쓰기를 자동 재생하지 않는다. 사용자의 상태 확인은 기존 recover를 통해 영수증을 확인하며 새 발송 권한을 만들지 않는다. 이전 회차의 대화/결과 링크도 보존한다.
 - 실행을 접수할 때 대화 화면 투영의 `progress`에 UTC `started_at`과 빈 `steps`를 기록한다. 기존 대화 상세 조회에서 실제 LangGraph 작업의 시작·종료를 사용자용 `label`과 `status`로 보내며, 이벤트의 입력·출력·예외 원문은 진행 내역에 저장하지 않는다. 답변·승인 대기 또는 실행 종료에는 `finished_at`을 기록한다. 답변/승인/상태 확인이 접수되면 새 revision에서 시간을 다시 잰다. 재시작에 의한 중단은 마지막으로 저장한 시각에서 타이머를 멈춘다.
+- 읽기 도구는 대화의 인증된 소유자를 서버에서 주입한다. 검증에 실패한 입력은 `invalid_tool_input`, 업무 실행 오류는 짧은 코드를 가진 실패 결과로 모델에 돌려준다. 빈 검색 결과는 빈 배열과 함께 완료로 투영한다. 화면은 도구 결과 배열을 타임라인 상세로 렌더하고 내부 다운로드 링크는 기존 Bearer 경로를 사용한다.
+- `search_trade_documents`는 종류·문서번호·거래처·발급일 범위 중 한 조건 이상을 받는다. 검색은 해당 사용자의 승인된 제안 중 발급 파일이 있는 기록으로 제한하며 승인 시각의 한국 날짜 양끝을 포함한다. 거래처·문서번호는 승인 당시 문서에서 읽는다. 최신 발급 순 최대 10건이며 `issued_documents`에 제안 ID·문서 ID·버전·종류·번호·거래처·발급일·인증 다운로드 정보를 담는다.
 - React는 실행 중에만 2초 조회하고 숨긴 탭에서는 쉬며 요청/타이머를 정리한다. 기존 문서 스냅샷·다운로드·메일/문서 상세 링크를 재사용한다. 모델 키는 기존 stored_key/local 경계를 사용하며 local_worker의 도구 대화는 서버 키 대체 없이 거부한다. RAG 검색·Calendar 실행·새 큐·SSE는 범위 밖이다.
 
 ## 18. 문서함(지식 문서) 수집과 벡터 저장

@@ -20,6 +20,7 @@ PREPARE_LABELS = {
     ("mail", "search"): "메일 검색", ("mail", "query"): "메일 원문 조회",
     ("mail", "draft"): "답장 초안 작성", ("mail", "send"): "답장 발송 준비",
     ("documents", "get"): "문서 조회", ("documents", "schema"): "문서 입력 조건 확인",
+    ("documents", "search_issued"): "발급 문서 검색",
     ("documents", "draft"): "문서 초안 작성", ("documents", "issue"): "파일 발급 준비",
     ("documents", "approve_packing"): "포장 합계 승인 준비",
 }

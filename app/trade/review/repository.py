@@ -9,7 +9,7 @@ from copy import deepcopy
 from hashlib import sha256
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import Date, case, cast, func, or_, select, update
 
 from app.db.models import FileAsset, TradeArtifact, TradeDocument, TradeProposal, utcnow
 from app.files.storage import StorageError
@@ -42,6 +42,54 @@ class SQLReviews:
 
     def document(self, document_id):
         return self.documents.get(document_id)
+
+    def search_issued(self, *, document_number, counterparty, issued_from, issued_to):
+        document = TradeProposal.payload["document"]
+        number = document["document_number"].as_string()
+        internal_number = func.coalesce(document["doc_no"].as_string(), TradeDocument.doc_no)
+        party = case((TradeDocument.doc_kind == "PO", document["seller"]["legal_name"].as_string()),
+                     else_=document["buyer"]["legal_name"].as_string())
+        day = cast(func.timezone("Asia/Seoul", TradeProposal.decided_at), Date)
+        has_files = select(TradeArtifact.id).where(
+            TradeArtifact.proposal_id == TradeProposal.id, TradeArtifact.user_id == self.user_id,
+        ).exists()
+        query = select(
+            TradeProposal.id.label("proposal_id"), TradeProposal.document_id, TradeProposal.revision,
+            TradeDocument.doc_kind.label("kind"), func.coalesce(number, internal_number).label("document_number"),
+            party.label("counterparty"), day.label("issued_on"), TradeProposal.decided_at,
+        ).join(TradeDocument).where(
+            TradeDocument.user_id == self.user_id, TradeProposal.user_id == self.user_id,
+            TradeProposal.status == "approved", TradeProposal.decided_at.is_not(None), has_files,
+        )
+        if self.document_type:
+            query = query.where(TradeDocument.doc_kind == self.document_type)
+        if document_number:
+            query = query.where(or_(number.icontains(document_number, autoescape=True),
+                                    internal_number.icontains(document_number, autoescape=True)))
+        if counterparty:
+            query = query.where(party.icontains(counterparty, autoescape=True))
+        if issued_from:
+            query = query.where(day >= issued_from)
+        if issued_to:
+            query = query.where(day <= issued_to)
+
+        issued = query.order_by(TradeProposal.decided_at.desc(), TradeProposal.id.desc()).limit(10).subquery()
+        files = select(issued, TradeArtifact.id, TradeArtifact.file_format, TradeArtifact.filename,
+                       TradeArtifact.media_type, TradeArtifact.content_hash).join(
+            TradeArtifact, TradeArtifact.proposal_id == issued.c.proposal_id,
+        ).where(TradeArtifact.user_id == self.user_id).order_by(
+            issued.c.decided_at.desc(), issued.c.proposal_id.desc(), TradeArtifact.file_format,
+        )
+        matches = {}
+        with self.database.session() as session:
+            for row in session.execute(files):
+                proposal = matches.setdefault(row.proposal_id, {
+                    "proposal_id": row.proposal_id, "document_id": row.document_id, "revision": row.revision,
+                    "kind": row.kind, "document_number": row.document_number, "counterparty": row.counterparty,
+                    "issued_on": row.issued_on.isoformat(), "files": [],
+                })
+                proposal["files"].append(artifact_view(row))
+        return {"issued_documents": list(matches.values())}
 
     def branding(self):
         with self.database.session() as session:
