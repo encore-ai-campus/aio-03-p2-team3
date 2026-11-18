@@ -167,7 +167,11 @@ def test_pi_number_is_unique_for_owner_on_create_and_rename(pi_client):
     values["document_number"] = "PI-OTHER"
     assert pi_client.put(f"/api/trade/pi/{second['document_id']}", json={"revision": 1, "document": values}).status_code == 200
     values["document_number"] = None
-    assert all(pi_client.post("/api/trade/pi", json=values).status_code == 201 for _ in range(2))
+    auto_numbered = [pi_client.post("/api/trade/pi", json=values) for _ in range(2)]
+    assert all(response.status_code == 201 for response in auto_numbered)
+    generated_numbers = [response.json()["document"]["document_number"] for response in auto_numbered]
+    assert len(set(generated_numbers)) == 2
+    assert all(number.startswith("PI-") for number in generated_numbers)
     pi_client.app.dependency_overrides[current_user_id] = lambda: 2
     assert pi_client.post("/api/trade/pi", json=pi_input().model_dump(mode="json")).status_code == 201
     assert first["document_id"] != second["document_id"]

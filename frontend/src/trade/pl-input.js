@@ -1,7 +1,7 @@
 const HEADER_FIELDS = ["product_family", "document_number", "incoterms", "remarks", "ship_to", "bill_to", "shipment_reference", "hs_code",
   "actual_package_count", "container_count", "declared_net_weight_kg", "declared_gross_weight_kg", "declared_volume_cbm", "declared_total_quantity", "declared_total_quantity_unit"]
 export const PACKAGE_FIELDS = ["package_type", "package_count", "net_weight_kg", "gross_weight_kg", "dimensions", "shipping_marks"]
-const ITEM_FIELDS = [...PACKAGE_FIELDS, "product_name", "product_code", "capacity", "quantity", "unit", "volume_cbm", "source"]
+const ITEM_FIELDS = [...PACKAGE_FIELDS, "product_name", "product_code", "capacity", "quantity", "unit", "volume_cbm", "source", "confirm_product_override"]
 const PARTY_FIELDS = ["legal_name", "address", "contact", "phone", "email", "registration_details"]
 export const PACKING_TOTAL_FIELDS = [["actual_package_count","포장 수","package_count"],["declared_net_weight_kg","순중량 kg","net_weight_kg"],
   ["declared_gross_weight_kg","총중량 kg","gross_weight_kg"],["declared_volume_cbm","부피 CBM","volume_cbm"]]
@@ -32,7 +32,7 @@ export function plSectionFor(path) {
   return /^(?:items|packages|packing)(?:\.|$)/.test(path) ? "packing" : "terms"
 }
 export function plMissing(draft) {
-  const paths = ["product_family", "document_number", "incoterms", "shipment_reference"]
+  const paths = ["product_family", "incoterms", "shipment_reference"]
   for (const role of ["buyer","seller"]) for (const key of ["legal_name","address"])
     if (role !== "seller" || key !== "legal_name") paths.push(`${role}.${key}`)
   if (!draft.items.length) paths.push("items")

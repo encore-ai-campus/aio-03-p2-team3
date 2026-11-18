@@ -72,10 +72,12 @@ export default function PLForm({ token, draft, setDraft, step, fields = null, se
         {[["document_number","PL 문서번호"],["shipment_reference","선적 참조"],["hs_code","HS 코드"],["incoterms","납품 조건"],
           ["actual_package_count","원본 포장 수"],["container_count","원본 컨테이너 표기"],["declared_net_weight_kg","원본 순중량 (kg)"],
           ["declared_gross_weight_kg","원본 총중량 (kg)"],["declared_volume_cbm","원본 부피 (CBM)"],["declared_total_quantity","원본 총수량"],["declared_total_quantity_unit","원본 수량 단위"]].filter(([key]) => wanted(key)).map(([key,label]) =>
-          <Field key={key} label={label} value={draft[key]} aria-invalid={missing.includes(key) || undefined} onChange={(value) => change(key,value)} />)}
+          <Field key={key} label={label} value={draft[key]} aria-invalid={key !== "document_number" && missing.includes(key) || undefined}
+            readOnly={key === "document_number"} placeholder={key === "document_number" ? "승인·발급 시 자동 생성" : undefined}
+            onChange={(value) => key !== "document_number" && change(key,value)} />)}
       </div>{!fields && <details className="pi-optional"><summary>배송지·청구지·비고</summary><div className="settings-fields">{[["ship_to","배송지"],["bill_to","청구지"],["remarks","비고"]].map(([key,label]) =>
         <Field key={key} label={label} value={draft[key]} multiline rows={2} onChange={(value) => change(key,value)} />)}</div></details>}
-      <p className="section-note">컨테이너가 없는 선적은 비워도 됩니다. 원본 단위와 ‘2 x 40FT’ 같은 표기를 그대로 보존해요.</p>
+      <p className="section-note">PL 문서번호는 최종 승인·발급 시 최신 순번으로 자동 생성됩니다. 컨테이너가 없는 선적은 비워도 됩니다. 원본 단위와 ‘2 x 40FT’ 같은 표기를 그대로 보존해요.</p>
     </>}
   </fieldset>
 }

@@ -364,7 +364,7 @@ function PLSummary({ draft, current, dirty, disabled, onEdit }) {
   return <aside className="pi-summary" aria-label="작성 내용 요약">
     <button type="button" className="pi-summary-toggle" aria-expanded={open} aria-controls="pi-summary-content" onClick={() => setOpen(!open)}>작성 내용 {open ? "접기" : "보기"}</button>
     <div id="pi-summary-content" className={open ? "open" : ""}>
-      <h2>작성 중인 PL</h2><p className="pi-summary-number">{draft.document_number || "문서번호 미입력"}</p>
+      <h2>작성 중인 PL</h2><p className="pi-summary-number">{draft.document_number || "승인·발급 시 문서번호 자동 생성"}</p>
       <dl>{PL_STEPS.map((step) => <div key={step.key}><dt>{step.label}<button type="button" disabled={disabled} onClick={() => { setOpen(false); onEdit(step.key) }}>{step.label} 수정</button></dt><dd>{summaries[step.key]}</dd></div>)}</dl>
       {totals && <div className="pi-summary-total"><span>{dirty ? "마지막 저장 포장 합계" : "서버 포장 합계"}</span>
         <strong>{totals.calculated.package_count ?? "확인 필요"}</strong>

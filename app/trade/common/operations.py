@@ -20,13 +20,17 @@ def calculate(draft):
 
 def prepare_priced(values, context, document_type):
     draft = deepcopy(values)
+    draft["document_number"] = None
     draft.update(document_type=document_type, doc_kind=document_type,
                  issuer=deepcopy(context.issuer), bank=deepcopy(context.bank))
     apply_issuer_defaults(draft, document_type, context.issuer, fix_name=True)
     apply_company_profiles(draft, context.counterparties)
     for item in draft.get("items", []):
+        item["product_match_confirmed"] = item.pop("confirm_product_override", False) is True
         override = item.pop("confirm_price_override", False)
         item["price_override_confirmed"] = override is True or item.get("price_override_confirmed") is True
+        if document_type != "PL" and item.get("discount_percent") is None:
+            item["discount_percent"] = "0"
         if item.get("unit_price") is not None:
             item.setdefault("price_source", "User-confirmed transaction-specific override" if override else "Entered document value")
     synchronize_quantities(draft)

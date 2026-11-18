@@ -97,6 +97,8 @@ def extract_facts(prompt, schema: type[PydanticBaseModel], text: str, backend=No
     for item in draft.get("items", []):
         if "confirm_price_override" in item:
             item["confirm_price_override"] = False
+        if "confirm_product_override" in item:
+            item["confirm_product_override"] = False
         if item.get("product_code") and item["product_code"].casefold() not in str(item.get("source") or "").casefold():
             draft.setdefault("conflicts", []).append("Confirm product code against its exact source quote")
     verify_item_quotes(draft, text)

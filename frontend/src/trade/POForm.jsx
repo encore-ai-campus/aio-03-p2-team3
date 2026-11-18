@@ -32,8 +32,7 @@ export default function POForm({ token, draft, setDraft, step, fields = null, se
   function item(index, key, value) {
     onDirty()
     setDraft((previous) => ({ ...previous, items: previous.items.map((row, i) => i === index ? { ...row, [key]: value,
-      ...(key === "quantity" ? { paid_quantity: value } : {}),
-      ...(["product_name","product_code","capacity","unit"].includes(key) ? { confirm_price_override: false } : {}) } : row) }))
+      ...(key === "quantity" ? { paid_quantity: value } : {}) } : row) }))
   }
   function chooseSupplier(key) {
     const selected = settings?.counterparties.find((row) => row.company_key === key)
@@ -70,7 +69,8 @@ export default function POForm({ token, draft, setDraft, step, fields = null, se
         <option value="" disabled>상품군을 선택해 주세요</option>
         {[["other","기타"],["cosmetics","화장품"],["polysilicon","폴리실리콘"],["wafer","웨이퍼"],["solar_cell","태양전지"],["solar_module","태양광 모듈"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}
       </select></div>}
-      {wanted("document_number") && <DocumentField label="PO 문서번호" value={draft.document_number} onChange={(value) => change("document_number", value)} placeholder="미확정이면 DRAFT" />}
+      {wanted("document_number") && <><DocumentField label="PO 문서번호" value={draft.document_number} onChange={() => {}} placeholder="승인·발급 시 자동 생성" readOnly />
+        <p className="section-note">PO 문서번호는 최종 승인·발급 시 최신 순번으로 자동 생성됩니다.</p></>}
       {wanted("currency") && <DocumentField label="통화" value={draft.currency} maxLength={3} pattern="[A-Z]{3}" onChange={(value) => change("currency", value.toUpperCase())} />}
       {wanted("incoterms") && <DocumentField label="납품 조건 (Incoterms·장소)" value={draft.incoterms} onChange={(value) => change("incoterms", value)} placeholder="예: FOB Busan" />}
       {wanted("payment_terms") && <DocumentField label="지급 조건" value={draft.payment_terms} onChange={(value) => change("payment_terms", value)} />}
@@ -98,10 +98,11 @@ export default function POForm({ token, draft, setDraft, step, fields = null, se
               setDraft((previous) => ({ ...previous, items: previous.items.map((entry) => entry.rowId === row.rowId ? selectProduct(entry, product) : entry) }))
             }} />
             <label className="pi-price-check"><input type="checkbox" aria-label={`품목 ${index+1} · 단가표 대신 입력한 단가 사용`} checked={row.confirm_price_override ?? false} onChange={(event) => item(index,"confirm_price_override",event.target.checked)} /> 단가표 대신 입력한 단가 사용</label>
+            <label className="pi-price-check"><input type="checkbox" aria-label={`품목 ${index+1} · 단가표 대신 입력한 상품 정보 사용`} checked={row.confirm_product_override ?? false} onChange={(event) => item(index,"confirm_product_override",event.target.checked)} /> 단가표 대신 입력한 상품 코드·규격 사용</label>
             <details open={fields?.some((path) => path === `items.${index}.discount_percent`)}>
             <summary>품목 {index+1} 상세 · 규격·할인·무상 수량</summary>
             <div className="settings-fields">
-              {[["product_code","상품 코드"],["capacity","용량·규격"],["discount_percent","할인율 (%)"],["free_quantity","무상 수량"],["promotion","프로모션"]].filter(([key]) => wanted(`items.${index}.${key}`) || fields?.includes("items")).map(([key,label]) =>
+              {[["product_code","상품 코드"],["capacity","용량·규격"],["discount_percent","할인율 (%)"],["free_quantity","무상 수량"],["promotion","프로모션"]].filter(([key]) => wanted(`items.${index}.${key}`) || fields?.includes("items") || (row.confirm_product_override && ["product_code","capacity"].includes(key))).map(([key,label]) =>
                 <DocumentField key={key} label={`${label} · 품목 ${index+1}`} value={row[key]} onChange={(value) => item(index,key,value)}
                   disabled={(key === "free_quantity" && Boolean(row.promotion))}
                   placeholder={key === "promotion" ? "예: 2+1" : key === "price_basis" ? "예: PCS" : undefined}

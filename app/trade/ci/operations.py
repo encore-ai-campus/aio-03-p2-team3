@@ -23,8 +23,9 @@ def prepare_ci(command: CIInput, source, conflicts=(), issuer=None):
         item["source_line_total"] = item["line_total"]
         item["source"] = f"Approved PI {command.source_pi_id} revision {command.source_revision}; FOC if unit price is zero"
     values = command.model_dump(mode="json")
-    # CI 문서번호는 따로 명시한다. 나머지 미지정 항목만 원본에서 가져온다.
-    draft["document_number"] = values.pop("document_number")
+    # CI 번호는 최종 승인·발급 시 서버가 생성한다.
+    draft["document_number"] = None
+    values.pop("document_number", None)
     for key, value in values.items():
         if value is not None or key in {"shipment_reference", "country_of_origin"}:
             draft[key] = value
@@ -45,10 +46,12 @@ def prepare_ci(command: CIInput, source, conflicts=(), issuer=None):
 def prepare_standalone(command, context, values=None):
     draft = deepcopy(values if values is not None else command.model_dump(mode="json"))
     draft.pop("mode", None)
+    draft["document_number"] = None
     draft.update(document_type="PI", doc_kind="PI", issuer=deepcopy(context.issuer), bank=None)
     apply_issuer_defaults(draft, "PI", context.issuer, fix_name=True)
     apply_company_profiles(draft, context.counterparties)
     for item in draft.get("items", []):
+        item["product_match_confirmed"] = item.pop("confirm_product_override", False) is True
         confirmed = item.pop("confirm_price_override", False)
         # 단독 CI는 직접 입력이므로 원문 근거로 단가 확인을 대신할 수 없다.
         item["source"] = None

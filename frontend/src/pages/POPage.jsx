@@ -310,7 +310,7 @@ function POSummary({ draft, current, dirty, disabled, onEdit }) {
   return <aside className="pi-summary" aria-label="작성 내용 요약">
     <button type="button" className="pi-summary-toggle" aria-expanded={open} aria-controls="pi-summary-content" onClick={() => setOpen(!open)}>작성 내용 {open ? "접기" : "보기"}</button>
     <div id="pi-summary-content" className={open ? "open" : ""}>
-      <h2>작성 중인 PO</h2><p className="pi-summary-number">{draft.document_number || "문서번호 미입력"}</p>
+      <h2>작성 중인 PO</h2><p className="pi-summary-number">{draft.document_number || "승인·발급 시 문서번호 자동 생성"}</p>
       <dl>{PO_STEPS.map((step) => <div key={step.key}><dt>{step.label}<button type="button" disabled={disabled} onClick={() => { setOpen(false); onEdit(step.key) }}>{step.label} 수정</button></dt><dd>{summaries[step.key]}</dd></div>)}</dl>
       {current && <div className="pi-summary-total"><span>{dirty ? "마지막 저장 금액" : "저장된 합계"}</span><strong>{current.document.currency} {current.document.total ?? "확인 필요"}</strong></div>}
       <p className="section-note">{dirty ? "변경한 내용은 저장하면 계산에 반영돼요." : "전체 확인 후 승인한 내용으로 파일을 발급해요."}</p>

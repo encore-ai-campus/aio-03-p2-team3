@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 
 const LABELS = {
   product_family: "상품군", document_number: "문서번호", document_type: "문서 종류", currency: "통화",
-  incoterms: "납품 조건", payment_terms: "지급 조건", ship_to: "배송지", bill_to: "청구지",
+  incoterms: "납품 조건", payment_terms: "지급 조건", issue_date: "발행일", ship_to: "배송지", bill_to: "청구지",
   country_of_origin: "원산지", shipment_reference: "선적 참조", hs_code: "HS 코드",
   container_count: "컨테이너 수", actual_package_count: "실제 포장 수", declared_net_weight_kg: "원본 순중량 (kg)",
   declared_gross_weight_kg: "원본 총중량 (kg)", declared_volume_cbm: "원본 부피 (CBM)",
@@ -40,9 +40,94 @@ export function updateMissingField(value, path, nextValue) {
   target[parts.at(-1)] = nextValue
   if (parts[0] === "items") {
     if (parts.at(-1) === "quantity") target.paid_quantity = nextValue
-    if (["product_name", "product_code", "capacity", "unit"].includes(parts.at(-1))) target.confirm_price_override = false
+  }
+  if (Array.isArray(copy.conflicts)) {
+    copy.conflicts = copy.conflicts.filter((message) => {
+      const conflict = sourceConflictDetails(message, copy)
+      return !(conflict?.clearable && conflict.fields.includes(path))
+    })
   }
   return copy
+}
+
+function sourceConflictDetails(raw, draft) {
+  const message = String(raw ?? "").trim()
+  const fieldNames = {
+    "legal name": "legal_name", address: "address", phone: "phone", email: "email",
+    "registration details": "registration_details", incoterms: "incoterms", "payment terms": "payment_terms",
+    "document number": "document_number", "issue date": "issue_date", "shipment reference": "shipment_reference",
+    "country of origin": "country_of_origin", "ship to": "ship_to", "bill to": "bill_to",
+    "product name": "product_name", "product code": "product_code", capacity: "capacity",
+    quantity: "quantity", "paid quantity": "paid_quantity", "free quantity": "free_quantity",
+    "shipped quantity": "shipped_quantity", "unit price": "unit_price", "discount percent": "discount_percent",
+  }
+  let match = /^Item (\d+) (product name|product code|capacity|quantity|paid quantity|free quantity|shipped quantity|unit price|discount percent) was not found in its source quote; confirm the value$/i.exec(message)
+  if (match) {
+    const index = Number(match[1]) - 1
+    const key = fieldNames[match[2].toLowerCase()]
+    const path = `items.${index}.${key}`
+    const name = draft.items?.[index]?.product_name || `품목 ${index + 1}`
+    const value = readPath(draft, path)
+    return { message: `품목 ${index + 1} (${name}) · ${LABELS[key]} 입력값${value ? ` ‘${value}’` : ""}이 원문 인용에서 확인되지 않습니다. 원문과 대조해 수정하세요.`, fields: [path], clearable: true }
+  }
+  match = /^(Buyer|Seller) (legal name|address|phone|email|registration details) was not found verbatim in the prompt; confirm it$/i.exec(message)
+  if (match) {
+    const path = `${match[1].toLowerCase()}.${fieldNames[match[2].toLowerCase()]}`
+    const value = readPath(draft, path)
+    return { message: `${match[1] === "Buyer" ? "구매자" : "판매자"} · ${LABELS[path.split(".")[1]]} 입력값${value ? ` ‘${value}’` : ""}이 원문에서 확인되지 않습니다. 원문과 대조해 수정하세요.`, fields: [path], clearable: true }
+  }
+  match = /^(Incoterms|Payment terms|Document number|Issue date|Shipment reference|Country of origin|Ship to|Bill to) was not found verbatim in the prompt; confirm it$/i.exec(message)
+  if (match) {
+    const path = fieldNames[match[1].toLowerCase()]
+    const value = readPath(draft, path)
+    return { message: `${LABELS[path]} 입력값${value ? ` ‘${value}’` : ""}이 원문에서 확인되지 않습니다. 원문과 대조해 수정하세요.`, fields: [path], clearable: true }
+  }
+  match = /^Item (\d+) has no verifiable exact quote from the prompt; confirm its extracted facts$/i.exec(message)
+  if (match) {
+    const index = Number(match[1]) - 1
+    const name = draft.items?.[index]?.product_name || `품목 ${index + 1}`
+    const fields = ["product_name", "capacity", "product_code", "quantity", "unit_price"].map((key) => `items.${index}.${key}`)
+    return { message: `품목 ${index + 1} (${name})의 원문 근거를 찾지 못했습니다. 품목명·규격·상품 코드·수량·단가를 원문과 대조해 수정하세요.`, fields }
+  }
+  if (/^Currency was not explicitly identified in the prompt|^More than one currency is explicitly indicated|^Extracted currency .+ conflicts with explicit .+ price evidence/i.test(message)) {
+    const value = draft.currency || "미입력"
+    return { message: `통화 입력값 ‘${value}’을 원문에서 확인할 수 없거나 원문에 여러 통화가 있습니다. 통화 항목을 원문에 맞게 수정하세요.`, fields: ["currency"], clearable: true }
+  }
+  if (/^Confirm product code against its exact source quote$/i.test(message)) {
+    const fields = (draft.items ?? []).map((_, index) => `items.${index}.product_code`).filter((path) => validPath(draft, path))
+    return { message: "품목 상품 코드가 원문에서 확인되지 않습니다. 각 품목의 상품 코드를 원문과 대조해 수정하세요.", fields }
+  }
+  if (/^A source note is not an exact quote from the prompt; review the translated fields$/i.test(message)) {
+    const fields = (draft.items ?? []).flatMap((_, index) => [`items.${index}.product_name`, `items.${index}.capacity`])
+      .filter((path) => validPath(draft, path))
+    return { message: "추출된 품목명·용량/규격의 원문 인용이 일치하지 않습니다. 해당 품목 정보를 원문과 대조해 수정하세요.", fields }
+  }
+  if (/^Attached order image has no quoted source evidence|^Order details were extracted from an image/i.test(message)) {
+    const fields = (draft.items ?? []).flatMap((_, index) => [`items.${index}.product_name`, `items.${index}.capacity`, `items.${index}.quantity`])
+      .filter((path) => validPath(draft, path))
+    return { message: "첨부 이미지에서 추출한 품목명·규격·수량을 이미지 원문과 대조해 수정하세요.", fields }
+  }
+  if (/^Confirm sample designation against its exact source quote$/i.test(message)) {
+    return { message: "샘플로 표시된 품목의 원문 근거를 확인하세요. 해당 품목의 샘플 여부를 원문과 대조하세요.", fields: [] }
+  }
+  if (/^Promotion command is negated or cancelled/i.test(message)) {
+    const fields = (draft.items ?? []).map((_, index) => `items.${index}.promotion`).filter((path) => validPath(draft, path))
+    return { message: "원문에서 프로모션이 취소되었거나 적용되지 않는 것으로 표시되어 있습니다. 프로모션 조건을 원문에 맞게 수정하세요.", fields }
+  }
+  if (/^Promotion command target is unclear/i.test(message)) {
+    const fields = (draft.items ?? []).map((_, index) => `items.${index}.promotion`).filter((path) => validPath(draft, path))
+    return { message: "프로모션을 적용할 품목을 확인할 수 없습니다. 해당 품목의 프로모션 조건을 구체적으로 수정하세요.", fields }
+  }
+  if (/^Promotion command contains conflicting event ratios/i.test(message)) {
+    const fields = (draft.items ?? []).map((_, index) => `items.${index}.promotion`).filter((path) => validPath(draft, path))
+    return { message: "프로모션 비율이 서로 다릅니다. 품목별 적용 비율을 원문과 대조해 수정하세요.", fields }
+  }
+  match = /^(.+) stated price differs from the verified catalog; confirm transaction override$/i.exec(message)
+  if (match) {
+    const index = (draft.items ?? []).findIndex((item) => item.product_name === match[1])
+    if (index >= 0) return { message: `품목 ${index + 1} (${match[1]}) · 단가 ${draft.items[index].unit_price ?? "미입력"}가 등록 단가와 다릅니다. 단가를 수정하거나 수기 단가 사용을 확인하세요.`, fields: [`items.${index}.unit_price`], clearable: true }
+  }
+  return null
 }
 
 function packingIssuePaths(message) {
@@ -81,6 +166,8 @@ function matchProduct(message, draft) {
 function issueDetails(raw, draft, kind) {
   const message = String(typeof raw === "string" ? raw : raw?.message ?? "").trim().replace(/^Packing:\s*/i, "")
   const fields = []
+  const sourceConflict = sourceConflictDetails(message.replace(/^Resolve conflicting information:\s*/i, ""), draft)
+  if (sourceConflict) return sourceConflict
   if (message === "items" || /^At least one line item is required$/i.test(message)) {
     return { message: "품목 항목을 추가하세요.", fields: [], step: kind === "PL" ? "packing" : kind === "CI" ? null : "items", source: kind === "CI" }
   }
@@ -111,16 +198,20 @@ function issueDetails(raw, draft, kind) {
       fields.push(`items.${index}.product_name`, `items.${index}.capacity`, `items.${index}.product_code`)
       const name = draft.items?.[index]?.product_name || `품목 ${index + 1}`
       const valid = fields.filter((path) => validPath(draft, path))
-      return { message: `${name}이(가) 등록 품목과 일치하지 않습니다. 등록된 품목명·용량/규격·상품 코드를 확인하세요.`, fields: valid, catalogMatch: true }
+      const canConfirmManualItem = kind !== "CI" || draft.mode === "standalone"
+      if (!canConfirmManualItem) return { message: `${name}이(가) 등록 품목과 일치하지 않습니다. 원본 PI의 품목 정보를 확인하세요.`,
+        fields: [], source: true }
+      return { message: `${name}이(가) 등록 품목과 일치하지 않습니다. 등록 정보를 확인하거나 수기 입력을 선택하세요.`, fields: valid,
+        catalogMatch: true, confirmPath: `items.${index}.confirm_product_override` }
     }
   }
   match = /^Product name is required for item (\d+)|^Product name for item (\d+) must be (?:English|translated)/i.exec(message)
   if (match) fields.push(`items.${Number(match[1] ?? match[2]) - 1}.product_name`)
   match = /^(Buyer|Seller) (legal name|address|contact|phone|email|registration details)(?: is required| must be)/i.exec(message)
   if (match) fields.push(`${match[1].toLowerCase()}.${{ "legal name": "legal_name", "registration details": "registration_details" }[match[2].toLowerCase()] ?? match[2].toLowerCase()}`)
-  match = /^(Document number|Incoterms and named place|Payment terms|Currency|Product family|Country of origin|Shipment reference|At least one line item)\b/i.exec(message)
+  match = /^(Incoterms and named place|Payment terms|Currency|Product family|Country of origin|Shipment reference|At least one line item)\b/i.exec(message)
   if (match) {
-    const key = { "document number": "document_number", "incoterms and named place": "incoterms", "payment terms": "payment_terms",
+    const key = { "incoterms and named place": "incoterms", "payment terms": "payment_terms",
       currency: "currency", "product family": "product_family", "country of origin": "country_of_origin",
       "shipment reference": "shipment_reference", "at least one line item": "items.0.product_name" }[match[1].toLowerCase()]
     if (key) fields.push(key)
@@ -230,6 +321,8 @@ export default function MissingFieldsDialog({ open, kind, draft, missing = [], i
     ]
     return rows.map((row) => {
       const rawMessage = String(typeof row.raw === "string" ? row.raw : row.raw?.message ?? "").trim()
+      if ((row.missing && row.raw === "document_number")
+          || /document number/i.test(rawMessage.replace(/_/g, " "))) return null
       if (/^Issuing company name is not configured$/i.test(rawMessage)) {
         return { ...row, message: "설정에서 당사 영문 회사명을 등록하세요.", fields: [], settings: "company" }
       }
@@ -240,8 +333,8 @@ export default function MissingFieldsDialog({ open, kind, draft, missing = [], i
         : issueDetails(row.raw, draft, kind)
       if (row.raw === issuerPath || detail.fields?.includes(issuerPath)) {
         const fields = (detail.fields ?? []).filter((path) => path !== issuerPath)
-        if (!fields.length) return null
-        detail = { ...detail, fields }
+        detail = fields.length ? { ...detail, fields }
+          : { message: `${kind === "PO" ? "구매자" : "판매자"} 회사명이 설정의 당사 회사명과 일치하지 않습니다. 회사 설정을 확인한 뒤 다시 저장하세요.`, fields: [], settings: "company" }
       }
       return { ...row, ...detail }
     }).filter(Boolean).filter((entry, index, all) => {
@@ -287,9 +380,15 @@ export default function MissingFieldsDialog({ open, kind, draft, missing = [], i
         </p>
         {active.step && onOpenStep && <button className="btn" type="button" disabled={busy} onClick={() => { onOpenStep(active.step); setSelected(null) }}>관련 입력 단계로 이동</button>}
       </>}
+      {active.catalogMatch && active.confirmPath && <label className="missing-fields-confirm">
+        <input type="checkbox" checked={Boolean(readPath(draft, active.confirmPath))}
+          onChange={(event) => onChange(active.confirmPath, event.target.checked)} /> 등록 품목과 달라도 직접 입력한 품목 정보를 사용
+      </label>}
       {active.fields.length > 0 && <p className="section-note" role="status">
-        {dirty ? "변경사항을 저장하면 서버가 다시 검증합니다. 입력값이 조건을 충족하면 해당 오류가 사라집니다." : active.catalogMatch
-          ? "현재 값은 이미 저장되어 있습니다. 단가표에 등록된 품목 정보와 다르면 값을 수정해야 저장할 수 있습니다."
+        {dirty ? active.catalogMatch && readPath(draft, active.confirmPath)
+          ? "수기 품목 정보를 사용하도록 확인했습니다. 저장하면 단가·필수 항목 등 나머지 기준을 다시 확인합니다."
+          : "변경사항을 저장하면 서버가 다시 검증합니다. 입력값이 조건을 충족하면 해당 오류가 사라집니다." : active.catalogMatch
+          ? "등록 품목과 다르게 사용하려면 위 확인란을 선택한 뒤 저장하세요."
           : "현재 값은 이미 저장되어 있습니다. 값을 바꾸면 저장 버튼이 활성화됩니다."}
       </p>}
       <div className="form-actions"><button className="btn blue" type="button" disabled={busy || !dirty || !active.fields.length} onClick={onSave}>{busy ? "저장 중…" : "변경사항 저장"}</button></div>

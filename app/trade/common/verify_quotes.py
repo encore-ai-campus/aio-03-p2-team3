@@ -13,7 +13,10 @@ import re
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/extractor.py verify_item_quotes
 def verify_item_quotes(draft, prompt, *, image_context=False):
     """Block item facts when their quoted support is absent from the original user prompt."""
-    normalize = lambda text: " ".join(str(text or "").casefold().split())
+    def normalize(text):
+        text = str(text or "")
+        text = re.sub(r"\*{1,3}|~~|`", "", text)
+        return " ".join(text.casefold().split())
     source = normalize(prompt)
     source_notes = draft.get("source_notes", [])
     verified_notes = []
@@ -52,7 +55,14 @@ def verify_item_quotes(draft, prompt, *, image_context=False):
             except Exception:
                 seen = []
                 expected = None
-            if expected is not None and expected not in seen:
+            no_optional_zero_in_source = (
+                field == "discount_percent" and expected == 0
+                and not re.search(r"%|\bdiscount\b|할인", quote, re.IGNORECASE)
+            ) or (
+                field == "free_quantity" and expected == 0
+                and not re.search(r"\bfree\b|\bfoc\b|\bbonus\b|무료|증정", quote, re.IGNORECASE)
+            )
+            if expected is not None and expected not in seen and not no_optional_zero_in_source:
                 draft.setdefault("conflicts", []).append(
                     f"Item {index} {field.replace('_', ' ')} was not found in its source quote; confirm the value")
     for role in ("buyer", "seller"):
@@ -61,7 +71,7 @@ def verify_item_quotes(draft, prompt, *, image_context=False):
             if value and normalize(value) not in source and not has_verified_translation_evidence:
                 draft.setdefault("conflicts", []).append(
                     f"{role.title()} {field.replace('_', ' ')} was not found verbatim in the prompt; confirm it")
-    for field in ("incoterms", "payment_terms", "remarks", "document_number", "issue_date", "shipment_reference", "country_of_origin", "ship_to", "bill_to"):
+    for field in ("incoterms", "payment_terms", "remarks", "issue_date", "shipment_reference", "country_of_origin", "ship_to", "bill_to"):
         value = draft.get(field)
         if value and normalize(value) not in source and not has_verified_translation_evidence:
             draft.setdefault("conflicts", []).append(

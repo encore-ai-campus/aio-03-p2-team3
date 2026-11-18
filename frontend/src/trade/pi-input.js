@@ -25,7 +25,7 @@ export const PI_STEPS = [
   { key: "buyer", label: "거래처", question: "어느 회사에 보낼까요?", note: "구매자의 영문 회사명과 주소를 알려주세요." },
   { key: "seller", label: "판매자", question: "판매자 정보를 확인해 주세요", note: "PI의 판매자는 문서를 발행하는 우리 회사입니다." },
   { key: "items", label: "품목", question: "어떤 상품을 얼마나 보내나요?", note: "품목과 수량·단가를 표에서 바로 수정하세요." },
-  { key: "terms", label: "거래 조건", question: "거래 조건을 알려주세요", note: "문서번호와 납품·지급 조건을 확인하면 작성이 끝나요." },
+  { key: "terms", label: "거래 조건", question: "거래 조건을 알려주세요", note: "납품·지급 조건을 확인하면 작성이 끝나요." },
 ]
 
 export function piSectionFor(path) {
@@ -40,7 +40,7 @@ function blank(value) {
 
 // 질문할 빈칸만 고른다. 금액·가격 검증과 발급 가능 여부는 기존 서버가 판단한다.
 export function piMissing(draft) {
-  const paths = ["product_family", "document_number", "currency", "incoterms", "payment_terms"]
+  const paths = ["product_family", "currency", "incoterms", "payment_terms"]
   for (const role of ["buyer", "seller"]) for (const key of ["legal_name", "address"])
     if (role !== "seller" || key !== "legal_name") paths.push(`${role}.${key}`)
   if (!draft.items.length) paths.push("items")

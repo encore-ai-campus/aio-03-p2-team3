@@ -2,7 +2,7 @@ const PARTY = [["legal_name","회사명"],["legal_name_en","회사명 (영문)"]
 
 export default function PLSnapshot({ document }) {
   const totals = document.packing_totals
-  return <div className="document-snapshot"><div className="snapshot-total"><span>{document.document_number || document.doc_no || "문서번호 미입력"}</span><b>{totals?.approved ? "포장 합계 승인 완료" : "포장 합계 확인 필요"}</b></div>
+  return <div className="document-snapshot"><div className="snapshot-total"><span>{document.document_number || "승인·발급 시 문서번호 자동 생성"}</span><b>{totals?.approved ? "포장 합계 승인 완료" : "포장 합계 확인 필요"}</b></div>
     <div className="snapshot-parties">{[["issuer","발행 회사"],["seller","판매자"],["buyer","구매자"]].map(([role,label]) => <section className="snapshot-section" key={role}><h3>{label}</h3><dl>{PARTY.filter(([key]) => document[role]?.[key]).map(([key,title]) => <div key={key}><dt>{title}</dt><dd>{document[role][key]}</dd></div>)}</dl></section>)}</div>
     <p className="section-note">품목·별도 포장 표는 좌우로 스크롤할 수 있어요. 키보드는 표에 초점을 둔 뒤 방향키로 이동해 주세요.</p>
     <div className="table-scroll" role="region" aria-label="PL 품목·포장 · 가로 스크롤" tabIndex={0}><table className="document-table"><thead><tr>{["품목","수량","포장 수·종류","순중량 kg","총중량 kg","부피 CBM"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{(document.items ?? []).map((row,index) =>

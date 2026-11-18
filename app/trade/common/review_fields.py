@@ -41,8 +41,7 @@ def field_value(data, field):
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/review_fields.py missing_review_fields
 def missing_review_fields(data):
     dtype = data.get("document_type")
-    fields = [ReviewField(("document_number",), "Document number (or DRAFT)"),
-              ReviewField(("incoterms",), "Delivery terms / Incoterms and named place"),
+    fields = [ReviewField(("incoterms",), "Delivery terms / Incoterms and named place"),
               ReviewField(("payment_terms",), "Payment terms", dtype in {"PI", "PO"}),
               ReviewField(("ship_to",), "Ship-to address", False),
               ReviewField(("country_of_origin",), "Country of origin", dtype == "CI"),

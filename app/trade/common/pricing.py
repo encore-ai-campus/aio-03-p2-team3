@@ -167,7 +167,12 @@ def apply_catalog_product_matches(draft, catalog=None):
         if is_manual_sample(draft, item):
             continue
         if match["status"] == "matched":
-            item["product_id"] = match["product"]["id"]
+            product = match["product"]
+            item["product_id"] = product["id"]
+            if not item.get("capacity") and product.get("capacity"):
+                item["capacity"] = product["capacity"]
+            if not item.get("product_code") and product.get("source_code"):
+                item["product_code"] = product["source_code"]
             confirmation = match.get("confirmation")
             if confirmation and confirmation not in pending:
                 pending.append(confirmation)
@@ -175,6 +180,8 @@ def apply_catalog_product_matches(draft, catalog=None):
 
         if item.get("product_id") in product_ids:
             item.pop("product_id", None)
+        if item.get("product_match_confirmed") is True:
+            continue
         name = item.get("product_name") or "item"
         suggestions = match.get("suggestions", [])
         if suggestions:
@@ -234,6 +241,14 @@ def apply_verified_catalog_prices(draft, catalog=None):
     exact_matches = [match_catalog_product(item.get("product_name"), item.get("capacity"), products,
                                             item.get("product_code"))
                      for item in items]
+    for item, match in zip(items, exact_matches):
+        if match["status"] == "matched":
+            product = match["product"]
+            item["product_id"] = product["id"]
+            if not item.get("capacity") and product.get("capacity"):
+                item["capacity"] = product["capacity"]
+            if not item.get("product_code") and product.get("source_code"):
+                item["product_code"] = product["source_code"]
     regular_matches = [match for item, match in zip(items, exact_matches) if not is_manual_sample(draft, item)]
     price_table = "purchase_prices" if draft.get("document_type") == "PO" else "buyer_prices"
     party_field = "supplier_key" if price_table == "purchase_prices" else "buyer_key"
@@ -283,7 +298,7 @@ def apply_verified_catalog_prices(draft, catalog=None):
                 item.pop("price_override_confirmed", None)
                 item.pop("product_id", None)
             item["master_price"] = False
-            if match["status"] == "suggested":
+            if item.get("product_match_confirmed") is not True and match["status"] == "suggested":
                 suggestions = match.get("suggestions", [])
                 if suggestions:
                     candidate = suggestions[0]
@@ -296,8 +311,9 @@ def apply_verified_catalog_prices(draft, catalog=None):
                     message = f"Double-check this product: {item.get('product_name') or 'item'}."
                 if message not in pending:
                     pending.append(message)
-            draft.setdefault("missing_fields", []).append(
-                f"Exact catalog product match for {item.get('product_name') or 'item'}; capacity/SKU may be needed")
+            if item.get("product_match_confirmed") is not True:
+                draft.setdefault("missing_fields", []).append(
+                    f"Exact catalog product match for {item.get('product_name') or 'item'}; capacity/SKU may be needed")
             continue
         product = match["product"]
         product_prices = [row for row in price_rows if row.get("product_id") == product["id"]]

@@ -217,6 +217,12 @@ export default function PIPage() {
   }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, draft.seller?.legal_name])
   const pending = proposal?.status === "pending"
   const canEdit = !busy && !loading && (!documentId || current)
+  const reviewIssues = current?.issues?.length ? current.issues
+    : (current?.document?.blocking_issues ?? []).map((message) => ({ code: "DOCUMENT_INVALID", message }))
+  const hasVisibleIssues = [...(current?.missing_fields ?? []), ...reviewIssues.map((issue) => issue?.message ?? issue)]
+    .some((issue) => String(issue).trim().toLowerCase() !== "document_number"
+      && !/document number/i.test(String(issue).replace(/_/g, " ")))
+  const canRecheck = current?.status === "needs_input" && !hasVisibleIssues
   const stepIndex = PI_STEPS.findIndex((entry) => entry.key === screen.key)
   const step = PI_STEPS[stepIndex]
   const following = guided ? piNextScreen(draft, stepIndex)
@@ -289,15 +295,16 @@ export default function PIPage() {
         <p className="pi-question-note">저장된 내용으로 계산한 금액이에요. 회사·계좌와 거래 조건을 함께 확인하세요.</p>
         {dirty && <p className="form-error">아직 저장하지 않은 변경사항이 있어요. 저장한 뒤 검토해 주세요.</p>}
         {current.status === "needs_input" && <p className="section-note">표시된 항목을 수정한 뒤 다시 저장해 주세요. 발행 회사·계좌·직인은 <Link to="/settings">회사 설정</Link>에서 확인할 수 있어요.</p>}
+        {canRecheck && <p className="section-note">오류 항목은 없지만 서버 상태가 ‘입력 필요’입니다. 현재 저장된 값으로 다시 확인해 주세요.</p>}
         <DocumentSnapshot document={current.document} />
         <fieldset className="editor-checks" disabled={busy || pending || current.status !== "ready"}><legend>발급 형식</legend>{["pdf","xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous, format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
         <div className="form-actions">{(dirty || modifying) && <button className="btn" type="button" disabled={!canEdit} onClick={() => accept(current, proposal)}>저장 전 수정 취소</button>}
           {current && <button type="button" className="btn" title="최신 설정 정보를 새 PI 버전에 적용합니다. 이미 발급된 파일은 보존됩니다."
             disabled={busy || loading || ["sent", "sending"].includes(current.status)} onClick={refreshSettings}>최신 설정 정보 적용</button>}
-          <button className="btn" type="button" disabled={!canEdit || (!dirty && !modifying)} onClick={save}>{modifying ? "수정 저장·재검토" : "변경사항 저장"}</button>
+          <button className="btn" type="button" disabled={!canEdit || (!dirty && !modifying && !canRecheck)} onClick={save}>{modifying ? "수정 저장·재검토" : canRecheck ? "문서 다시 확인" : "변경사항 저장"}</button>
           <button className="btn blue" type="button" disabled={busy || dirty || modifying || pending || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
       </section>)}
-      <MissingFieldsDialog open={Boolean(current && screen.key === "review" && !finalReview)} kind="PI" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+      <MissingFieldsDialog open={Boolean(current && screen.key === "review" && !finalReview)} kind="PI" draft={draft} missing={current?.missing_fields} issues={reviewIssues} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
         onSave={save} onOpenStep={edit} />
       {settingsError && <p className="section-note" role="status">회사 설정을 불러오지 못해 당사 회사명을 자동 적용할 수 없습니다. <Link to="/settings">설정 확인</Link> · {settingsError}</p>}
@@ -319,7 +326,7 @@ function PISummary({ draft, current, dirty, disabled, onEdit }) {
   return <aside className="pi-summary" aria-label="작성 내용 요약">
     <button type="button" className="pi-summary-toggle" aria-expanded={open} aria-controls="pi-summary-content" onClick={() => setOpen(!open)}>작성 내용 {open ? "접기" : "보기"}</button>
     <div id="pi-summary-content" className={open ? "open" : ""}>
-      <h2>작성 중인 PI</h2><p className="pi-summary-number">{draft.document_number || "문서번호 미입력"}</p>
+      <h2>작성 중인 PI</h2><p className="pi-summary-number">{draft.document_number || "승인·발급 시 문서번호 자동 생성"}</p>
       <dl>{PI_STEPS.map((step) => <div key={step.key}><dt>{step.label}<button type="button" disabled={disabled} onClick={() => { setOpen(false); onEdit(step.key) }}>{step.label} 수정</button></dt><dd>{summaries[step.key]}</dd></div>)}</dl>
       {current && <div className="pi-summary-total"><span>{dirty ? "마지막 저장 금액" : "저장된 합계"}</span><strong>{current.document.currency} {current.document.total ?? "확인 필요"}</strong></div>}
       <p className="section-note">{dirty ? "변경한 내용은 저장하면 계산에 반영돼요." : "전체 확인 후 승인한 내용으로 파일을 발급해요."}</p>

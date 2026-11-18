@@ -14,7 +14,7 @@ export function ciPayload(draft) {
 }
 
 export function ciMissing(draft) {
-  return ["document_number", "shipment_reference", "country_of_origin"].filter((key) =>
+  return ["shipment_reference", "country_of_origin"].filter((key) =>
     draft[key] == null || /^(?:\s*|tbd|unknown|not provided|to be confirmed|n\/a)$/i.test(draft[key].trim()))
 }
 

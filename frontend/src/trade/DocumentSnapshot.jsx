@@ -9,7 +9,7 @@ function Details({ title, values, labels }) {
 export default function DocumentSnapshot({ document, kind = "pi" }) {
   if (kind === "pl") return <PLSnapshot document={document} />
   return <div className="document-snapshot">
-    <div className="snapshot-total"><span>{document.document_number || document.doc_no || "문서번호 미입력"}</span><b>{document.currency || ""} {document.total ?? "합계 확인 필요"}</b></div>
+    <div className="snapshot-total"><span>{document.document_number || "승인·발급 시 문서번호 자동 생성"}</span><b>{document.currency || ""} {document.total ?? "합계 확인 필요"}</b></div>
     <div className="snapshot-parties"><Details title="발행 회사" values={document.issuer} labels={PARTY_LABELS} />
       <Details title={kind === "po" ? "판매자 · 공급처" : "판매자"} values={document.seller} labels={PARTY_LABELS} /><Details title={kind === "po" ? "구매자 · 우리 회사" : "구매자"} values={document.buyer} labels={PARTY_LABELS} /></div>
     <div className="table-scroll" tabIndex={0} role="region" aria-label="품목별 금액 · 가로 스크롤"><table className="document-table"><thead><tr><th>품목</th><th>유상/무상 수량</th><th>단가</th><th>할인율</th><th>금액</th></tr></thead><tbody>

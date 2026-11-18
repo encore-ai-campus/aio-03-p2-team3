@@ -70,10 +70,14 @@ def decide(proposal_id: str, document_id: int, decision: Decision, *, repository
             or (sha256(branding.logo).hexdigest() if branding.logo else None) != proposal["payload"]["logo_sha256"]):
         raise DocumentError("PROPOSAL_MISMATCH", "검토한 회사 이미지와 저장된 이미지가 일치하지 않습니다")
     try:
-        files = renderer(proposal["payload"], branding)
+        number = repository.reserve_document_number(proposal_id, decision.revision, decision.content_hash)
+        render_payload = deepcopy(proposal["payload"])
+        render_payload["document"]["document_number"] = number
+        files = renderer(render_payload, branding)
     except (ValueError, ArithmeticError, TypeError) as error:
         raise DocumentError("RENDER_FAILED", "파일을 만들지 못했습니다. 문서와 회사 이미지를 확인하세요", 422) from error
     if (sorted(file.file_format for file in files) != sorted(proposal["payload"]["formats"])
             or any(not file.content for file in files)):
         raise DocumentError("RENDER_FAILED", "요청한 형식의 파일을 모두 만들지 못했습니다", 422)
-    return repository.approve(proposal_id, decision.revision, decision.content_hash, files)
+    return repository.approve(proposal_id, decision.revision, decision.content_hash, files,
+                              render_payload["document"])

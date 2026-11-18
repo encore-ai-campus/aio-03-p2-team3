@@ -38,7 +38,7 @@ function MailDocumentCard({ payload }) {
   const document = payload.document
   if (payload.trade_doc_id) {
     const kind = (payload.files?.[0]?.kind || "").toLowerCase()
-    return <DocCard chip={kind ? kind.toUpperCase() : "문서"} chipClass={kind} number={document.document_number || document.doc_no}
+    return <DocCard chip={kind ? kind.toUpperCase() : "문서"} chipClass={kind} number={document.document_number || "승인·발급 시 문서번호 자동 생성"}
       parties={tradePartyNames(document)} total={tradeTotal(document)} meta={`승인 버전 ${payload.revision} · 이번 발송에 고정`}
       link={kind ? `/trade/${kind}/${payload.trade_doc_id}` : null} />
   }
@@ -112,7 +112,7 @@ export default function ReviewCard({ waiting, results, busy, onResume }) {
         <p className="review-note">같은 메일 대화로 발송됩니다. 문서 발급과 메일 발송은 별개입니다.</p>
       </> : <>
         {payload.preview?.document ? <DocCard hero chip={payload.kind} chipClass={payload.kind?.toLowerCase()}
-          number={payload.preview.document.document_number || payload.preview.document.doc_no}
+          number={payload.preview.document.document_number || "승인·발급 시 문서번호 자동 생성"}
           parties={tradePartyNames(payload.preview.document)}
           itemsNote={payload.preview.document.items?.length ? `품목 ${payload.preview.document.items.length}건 · 버전 ${payload.revision}` : `버전 ${payload.revision}`}
           items={payload.preview.document.items} total={tradeTotal(payload.preview.document)}
