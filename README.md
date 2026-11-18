@@ -36,6 +36,8 @@ uv run pytest            # 테스트
 uv run uvicorn app.main:app --reload  # 로컬 서버
 ```
 
+모델 교체 전 비용/노력치 비교는 [LLM 측정 단계](docs/plans/llm-quality-and-cost.md)를 따른다. `uv run python -m app.evaluation.model_benchmark --out work/llm-benchmark/dry.json`은 API를 호출하지 않는다. 실제 측정은 개인 PC에서 `--live`로 실행하며 기능별 토큰/비용/지연을 기록한다. 운영 모델·기한·출력 상한은 바꾸지 않고, 보고서가 기존 모델 복귀의 비교 기준이 된다.
+
 - 기본 화면: `http://127.0.0.1:8000/`(`/inbox`로 이동). 상태 확인: `http://127.0.0.1:8000/healthz` → `{"status":"ok"}`. 화면·상태 확인에는 API 키가 필요 없다.
 - 위 Uvicorn 명령은 기본 `AI_RUNTIME=server`의 사용자별 DB 키 방식이다. 개인 `.env` 키를 쓰려면 아래 전용 로컬 실행 절차를 따른다.
 - Render 빌드 명령: `bash scripts/render-build.sh`(아래 같은 출처 UI 배포 안내). 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
