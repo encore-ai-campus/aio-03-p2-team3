@@ -5,8 +5,7 @@ import { useAuth } from "../useAuth"
 import { dateKey, formatEventWhen } from "../calendar/useCalendarEvents"
 import ReviewCard from "./ReviewCard"
 import DocCard, { FileButtons } from "./DocCard"
-import Markdown from "react-markdown"
-import remarkBreaks from "remark-breaks"
+import AssistantMarkdown from "./AssistantMarkdown"
 import "./agent.css"
 
 const STATUS = { running: "처리 중", needs_input: "답변 대기", needs_approval: "승인 대기", completed: "응답 완료",
@@ -39,34 +38,6 @@ function Icon({ name }) {
     send: <><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4z" /></>,
   }
   return <svg className="op-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.get}</svg>
-}
-
-function CopyButton({ text }) {
-  const [done, setDone] = useState(false)
-  return <button type="button" className="copy" onClick={() => {
-    const finish = value => { setDone(value); if (value) setTimeout(() => setDone(false), 1400) }
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => finish(true), () => finish(false))
-    else {
-      const area = document.createElement("textarea")
-      area.value = text
-      document.body.appendChild(area)
-      area.select()
-      try { finish(document.execCommand("copy")) } catch { finish(false) }
-      area.remove()
-    }
-  }}>{done ? "복사됨" : "복사"}</button>
-}
-
-function MarkdownText({ text }) {
-  return <Markdown remarkPlugins={[remarkBreaks]} components={{
-    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
-    table: ({ children }) => <div className="table-scroll" tabIndex={0} role="region" aria-label="표 · 가로 스크롤"><table>{children}</table></div>,
-    pre: ({ children }) => {
-      const content = children?.props?.children
-      const raw = Array.isArray(content) ? content.join("") : String(content ?? "")
-      return <div className="codeblock"><CopyButton text={raw} /><pre>{children}</pre></div>
-    },
-  }}>{text}</Markdown>
 }
 
 const KNOWLEDGE_STATUS = {
@@ -332,7 +303,7 @@ export default function AgentPage() {
             {timelineAbove && index === messages.length - 1 && timeline}
             {message.role === "user"
               ? <div className="msg-user">{message.text}</div>
-              : <div className="msg-agent"><MarkdownText text={message.text} /></div>}
+              : <div className="msg-agent"><AssistantMarkdown text={message.text} /></div>}
           </Fragment>)}
           {view?.error && <p className="form-error" role="alert">{ERRORS[view.error] || `처리 상태를 확인해 주세요. (${view.error})`}</p>}
           {!timelineAbove && timeline}

@@ -186,5 +186,46 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         expect(document_page).to_have_url(f'{base}/app/documents?document={document_id}')
         document_page.get_by_role('button', name='원본 보기').click()
         expect(document_page.get_by_role('img', name='업로드한 원본 1페이지')).to_be_visible(timeout=10000)
+        document_page.close()
+        fence = chr(96) * 3
+        choices.calls.append("\n".join([
+            fence + "markdown", "# 납기 검토", "",
+            "**확인 필요**", "", "- 발주 확인", "- 검수 완료", "",
+            "| 품목 | 납기 |", "| --- | --- |", "| SC-110 | 영업일 21일 |", "",
+            "| 거래처 참조 번호 | 선적 확인 시각 | 품질검사 담당자 | 요청 수량 및 단위 |",
+            "| --- | --- | --- | --- |", "| FW-2026 | 오전 10시 | 구매팀 | 100개 |", "",
+            "> 계약서 제1조를 참고해 주세요.", "",
+            "[문서함](/app/documents) · [위험한 주소](javascript:alert%281%29)", "",
+            '<img src="https://example.invalid/pixel" onerror="void(0)">', "",
+            fence + "python", "product = " + repr("SC-" + "1" * 90), fence, fence,
+        ]))
+        context.grant_permissions(["clipboard-read", "clipboard-write"])
+        page.get_by_label("업무 요청", exact=True).fill("납기 검토 내용과 예제 코드 보여줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(page.get_by_role("heading", name="납기 검토", exact=True)).to_be_visible(timeout=20000)
+        answer = page.locator(".msg-agent").last
+        expect(answer.locator("strong")).to_have_text("확인 필요")
+        expect(answer.get_by_role("listitem")).to_have_count(2)
+        expect(answer.get_by_role("cell", name="영업일 21일")).to_be_visible()
+        expect(answer.locator("blockquote")).to_have_text("계약서 제1조를 참고해 주세요.")
+        expect(answer.get_by_role("link", name="문서함")).to_have_attribute("href", "/app/documents")
+        expect(answer.get_by_text("위험한 주소")).to_be_visible()
+        expect(answer.get_by_role("link", name="위험한 주소")).to_have_count(0)
+        expect(answer.locator("img")).to_have_count(0)
+        tables = answer.get_by_role("region", name="표 · 가로 스크롤")
+        assert tables.first.evaluate("(el) => el.scrollWidth === el.clientWidth")
+        table = tables.last
+        code = answer.get_by_role("region", name="코드 · 가로 스크롤")
+        for region in (table, code):
+            assert region.evaluate("(el) => el.scrollWidth > el.clientWidth")
+            region.focus()
+            expect(region).to_be_focused()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        copy = answer.get_by_role("button", name="복사", exact=True)
+        copy.focus()
+        page.keyboard.press("Enter")
+        expect(answer.get_by_role("button", name="복사됨", exact=True)).to_be_visible()
+        assert page.evaluate("navigator.clipboard.readText()") == code.locator("code").text_content()
+        page.screenshot(path=str(tmp_path / "agent-markdown-mobile.png"), full_page=True)
         assert not errors
         browser.close()
