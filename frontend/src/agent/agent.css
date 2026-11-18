@@ -51,7 +51,7 @@
 
 /* 작업 타임라인 */
 .work { max-width: 680px }
-.work-row { position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font-size: 12.5px; color: #5b6575; background: transparent; border-radius: 9px; padding: 9px 11px; transition: background .18s cubic-bezier(.2,0,0,1) }
+.work-row { position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font-size: 12.5px; color: #5b6575; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; transition: background .18s cubic-bezier(.2,0,0,1) }
 .work-row:hover { background: #f7f8fa }
 .work-row .chev { width: 14px; height: 14px; flex: none; color: #9aa2b1; transition: transform .24s cubic-bezier(.2,0,0,1) }
 .work.open .work-row .chev { transform: rotate(180deg) }
@@ -75,7 +75,7 @@
 .work.open .step:nth-child(4) { animation-delay: 150ms }
 .work.open .step:nth-child(n+5) { animation-delay: 180ms }
 .step.dim { opacity: .55 }
-.step-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px; font-size: 12.5px; color: #5b6575; background: transparent; transition: background .18s cubic-bezier(.2,0,0,1) }
+.step-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border: 0; border-radius: 9px; font-size: 12.5px; color: #5b6575; background: transparent; transition: background .18s cubic-bezier(.2,0,0,1) }
 .step-head:hover { background: #f7f8fa }
 .step-head .op-ic { width: 15px; height: 15px; flex: none; color: #8a93a3 }
 .step-head .step-name { color: var(--ink) }

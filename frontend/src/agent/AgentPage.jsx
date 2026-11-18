@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { apiFetch, downloadFile } from "../api"
 import { useAuth } from "../useAuth"
@@ -204,6 +204,9 @@ export default function AgentPage() {
     }
   }
   const running = busy || view?.status === "running"
+  const messages = view?.messages || []
+  const timeline = view && <WorkTimeline results={view.results || []} running={running} token={token} onError={setError} />
+  const timelineAbove = messages.length > 0 && messages[messages.length - 1].role !== "user"
   return <>
     <div className="page-head"><div><h1 className="page-title">업무 도우미</h1><p className="page-sub">메일과 문서 작업을 요청하고, 실행할 내용을 확인하세요.</p></div></div>
     <div className={`agent-layout${historyOpen ? " history-open" : ""}`}>
@@ -224,11 +227,14 @@ export default function AgentPage() {
         {conversationId && !view && !error && <p role="status">대화를 읽고 있습니다…</p>}
         {!conversationId && <div className="agent-intro"><h2 className="section-title">어떤 업무를 도와드릴까요?</h2><p>예: “가상 거래처 메일을 찾아서 답장 후보를 확인해 줘.”</p><p className="section-note">회사 업무 메일·PI·PO·CI·PL을 다룹니다. 발송과 발급은 각각 확인 후 실행합니다.</p></div>}
         <div className="thread" ref={endRef}>
-          {view?.messages?.map((message, index) => message.role === "user"
-            ? <div className="msg-user" key={index}>{message.text}</div>
-            : <div className="msg-agent" key={index}><MarkdownText text={message.text} /></div>)}
+          {messages.map((message, index) => <Fragment key={index}>
+            {timelineAbove && index === messages.length - 1 && timeline}
+            {message.role === "user"
+              ? <div className="msg-user">{message.text}</div>
+              : <div className="msg-agent"><MarkdownText text={message.text} /></div>}
+          </Fragment>)}
           {view?.error && <p className="form-error" role="alert">{ERRORS[view.error] || `처리 상태를 확인해 주세요. (${view.error})`}</p>}
-          {view && <WorkTimeline results={view.results || []} running={running} token={token} onError={setError} />}
+          {!timelineAbove && timeline}
           {view?.waiting && <ReviewCard key={`${view.revision}-${view.waiting.task_id || view.waiting.action?.id}`} waiting={view.waiting}
             results={view.results || []} busy={running} onResume={response => send(`/${view.id}/resume`, { revision: view.revision, response })} />}
           {["interrupted", "review"].includes(view?.status) && <div className="card agent-recover"><p>실행이 중단되었거나 결과 확인이 필요합니다. 이미 보냈을 수 있는 메일은 자동으로 다시 보내지 않습니다.</p>
