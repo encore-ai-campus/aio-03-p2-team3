@@ -148,6 +148,8 @@ def test_mailbox_api_reads_original_and_sends_selected_candidate_once(mailbox_cl
     headers = bearer(token)
     listing = client.get("/api/mail/threads", headers=headers)
     assert listing.status_code == 200 and listing.json()["items"][0]["thread_id"] == "fake-thread"
+    # 상태 탭 건수: 스레드별 최신 처리 상태만 센다.
+    assert listing.json()["status_counts"] == {"awaiting_approval": 1}
     assert "no-store" in listing.headers["cache-control"]
     detail = client.get("/api/mail/threads/fake-thread", headers=headers).json()
     assert detail["messages"][0]["body"] and len(detail["candidates"]) == 2
