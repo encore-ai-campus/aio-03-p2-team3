@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useId, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { apiFetch, downloadFile } from "../api"
 import { useAuth } from "../useAuth"
@@ -21,6 +21,8 @@ Object.assign(ERRORS, { agent_model_network: "AI 연결이 끊겼습니다. 저�
 const OPERATIONS = { search: "메일 검색", query: "원문 조회", draft: "초안 작성", get: "문서 조회", schema: "입력 조건 확인",
   issue: "파일 발급", approve_packing: "포장 합계 승인", send: "답장 발송" }
 const OUTCOMES = { completed: "완료", failed: "실패", cancelled: "취소", needs_review: "확인 필요", unknown: "결과 확인 필요", blocked: "선행 작업 확인 필요" }
+const PROGRESS_STATUS = { running: "진행 중", completed: "완료", failed: "실패",
+  review: "확인 필요", interrupted: "중단" }
 
 function Icon({ name }) {
   const paths = {
@@ -80,11 +82,11 @@ function StepDetail({ item, token, onError }) {
   </>
 }
 
-function Step({ item, token, onError, dim }) {
+function Step({ item, token, onError }) {
   const [open, setOpen] = useState(false)
   const label = OPERATIONS[item.operation] || "업무 처리"
   const outcome = OUTCOMES[item.status] || "결과 확인 필요"
-  return <li className={`step${open ? " open" : ""}${dim ? " dim" : ""}`}>
+  return <li className={`step${open ? " open" : ""}`}>
     <button type="button" className="step-head" aria-expanded={open} onClick={() => setOpen(value => !value)}>
       <Icon name={item.operation} />
       <span className="step-name">{label}</span>
@@ -96,29 +98,55 @@ function Step({ item, token, onError, dim }) {
   </li>
 }
 
-function WorkTimeline({ results, running, token, onError }) {
-  const [open, setOpen] = useState(false)
-  const wasRunning = useRef(false)
+function ElapsedTime({ startedAt, finishedAt, running }) {
+  const start = Date.parse(startedAt)
+  const [now, setNow] = useState(Date.now)
   useEffect(() => {
-    if (running) { setOpen(true); wasRunning.current = true }
-    else if (wasRunning.current) { setOpen(false); wasRunning.current = false }
-  }, [running])
-  if (!results.length) return null
+    if (!running) return
+    const tick = () => setNow(Date.now())
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [running, start])
+  const end = running ? now : Date.parse(finishedAt)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null
+  const seconds = Math.max(0, Math.floor((end - start) / 1000))
+  const minutes = Math.floor(seconds / 60)
+  return <time dateTime={`PT${seconds}S`}>{minutes ? `${minutes}분 ${seconds % 60}초` : `${seconds}초`}</time>
+}
+
+function WorkTimeline({ results, running, progress, status, token, onError }) {
+  const [open, setOpen] = useState(false)
+  const bodyId = useId()
+  if (!running && !progress && !results.length) return null
+  const steps = progress?.steps || []
   const attention = results.some(item => item.status !== "completed")
   const names = results.map(item => OPERATIONS[item.operation] || "업무 처리").slice(0, 3).join(" · ") + (results.length > 3 ? ` 외 ${results.length - 3}` : "")
   return <div className={`work${open ? " open" : ""}${running ? " running" : ""}`}>
-    <button type="button" className="work-row" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+    <button type="button" className="work-row" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(value => !value)}>
       <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
       {running
-        ? <span className="work-state" key="run"><svg className="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>업무 처리 중 · {results.length}단계</span>
-        : attention
+        ? <span className="work-state" key="run"><svg className="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>
+          {progress ? <><ElapsedTime startedAt={progress.started_at} running /> 동안 작업 중</> : "업무 처리 중"}
+        </span>
+        : progress
+          ? <span className={`work-state${status === "completed" ? "" : " warn"}`}>{STATUS[status]} · <ElapsedTime startedAt={progress.started_at} finishedAt={progress.finished_at} /></span>
+          : attention
           ? <span className="work-state warn" key="warn"><svg className="ok-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 8v5" /><path d="M12 16.5v.5" /><circle cx="12" cy="12" r="9" /></svg>확인 필요 · {results.length}단계</span>
           : <span className="work-state" key="ok"><svg className="ok-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>업무 완료 · {results.length}단계</span>}
-      <span className="work-meta">{names}</span>
+      {!progress && <span className="work-meta">{names}</span>}
     </button>
-    <div className="work-body"><div><ol>
-      {results.map((item, index) => <Step key={item.task_id || index} item={item} token={token} onError={onError} dim={running && index < results.length - 1} />)}
-    </ol></div></div>
+    <div className="work-body" id={bodyId} inert={!open}><div>
+      {steps.length > 0 && <ol aria-label="이번 요청의 작업 단계">
+        {steps.map((step, index) => <li className={`progress-step ${step.status}`} key={index}>
+          <span>{step.label}</span><span>{PROGRESS_STATUS[step.status]}</span>
+        </li>)}
+      </ol>}
+      {running && !steps.length && <p className="progress-placeholder">작업 시작을 기다리고 있습니다.</p>}
+      {!running && results.length > 0 && <ol aria-label="작업 결과">
+        {results.map((item, index) => <Step key={item.task_id || index} item={item} token={token} onError={onError} />)}
+      </ol>}
+    </div></div>
   </div>
 }
 
@@ -128,10 +156,13 @@ export default function AgentPage() {
   const { conversationId = "" } = useParams()
   const navigate = useNavigate()
   const [list, setList] = useState([])
-  const [view, setView] = useState(null)
+  const [loadedView, setView] = useState(null)
+  const view = loadedView?.token === token && loadedView?.data.id === conversationId ? loadedView.data : null
   const [text, setText] = useState("")
   const [error, setError] = useState("")
-  const [busy, setBusy] = useState(false)
+  const [readError, setReadError] = useState("")
+  const [submittedAt, setSubmittedAt] = useState(null)
+  const busy = submittedAt !== null
   const [reload, setReload] = useState(0)
   const [historyOpen, setHistoryOpen] = useState(false)
   const operation = useRef(null)
@@ -148,7 +179,7 @@ export default function AgentPage() {
 
   useEffect(() => {
     let cancelled = false, timer, request
-    setView(null); setError(""); setText(""); setBusy(false)
+    setError(""); setReadError(""); setText(""); setSubmittedAt(null)
     operation.current?.abort()
     async function read() {
       clearTimeout(timer)
@@ -157,11 +188,14 @@ export default function AgentPage() {
       try {
         const data = await apiFetch(`/agent/conversations/${conversationId}`, { token, signal: request.signal })
         if (cancelled) return
-        setView(data)
+        setReadError("")
+        setView({ token, data })
         setList(items => [{ id: data.id, title: data.title, status: data.status }, ...items.filter(item => item.id !== data.id)])
         if (data.status === "running") timer = setTimeout(read, 2000)
       } catch (failure) {
-        if (!cancelled && failure.name !== "AbortError") setError(failure.message)
+        if (cancelled || failure.name === "AbortError") return
+        setReadError(failure.message)
+        if (failure.status === 0 || failure.status >= 500) timer = setTimeout(read, 2000)
       }
     }
     read(); document.addEventListener("visibilitychange", read)
@@ -192,21 +226,25 @@ export default function AgentPage() {
     if (busy) return
     const request = new AbortController()
     operation.current?.abort(); operation.current = request
-    setBusy(true); setError("")
+    setSubmittedAt(new Date().toISOString()); setError("")
     try {
       const data = await apiFetch(`/agent/conversations${path}`, { method: "POST", token, body, signal: request.signal })
       if (operation.current !== request || request.signal.aborted) return
-      setText(""); navigate(`/agent/${data.id}`); setReload(value => value + 1)
+      setView({ token, data }); setText("")
+      if (conversationId === data.id) setReload(value => value + 1)
+      else navigate(`/agent/${data.id}`)
     } catch (failure) {
       if (failure.name !== "AbortError") setError(failure.message)
     } finally {
-      if (operation.current === request && !request.signal.aborted) setBusy(false)
+      if (operation.current === request && !request.signal.aborted) setSubmittedAt(null)
     }
   }
   const running = busy || view?.status === "running"
+  const progress = busy ? { started_at: submittedAt } : view?.progress
   const messages = view?.messages || []
-  const timeline = view && <WorkTimeline results={view.results || []} running={running} token={token} onError={setError} />
-  const timelineAbove = messages.length > 0 && messages[messages.length - 1].role !== "user"
+  const timeline = <WorkTimeline key={`${view?.id || ""}-${view?.revision || 0}`}
+    results={view?.results || []} running={running} progress={progress} status={view?.status} token={token} onError={setError} />
+  const timelineAbove = !running && messages.length > 0 && messages[messages.length - 1].role !== "user"
   return <>
     <div className="page-head"><div><h1 className="page-title">업무 도우미</h1><p className="page-sub">메일과 문서 작업을 요청하고, 실행할 내용을 확인하세요.</p></div></div>
     <div className={`agent-layout${historyOpen ? " history-open" : ""}`}>
@@ -223,8 +261,8 @@ export default function AgentPage() {
             id="agent-history-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>대화 목록</button>
           <Link className="icon-btn" to="/agent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>새 대화</Link>
         </div>
-        {error && <p className="form-error" role="alert">{error} <button className="btn" onClick={() => setReload(value => value + 1)}>상태 다시 읽기</button></p>}
-        {conversationId && !view && !error && <p role="status">대화를 읽고 있습니다…</p>}
+        {(error || readError) && <p className="form-error" role="alert">{error || readError} <button className="btn" onClick={() => setReload(value => value + 1)}>상태 다시 읽기</button></p>}
+        {conversationId && !view && !error && !readError && <p role="status">대화를 읽고 있습니다…</p>}
         {!conversationId && <div className="agent-intro"><h2 className="section-title">어떤 업무를 도와드릴까요?</h2><p>예: “가상 거래처 메일을 찾아서 답장 후보를 확인해 줘.”</p><p className="section-note">회사 업무 메일·PI·PO·CI·PL을 다룹니다. 발송과 발급은 각각 확인 후 실행합니다.</p></div>}
         <div className="thread" ref={endRef}>
           {messages.map((message, index) => <Fragment key={index}>
@@ -240,7 +278,7 @@ export default function AgentPage() {
           {["interrupted", "review"].includes(view?.status) && <div className="card agent-recover"><p>실행이 중단되었거나 결과 확인이 필요합니다. 이미 보냈을 수 있는 메일은 자동으로 다시 보내지 않습니다.</p>
             <button className="btn" disabled={running} onClick={() => send(`/${view.id}/recover`, { revision: view.revision })}>저장된 실행 상태 확인</button></div>}
         </div>
-        <p className={`runline${running ? " on" : ""}`} role="status" aria-live="polite">{running ? "업무를 처리하고 있습니다. 이 화면을 나가도 접수된 작업은 계속됩니다." : view ? STATUS[view.status] : ""}</p>
+        <p className={progress ? "sr-only" : "runline"} role="status">{running ? "업무를 처리하고 있습니다." : view ? STATUS[view.status] : ""}</p>
         {(!conversationId || (view && !view.waiting && !running && !["interrupted", "review"].includes(view.status))) && <form className="card agent-compose" onSubmit={event => {
           event.preventDefault(); if (text.trim()) send(conversationId ? `/${conversationId}/messages` : "", { message: text.trim(), ...(view ? { revision: view.revision } : {}) })
         }}><label className="sr-only" htmlFor="agent-request">업무 요청</label><textarea id="agent-request" rows={4} maxLength={8000} value={text} onChange={event => setText(event.target.value)} disabled={running} required placeholder="메일이나 문서 작업을 요청해 주세요." />

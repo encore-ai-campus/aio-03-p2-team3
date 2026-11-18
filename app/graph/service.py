@@ -1,6 +1,9 @@
 """대화 실행과 화면 투영. DB와 런타임 조립은 호출자가 주입한다."""
+from __future__ import annotations
+
 from contextlib import ExitStack
 import json
+import logging
 from threading import Lock
 from typing import Callable, Protocol
 from uuid import uuid4
@@ -9,13 +12,46 @@ from langchain_core.messages import messages_from_dict
 
 from app.graph.schemas import WorkflowError
 
+logger = logging.getLogger(__name__)
+
+NODE_LABELS = {"load_context": "대화 맥락 불러오기", "plan": "다음 작업 판단",
+               "reflect": "작업 결과 재검토", "cancel_action": "작업 취소"}
+PREPARE_LABELS = {
+    ("mail", "search"): "메일 검색", ("mail", "query"): "메일 원문 조회",
+    ("mail", "draft"): "답장 초안 작성", ("mail", "send"): "답장 발송 준비",
+    ("documents", "get"): "문서 조회", ("documents", "schema"): "문서 입력 조건 확인",
+    ("documents", "draft"): "문서 초안 작성", ("documents", "issue"): "파일 발급 준비",
+    ("documents", "approve_packing"): "포장 합계 승인 준비",
+}
+EXECUTE_LABELS = {"send": "답장 발송", "issue": "파일 발급", "approve_packing": "포장 합계 승인"}
+
 
 class Conversations(Protocol):
     def list(self, owner: int) -> list[dict]: ...
     def get(self, owner: int, conversation_id: str) -> dict: ...
     def claim(self, owner: int, conversation_id: str, *, title=None, revision=None) -> dict: ...
-    def finish(self, owner: int, conversation_id: str, view: dict, status: str) -> None: ...
+    def update_progress(self, owner: int, conversation_id: str, revision: int, steps: list[dict]) -> None: ...
+    def finish(self, owner: int, conversation_id: str, revision: int, view: dict, status: str) -> None: ...
     def interrupt_running(self) -> None: ...
+
+
+def progress_label(node, state, operation):
+    if node == "plan" and state.get("error"):
+        return None
+    if node in NODE_LABELS:
+        return NODE_LABELS[node]
+    domain, _, phase = node.partition("_")
+    if phase == "prepare":
+        task = next((task for task in state.get("tasks", []) if task["id"] == state.get("current")), {})
+        return PREPARE_LABELS.get((domain, task.get("operation")), "업무 준비")
+    if phase == "recheck":
+        return "승인 내용 재확인"
+    if phase == "execute":
+        if operation == "recover":
+            return "저장된 실행 결과 확인"
+        action = (state.get("work") or {}).get("action") or {}
+        return EXECUTE_LABELS.get(action.get("operation"), "업무 실행")
+    return None
 
 
 def project(snapshot):
@@ -71,17 +107,50 @@ class AgentService:
 
     def run(self, owner, conversation_id, operation, payload):
         previous = self.store.get(owner, conversation_id)
+        revision = previous["revision"]
+        steps = {}
+        task_ids = {}
+        progress_available = True
+
+        def on_task(event):
+            nonlocal progress_available
+            if not progress_available:
+                return
+            step_id = event["id"]
+            if "input" in event:
+                label = progress_label(event["name"], event["input"], operation)
+                if label is None:
+                    return
+                steps[step_id] = {"label": label, "status": "running"}
+                task_ids[step_id] = event["input"].get("current")
+            elif step_id in steps:
+                result = event["result"] or {}
+                work = result.get("work") or {}
+                outcome = (result.get("results") or {}).get(task_ids[step_id], {})
+                failed = event["error"] or result.get("error") or "failed" in (work.get("status"), outcome.get("status"))
+                review = work.get("status") == "needs_review" or outcome.get("status") == "unknown"
+                status = "failed" if failed else "review" if review else "completed"
+                steps[step_id] = {**steps[step_id], "status": status}
+            else:
+                return
+            try:
+                self.store.update_progress(owner, conversation_id, revision, list(steps.values()))
+            except Exception:
+                progress_available = False
+                logger.warning("업무 도우미 진행 상태 저장 실패")
+
         runtime = None
         try:
             runtime = self._runtime()
+            execution = {"actor_id": owner, "thread_id": conversation_id, "on_task": on_task}
             if operation == "start":
-                runtime.start(actor_id=owner, thread_id=conversation_id, request=payload["message"])
+                runtime.start(**execution, request=payload["message"])
             elif operation == "message":
-                runtime.message(actor_id=owner, thread_id=conversation_id, request=payload["message"])
+                runtime.message(**execution, request=payload["message"])
             elif operation == "resume":
-                runtime.resume(actor_id=owner, thread_id=conversation_id, response=payload["response"])
+                runtime.resume(**execution, response=payload["response"])
             elif operation == "recover":
-                runtime.recover(actor_id=owner, thread_id=conversation_id)
+                runtime.recover(**execution)
             else:
                 raise WorkflowError("unsupported_operation")
             view, status = project(runtime.snapshot(actor_id=owner, thread_id=conversation_id))
@@ -99,4 +168,4 @@ class AgentService:
                 except WorkflowError:
                     pass
             view["error"] = code
-        self.store.finish(owner, conversation_id, view, status)
+        self.store.finish(owner, conversation_id, revision, view, status)
