@@ -38,12 +38,25 @@
 .thread > :nth-child(2) { animation-delay: 50ms }
 .thread > :nth-child(3) { animation-delay: 100ms }
 .msg-agent > :last-child { margin-bottom: 0 }
+.msg-agent > h1:first-child, .msg-agent > h2:first-child, .msg-agent > h3:first-child { margin-top: 0 }
 .msg-agent p { margin: 0 0 10px; white-space: pre-wrap }
+.msg-agent strong { font-weight: 750 }
 .msg-agent ul, .msg-agent ol { margin: 0 0 10px; padding-left: 20px }
 .msg-agent li { margin: 4px 0 }
-.msg-agent h1, .msg-agent h2, .msg-agent h3 { font-size: 15px; margin: 16px 0 8px; letter-spacing: -.01em }
+.msg-agent li::marker { color: #98a0ad }
+.msg-agent h1 { font-size: 17px; margin: 20px 0 8px }
+.msg-agent h2 { font-size: 15.5px; margin: 18px 0 8px }
+.msg-agent h3, .msg-agent h4 { font-size: 14px; margin: 16px 0 6px }
+.msg-agent h1, .msg-agent h2, .msg-agent h3, .msg-agent h4 { letter-spacing: -.01em; font-weight: 750 }
+.msg-agent blockquote { margin: 0 0 10px; padding: 9px 14px; border-left: 3px solid #d7defc; background: #f7f8fa; border-radius: 0 8px 8px 0; color: #4c586b }
+.msg-agent blockquote > :last-child { margin-bottom: 0 }
+.msg-agent table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin: 2px 0 12px }
+.msg-agent th, .msg-agent td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; overflow-wrap: anywhere }
+.msg-agent th { background: #f7f8fa; color: #6c7787; font-size: 11px }
+.msg-agent hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0 }
+.msg-agent a:hover { text-decoration: underline }
 .msg-agent code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86em; background: #f7f8fa; border-radius: 5px; padding: 2px 6px; color: #3a4666 }
-.codeblock { position: relative; background: #f7f8fa; border-radius: 10px; margin: 4px 0 12px; overflow: hidden; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
+.codeblock { position: relative; background: #f7f8fa; border: 1px solid #eceff4; border-radius: 10px; margin: 4px 0 12px; overflow: hidden; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
 .codeblock pre { margin: 0; padding: 14px 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: #39415c }
 .codeblock .copy { position: absolute; top: 8px; right: 8px; font-size: 11px; color: #687387; background: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; transition: background .18s cubic-bezier(.2,0,0,1) }
 .codeblock .copy:hover { background: #f1f3f7 }
@@ -102,14 +115,106 @@
 .step-detail .btn { font-size: 11px; padding: 7px 10px; margin: 4px 6px 0 0 }
 .step-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; font-size: 13px; background: #f7f8fa; border-radius: 8px; padding: 10px 12px; margin: 6px 0 }
 
-/* 승인·추가 입력 카드: 스프링 등장 */
-.agent-review { max-width: 680px; border: 1.5px solid var(--blue) !important; scroll-margin: 110px; animation: agent-rise-spring .32s cubic-bezier(.34,1.56,.64,1) both }
-.agent-review .agent-text { max-height: 300px; overflow: auto; background: #f7f8fa; border-radius: 9px; padding: 12px 14px; font-size: 12.5px; line-height: 1.7; color: #4c586b }
-.agent-field { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 }
-.agent-field textarea, .agent-field select { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #d6dce6; border-radius: 8px; font: inherit; background: #fff; color: var(--ink); resize: vertical; transition: border-color .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1) }
-.agent-field textarea:focus-visible, .agent-field select:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px #315df51f; outline: none }
-.agent-review pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; font-size: 13px }
-.agent-attach { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; background: #f7f8fa; font-size: 12.5px; overflow-wrap: anywhere }
+/* 승인·추가 입력 카드(docs/plans/agent-chat-ui 시안): 배지+틴트 배경, 스프링 등장 */
+.card.agent-review { max-width: 680px; border-radius: 14px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 14px; scroll-margin: 110px; animation: agent-rise-spring .32s cubic-bezier(.34,1.56,.64,1) both }
+.agent-review.approve { background: #f6f8ff; border-color: #d7defc }
+.agent-review.question { background: #faf6ec; border-color: #eadfc4 }
+.review-head { display: flex; flex-direction: column; gap: 8px }
+.review-head .review-title { font-size: 15.5px; letter-spacing: -.015em }
+.review-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid transparent }
+.agent-review.approve .review-actions { border-top-color: #dfe6fb }
+.agent-review.question .review-actions { border-top-color: #ecdfc3 }
+.review-note { font-size: 12px; color: #687387 }
+.badge { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 750 }
+.badge svg { width: 12px; height: 12px }
+.badge.blue { background: #fff; border: 1px solid #c9d4fb; color: #284ee8 }
+.badge.amber { background: #fff; border: 1px solid #e6d8b4; color: #9a690d }
+
+/* 메일 프레임: 발송 승인의 받는 사람·제목·본문(.mail-body 이름이 메일함 css와 겹쳐 리뷰 카드 안으로 스코프) */
+.agent-review .mail-frame { background: #fff; border: 1px solid #e3e8f3; border-radius: 11px; overflow: hidden }
+.agent-review .mail-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid #f0f2f8; flex-wrap: wrap }
+.agent-review .mail-dir { width: 26px; height: 26px; border-radius: 8px; background: var(--blue-tint); color: #284ee8; display: grid; place-items: center }
+.agent-review .mail-dir svg { width: 14px; height: 14px }
+.agent-review .mail-to { min-width: 0 }
+.agent-review .mail-to small { display: block; font-size: 10.5px; color: #687387; font-weight: 650 }
+.agent-review .mail-to b { font-size: 13px; letter-spacing: -.01em; overflow-wrap: anywhere }
+.agent-review .mail-kind { margin-left: auto; font-size: 10.5px; font-weight: 750; color: #5b6575; background: #f1f3f8; border-radius: 6px; padding: 3px 8px }
+.agent-review .mail-subject { font-size: 14px; font-weight: 750; letter-spacing: -.01em; padding: 12px 14px 0; overflow-wrap: anywhere }
+.agent-review .mail-body { margin: 9px 14px 14px; background: #f7f8fb; border-radius: 8px; padding: 12px 13px; font-size: 12.5px; line-height: 1.75; color: #4c586b; max-height: 190px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere }
+
+/* 첨부 칩 */
+.attach-row { display: flex; gap: 8px; flex-wrap: wrap }
+.attach-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #dfe4ee; border-radius: 9px; background: #fff; font-size: 12.5px; font-weight: 600; color: #334052; text-decoration: none; transition: border-color .18s cubic-bezier(.2,0,0,1), background .18s cubic-bezier(.2,0,0,1) }
+.attach-chip:hover { border-color: #c6d2e6; background: #fafbfd }
+.attach-chip svg { width: 14px; height: 14px; color: #7e8795 }
+.attach-chip em { font-style: normal; font-size: 10px; font-weight: 800; color: #7e8795; background: #f1f3f8; border-radius: 5px; padding: 2px 6px; letter-spacing: .03em }
+
+/* 문서 카드: 종류 색칩 + 문서번호 + 다운로드 */
+.doc-card { background: #fff; border: 1px solid #dfe4ee; border-radius: 12px; padding: 14px 16px; transition: transform .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1), border-color .18s cubic-bezier(.2,0,0,1) }
+.doc-card:hover { transform: translateY(-1px); border-color: #c9d4fb; box-shadow: 0 6px 20px #26324814 }
+.doc-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap }
+.kind-chip { font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px; letter-spacing: .03em }
+.kind-chip.pi { background: var(--blue-tint); color: #284ee8 }
+.kind-chip.po { background: #e9f4ee; color: #146c46 }
+.kind-chip.ci { background: #f7efe2; color: #9a690d }
+.kind-chip.pl, .kind-chip.quote { background: #eef1f5; color: #47536a }
+.doc-number { font-size: 14.5px; font-weight: 800; letter-spacing: -.01em; overflow-wrap: anywhere }
+.doc-link { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--blue); text-decoration: none; border: 0; background: none; padding: 4px 6px; border-radius: 7px; transition: background .18s cubic-bezier(.2,0,0,1) }
+.doc-link:hover { background: var(--blue-tint) }
+.doc-link svg { width: 13px; height: 13px }
+.doc-parties { display: flex; align-items: center; gap: 9px; margin-top: 9px; font-size: 12.5px; color: #4c586b; flex-wrap: wrap }
+.doc-parties b { color: var(--ink); font-weight: 750 }
+.doc-parties svg { width: 14px; height: 14px; color: #9aa2b1 }
+.doc-items-note { margin: 5px 0 0; font-size: 12px; color: #687387 }
+.doc-meta { margin: 7px 0 0; font-size: 12px; color: #687387 }
+.doc-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 11px; padding-top: 11px; border-top: 1px solid #f0f2f6; flex-wrap: wrap }
+.doc-total { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.01em }
+.doc-files { display: flex; gap: 7px; flex-wrap: wrap }
+.file-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border: 1px solid #dfe4ee; border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; color: #334155; transition: background .18s cubic-bezier(.2,0,0,1), transform .18s cubic-bezier(.2,0,0,1), border-color .18s cubic-bezier(.2,0,0,1) }
+.file-btn:hover { background: #f4f6fb; border-color: #c6d2e6 }
+.file-btn:active { transform: scale(.96) }
+.file-btn svg { width: 13px; height: 13px; color: #7e8795 }
+.doc-card.hero .doc-number { font-size: 16px }
+.doc-card.hero .doc-total { font-size: 20px }
+.doc-full-toggle { align-self: flex-start; margin-top: 11px }
+.doc-full { margin-top: 12px; border-top: 1px solid #f0f2f6; padding-top: 12px; animation: agent-rise .22s cubic-bezier(.2,0,0,1) both }
+
+/* 답장 후보 카드 */
+.cand-list { display: flex; flex-direction: column; gap: 9px }
+.cand { display: flex; flex-direction: column; gap: 6px; border: 1px solid #dfe4ee; border-radius: 11px; background: #fff; padding: 13px 15px; transition: border-color .18s cubic-bezier(.2,0,0,1) }
+.cand:hover { border-color: #c6d2e6 }
+.cand-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.cand-no { font-size: 10.5px; font-weight: 800; color: #687387; background: #f1f3f8; padding: 2px 7px; border-radius: 6px; font-variant-numeric: tabular-nums }
+.cand-title { font-size: 13px; font-weight: 750; letter-spacing: -.01em }
+.cand-subject { font-size: 12px; color: #687387 }
+.cand-preview { font-size: 12px; color: #687387; line-height: 1.65; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere }
+
+/* 문서함 조각 인용 카드 */
+.cite-card { background: #fff; border: 1px solid #dfe4ee; border-radius: 12px; padding: 14px 16px }
+.cite-src { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.file-chip { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: #334052; text-decoration: none; overflow-wrap: anywhere }
+.file-chip:hover { color: var(--blue) }
+.file-chip svg { width: 15px; height: 15px; color: #7e8795; flex: none }
+.page-chip { font-size: 11px; font-weight: 800; background: #f1f3f8; border-radius: 6px; padding: 3px 8px; color: #4c586b; font-variant-numeric: tabular-nums }
+.cite-text { margin: 10px 0 0; font-size: 13px; line-height: 1.8; color: #334052; display: flex; gap: 8px }
+.cite-text > svg { width: 16px; height: 16px; color: #c9d4fb; margin-top: 4px; flex: none }
+
+/* 그 외 결과: key-value 표 */
+.kv { background: #fff; border: 1px solid #e6eaf1; border-radius: 11px; overflow: hidden; font-size: 12.5px; margin: 0 }
+.kv-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); border-bottom: 1px solid #f0f2f6 }
+.kv-row:last-child { border-bottom: 0 }
+.kv-row dt { background: #f8f9fc; color: #5b6575; font-weight: 700; padding: 9px 13px }
+.kv-row dd { margin: 0; padding: 9px 13px; color: var(--ink); overflow-wrap: anywhere }
+
+/* 질문 폼: 항목별 입력 */
+.q-fields { display: flex; flex-direction: column; gap: 13px }
+.q-field { display: flex; flex-direction: column; gap: 6px }
+.q-field > span { font-size: 12px; font-weight: 750; color: #4c586b }
+.q-field small { font-size: 11px; color: #687387; font-weight: 500 }
+.q-field select, .q-field input, .q-field textarea { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid #d6dce6; border-radius: 9px; font: inherit; font-size: 12.5px; background: #fff; color: var(--ink); resize: vertical; transition: border-color .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1) }
+.q-field textarea.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px }
+.q-field select:focus-visible, .q-field input:focus-visible, .q-field textarea:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px #315df51f; outline: none }
+
 .agent-recover { max-width: 680px; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
 
 /* 스크롤 정지 여백: 스티키 컴포저에 대상이 가려지지 않게(PI 화면의 html scroll-padding과 같은 방식) */
@@ -153,4 +258,8 @@ html:has(.agent-compose) { scroll-padding-bottom: 110px }
   html:has(.agent-compose) { scroll-padding-bottom: calc(var(--mobile-nav-height, 0px) + 130px) }
   .work, .step, .agent-review, .agent-recover { scroll-margin-bottom: calc(var(--mobile-nav-height, 0px) + 140px) }
   .page-head { margin-bottom: 14px }
+  .doc-foot { flex-direction: column; align-items: flex-start }
+  .doc-files, .file-btn { width: 100% }
+  .file-btn { flex: 1; justify-content: center }
+  .kv-row { grid-template-columns: 110px minmax(0, 1fr) }
 }
