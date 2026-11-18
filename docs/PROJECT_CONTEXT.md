@@ -233,7 +233,7 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 - 설계 결정·오류 사례·수정 이유·버전·재실행 결과는 Issue, PR('오류·재실행 기록' 칸), 팀 노션에도 남긴다.
 
 ## 9. 레포 세팅·작업 방식
-마지막 갱신: 2026-11-18 · Linux CI의 Office·한글 글꼴 설치
+마지막 갱신: 2026-11-18 · GitHub CI의 느린 통합 검사 제외
 
 - KE KOREA 이식 1~6절 완료에 따라 `.work/TASK.md`의 이식 전용 규칙을 삭제했다. 이식 계획과 원본 사본은 참고 이력으로 보관한다(2026-11-12, 요청자 지시).
 - 세팅 단계는 `.work/FLOW.md` 순서로 진행한다. 7단계까지 모두 마쳤다. 다음 과제는 템플릿 레포 `doomdiver100T/aio-team-template`([공통] 파일, [과제별] 빈 틀·최소 실행 틀)의 README '이 템플릿으로 새 과제 시작하기'에서 시작한다(Template repository 켜 둠). 작업량 기준 100KB·도구 1회 크기는 기록을 보고 그대로 두었다(`.work/RULES.md` 8절 5번). 세팅 진행기록은 `.work/STATUS.md`.
@@ -247,5 +247,5 @@ React 무역 문서에서 PI·PO·CI·PL 최신 설정 적용과 누락 입력 �
 - 담당(2026-11-10): 공통 기반(공통 계약, 서버·DB·배포, Google 로그인·Gmail 알림 수신)과 검토 기능은 김민성, 캘린더 연결 기능은 정원철, 이미지→견적서 기능은 임석원. 김진혁은 Assignees가 비어 있는 Issue에서 배정받는다. 담당은 Issue Assignees로 보고, 프로젝트를 마친 뒤 PR 내역으로 README에 정리한다(`.work/TASK.md`). [Request]
 - 실행 환경: Python 3.12, uv. 설치 `uv sync`, 테스트 `uv run pytest`, 패키지 추가 `uv add <패키지>==<버전>`. 서버는 로컬 `uv run uvicorn app.main:app --reload`, Render `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`로 실행한다. 자세한 것은 README '실행 방법'.
 - 규칙 검사: `python3 .work/check.py`. PR 전에 통과시킨다(테스트는 따로 `uv run pytest`).
-- CI: `.github/workflows/rules-check.yml`은 PR 생성/코드 갱신/재개와 `main` push에서 규칙 검사 후 `scripts/ci_scope.py`로 변경 경로를 판별한다. 코드·설정·미분류 경로가 있거나 비교가 실패하면 전체 Python/pgvector PostgreSQL·Windows worker 검사를 실행한다. Linux는 Ubuntu 기본 아카이브에서 지식 문서용 Office와 한글 글꼴을 설치하고, 설치 단계는 4분, 전체 작업은 20분으로 제한한다. Chromium·프론트 준비와 Windows의 고정 pgvector 설치도 유지한다. README·지정 문서 폴더의 Markdown·작업 규칙·PR 양식만 바뀌면 이 설치/DB/무거운 테스트를 모두 생략한다(테스트가 직접 읽는 `docs/TEST_REPORT.md`는 제외). 필수 검사 이름 `rules-check`·`tests`는 유지하고 범위 확인 실패는 `tests` 성공으로 처리하지 않는다. `.github/workflows/pr-check.yml`은 PR 본문/읽음 코드/최신 흐름 기재를 독립적으로 검사해 설명 수정이 이전 테스트 실패를 덮거나 테스트를 다시 시작하지 않는다. 동일 브랜치의 새 커밋은 이전 실행을 취소하며 본문/코드 워크플로는 서로 취소하지 않는다. GitHub의 병합 충돌 판정과 기존 필수 검사 Ruleset은 유지한다.
-
+- CI: `.github/workflows/rules-check.yml`은 PR 생성/코드 갱신/재개와 `main` push에서 규칙 검사 후 `scripts/ci_scope.py`로 변경 경로를 판별한다. 코드·설정·미분류 경로가 있거나 비교가 실패하면 Linux의 Python/pgvector PostgreSQL 검사와 Windows 개인 실행기·DPAPI·DACL 검사를 실행한다. Linux는 LibreOffice·변환용 한글 폰트·Chromium·프론트 의존성 설치를 생략하고 `uv run --locked pytest -m 'not slow'`를 실행한다. Windows도 실제 HTTPS/PC 프로세스 검사를 제외한다. 잠금 파일 확인과 Python 패키지 설치는 각 작업의 `uv run --locked`에서 수행한다. Linux 20분 한도와 Windows 고정 pgvector 설치를 유지한다. README·지정 문서 폴더의 Markdown·작업 규칙·PR 양식만 바뀌면 테스트와 DB 준비를 생략한다(테스트가 직접 읽는 `docs/TEST_REPORT.md`는 제외). 필수 검사 이름 `rules-check`·`tests`는 유지하고 범위 확인 실패는 `tests` 성공으로 처리하지 않는다. `.github/workflows/pr-check.yml`은 PR 본문/읽음 코드/최신 흐름 기재를 독립적으로 검사해 설명 수정이 이전 테스트 실패를 덮거나 테스트를 다시 시작하지 않는다. 동일 브랜치의 새 커밋은 이전 실행을 취소하며 본문/코드 워크플로는 서로 취소하지 않는다. GitHub의 병합 충돌 판정과 기존 필수 검사 Ruleset은 유지한다.
+- 로컬 `uv run pytest`에는 DOCX·XLSX·TXT 실제 변환, Chromium, Gmail 런처·PC 별도 프로세스 시험이 포함된다. 이 시험만 실행할 때는 `uv run pytest -m slow`를 쓴다. Excel 숨김 시트·수식 결과 누락 검사는 CI에도 포함된다. 운영의 DOCX·XLSX·TXT 업로드에는 LibreOffice가 필요하다.

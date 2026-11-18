@@ -2,6 +2,8 @@
 from hashlib import sha256
 from uuid import uuid4
 
+import pytest
+
 from tests.fakes.storage import FakeStorage
 from tests.test_files_storage import bearer, make_client
 from tests.test_pi_domain import pi_input
@@ -91,6 +93,7 @@ def test_saved_settings_apply_to_new_documents_and_preserve_existing_issue(datab
             assert response.status_code == 200 and sha256(response.content).hexdigest() == file["content_hash"]
 
 
+@pytest.mark.slow
 def test_gmail_settings_browser_callbacks_failures_and_mobile(database_url, tmp_path, monkeypatch):
     """실제 React/FastAPI/PostgreSQL + 가짜 Google/JWKS, 외부 API 호출 없음."""
     import json

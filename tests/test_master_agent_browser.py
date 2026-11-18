@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import httpx
 from playwright.sync_api import expect, sync_playwright
+import pytest
 
 from tests.test_master_agent import Choices, app_for, auth, company
 from tests.fakes.storage import FakeStorage
@@ -18,6 +19,9 @@ from tests.test_approval import add_mail
 from tests.test_knowledge_browser import serve
 from tests.test_supabase_auth import SUPABASE_URL, FakeJwks
 from app.web import frontend
+
+
+pytestmark = pytest.mark.slow
 
 
 def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tmp_path, monkeypatch):

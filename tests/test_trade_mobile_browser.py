@@ -29,6 +29,9 @@ from tests.test_supabase_auth import FakeJwks, SUPABASE_URL, write_settings
 from tests.test_trade_flow import seal_png
 
 
+pytestmark = pytest.mark.slow
+
+
 @pytest.fixture(scope="module")
 def mobile_frontend(tmp_path_factory):
     output = tmp_path_factory.mktemp("trade-mobile") / "dist"

@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import httpx
 from playwright.sync_api import expect, sync_playwright
+import pytest
 
 from app.auth.supabase import TokenVerifier
 from app.main import create_app
@@ -21,6 +22,9 @@ from tests.test_knowledge_browser import serve
 from tests.test_supabase_auth import FakeJwks, SUPABASE_URL
 from tests.test_mailbox import add_quote
 from tests.fakes.gmail import message
+
+
+pytestmark = pytest.mark.slow
 
 
 def test_browser_mailbox_original_preview_send_and_mobile(database_url, tmp_path, monkeypatch):

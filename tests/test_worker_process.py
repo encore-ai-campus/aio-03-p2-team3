@@ -38,6 +38,9 @@ from tests.test_pi_domain import pi_input
 from tests.test_trade_flow import seal_png
 
 
+pytestmark = pytest.mark.slow
+
+
 # 서버 큐의 전체 120초 기한과 응답 여유 5초를 기다린다. 연결 실패는 5초로 제한한다.
 # PC의 SDK 호출 제한(20초)·서버 재시도 예산은 바꾸지 않는다.
 SERVICE_TIMEOUT = httpx.Timeout(125, connect=5)
