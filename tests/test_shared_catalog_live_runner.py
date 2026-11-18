@@ -2,13 +2,18 @@
 from decimal import Decimal
 import importlib.util
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 ROOT = Path(__file__).parents[1]
-RECORDS = ROOT / 'docs/test-records/llm-benchmark-20261118'
+# 실제 SKU가 든 기록 폴더는 공개 레포에 없다. 개인 PC에서만(CATALOG_RECORDS_DIR 또는 기본 경로) 돈다.
+RECORDS = Path(os.environ.get('CATALOG_RECORDS_DIR') or ROOT / 'docs/test-records/llm-benchmark-20261118')
+if not all((RECORDS / name).exists() for name in
+           ('catalog-query-confirmed.json', 'shared-catalog-snapshot.json', 'catalog-ground-truth-approval.json')):
+    pytest.skip('공유 카탈로그 기록 폴더 없음(CATALOG_RECORDS_DIR)', allow_module_level=True)
 spec = importlib.util.spec_from_file_location('run_live', ROOT / 'scripts/run_shared_catalog_live.py')
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
