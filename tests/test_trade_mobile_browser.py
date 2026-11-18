@@ -113,12 +113,12 @@ def test_pi_po_mobile_complete_resize_conflict_retry(database_url, mobile_fronte
         page.get_by_role("button", name="이 단계 전체 수정").click()
         page.get_by_role("navigation", name=kind.upper() + " 작성 단계").get_by_role("button", name="품목", exact=True).click()
         expect(page.get_by_role("button", name="품목 추가", exact=True)).to_be_visible()
-        page.get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Serum")
-        page.get_by_label("유상 수량 · 품목 1", exact=True).fill("10")
+        page.locator(".pi-question").get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Serum")
+        page.locator(".pi-question").get_by_label("유상 수량 · 품목 1", exact=True).fill("10")
         page.get_by_role("button", name="품목 추가", exact=True).click()
         page.get_by_role("button", name="품목 2 삭제", exact=True).click()
         page.get_by_text("품목 1 상세", exact=False).click()
-        page.get_by_label("용량·규격 · 품목 1", exact=True).fill("50ml")
+        page.locator(".pi-question").get_by_label("용량·규격 · 품목 1", exact=True).fill("50ml")
         page.get_by_label("할인율 (%) · 품목 1", exact=True).fill("10")
         if kind == "po":
             page.get_by_label("무상 수량 · 품목 1", exact=True).fill("2")
@@ -127,7 +127,7 @@ def test_pi_po_mobile_complete_resize_conflict_retry(database_url, mobile_fronte
             expect(page.get_by_label("할인율 (%) · 품목 1", exact=True)).to_be_disabled()
             page.get_by_label("샘플 품목 (0원 포함)").uncheck()
         page.get_by_role("button", name="작성 내용 보기", exact=True).click()
-        quantity = page.get_by_label("유상 수량 · 품목 1", exact=True)
+        quantity = page.locator(".pi-question").get_by_label("유상 수량 · 품목 1", exact=True)
         quantity.focus()
         for width in (1440, 390):
             page.set_viewport_size({"width": width, "height": 844})
@@ -147,7 +147,7 @@ def test_pi_po_mobile_complete_resize_conflict_retry(database_url, mobile_fronte
         page.get_by_role("button", name="다음", exact=True).click()
         page.get_by_label(kind.upper() + " 문서번호", exact=True).fill(kind.upper() + "-" + "LONG" * 30)
         page.get_by_label("납품 조건 (Incoterms·장소)", exact=True).fill("FOB Busan")
-        page.get_by_label("지급 조건", exact=True).fill("T/T")
+        page.locator(".pi-question").get_by_label("지급 조건", exact=True).fill("T/T")
         page.get_by_role("button", name="저장하고 전체 확인", exact=True).click()
         expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
         path = "/api/trade/" + kind + "/" + page.url.rsplit("/", 1)[1]
@@ -200,12 +200,12 @@ def test_pi_po_mobile_complete_resize_conflict_retry(database_url, mobile_fronte
         expect(page.get_by_role("button", name="PDF 다운로드", exact=True)).to_be_enabled()
         # 실제 다른 창 저장으로 revision 충돌을 만들고 입력·단계를 보존한다.
         page.get_by_role("navigation", name=kind.upper() + " 작성 단계").get_by_role("button", name="거래 조건", exact=True).click()
-        page.get_by_label("지급 조건", exact=True).fill("UNSAVED MOBILE TERMS")
+        page.locator(".pi-question").get_by_label("지급 조건", exact=True).fill("UNSAVED MOBILE TERMS")
         current = client.get(path).json()
         assert client.put(path, json={"revision": current["revision"], "document": current["input"]}).status_code == 200
         page.get_by_role("button", name="임시 저장", exact=True).click()
         expect(page.get_by_role("alert")).to_contain_text("최신")
-        expect(page.get_by_label("지급 조건", exact=True)).to_have_value("UNSAVED MOBILE TERMS")
+        expect(page.locator(".pi-question").get_by_label("지급 조건", exact=True)).to_have_value("UNSAVED MOBILE TERMS")
         expect(page.locator('[aria-current="step"]')).to_have_text("거래 조건")
         # 원문 작성 방법을 왕복해도 입력을 보존하고 가짜 추출의 누락을 보완한다.
         page.goto(base + "/app/trade/" + kind)
@@ -431,12 +431,12 @@ def test_ci_linked_mobile_source_reselect_preserves_shipment(ci_browser, tmp_pat
                 "원산지": "Republic of Korea", "납품 조건": "FOB Busan", "배송지": "1 Fiction Avenue " * 20,
                 "청구지": "2 Fiction Avenue " * 20, "비고": "Virtual shipment notes " * 10}
     for label, value in shipment.items():
-        page.get_by_label(label, exact=True).fill(value)
+        page.locator(".pi-question").get_by_label(label, exact=True).fill(value)
     expect(page.get_by_role("button", name="CI 생성", exact=True)).to_be_disabled()
     assert client.get("/api/trade/ci").json() == []
     assert client.post("/api/trade/ci", json={"source_pi_id": incomplete["document_id"], "source_revision": 1}).status_code == 409
     page.get_by_role("button", name="작성 내용 보기", exact=True).click()
-    reference = page.get_by_label("선적 참조", exact=True)
+    reference = page.locator(".pi-question").get_by_label("선적 참조", exact=True)
     reference.focus()
     for width in (1440, 390):
         page.set_viewport_size({"width": width, "height": 844})
@@ -487,17 +487,17 @@ def test_ci_linked_mobile_source_reselect_preserves_shipment(ci_browser, tmp_pat
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="전체 확인", exact=True).click()
     ci_issue_download(page, context, client, base, tmp_path, "ci-linked")
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="선적 정보", exact=True).click()
-    page.get_by_label("선적 참조", exact=True).fill("UNSAVED LINKED SHIPMENT")
+    page.locator(".pi-question").get_by_label("선적 참조", exact=True).fill("UNSAVED LINKED SHIPMENT")
     current = client.get(path).json()
     assert client.put(path, json={"revision": current["revision"], "document": current["input"]}).status_code == 200
     page.get_by_role("button", name="저장하고 전체 확인", exact=True).click()
     expect(page.get_by_role("alert")).to_contain_text("입력은 보존")
     expect(page.get_by_role("alert")).to_be_focused()
-    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED LINKED SHIPMENT")
+    expect(page.locator(".pi-question").get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED LINKED SHIPMENT")
     page.get_by_role("button", name="최신본 다시 읽기", exact=True).click()
     expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="선적 정보", exact=True).click()
-    expect(page.get_by_label("선적 참조", exact=True)).to_have_value(shipment["선적 참조"])
+    expect(page.locator(".pi-question").get_by_label("선적 참조", exact=True)).to_have_value(shipment["선적 참조"])
 
 
 @pytest.mark.parametrize("method", ["direct", "extract"])
@@ -533,21 +533,28 @@ def test_ci_standalone_mobile_complete_price_conflict(ci_browser, monkeypatch, t
         page.get_by_label("회사명 (영문)", exact=True).fill("VirtualCounterparty" * 10)
         page.get_by_role("button", name="임시 저장", exact=True).click()
         expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_disabled()
-        page.get_by_role("button", name="거래처 보완", exact=True).click()
-    page.get_by_label("주소 (영문)", exact=True).fill("1 Fiction Avenue " * 20)
+        page.get_by_role("button", name="누락 항목 입력", exact=True).click()
+        dialog = page.get_by_role("dialog")
+        dialog.get_by_label("주소 (영문)", exact=True).fill("1 Fiction Avenue " * 20)
+        dialog.get_by_role("button", name="저장하고 반영", exact=True).click()
+        page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래처", exact=True).click()
+    page.locator(".pi-question").get_by_label("주소 (영문)", exact=True).fill("1 Fiction Avenue " * 20)
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="품목", exact=True).click()
     if method == "direct":
-        page.get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Serum")
-        page.get_by_label("유상 수량 · 품목 1", exact=True).fill("10")
+        page.locator(".pi-question").get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Serum")
+        page.locator(".pi-question").get_by_label("유상 수량 · 품목 1", exact=True).fill("10")
         page.get_by_text("품목 1 상세", exact=False).click()
-        page.get_by_label("용량·규격 · 품목 1", exact=True).fill("50ml")
+        page.locator(".pi-question").get_by_label("용량·규격 · 품목 1", exact=True).fill("50ml")
     else:
         page.get_by_role("button", name="임시 저장", exact=True).click()
         expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_disabled()
-        page.get_by_role("button", name="품목 보완", exact=True).click()
-        page.get_by_label("품목 1 · 단가표 대신 입력한 단가 사용", exact=True).check()
+        page.get_by_role("button", name="누락 항목 입력", exact=True).click()
+        dialog = page.get_by_role("dialog")
+        dialog.get_by_label("단가표 대신 입력한 단가 사용", exact=False).check()
+        dialog.get_by_role("button", name="저장하고 반영", exact=True).click()
+        page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="품목", exact=True).click()
     page.get_by_role("button", name="작성 내용 보기", exact=True).click()
-    field = page.get_by_label("유상 수량 · 품목 1", exact=True)
+    field = page.locator(".pi-question").get_by_label("유상 수량 · 품목 1", exact=True)
     field.focus()
     for width in (1440, 390):
         page.set_viewport_size({"width": width, "height": 844})
@@ -559,7 +566,7 @@ def test_ci_standalone_mobile_complete_price_conflict(ci_browser, monkeypatch, t
     keyboard_reachable(page)
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래·선적 조건", exact=True).click()
     page.get_by_label("CI 문서번호", exact=True).fill("CI-" + method + "-LONG" * 30)
-    page.get_by_label("선적 참조", exact=True).fill("SHIP-MOBILE")
+    page.locator(".pi-question").get_by_label("선적 참조", exact=True).fill("SHIP-MOBILE")
     page.get_by_label("원산지", exact=True).fill("Republic of Korea")
     page.get_by_label("납품 조건", exact=True).fill("FOB Busan")
     layout(page)
@@ -572,17 +579,17 @@ def test_ci_standalone_mobile_complete_price_conflict(ci_browser, monkeypatch, t
     assert saved["document"].get("payment_terms") in (None, "N/A")
     ci_issue_download(page, context, client, base, tmp_path, "ci-" + method)
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래·선적 조건", exact=True).click()
-    page.get_by_label("선적 참조", exact=True).fill("UNSAVED STANDALONE SHIPMENT")
+    page.locator(".pi-question").get_by_label("선적 참조", exact=True).fill("UNSAVED STANDALONE SHIPMENT")
     current = client.get(path).json()
     assert client.put(path, json={"revision": current["revision"], "document": current["input"]}).status_code == 200
     page.get_by_role("button", name="임시 저장", exact=True).click()
     expect(page.get_by_role("alert")).to_be_focused()
-    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED STANDALONE SHIPMENT")
+    expect(page.locator(".pi-question").get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED STANDALONE SHIPMENT")
     expect(page.locator('[aria-current="step"]')).to_have_text("거래·선적 조건")
     page.get_by_role("button", name="최신본 다시 읽기", exact=True).click()
     expect(page.get_by_role("button", name="최종 검토 만들기", exact=True)).to_be_enabled()
     page.get_by_role("navigation", name="CI 작성 단계").get_by_role("button", name="거래·선적 조건", exact=True).click()
-    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("SHIP-MOBILE")
+    expect(page.locator(".pi-question").get_by_label("선적 참조", exact=True)).to_have_value("SHIP-MOBILE")
 
 
 @pytest.mark.parametrize("method", ["direct", "extract"])
@@ -606,11 +613,11 @@ def test_pl_mobile_two_approvals_conflict_and_download(ci_browser, monkeypatch, 
         page.get_by_role("button", name="원문에서 정보 가져오기", exact=True).click()
     else:
         page.get_by_label("회사명 (영문)", exact=True).fill("Virtual Buyer")
-    page.get_by_label("주소 (영문)", exact=True).fill("1 Fiction Avenue " * 20)
+    page.locator(".pi-question").get_by_label("주소 (영문)", exact=True).fill("1 Fiction Avenue " * 20)
     nav = page.get_by_role("navigation", name="PL 작성 단계")
     nav.get_by_role("button", name="품목·포장", exact=True).click()
     if method == "direct":
-        page.get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Item")
+        page.locator(".pi-question").get_by_label("품목명 (영문) · 품목 1", exact=True).fill("Virtual Item")
         page.get_by_label("수량 · 품목 1", exact=True).fill("10")
         page.get_by_label("포장 수 · 품목 1", exact=True).fill("2")
         page.get_by_label("포장 종류 · 품목 1", exact=True).fill("BOX")
@@ -630,7 +637,7 @@ def test_pl_mobile_two_approvals_conflict_and_download(ci_browser, monkeypatch, 
     keyboard_reachable(page)
     nav.get_by_role("button", name="선적 조건·합계", exact=True).click()
     page.get_by_label("PL 문서번호", exact=True).fill("PL-" + method)
-    page.get_by_label("선적 참조", exact=True).fill("SHIP-MOBILE")
+    page.locator(".pi-question").get_by_label("선적 참조", exact=True).fill("SHIP-MOBILE")
     page.get_by_label("납품 조건", exact=True).fill("FOB Busan")
     page.get_by_label("원본 포장 수", exact=True).fill("99")
     page.get_by_role("button", name="저장하고 전체 확인", exact=True).click()
@@ -692,9 +699,14 @@ def test_pl_mobile_two_approvals_conflict_and_download(ci_browser, monkeypatch, 
             button.click()
         assert sha256(Path(download.value.path()).read_bytes()).hexdigest() == file["content_hash"]
     nav.get_by_role("button", name="선적 조건·합계", exact=True).click()
-    page.get_by_label("선적 참조", exact=True).fill("UNSAVED SHIPMENT")
+    page.locator(".pi-question").get_by_label("선적 참조", exact=True).fill("UNSAVED SHIPMENT")
     current = client.get(path).json()
     assert client.put(path, json={"revision": current["revision"], "document": current["input"]}).status_code == 200
     page.get_by_role("button", name="임시 저장", exact=True).click()
     expect(page.get_by_role("alert")).to_be_focused()
-    expect(page.get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED SHIPMENT")
+    expect(page.locator(".pi-question").get_by_label("선적 참조", exact=True)).to_have_value("UNSAVED SHIPMENT")
+
+
+
+
+
