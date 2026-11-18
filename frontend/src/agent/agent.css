@@ -51,7 +51,7 @@
 
 /* 작업 타임라인 */
 .work { max-width: 680px }
-.work-row { position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font-size: 12.5px; color: #5b6575; border-radius: 9px; padding: 9px 11px; transition: background .18s cubic-bezier(.2,0,0,1) }
+.work-row { position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font-size: 12.5px; color: #5b6575; background: transparent; border-radius: 9px; padding: 9px 11px; transition: background .18s cubic-bezier(.2,0,0,1) }
 .work-row:hover { background: #f7f8fa }
 .work-row .chev { width: 14px; height: 14px; flex: none; color: #9aa2b1; transition: transform .24s cubic-bezier(.2,0,0,1) }
 .work.open .work-row .chev { transform: rotate(180deg) }
@@ -75,7 +75,7 @@
 .work.open .step:nth-child(4) { animation-delay: 150ms }
 .work.open .step:nth-child(n+5) { animation-delay: 180ms }
 .step.dim { opacity: .55 }
-.step-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px; font-size: 12.5px; color: #5b6575; transition: background .18s cubic-bezier(.2,0,0,1) }
+.step-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px; font-size: 12.5px; color: #5b6575; background: transparent; transition: background .18s cubic-bezier(.2,0,0,1) }
 .step-head:hover { background: #f7f8fa }
 .step-head .op-ic { width: 15px; height: 15px; flex: none; color: #8a93a3 }
 .step-head .step-name { color: var(--ink) }
@@ -100,11 +100,15 @@
 .agent-review { max-width: 680px; border: 1.5px solid var(--blue) !important; scroll-margin: 110px; animation: agent-rise-spring .32s cubic-bezier(.34,1.56,.64,1) both }
 .agent-review .agent-text { max-height: 300px; overflow: auto; background: #f7f8fa; border-radius: 9px; padding: 12px 14px; font-size: 12.5px; line-height: 1.7; color: #4c586b }
 .agent-field { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 }
-.agent-field textarea, .agent-field select { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #d6dce6; border-radius: 8px; font: inherit; resize: vertical; transition: border-color .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1) }
+.agent-field textarea, .agent-field select { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #d6dce6; border-radius: 8px; font: inherit; background: #fff; color: var(--ink); resize: vertical; transition: border-color .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1) }
 .agent-field textarea:focus-visible, .agent-field select:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px #315df51f; outline: none }
 .agent-review pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; font-size: 13px }
 .agent-attach { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; background: #f7f8fa; font-size: 12.5px; overflow-wrap: anywhere }
 .agent-recover { max-width: 680px; animation: agent-rise .24s cubic-bezier(.2,0,0,1) both }
+
+/* 스크롤 정지 여백: 스티키 컴포저에 대상이 가려지지 않게(PI 화면의 html scroll-padding과 같은 방식) */
+html:has(.agent-compose) { scroll-padding-bottom: 110px }
+.work, .step, .agent-review, .agent-recover { scroll-margin-bottom: 120px }
 
 /* 진행 상태줄 */
 .runline { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #98a0ad; padding: 4px 4px 0; min-height: 22px; margin: 0 }
@@ -141,5 +145,7 @@
   .msg-user { max-width: 92% }
   .work, .msg-agent, .agent-review, .agent-recover, .agent-intro { max-width: none }
   .agent-compose { position: sticky; bottom: calc(var(--mobile-nav-height, 0px) + 10px) }
+  html:has(.agent-compose) { scroll-padding-bottom: calc(var(--mobile-nav-height, 0px) + 130px) }
+  .work, .step, .agent-review, .agent-recover { scroll-margin-bottom: calc(var(--mobile-nav-height, 0px) + 140px) }
   .page-head { margin-bottom: 14px }
 }

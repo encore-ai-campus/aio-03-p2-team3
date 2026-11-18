@@ -194,7 +194,7 @@ export default function AgentPage() {
     operation.current?.abort(); operation.current = request
     setBusy(true); setError("")
     try {
-      const data = await apiFetch(`/agent/conversations${path}`, { token, body, signal: request.signal })
+      const data = await apiFetch(`/agent/conversations${path}`, { method: "POST", token, body, signal: request.signal })
       if (operation.current !== request || request.signal.aborted) return
       setText(""); navigate(`/agent/${data.id}`); setReload(value => value + 1)
     } catch (failure) {
