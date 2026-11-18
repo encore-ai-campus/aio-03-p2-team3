@@ -4,6 +4,7 @@ import { apiFetch } from "../api"
 import { useAuth } from "../useAuth"
 import "./mailbox.css"
 import QuotePanel from "./QuotePanel"
+import ReplyCandidateEditor from "./ReplyCandidateEditor"
 
 const STATUS = { processing: "처리 중", awaiting_approval: "답장 대기", sent: "보냄",
   error: "처리 오류", ignored: "초안 없음", needs_review: "확인 필요" }
@@ -104,6 +105,7 @@ export default function MailboxPage() {
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState(null)
+  const [editingCandidate, setEditingCandidate] = useState(null)
   const [stampedAt, setStampedAt] = useState(null)
   const [reload, setReload] = useState(0)
   const operation = useRef(null)
@@ -137,7 +139,7 @@ export default function MailboxPage() {
 
   useEffect(() => {
     let cancelled = false, timer, request
-    setThread(null); setDetailError(""); setPreview(null)
+    setThread(null); setDetailError(""); setPreview(null); setEditingCandidate(null)
     setDetailLoading(Boolean(selected))
     async function read() {
       if (!selected || document.hidden) return
@@ -158,7 +160,7 @@ export default function MailboxPage() {
   }, [token, selected, reload])
 
   useEffect(() => {
-    setBusy(false); setNotice("")
+    setBusy(false); setNotice(""); setEditingCandidate(null)
     return () => { operation.current?.abort(); operation.current = null }
   }, [token, selected])
 
@@ -333,7 +335,9 @@ export default function MailboxPage() {
                   <span className="csub">{candidate.subject}</span>
                 </div>
                 {candidate.needs_review && <p className="cand-note">내용을 주의 깊게 확인해 주세요.</p>}
-                <p className="cand-body">{candidate.body}</p>
+                <ReplyCandidateEditor candidate={candidate} token={token} busy={busy}
+                   onEditingChange={setEditingCandidate} onSaved={() => setReload((value) => value + 1)}
+                   onError={setDetailError} />
                 {attachRow(candidate)}
                 {candidate.quote_id && candidate.document &&
                   <QuotePanel candidate={candidate} token={token} onSaved={() => setReload((value) => value + 1)} />}
@@ -342,7 +346,7 @@ export default function MailboxPage() {
                     ? <span className="sent-line">{IC.check}발송 완료</span>
                     : canSend(candidate)
                       ? <button className="btn blue" type="button"
-                        disabled={busy || needsPrice(candidate)}
+                        disabled={busy || editingCandidate !== null || needsPrice(candidate)}
                         onClick={() => act(`/mail/candidates/${candidate.id}/preview`, "GET", undefined, true)}>
                         발송 내용 확인 {IC.arrow}
                       </button>
@@ -374,7 +378,8 @@ export default function MailboxPage() {
           <span className="note">선택한 답장을 같은 Gmail 대화로 보냅니다.</span>
           <button className="btn" type="button" disabled={busy} onClick={() => setPreview(null)}>취소</button>
           <button className="btn blue" type="button" disabled={busy}
-            onClick={() => act(`/mail/candidates/${preview.id}/send`, "POST", { revision: preview.document?.revision ?? null })}>
+            onClick={() => act(`/mail/candidates/${preview.id}/send`, "POST", { revision: preview.document?.revision ?? null,
+               expected_subject: preview.subject, expected_body: preview.body })}>
             {busy ? "보내는 중…" : "확인하고 보내기"}
           </button>
         </div>
