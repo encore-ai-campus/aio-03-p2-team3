@@ -206,24 +206,24 @@ def test_gmail_403_quota_error_keeps_token_and_resumes(local, reason):
     assert watch(access).status == "active" and watch(access).history_id == "1001"
 
 
-def test_logout_stops_without_google_stop_and_relogin_skips_logged_out_mail(local):
+def test_logout_keeps_collecting_and_relogin_preserves_position(local):
     client, fake, access = local
     client.post("/logout")
-    before = len(fake.calls), len(fake.mailbox.calls)
     poll(local)
-    assert watch(access).status == "stopped" and before == (len(fake.calls), len(fake.mailbox.calls))
+    assert watch(access).status == "active" and fake.mailbox.called("history")
+    cursor = watch(access).history_id
     assert sign_in(client).status_code == 303
-    assert watch(access).history_id == "1001"
+    assert watch(access).history_id == cursor
     assert not fake.called("stop") and not fake.called("watch")
 
 
-def test_cancel_reconnection_stops_local_collection(local):
+def test_cancel_reconnection_keeps_existing_collection(local):
     client, fake, access = local
     response = client.get("/auth/google/start", follow_redirects=False)
     state = parse_qs(urlsplit(response.headers["location"]).query)["state"][0]
     client.get("/auth/google/callback", params={"state": state, "error": "access_denied"}, follow_redirects=False)
     poll(local)
-    assert watch(access).status == "stopped" and not fake.mailbox.called("history")
+    assert watch(access).status == "active" and fake.mailbox.called("history")
 
 
 @pytest.mark.parametrize("stop_at", ["page", "message"])
@@ -285,9 +285,6 @@ def test_owner_configuration_does_not_change_collection(local, owner, monkeypatc
 
 @pytest.mark.parametrize("sender,labels,reason", [
     ("demo@example.invalid", ["INBOX"], "self"),
-    ("no-reply@example.invalid", ["INBOX"], "no_reply"),
-    ("sender@example.invalid", ["INBOX", "CATEGORY_PROMOTIONS"], "promotion"),
-    ("sender@example.invalid", ["INBOX", "CATEGORY_SOCIAL"], "social"),
     ("sender@example.invalid", [], "not_inbox"),
 ])
 def test_shared_filters_skip_mail_without_ai(local, sdk, sender, labels, reason):
@@ -300,6 +297,7 @@ def test_shared_filters_skip_mail_without_ai(local, sdk, sender, labels, reason)
 
 def test_failed_initial_profile_read_retries_without_watch(local, monkeypatch):
     _, fake, access = local
+    stop_watch(access, 1)
     original = fake.get_history_id
     monkeypatch.setattr(fake, "get_history_id", lambda token: (_ for _ in ()).throw(GoogleUnavailable()))
     register_watch(access, 1)
@@ -312,6 +310,7 @@ def test_failed_initial_profile_read_retries_without_watch(local, monkeypatch):
 
 def test_profile_response_cannot_reactivate_logged_out_collection(local, monkeypatch):
     _, fake, access = local
+    stop_watch(access, 1)
 
     def profile(token):
         stop_watch(access, 1)
@@ -353,7 +352,7 @@ def test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector(tmp_pat
         assert fake.called("watch")[0][2] == "projects/fake/topics/unchanged"
         assert "새 메일 알림 켜짐" in client.get("/inbox").text
         client.post("/logout")
-        assert len(fake.called("stop")) == 1 and not fake.called("profile")
+        assert not fake.called("stop") and not fake.called("profile")
 
 
 def test_real_google_profile_request_reads_position_without_watch(local):
@@ -395,7 +394,7 @@ def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_p
                         pass
                     assert process.poll() is None and time.monotonic() < deadline
                     time.sleep(0.05)
-                assert "이 PC에서 본인 Gmail" in client.get("/login").text
+                assert "로그아웃 후에도 수집" in client.get("/login").text
                 assert client.get("/healthz", headers={"Host": "public.example.invalid"}).status_code == 400
                 start = client.get("/auth/google/start")
                 state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
@@ -415,7 +414,9 @@ def test_actual_local_launcher_collects_while_browser_idle_then_sends_once(tmp_p
                 before = client.get("/test/state").json()
                 time.sleep(0.15)
                 after = client.get("/test/state").json()
-                assert before == after and after["watches"] == after["stops"] == 0
+                assert after["reads"] > before["reads"]
+                assert after["ai_calls"] == before["ai_calls"] and after["sends"] == 1
+                assert after["watches"] == after["stops"] == 0
             process.terminate()
             # Uvicorn은 정상 lifespan 종료 뒤 원래 SIGTERM을 다시 발생시킬 수 있다.
             return_code = process.wait(timeout=10)

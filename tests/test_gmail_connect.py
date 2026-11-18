@@ -1,16 +1,18 @@
 """계획 7절: Gmail 연결을 앱 로그인에서 분리한 Bearer API를 가짜 Google·가짜 JWKS로 확인한다.
 
-연결→watch→토큰 갱신(/api/me)→로그아웃 watch 중지→재연결, state 재사용/만료, 연결 취소·권한
+연결→watch→토큰 갱신(/api/me)→로그아웃 수집 유지→재연결, state 재사용/만료, 연결 취소·권한
 누락, 타인 callback·계정 충돌 거부, 기존 정수 ID 보존 연결, 연결 해제(Google 토큰 폐기)를 본다.
 실제 Google·Supabase HTTP는 부르지 않는다.
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from cryptography.fernet import Fernet
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -114,6 +116,53 @@ def test_connect_registers_watch_and_me_reports_connected(database_url):
         stored = token_of(client, user.id)  # 기존 방식 그대로 암호문으로만 저장됐다
         assert "fake-refresh-1" not in stored.refresh_token_enc
         assert client.app.state.google_access.cipher.decrypt(stored.refresh_token_enc) == "fake-refresh-1"
+
+
+@pytest.mark.parametrize("outcome", ["connected", "cancelled", "login_failed", "expired", "scope_missing"])
+def test_callback_returns_to_configured_react_origin(database_url, monkeypatch, outcome):
+    from app.auth import gmail as gmail_module
+
+    jwks, fake = FakeJwks(), FakeGoogle()
+    settings = replace(settings_of(database_url),
+                       google_oauth_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
+                       frontend_origins=" http://127.0.0.1:3000, https://other.example.invalid ")
+    with make_client(database_url, jwks, fake, settings) as client:
+        client.base_url = "http://127.0.0.1:3000"
+        token = jwks.token()
+        url = start_connect(client, token)
+        params = {"state": state_of(url), "code": "fake-code"}
+        if outcome == "cancelled":
+            params["error"] = "access_denied"
+        elif outcome == "login_failed":
+            params["state"] = "wrong-state"
+        elif outcome == "expired":
+            monkeypatch.setattr(gmail_module, "STATE_TTL_SECONDS", -1)
+        elif outcome == "scope_missing":
+            fake.logins.append(fake_login(scopes=["openid"]))
+        # 반환 주소는 브라우저 입력이 아니라 운영자가 설정한 출처로만 정한다.
+        params["return_to"] = "https://untrusted.example.invalid"
+        result = client.get(settings.google_oauth_redirect_uri, params=params, follow_redirects=False)
+        assert result.headers["location"] == f"http://127.0.0.1:3000/app/settings?gmail={outcome}"
+        assert len(fake.called("exchange")) == (1 if outcome in {"connected", "scope_missing"} else 0)
+        if outcome == "connected":
+            assert me(client, token)["gmail"]["connected"] is True
+
+
+@pytest.mark.parametrize("origin", ["http://localhost:3000", "http://[", "http://127.0.0.1:3000"])
+def test_connect_checks_browser_host_before_google_consent(database_url, origin):
+    jwks, fake = FakeJwks(), FakeGoogle()
+    settings = replace(settings_of(database_url),
+                       google_oauth_redirect_uri="http://127.0.0.1:8000/auth/google/callback")
+    with make_client(database_url, jwks, fake, settings) as client:
+        response = client.post("/api/gmail/connect", headers={**bearer(jwks.token()), "Origin": origin})
+        if origin != "http://127.0.0.1:3000":
+            assert response.status_code == 400
+            assert response.json()["error"]["code"] == "callback_host_mismatch"
+            assert fake.called("authorize") == fake.called("exchange") == []
+            assert not client.cookies.get("gq_session")
+        else:
+            assert response.status_code == 200
+            assert len(fake.called("authorize")) == 1
 
 
 def test_connect_state_is_checked_single_use_and_expires(database_url, monkeypatch):
@@ -294,25 +343,17 @@ def test_fresh_connect_without_google_identity_attaches_to_current_user(database
         assert after["user_id"] == before["user_id"] and after["gmail"]["connected"] is True
 
 
-def test_logout_stops_watch_and_reconnect_resumes(database_url):
+def test_logout_keeps_watch_and_reconnect_preserves_cursor(database_url):
     jwks, fake = FakeJwks(), FakeGoogle()
     with make_client(database_url, jwks, fake) as client:
         token = jwks.token()
         user_id = me(client, token)["user_id"]
         complete(client, start_connect(client, token))
-
         response = client.post("/api/gmail/logout", headers=bearer(token))
-        assert response.status_code == 200
-        assert response.json() == {"connected": True, "watch": "stopped"}  # 토큰은 보존한다
-        assert fake.called("stop") == [("stop", "fake-access-1")]
-        assert watch_of(client, user_id).status == "stopped"
-        assert me(client, token)["gmail"] == {"connected": True, "watch": "stopped"}
-
-        # 재연결: 다시 감시가 켜지고 멈춘 뒤 온 메일은 건너뛴다(새 historyId부터).
-        assert complete(client, start_connect(client, token)).headers["location"] == \
-            "/app/settings?gmail=connected"
-        assert (watch_of(client, user_id).status, watch_of(client, user_id).history_id) == \
-            ("active", "1001")
+        assert response.json() == {"connected": True, "watch": "active"}
+        assert fake.called("stop") == []
+        assert complete(client, start_connect(client, token)).headers["location"] == "/app/settings?gmail=connected"
+        assert watch_of(client, user_id).history_id == "1000"
 
 
 def test_disconnect_revokes_google_token(database_url):

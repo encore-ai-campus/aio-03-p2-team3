@@ -77,3 +77,12 @@ def email():
         "body_text": "테스트용 가상 메일입니다.", "received_at": "2026-11-09T00:00:00+00:00",
         "direction": "in",
     }
+
+
+@pytest.fixture(autouse=True)
+def isolated_mail_decisions(monkeypatch):
+    """Gmail 회귀는 실제 Decisions를 호출하지 않는다. 어댑터 시험은 자체 대역을 주입한다."""
+    from app.llm import mail_gate
+    original = mail_gate.classify_email
+    monkeypatch.setattr(mail_gate, "classify_email", lambda *args, **kwargs: mail_gate.GateResult(False, 1.0))
+    return original

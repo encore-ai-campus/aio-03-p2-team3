@@ -187,6 +187,30 @@ def test_screen_request_renews_stale_watch(client, fake):
     assert datetime.now(UTC) - watch_of(client).last_renewed_at < timedelta(minutes=1)
 
 
+def test_background_renewal_without_login_preserves_cursor_and_disconnect_wins(client, fake, monkeypatch):
+    from app.services.auth import delete_login_tokens
+    from app.services.watch import renew_connected_watches, stop_watch
+    sign_in(client)
+    owner = watch_of(client).user_id
+    client.post("/logout")
+    with client.app.state.database.session() as session:
+        watch = session.get(GmailWatch, owner)
+        watch.last_renewed_at = datetime.now(UTC) - timedelta(hours=25)
+        watch.history_id = "1234"
+    renew_connected_watches(client.app.state.google_access)
+    assert watch_of(client).history_id == "1234" and len(fake.called("watch")) == 2
+    original_watch = fake.watch
+    def disconnect_during_watch(*args):
+        response = original_watch(*args)
+        stop_watch(client.app.state.google_access, owner)
+        delete_login_tokens(client.app.state.google_access, owner)
+        return response
+    monkeypatch.setattr(fake, "watch", disconnect_during_watch)
+    renew_watch_if_due(client.app.state.google_access, owner, datetime.now(UTC) + timedelta(days=2))
+    assert watch_of(client).status == "stopped"
+    assert rows(client, GoogleToken) == []
+
+
 def test_refresh_token_expiry_asks_to_log_in_again(client, fake):
     sign_in(client)
     with client.app.state.database.session() as session:
@@ -318,19 +342,18 @@ def test_other_users_data_is_denied(client):
     assert client.get(f"/test/processed/{theirs.id}").json() == {"thread_id": "theirs"}
 
 
-def test_logout_stops_watch_and_relogin_starts_fresh(client, fake):
+def test_logout_keeps_watch_and_relogin_preserves_cursor(client, fake):
     sign_in(client)
     access = client.app.state.google_access
     response = client.post("/logout", follow_redirects=False)
     assert response.headers["location"] == "/login?notice=logged_out"
-    assert fake.called("stop") == [("stop", "fake-access-1")]
+    assert fake.called("stop") == []
     watch = watch_of(client)
-    assert watch.status == "stopped"
-    assert renew_watch_if_due(access, watch.user_id, datetime.now(UTC) + timedelta(days=3)) is False
+    assert watch.status == "active"
+    assert renew_watch_if_due(access, watch.user_id, datetime.now(UTC) + timedelta(days=3)) is True
     assert 'href="/login"' in client.get("/inbox").text
-
     sign_in(client)
-    assert watch_of(client).history_id == "1001"  # 멈췄다 다시 켜면 그 시점부터 처리한다
+    assert watch_of(client).history_id == "1000"
 
 
 def test_unreadable_token_is_treated_as_expired(client):

@@ -67,7 +67,7 @@ def pair(web, user_id=1, *, name="가상 개인 PC", capabilities=None):
 
 def enqueue(web, user_id=1, **changes):
     client, config, clock = web
-    kwargs = dict(prompt_id="analyze_email", prompt_version="v1", schema_id="EmailAnalysis", schema_version="v1",
+    kwargs = dict(prompt_id="analyze_email", prompt_version="v2", schema_id="EmailAnalysis", schema_version="v1",
                   variables={"thread_context": "가상 과거 내용", "email": "가상 메일 내용"},
                   requested_model=MODEL, run_id=str(uuid4()), model=MODEL)
     kwargs.update(changes)

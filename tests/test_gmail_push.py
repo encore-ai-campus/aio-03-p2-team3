@@ -136,6 +136,17 @@ def test_repeated_notification_and_same_message_in_later_history_run_once(access
     assert watch(access).history_id == "1002"
 
 
+def test_missing_message_does_not_block_later_mail_or_cursor(access, fake, graph):
+    fake.mailbox.pages[None] = history_page("deleted-message", "fake-message", history_id="1002")
+    fake.mailbox.raw_messages["deleted-message"] = HttpError(
+        httplib2.Response({"status": 404}), b'{"error":{"code":404,"errors":[{"reason":"notFound"}]}}')
+    notify(access, graph, "1002")
+    assert watch(access).history_id == "1002"
+    assert watch(access).status == "active"
+    assert len(rows(access.database, Run)) == 1
+    assert [row.gmail_message_id for row in rows(access.database, ProcessedMessage)] == ["fake-message"]
+
+
 def test_overlapping_notifications_are_serialized(access, graph, database_url):
     # 서로 다른 엔진·연결에서도 DB 잠금으로 중복 처리가 직렬화된다.
     database = Database(database_url)
@@ -156,12 +167,6 @@ def test_overlapping_notifications_are_serialized(access, graph, database_url):
 @pytest.mark.parametrize("sender,labels,reason", [
     ("Demo <DEMO@example.invalid>", ["INBOX"], "self"),
     ("alias@example.invalid", ["SENT", "INBOX"], "self"),
-    ("no-reply@example.invalid", ["INBOX"], "no_reply"),
-    ("No_Reply@example.invalid", ["INBOX"], "no_reply"),
-    ("noreply@example.invalid", ["INBOX"], "no_reply"),
-    ("do-not-reply@example.invalid", ["INBOX"], "no_reply"),
-    ("sender@example.invalid", ["INBOX", "CATEGORY_PROMOTIONS"], "promotion"),
-    ("sender@example.invalid", ["INBOX", "CATEGORY_SOCIAL"], "social"),
     ("sender@example.invalid", ["SENT"], "self"),
     ("sender@example.invalid", [], "not_inbox"),
     ("sender@example.invalid", ["INBOX", "SPAM"], "not_inbox"),

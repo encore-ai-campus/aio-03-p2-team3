@@ -37,6 +37,8 @@ def serve():
     with pytest.MonkeyPatch.context() as patch:
         mock_sdk = sdk.__wrapped__(patch)
         calls = next(mock_sdk)
+        from app.llm import mail_gate
+        patch.setattr(mail_gate, "classify_email", lambda *args, **kwargs: mail_gate.GateResult(False, 1.0))
 
         def create_app(settings):
             app = original(settings, google=google)

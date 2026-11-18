@@ -243,7 +243,7 @@ def test_gmail_settings_browser_callbacks_failures_and_mobile(database_url, tmp_
         with httpx.Client() as client:
             assert client.post(base + "/api/gmail/logout", headers={"Authorization": "Bearer " + token}).status_code == 200
         gmail.get_by_role("button", name="상태 다시 확인", exact=True).click()
-        expect(gmail.get_by_text("메일 감시 중지", exact=False)).to_be_visible()
+        expect(gmail.get_by_text("메일 감시 중", exact=True)).to_be_visible()
         gmail.get_by_role("button", name="Gmail 다시 연결", exact=True).click()
         expect(gmail.get_by_text("메일 감시 중", exact=True)).to_be_visible()
 

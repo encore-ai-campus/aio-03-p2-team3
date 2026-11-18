@@ -72,6 +72,12 @@ class WatchFailed(GoogleError):
     code = "watch_failed"
 
 
+class MessageNotFound(GoogleError):
+    """기록에는 남아 있지만 현재 메일함에서 조회할 수 없는 메시지."""
+
+    code = "message_not_found"
+
+
 class HistoryExpired(GoogleUnavailable):
     """history.list의 404. 전체 메일함을 다시 읽지 않고 재연결을 요구한다."""
 
@@ -283,6 +289,8 @@ class GoogleClient:
                 userId="me", id=message_id, format="full",
             ).execute(num_retries=LIMITS["GMAIL_MAX_RETRIES"])
         except Exception as error:
+            if getattr(getattr(error, "resp", None), "status", None) == 404:
+                raise MessageNotFound() from error
             raise GoogleUnavailable(_error_label(error)) from error
 
     def get_attachment(self, gmail, message_id: str, attachment_id: str) -> str:

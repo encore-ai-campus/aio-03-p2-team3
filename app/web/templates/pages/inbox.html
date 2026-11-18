@@ -20,7 +20,7 @@
 {% if status.notice %}{{ banner(status.notice) }}{% endif %}
 {% if status.relogin %}<p>{{ link_button('다시 로그인', '/auth/google/start?consent=1') }}</p>{% endif %}
 {% if local_mode %}
-<p class="muted">이 PC에서 지정한 본인 계정의 새 메일을 30초마다 확인합니다. 로그아웃·연결 만료·프로그램 종료 시 수집을 멈춥니다. 화면 목록은 90초마다 갱신됩니다.</p>
+<p class="muted">이 PC에 Gmail을 연결한 계정의 새 메일을 30초 간격으로 순차 확인합니다. 로그아웃 뒤에도 수집하며 연결 해제·연결 만료·프로그램 종료 시 멈춥니다. 화면 목록은 90초마다 갱신됩니다.</p>
 {% else %}
 <p class="muted">새 메일이 오면 답장 후보를 만들어 이 화면에 보여 줍니다.</p>
 {% endif %}

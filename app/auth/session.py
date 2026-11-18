@@ -15,7 +15,7 @@ from app.auth import calendar as calendar_connection
 from app.clients.gmail import GoogleError, missing_scopes
 from app.db.models import GmailWatch, User
 from app.services.auth import has_refresh_token, missing_login_settings, save_login, stored_scopes
-from app.services.watch import register_watch, renew_watch_if_due, stop_watch
+from app.services.watch import register_watch, renew_watch_if_due
 from app.web import templates
 
 router = APIRouter()
@@ -25,7 +25,7 @@ LOGIN_NOTICES = {
     "login_failed": "로그인을 마치지 못했습니다. 다시 시도해 주세요.",
     "scope_missing": "Gmail 읽기·보내기 권한을 모두 허용해야 쓸 수 있습니다. 다시 로그인해 권한을 모두 선택해 주세요.",
     "config_missing": "서버 설정이 끝나지 않아 지금은 로그인할 수 없습니다.",
-    "logged_out": "로그아웃했습니다. 새 메일 알림도 멈췄습니다.",
+    "logged_out": "로그아웃했습니다. Gmail 연결과 새 메일 수집은 유지됩니다.",
 }
 CONNECTION_NOTICES = {
     "token_expired": "Google 연결이 만료되었거나 취소되었습니다. 다시 로그인해 주세요.",
@@ -119,10 +119,6 @@ def google_callback(
     if not pending or not state or not secrets.compare_digest(state, pending["state"]):
         return _to("/login?notice=login_failed")
     if error:
-        if request.app.state.google_access.local_mode:
-            user = session_user(request)
-            if user is not None:
-                stop_watch(request.app.state.google_access, user.id)
         return _to("/login?notice=cancelled" if error == "access_denied" else "/login?notice=login_failed")
     if not code:
         return _to("/login?notice=login_failed")
@@ -148,7 +144,5 @@ def google_callback(
 
 @router.post("/logout", include_in_schema=False)
 def logout(request: Request, user: User | None = Depends(session_user)):
-    if user is not None:
-        stop_watch(request.app.state.google_access, user.id)
     request.session.clear()
     return _to("/login?notice=logged_out")
