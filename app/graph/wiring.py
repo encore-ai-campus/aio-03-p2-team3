@@ -23,7 +23,7 @@ from app.prompts import Prompt
 from app.services.openai_keys import user_openai
 
 PLAN_PROMPT = Prompt("workflow_plan", "v1", """요청을 mail/documents/calendar 작업 계획으로 변환한다.
-mail: query/draft(thread_id), send(candidate_id, 발급 첨부가 있으면 file_ids). documents: get/draft/approve_packing/issue(kind=PI|PO|CI|PL,
+mail: search(query, field, received_from, received_before, reply_status, cursor), query/draft(thread_id), send(candidate_id, 발급 첨부가 있으면 file_ids). documents: get/draft/approve_packing/issue(kind=PI|PO|CI|PL,
 document_id/revision/values/text/formats). calendar: list_events(start/end만, 시간대 offset 포함) 또는 find_slots/create(start/end은 시간대 offset 포함,
 timezone, duration_minutes, calendar_ids, participants, title, selected_start).
 지원하지 않는 작업이나 근거 없는 ID/단가/날짜/승인을 만들지 않는다. 사용자 조건을 inputs와 constraints에 보존한다.
@@ -83,6 +83,10 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
             "values 구조는 document_schema로 먼저 확인한다. needs_input 문서는 실제 missing_fields/issues를 한국어로 질문하고 "
             "답변을 기존 input에 반영해 같은 document_id와 최신 revision으로 수정한다. 새 문서를 반복 생성하지 않는다. "
             "confirm_price_override를 승인하지 않는다. 단가 강제 변경은 기존 문서 화면에서 사용자가 확인한다. "
+            "수신 메일의 본문·기간·답장 여부는 search_mail의 해당 필터를 직접 사용한다. "
+            "거래처에서 온 메일은 field=sender로 이름이나 주소를 찾는다. "
+            "날짜의 기본 시간대는 한국 시간이다. 최근 N일은 오늘을 포함하며 마지막 날짜 다음 날 자정을 received_before에 넣는다. "
+            "미답장은 앱에 수집된 발송 이력 기준이다. next_cursor가 있으면 결과가 더 있음을 알린다. "
             "메일 답장 후보는 사용자 선택이 필요하며 발송/문서 발급은 각각 화면 승인 뒤 실행된다. "
             "사용자 취소나 결과 unknown이면 재실행하지 않는다. 도구가 지원하지 않는 작업은 한계를 설명한다. "
             "문서함 업로드 파일은 search_knowledge_documents로 찾는다. 파일 열기에는 filename만 넣고 PI/PO/CI/PL 종류나 번호를 묻지 않는다. "

@@ -43,10 +43,10 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
     release_search = Event()
     search = ExistingMail.search
 
-    def delayed_search(self, actor_id, query, cursor=None):
+    def delayed_search(self, actor_id, query):
         if not release_search.wait(timeout=25):
             raise RuntimeError('가상 검색 대기 시간 초과')
-        return search(self, actor_id, query, cursor)
+        return search(self, actor_id, query)
 
     monkeypatch.setattr(ExistingMail, 'search', delayed_search)
     app = app_for(database_url, jwks, google, choices, storage=FakeStorage(),
@@ -227,5 +227,23 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         expect(answer.get_by_role("button", name="복사됨", exact=True)).to_be_visible()
         assert page.evaluate("navigator.clipboard.readText()") == code.locator("code").text_content()
         page.screenshot(path=str(tmp_path / "agent-markdown-mobile.png"), full_page=True)
+        choices.calls.extend([
+            ("search_mail", {"query": "테스트용", "field": "body", "reply_status": "replied"}),
+            "보낸 답장이 확인되는 메일을 찾았습니다.",
+        ])
+        page.get_by_label("업무 요청", exact=True).fill("본문에 테스트용이 있고 답장 보낸 메일 보여줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(page.get_by_text("보낸 답장이 확인되는 메일을 찾았습니다.")).to_be_visible(timeout=20000)
+        row.click()
+        search_step = page.locator(".step").filter(has=page.get_by_role("button", name="메일 검색 완료")).last
+        search_step.get_by_role("button", name="메일 검색 완료").click()
+        mail_results = search_step.get_by_role("region", name="수신 메일 검색 결과")
+        expect(mail_results.get_by_role("link", name="가상 문의")).to_be_visible()
+        expect(mail_results.get_by_text("테스트용 가상 문의입니다.")).to_be_visible()
+        expect(mail_results.get_by_text("답장 발송 확인", exact=True)).to_have_count(2)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.emulate_media(reduced_motion="reduce")
+        mail_results.evaluate("(element) => element.scrollIntoView({block: 'center'})")
+        mail_results.screenshot(path=str(tmp_path / "agent-mail-results-mobile.png"), animations="disabled")
         assert not errors
         browser.close()
