@@ -374,3 +374,78 @@ def test_native_tool_binding_uses_owner_key_and_refuses_worker_fallback(database
             s.get(User, 1).ai_execution_mode = 'local_worker'
         result = runtime.start(actor_id=1, thread_id='no-worker-fallback', request='메일 검색')
         assert result['error'] == 'LOCAL_WORKER_KEY_FORBIDDEN' and len(requests) == 2
+
+
+def test_mail_search_filters_body_date_and_sent_reply_before_paging(database):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from app.db.models import Counterparty, ProcessedMessage, ReplyCandidate, ThreadMessage, User
+    from app.graph.mail.adapters import ExistingMail
+    from app.graph.mail.schemas import SearchInput
+    from app.graph.master.tools import AGENT_TOOLS
+
+    start = datetime(2026, 11, 19, tzinfo=ZoneInfo("Asia/Seoul"))
+    end = start + timedelta(days=1)
+    sender = "alpha@fiction.example.invalid"
+    keyword = "코발트독수리%_"
+
+    with database.session() as session:
+        outsider = User(email="second@example.invalid", google_sub="second")
+        session.add(outsider)
+        session.flush()
+        session.add(Counterparty(user_id=1, company_key="fiction-alpha", legal_name="Fiction Alpha",
+                                 aliases=["알파"], email=sender))
+
+        def receive(key, thread_id, at, *, subject="발주 요청", body=keyword, owner=1):
+            session.add(ThreadMessage(user_id=owner, thread_id=thread_id, gmail_message_id=key, direction="in",
+                from_addr=sender, subject=subject, body_text=body, to_addrs=[], sent_at=at))
+            session.add(ProcessedMessage(user_id=owner, thread_id=thread_id, gmail_message_id=key,
+                                          received_at=at, status="awaiting_approval"))
+
+        def send(key, thread_id, at, owner=1):
+            session.add(ThreadMessage(user_id=owner, thread_id=thread_id, gmail_message_id=key, direction="out",
+                from_addr="tester@example.invalid", subject="Re: 발주 요청", body_text="확인했습니다.",
+                to_addrs=[sender], sent_at=at))
+
+        receive("early", "early", start - timedelta(seconds=1))
+        receive("replied", "replied", start + timedelta(minutes=15))
+        send("sent-reply", "replied", start + timedelta(minutes=30))
+        receive("first", "followup", start)
+        send("sent-first", "followup", start + timedelta(hours=1))
+        receive("other", "other", start + timedelta(hours=2), owner=outsider.id)
+        receive("subject-only", "subject-only", start + timedelta(hours=3), subject=keyword, body="본문에 없음")
+        receive("literal", "literal", start, body="코발트독수리AB")
+        receive("older-only", "older", start)
+        receive("older-new", "older", end, body="다음 날 메일")
+        receive("boundary", "boundary", end)
+        receive("followup", "followup", start + timedelta(hours=4), body="가상 본문 " * 50 + keyword)
+        send("other-sent", "followup", start + timedelta(hours=5), owner=outsider.id)
+        session.add(ReplyCandidate(user_id=1, thread_id="followup", run_id="fixture-run", source_message_id="followup",
+                                   label="초안", kind="general", subject="Re: 발주", body="아직 보내지 않은 초안"))
+
+    options = dict(query=keyword, field="body", received_from=start, received_before=end, reply_status="unanswered")
+    task = AGENT_TOOLS["search_mail"].invoke(options)
+    assert task["inputs"]["received_before"] == end.isoformat()
+    mail = ExistingMail(database=database)
+    result = mail.search(1, SearchInput.model_validate(task["inputs"]))
+    assert [row["thread_id"] for row in result["threads"]] == ["followup", "older"]
+    assert keyword in result["threads"][0]["preview"] and result["threads"][0]["preview"].startswith("…")
+    assert all(row["reply_status"] == "unanswered" for row in result["threads"])
+    assert result["search_scope"]["field"] == "body"
+    replied = mail.search(1, SearchInput(**{**options, "reply_status": "replied"}))
+    assert [row["thread_id"] for row in replied["threads"]] == ["followup", "replied"]
+    assert all(row["reply_status"] == "replied" for row in replied["threads"])
+    for field in ("sender", "all"):
+        alias = mail.search(1, SearchInput(query="알파", field=field, received_from=start, received_before=end))
+        assert {row["thread_id"] for row in alias["threads"]} == {"followup", "older", "literal", "subject-only", "replied"}
+
+    from app.db.mailbox import MailStore
+
+    store = MailStore(database)
+    page_one = store.search_threads(1, **options, cursor=None, limit=1)
+    page_two = store.search_threads(1, **options, cursor=page_one["next_cursor"], limit=1)
+    assert [row["thread_id"] for row in page_one["items"] + page_two["items"]] == ["followup", "older"]
+    assert page_two["next_cursor"] is None
+    with pytest.raises(ValueError, match="invalid_mail_search_window"):
+        SearchInput(received_from=end, received_before=start)

@@ -6,6 +6,7 @@ import { dateKey, formatEventWhen } from "../calendar/useCalendarEvents"
 import ReviewCard from "./ReviewCard"
 import DocCard, { FileButtons } from "./DocCard"
 import AssistantMarkdown from "./AssistantMarkdown"
+import MailSearchResult from "./MailSearchResult"
 import "./agent.css"
 
 const STATUS = { running: "처리 중", needs_input: "답변 대기", needs_approval: "승인 대기", completed: "응답 완료",
@@ -85,7 +86,7 @@ function StepDetail({ item, token, onError }) {
   const events = item.data?.events
   return <>
     {item.code && <p>{item.code}</p>}
-    {item.data?.threads?.map(thread => <p key={thread.thread_id}><Link to={`/inbox?thread=${encodeURIComponent(thread.thread_id)}`}>{thread.subject}</Link> · {thread.from_addr}</p>)}
+    {Array.isArray(item.data?.threads) && <MailSearchResult data={item.data} />}
     {item.data?.messages?.map(message => <article key={message.gmail_message_id}><b>{message.subject}</b><p>{message.from_addr}</p>
       <p className="agent-text">{message.body_text}</p></article>)}
     {item.data?.candidates?.some(Boolean) && <div className="cand-list">{item.data.candidates.map(candidate => candidate &&

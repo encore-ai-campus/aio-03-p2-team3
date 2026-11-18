@@ -3,14 +3,8 @@
 from typing import Protocol
 from datetime import datetime, timezone
 
-from app.graph.mail.schemas import SendInput, ThreadInput
-from pydantic import Field
-from app.graph.schemas import Contract, Evidence, ExecutionResult, PreparedAction, Question, WorkResult, content_hash
-
-
-class SearchInput(Contract):
-    query: str = Field(default="", max_length=200)
-    cursor: int | None = Field(default=None, gt=0)
+from app.graph.mail.schemas import SearchInput, SendInput, ThreadInput
+from app.graph.schemas import Evidence, ExecutionResult, PreparedAction, Question, WorkResult, content_hash
 
 
 def candidate_evidence(snapshot):
@@ -19,7 +13,7 @@ def candidate_evidence(snapshot):
 
 
 class MailPort(Protocol):
-    def search(self, actor_id: int, query: str, cursor: int | None) -> dict: ...
+    def search(self, actor_id: int, query: SearchInput) -> dict: ...
     def thread(self, actor_id: int, thread_id: str) -> dict: ...
     def draft(self, actor_id: int, thread_id: str) -> dict: ...
     def snapshot(self, actor_id: int, candidate_id: int, *, file_ids: list[str] | None = None) -> dict: ...
@@ -36,7 +30,7 @@ class MailNodes:
     def prepare(self, task, context):
         if task.operation == "search":
             query = SearchInput.model_validate(task.inputs)
-            return WorkResult(status="completed", data=self.port.search(context.actor_id, query.query, query.cursor))
+            return WorkResult(status="completed", data=self.port.search(context.actor_id, query))
         if (task.operation == "send" and context.memory.get("agent_mode")
                 and "candidate_id" not in task.constraints):
             return WorkResult(status="needs_input", question=Question(fields=["candidate_id"],

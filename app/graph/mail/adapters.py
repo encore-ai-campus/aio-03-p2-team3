@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.db.models import (Approval, CompanyBranding, CompanyProfile, FileAsset, Quote, ReplyCandidate,
                            RunEvent, ThreadMessage, TradeArtifact, TradeDocument, TradeProposal)
+from app.graph.mail.schemas import SearchInput
 from app.graph.schemas import ExecutionResult, WorkflowError, content_hash
 from app.services.auth import get_access_token
 from app.services import approval
@@ -52,9 +53,12 @@ class ExistingMail:
         self.storage = storage
         self.key_cipher = key_cipher
 
-    def search(self, actor_id, query, cursor=None):
-        data = MailStore(self.database).threads(actor_id, query=query, cursor=cursor, limit=10)
-        return {"threads": data["items"], "next_cursor": data["next_cursor"]}
+    def search(self, actor_id: int, query: SearchInput) -> dict:
+        data = MailStore(self.database).search_threads(actor_id, **query.model_dump(), limit=10)
+        return {
+            "threads": data["items"], "next_cursor": data["next_cursor"],
+            "search_scope": query.model_dump(mode="json", exclude={"cursor"}),
+        }
 
     def thread(self, actor_id, thread_id):
         with self.database.session() as session:

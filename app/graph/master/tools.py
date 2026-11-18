@@ -7,6 +7,8 @@ from pydantic import AwareDatetime, Field
 
 from app.graph.documents.schemas import DocumentInput, DocumentKind, IssuedDocumentSearch, KnowledgeDocumentSearch
 
+from app.graph.mail.schemas import SearchInput
+
 Positive = Annotated[int, Field(gt=0, strict=True)]
 
 
@@ -14,10 +16,13 @@ def task(domain, operation, **inputs):
     return {"domain": domain, "operation": operation, "inputs": inputs}
 
 
-@tool
-def search_mail(query: Annotated[str, Field(max_length=200)] = "", cursor: Positive | None = None) -> dict:
-    """본인 앱에 수집된 메일을 제목/발신자로 검색한다. 다음 페이지는 반환한 cursor를 사용한다."""
-    return task("mail", "search", query=query, cursor=cursor)
+@tool(args_schema=SearchInput)
+def search_mail(**inputs) -> dict:
+    """본인의 앱에 수집된 수신 메일을 제목·발신자·본문·수신 시각으로 찾는다.
+    아직 답장 안 한 메일은 reply_status=unanswered를 넣는다. 발송 전 초안은 답장으로 세지 않는다.
+    결과의 thread_id로 원문을 조회한다. 다음 페이지는 같은 조건과 next_cursor를 사용한다.
+    """
+    return task("mail", "search", **SearchInput.model_validate(inputs).model_dump(mode="json"))
 
 
 @tool
