@@ -1,7 +1,7 @@
 import { useState } from "react"
 
 /** Candidate editing is persisted before the existing approval flow can send anything. */
-export default function ReplyCandidateEditor({ candidate, token, busy, onSaved, onError }) {
+export default function ReplyCandidateEditor({ candidate, token, busy, onSaved, onError, onEditingChange }) {
   const [editing, setEditing] = useState(false)
   const [subject, setSubject] = useState(candidate.subject)
   const [body, setBody] = useState(candidate.body)
@@ -21,6 +21,7 @@ export default function ReplyCandidateEditor({ candidate, token, busy, onSaved, 
         },
       })
       setEditing(false)
+      onEditingChange(null)
       onSaved()
     } catch (error) { onError(error.message) }
     finally { setSaving(false) }
@@ -29,7 +30,7 @@ export default function ReplyCandidateEditor({ candidate, token, busy, onSaved, 
   if (!editing) return <>
     <p className="cand-body">{candidate.body}</p>
     {editable && <button type="button" className="btn sm" disabled={busy}
-      onClick={() => { setSubject(candidate.subject); setBody(candidate.body); setEditing(true) }}>
+      onClick={() => { setSubject(candidate.subject); setBody(candidate.body); setEditing(true); onEditingChange(candidate.id) }}>
       제목·본문 수정하기
     </button>}
   </>
@@ -44,7 +45,7 @@ export default function ReplyCandidateEditor({ candidate, token, busy, onSaved, 
       <button type="button" className="btn blue" disabled={saving || busy || !subject.trim() || !body.trim()} onClick={save}>
         {saving ? "저장 중…" : "수정 내용 저장"}
       </button>
-      <button type="button" className="btn" disabled={saving} onClick={() => setEditing(false)}>취소</button>
+      <button type="button" className="btn" disabled={saving} onClick={() => { setEditing(false); onEditingChange(null) }}>취소</button>
     </div>
   </div>
 }
