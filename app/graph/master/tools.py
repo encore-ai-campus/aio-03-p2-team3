@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from copy import deepcopy
 
 from langchain_core.tools import tool
-from pydantic import Field
+from pydantic import AwareDatetime, Field
 
 from app.graph.documents.schemas import DocumentInput, DocumentKind, IssuedDocumentSearch, KnowledgeDocumentSearch
 
@@ -93,6 +93,18 @@ def prepare_send(candidate_id: Positive, file_ids: list[str] | None = None) -> d
 
 
 @tool
+def list_calendar_events(
+    start: Annotated[AwareDatetime, Field(description="요청 기간의 시작. ISO 8601 오프셋을 포함한다. 날짜만 있으면 현지 자정.")],
+    end: Annotated[AwareDatetime, Field(description="요청 기간의 끝. ISO 8601 오프셋을 포함한다. 하루 조회는 다음날 자정.")],
+) -> dict:
+    """이미 등록된 기본 Google 캘린더의 일정 제목과 시각을 조회한다. '내일 일정 뭐 있어?', '회의 몇 시야?'에 사용한다.
+    최대 62일을 조회한다. 반환한 events의 제목·시작·종료를 사용한다. all_day는 종료일을 포함하지 않는다.
+    total이 events 길이보다 크면 일부 표시임을 알리고, 빈 시간은 find_slots를 사용한다.
+    """
+    return task("calendar", "list_events", start=start.isoformat(), end=end.isoformat())
+
+
+@tool
 def find_slots(start: str, end: str, timezone: str, duration_minutes: Positive,
                calendar_ids: Annotated[list[str], Field(min_length=1, max_length=32)],
                participants: list[str] | None = None, step_minutes: Positive | None = None,
@@ -129,4 +141,4 @@ def ask_user(question: str) -> dict:
 AGENT_TOOLS = {item.name: item for item in (search_mail, get_mail, prepare_reply, get_document, search_trade_documents,
     search_knowledge_documents, document_schema,
     prepare_document, prepare_issue, prepare_packing, prepare_send,
-    find_slots, create_event, ask_user)}
+    list_calendar_events, find_slots, create_event, ask_user)}

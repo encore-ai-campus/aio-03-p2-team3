@@ -589,3 +589,61 @@ def test_calendar_events_maps_provider_failures(connected_app, error, code):
                           params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T00:00:00+09:00'})
     assert response.status_code == 502
     assert response.json()['error']['code'] == code
+
+
+@pytest.mark.parametrize("scenario,expected_code", [
+    ("events", None), ("empty", None), ("capped", None),
+    ("unconnected", "calendar_not_connected"), ("unavailable", "calendar_unavailable"),
+    ("invalid_range", "invalid_range"),
+])
+def test_chat_reads_primary_calendar_agenda_without_approval(connected_app, monkeypatch, scenario, expected_code):
+    from app.graph import wiring
+    from langchain_core.messages import AIMessage
+
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    window = {"start": "2026-11-20T00:00:00+09:00", "end": "2026-11-21T00:00:00+09:00"}
+    if scenario == "invalid_range":
+        window["end"] = window["start"]
+    messages_seen = []
+
+    def choose(messages, _context):
+        messages_seen.append(messages)
+        if len(messages_seen) == 1:
+            return AIMessage("", tool_calls=[{"id": "agenda", "name": "list_calendar_events",
+                "args": window}]).model_dump()
+        return AIMessage("조회 결과를 확인했습니다.").model_dump()
+
+    original = wiring.make_workflow
+    monkeypatch.setattr("app.main.make_workflow", lambda **kwargs: original(**{**kwargs, "choose": choose}))
+    if scenario != "unconnected":
+        finish(client, token)
+    items = [
+        {"id": "event-1", "summary": "전시회", "start": "2026-11-20", "end": "2026-11-21", "all_day": True},
+        {"id": "event-2", "summary": "알파 미팅", "start": "2026-11-20T10:00:00+09:00",
+         "end": "2026-11-20T11:00:00+09:00", "all_day": False},
+    ]
+    if scenario == "events":
+        calendar.events = items
+    if scenario == "capped":
+        calendar.events = [{**items[1], "id": f"agenda-{index}"} for index in range(31)]
+    if scenario == "unavailable":
+        calendar.list_error = GoogleUnavailable("fake provider failure")
+
+    response = client.post("/api/agent/conversations", headers=bearer(token),
+                           json={"message": "내일 잡힌 일정과 시간을 알려줘."})
+    assert response.status_code == 202, response.text
+    state = client.get(f"/api/agent/conversations/{response.json()['id']}", headers=bearer(token)).json()
+    assert state["waiting"] is None
+    result, = state["results"]
+    assert result["operation"] == "list_events"
+    assert result["code"] == expected_code
+    assert result["status"] == ("failed" if expected_code else "completed")
+    if not expected_code:
+        assert result["data"]["events"] == calendar.events[:30]
+        assert result["data"]["total"] == len(calendar.events)
+        assert result["data"]["calendar_id"] == "primary"
+    calls = calendar.called("list_events")
+    assert len(calls) == int(scenario not in {"unconnected", "invalid_range"})
+    if calls:
+        assert calls[0][1:3] == ("calendar-access", "primary")

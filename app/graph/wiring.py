@@ -24,7 +24,7 @@ from app.services.openai_keys import user_openai
 
 PLAN_PROMPT = Prompt("workflow_plan", "v1", """요청을 mail/documents/calendar 작업 계획으로 변환한다.
 mail: query/draft(thread_id), send(candidate_id, 발급 첨부가 있으면 file_ids). documents: get/draft/approve_packing/issue(kind=PI|PO|CI|PL,
-document_id/revision/values/text/formats). calendar: find_slots/create(start/end은 시간대 offset 포함,
+document_id/revision/values/text/formats). calendar: list_events(start/end만, 시간대 offset 포함) 또는 find_slots/create(start/end은 시간대 offset 포함,
 timezone, duration_minutes, calendar_ids, participants, title, selected_start).
 지원하지 않는 작업이나 근거 없는 ID/단가/날짜/승인을 만들지 않는다. 사용자 조건을 inputs와 constraints에 보존한다.
 PL은 draft → approve_packing → issue 순서이며 각 승인 결과의 최신 revision을 bindings로 연결한다.
@@ -89,7 +89,10 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
             "반환된 문서함 링크로 파일을 안내한다. 후보가 여러 개면 이름을 보여주고 선택을 요청한다. "
             "내용 질문에는 query를 사용한다. 반환된 조항만 근거로 답하고 문서명과 페이지 또는 렌더 위치를 인용한다. "
             "조항이 질문을 뒷받침하지 않거나 검색이 실패하면 근거를 확인할 수 없다고 답한다. "
-            "일정은 find_slots로 후보를 찾아 사용자에게 보여주고, 사용자가 고른 시간만 create_event의 "
+            "이미 잡힌 일정의 제목·시간·목록 조회는 list_calendar_events를 사용한다. 시간대가 따로 없으면 한국 시간을 쓰고, "
+            "하루는 자정부터 다음 날 자정까지 조회한다. total과 events를 대조해 일부 표시를 알린다. "
+            "미연결이면 설정의 캘린더 연동을, 조회 실패면 다시 시도를 안내한다. "
+            "빈 시간은 find_slots로 후보를 찾아 사용자에게 보여주고, 사용자가 고른 시간만 create_event의 "
             "selected_start로 등록을 제안한다. 원문/후보/문서 전체를 답변에 반복하지 말고 결과를 요약한다. "
             "사용자 설정/기억(현재 요청 우선): " + json.dumps(context.memory, ensure_ascii=False, default=str)))
         with user_openai(database, context.actor_id, cipher=key_cipher) as ai:
