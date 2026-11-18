@@ -8,7 +8,7 @@ from weakref import WeakKeyDictionary
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.clients.gmail import GoogleError, TokenExpired, decode_message
+from app.clients.gmail import GoogleError, MessageNotFound, TokenExpired, decode_message
 from app.db.models import GmailWatch, ProcessedMessage, ThreadMessage, User
 from app.graph.run import start_run
 from app.services.auth import GoogleAccess, get_access_token
@@ -94,7 +94,12 @@ def collect_history(access, user, gmail, cursor, *, graph=None, should_continue=
                 if not should_continue():
                     return None
                 seen.add(message_id)
-                raw = access.google.get_message(gmail, message_id)
+                try:
+                    raw = access.google.get_message(gmail, message_id)
+                except MessageNotFound:
+                    # history에 추가 기록이 있어도 그 뒤 삭제됐을 수 있다. 다음 메일 수집을 막지 않는다.
+                    log.info("사용자 %s: 조회할 수 없는 Gmail 메시지를 건너뜁니다", user.id)
+                    continue
                 if not should_continue():
                     return None
                 def read_attachment(attachment_id):
@@ -107,7 +112,10 @@ def collect_history(access, user, gmail, cursor, *, graph=None, should_continue=
                 if not should_continue():
                     return None
                 if _claim_message(access, user.id, email, history["id"], reason):
-                    _run_message(access, user.id, email, graph)
+                    from app.db.mailbox import MailStore
+                    from app.services.mail_processing import process_saved
+                    process_saved(access, MailStore(access.database), user.id, message_id,
+                                  graph=graph, should_continue=should_continue)
         page_token = page.get("nextPageToken")
         if not page_token:
             break
@@ -124,13 +132,6 @@ def _processed(access, user_id, message_id):
 def _skip_reason(email, labels):
     if email["direction"] == "out":
         return "self"
-    local = email["from_addr"].partition("@")[0].casefold().replace("-", "").replace("_", "")
-    if "noreply" in local or "donotreply" in local:
-        return "no_reply"
-    if "CATEGORY_PROMOTIONS" in labels:
-        return "promotion"
-    if "CATEGORY_SOCIAL" in labels:
-        return "social"
     if "INBOX" not in labels or "TRASH" in labels or "SPAM" in labels:
         return "not_inbox"
     return None
@@ -143,6 +144,7 @@ def _claim_message(access, user_id, email, history_id, reason):
                 user_id=user_id, gmail_message_id=email["gmail_message_id"], thread_id=email["thread_id"],
                 history_id=str(history_id), received_at=datetime.fromisoformat(email["received_at"]),
                 status="ignored" if reason else "processing", skip_reason=reason,
+                triage=None if reason else {"phase": "pending"},
             ))
             session.flush()  # 메일 ID 유일 제약을 통과한 처리자만 스레드·그래프를 만든다.
             if not reason:

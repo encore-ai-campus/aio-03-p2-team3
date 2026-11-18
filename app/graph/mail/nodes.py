@@ -4,7 +4,13 @@ from typing import Protocol
 from datetime import datetime, timezone
 
 from app.graph.mail.schemas import SendInput, ThreadInput
-from app.graph.schemas import Evidence, ExecutionResult, PreparedAction, Question, WorkResult, content_hash
+from pydantic import Field
+from app.graph.schemas import Contract, Evidence, ExecutionResult, PreparedAction, Question, WorkResult, content_hash
+
+
+class SearchInput(Contract):
+    query: str = Field(default="", max_length=200)
+    cursor: int | None = Field(default=None, gt=0)
 
 
 def candidate_evidence(snapshot):
@@ -13,6 +19,7 @@ def candidate_evidence(snapshot):
 
 
 class MailPort(Protocol):
+    def search(self, actor_id: int, query: str, cursor: int | None) -> dict: ...
     def thread(self, actor_id: int, thread_id: str) -> dict: ...
     def draft(self, actor_id: int, thread_id: str) -> dict: ...
     def snapshot(self, actor_id: int, candidate_id: int, *, file_ids: list[str] | None = None) -> dict: ...
@@ -21,12 +28,19 @@ class MailPort(Protocol):
 
 
 class MailNodes:
-    operations = frozenset({"query", "draft", "send"})
+    operations = frozenset({"search", "query", "draft", "send"})
 
     def __init__(self, port: MailPort):
         self.port = port
 
     def prepare(self, task, context):
+        if task.operation == "search":
+            query = SearchInput.model_validate(task.inputs)
+            return WorkResult(status="completed", data=self.port.search(context.actor_id, query.query, query.cursor))
+        if (task.operation == "send" and context.memory.get("agent_mode")
+                and "candidate_id" not in task.constraints):
+            return WorkResult(status="needs_input", question=Question(fields=["candidate_id"],
+                message="발송할 답장 후보를 직접 선택해 주세요. 다음 단계에서 실제 수신자와 첨부를 확인합니다."))
         field = "candidate_id" if task.operation == "send" else "thread_id"
         if task.inputs.get(field) is None:
             return WorkResult(status="needs_input", question=Question(fields=[field], message="대상 메일 또는 답장 후보를 선택해 주세요."))

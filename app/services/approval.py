@@ -123,7 +123,7 @@ def send_approved_quote(user_id: int, quote_id: int, candidate_id: int, *, acces
 
 
 def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: int,
-                                 *, access: GoogleAccess, storage=None) -> ApprovalResult:
+                                 *, access: GoogleAccess, storage=None, expected_revision=None) -> ApprovalResult:
     """무역서류 확인 승인(계약 15.6절). 일반·견적 승인과 같은 사용자 잠금·조건부 claim·결과 키를 쓴다.
 
     발송 조건: `status="ready"`(PL은 `packing_totals.approved` 포함)이고 CI는 PI 원문 근거
@@ -141,6 +141,8 @@ def send_approved_trade_document(user_id: int, trade_doc_id: int, candidate_id: 
                     or candidate.run_id != document.run_id):
                 return ApprovalResult("not_found")
             thread_id = document.thread_id
+            if expected_revision is not None and document.revision != expected_revision:
+                return ApprovalResult("document_changed", thread_id)
             if document.status in {"sent", "sending"}:
                 return ApprovalResult("already_sent", thread_id)
             revision = document.revision

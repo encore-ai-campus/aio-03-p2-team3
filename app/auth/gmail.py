@@ -6,7 +6,7 @@
   흐름으로 완성해 React 앱(`/app/settings?gmail=…`)으로 안내한다. legacy 로그인은 그대로다.
 - `POST /api/gmail/disconnect`: Google 토큰까지 폐기하는 연결 해제. `google_sub`는 남겨
   같은 계정만 다시 연결할 수 있게 한다.
-- `POST /api/gmail/logout`: 앱 로그아웃 때 프론트가 부르는 감시 중지(토큰은 보존).
+- `POST /api/gmail/logout`: 앱 로그아웃 호환 경로. 연결·수집은 유지한다.
 - 연결 상태는 `GET /api/me`의 `gmail` 객체가 담당하고, 그 요청 뒤 감시 갱신을 건다.
 
 계정 규칙(CONTRACT 9.1): 같은 이메일이라고 자동 병합하지 않는다. Supabase Auth가 확인한
@@ -17,6 +17,7 @@
 
 import secrets
 import time
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -71,6 +72,16 @@ def connect(request: Request, user_id: int = Depends(bearer_user_id)):
         raise GmailConnectionError(
             503, "config_missing",
             f"서버 설정이 끝나지 않아 Gmail 연결을 시작할 수 없습니다({', '.join(missing)}).")
+    callback_host = urlsplit(settings.google_oauth_redirect_uri).hostname
+    try:
+        browser_host = urlsplit(request.headers.get("origin") or str(request.base_url)).hostname
+    except ValueError:
+        browser_host = None
+    if callback_host in {"localhost", "127.0.0.1", "::1"} and browser_host != callback_host:
+        raise GmailConnectionError(
+            400, "callback_host_mismatch",
+            f"앱과 Google 콜백의 호스트가 다릅니다. 앱 주소의 호스트를 {callback_host}로 맞춰 "
+            "접속한 뒤 Gmail 연결을 다시 시작해 주세요. localhost와 127.0.0.1은 서로 다른 주소입니다.")
     # 대기 값에는 계정 증명에 쓸 Supabase 공급자 subject를 미리 담아 둔다. callback 요청에는
     # Bearer 토큰이 없어 callback 안에서는 이 값을 구할 수 없다.
     _, _, token = request.headers.get("authorization", "").partition(" ")
@@ -115,8 +126,7 @@ def disconnect(request: Request, user_id: int = Depends(bearer_user_id)):
 
 @router.post("/logout")
 def logout(request: Request, user_id: int = Depends(bearer_user_id)):
-    """앱 로그아웃 보조: 감시만 멈춘다. Google 토큰은 보존해 재연결 때 다시 켠다."""
-    stop_watch(request.app.state.google_access, user_id)
+    """이전 클라이언트의 로그아웃 호출도 Gmail 연결·수집을 중지하지 않는다."""
     return gmail_status(request, user_id)
 
 
@@ -124,33 +134,33 @@ def complete_callback(request: Request, pending: dict, state: str | None,
                       code: str | None, error: str | None) -> RedirectResponse:
     """`GET /auth/google/callback`의 Gmail 연결 분기. 결과는 React 앱으로 안내한다."""
     if not state or not secrets.compare_digest(state, pending["state"]):
-        return _to_app("login_failed")
+        return _to_app(request, "login_failed")
     if time.time() - pending.get("at", 0) > STATE_TTL_SECONDS:
-        return _to_app("expired")
+        return _to_app(request, "expired")
     if error:
-        return _to_app("cancelled" if error == "access_denied" else "login_failed")
+        return _to_app(request, "cancelled" if error == "access_denied" else "login_failed")
     if not code:
-        return _to_app("login_failed")
+        return _to_app(request, "login_failed")
     access = request.app.state.google_access
     try:
         login = access.google.exchange_code(code, pending["verifier"])
     except GoogleError:
-        return _to_app("login_failed")
+        return _to_app(request, "login_failed")
     if missing_scopes(login.scopes):
-        return _to_app("scope_missing")
+        return _to_app(request, "scope_missing")
     if not login.refresh_token and not has_refresh_token(access, login.sub):
         # 갱신 토큰이 없으면 알림 처리·발송을 할 수 없다. 한 번만 동의 화면을 다시 띄워 새로 받는다.
         if pending.get("consent"):
-            return _to_app("login_failed")
+            return _to_app(request, "login_failed")
         return _restart_with_consent(request, access, pending)
     try:
         user_id = _connect_user(access, pending, login)
     except GmailConnectionError as rejected:
-        return _to_app(rejected.code)
+        return _to_app(request, rejected.code)
     except GoogleError:
-        return _to_app("config_missing")
+        return _to_app(request, "config_missing")
     register_watch(access, user_id)  # 실패해도 연결은 마치고, 상태 화면이 안내한다
-    return _to_app("connected")
+    return _to_app(request, "connected")
 
 
 def _restart_with_consent(request: Request, access, pending: dict) -> RedirectResponse:
@@ -209,5 +219,8 @@ def _connect_user(access, pending: dict, login) -> int:
         return existing.id
 
 
-def _to_app(notice: str) -> RedirectResponse:
-    return RedirectResponse(f"/app/settings?gmail={notice}", status_code=303)
+def _to_app(request: Request, notice: str) -> RedirectResponse:
+    # 운영의 같은 출처 배포는 상대 주소, 별도 React 화면은 설정한 첫 출처로 복귀한다.
+    origin = next((value.strip().rstrip("/") for value in
+                   request.app.state.settings.frontend_origins.split(",") if value.strip()), "")
+    return RedirectResponse(f"{origin}/app/settings?gmail={notice}", status_code=303)

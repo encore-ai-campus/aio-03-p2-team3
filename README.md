@@ -51,6 +51,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - DB 엔진·세션 팩터리와 컴파일한 그래프를 재사용한다. LLM은 호출 시 해당 사용자의 현재 키로 구성하며 공용 클라이언트를 캐시하지 않는다. 실행 기록은 `runs`·`run_events` 표에 저장한다. 원문 대신 노드 이름·바뀐 필드·오류 종류·프롬프트 버전·소요 시간을 남긴다.
 - HTMX 2.0.8은 `app/web/static/js/htmx.min.js`에 포함했다([공식 배포 파일](https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js), 같은 폴더 `htmx.LICENSE`에 0BSD 라이선스). 실행 중 외부 CDN 요청은 없다. 색·글꼴·간격은 `app/web/static/css/tokens.css`에서 조정한다.
 - React 화면(react-supabase 계획 6절, 2026-11-13): `cd frontend && npm ci && npm run dev`로 Vite 개발 서버를 띄우고 `http://localhost:5174/app/`(슬래시 포함)로 접속한다. 포트는 루트 `.env`의 `FRONTEND_PORT`로 바꾸며 비우면 5174다. 예를 들어 `FRONTEND_PORT=3000`이면 `http://localhost:3000/app/`로 접속한다. 지정한 포트가 사용 중이면 다른 포트로 바꾸지 않고 종료한다. Supabase Redirect URLs도 실제 주소의 `/app/login`과 맞춘다. `/api` 요청은 `frontend/vite.config.js` 프록시가 로컬 FastAPI(`127.0.0.1:8000`)로 보낸다. Supabase 설정은 루트 `.env` 한 곳에 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_SECRET_KEY`를 입력한다(틀: 루트 `.env.example`). Vite가 URL과 공개 키만 브라우저에 전달하고 서버 비밀 키는 제외한다. 버킷은 기본 `trade-files`이며 다른 이름일 때만 `SUPABASE_STORAGE_BUCKET`을 지정한다. 별도의 `frontend/.env`는 사용하지 않는다. 실제 Google 로그인은 계획 2절 콘솔 설정(비대칭 signing key·Google 공급자·redirect 허용)이 먼저다. 검사는 `frontend/`에서 `npm run lint`, `npm test`, `npm run build`. PI는 단계별 입력·원문 누락 보완·품목 표 편집 후 전체 확인으로 진행한다. 로그인·사이드바/하단탐색·인증 경계와 `/app/settings`의 회사/거래 기준 설정, `/app/trade/pi`의 PI 직접 입력/AI 추출/검토/승인/다운로드를 연결했다(계획 11·12절). 문서 ID가 포함된 주소로 재개할 수 있다. PO·CI·PL 등은 13절 이후 작업이다.
+- React 개발 서버에서 Gmail 연결: React와 Google 콜백의 호스트를 맞춘다(`localhost`와 `127.0.0.1`을 섞지 않는다). 예를 들어 `FRONTEND_PORT=3000`, `FRONTEND_ORIGINS=http://127.0.0.1:3000`, `GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback`로 설정하고 `http://127.0.0.1:3000/app/`에서 시작한다. Supabase Redirect URLs에는 `http://127.0.0.1:3000/app/login`, Google OAuth 클라이언트에는 위 8000 콜백을 등록한다. 백엔드를 재시작하면 Gmail 연결 결과가 첫 `FRONTEND_ORIGINS`의 `/app/settings?gmail=…`로 돌아온다. 출처를 비우면 기존 같은 서버 배포의 상대 주소를 유지한다. 개발 호스트가 다르면 연결 시작을 거부하고 안내하며, `/auth` 프록시는 추가하지 않는다.
 - 패키지 추가: `uv add <패키지>==<버전>`(개발용은 `uv add --dev …`). 버전은 `pip index versions <패키지>`로 확인하고, 바뀐 `pyproject.toml`·`uv.lock`을 함께 PR에 올린다.
 
 ### 문서함 업로드·원본 보기·비전 추출·pgvector 저장
@@ -114,11 +115,27 @@ Gmail 수집은 선택 기능이다. 사용할 때만 아래 개인 OAuth 설정
 3. 본인 PC의 `.env`에 개인 클라이언트 ID·비밀값을 `GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`으로 넣고, `GOOGLE_OAUTH_REDIRECT_URI`를 위 URI와 일치시킨다. `APP_BASE_URL`은 `http://127.0.0.1:8000`으로 지정하고 브라우저도 같은 주소를 쓴다. 로컬의 `GMAIL_PUBSUB_TOPIC`과 `PUBSUB_PUSH_*`는 비워도 된다. 공용 Render의 OAuth·토픽·구독·푸시 주소는 변경하지 않는다.
 4. 로컬 앱에서 앱 로그인 후 `/app/settings`의 **연동하기 → Gmail**로 연결하고 읽기/보내기 권한에 동의한다. 기존 Google 로그인 화면도 유지한다. `/inbox`의 **로컬 새 메일 수집 켜짐**과 `/settings`의 **로컬 .env 키 사용 가능**을 확인한다. Google 식별자를 환경 파일에 복사하는 단계는 없다. 처음 연결할 때 `users.getProfile`의 현재 historyId만 저장하므로 연결 전에 있던 메일함 전체를 처리하지 않는다.
 
-앱이 켜져 있으면 갱신 토큰과 `local:history` 활성/재시도 상태가 있는 user_id들을 30초 간격으로 순차 조회한다. 미연결·수집 중지·토큰/history 만료·공용 Pub/Sub 계정은 제외하고 한 계정이 실패해도 다음 계정은 계속한다. 화면을 닫아도 앱이 켜져 있으면 수집하며 수신 포트·공개 터널·Pub/Sub가 필요 없다. 기존 MIME 변환·필터·중복 방지·AI 후보 생성과 사용자 승인 후 발송을 사용한다. 화면 목록은 별도로 90초마다 갱신된다. 로컬에서는 Google `users.watch`·`users.stop`을 호출하지 않아 같은 계정의 공용 감시를 덮어쓰지 않는다.
+앱이 켜져 있으면 갱신 토큰과 `local:history` 활성/재시도 상태가 있는 user_id들을 30초 간격으로 순차 조회한다. 미연결·수집 중지·토큰/history 만료·공용 Pub/Sub 계정은 제외하고 한 계정이 실패해도 다음 계정은 계속한다. 화면을 닫아도 앱이 켜져 있으면 수집하며 수신 포트·공개 터널·Pub/Sub가 필요 없다. 기존 MIME 변환·필터·중복 방지·AI 후보 생성과 사용자 승인 후 발송을 사용한다. React 메일 목록은 30초, 기존 HTML 목록은 90초마다 갱신된다. 로컬에서는 Google `users.watch`·`users.stop`을 호출하지 않아 같은 계정의 공용 감시를 덮어쓰지 않는다.
 
-로그아웃·재연결 동의 취소·Google 연결 만료/취소·앱/PC 종료 시 추가 수집을 멈춘다. 정상 접근 토큰 만료는 저장된 갱신 토큰으로 갱신한다. 통신 실패는 마지막 커서를 보존하고 다음 주기에 중복 메일을 건너뛰며 이어 읽는다. historyId가 만료(404)되면 자동 전체 동기화 없이 **다시 로그인**을 안내한다. 명시적으로 다시 로그인하면 현재 위치로 재설정하므로 로그아웃/만료 기간의 과거 메일은 처리하지 않는다. 프로그램만 재시작하면 같은 로컬 DB의 마지막 커서부터 이어 읽되, 커서가 만료됐으면 재로그인이 필요하다. Google 외부 앱 테스트 상태의 갱신 토큰은 7일 만료 등 Google 정책에 따라 재동의를 요구할 수 있다.
+로그아웃·재연결 동의 취소는 기존 Gmail 연결과 수집을 유지한다. **설정에서 Gmail 연결 해제**, Google 권한 만료/취소·앱/PC 종료가 중지 조건이다. 정상 접근 토큰 만료는 저장된 갱신 토큰으로 갱신하고 통신 실패는 마지막 커서를 보존한다. 유효한 연결의 재로그인·프로그램 재시작도 같은 커서부터 이어 읽는다. historyId 만료(404)는 자동 전체 동기화 없이 재연결을 안내하며 이때는 현재 위치로 재설정한다. Google 외부 앱 테스트 상태의 갱신 토큰은 Google 정책에 따라 재동의가 필요할 수 있다.
+
+### React 메일함
+
+`/app/inbox`에서 수집된 메일의 원문·AI 후보·관련 문서를 확인하고 **발송 내용 확인 → 확인하고 보내기**로 선택한 후보만 같은 Gmail 대화에 보낸다. 실제 Reply-To/From 수신자를 확인하며 전송 오류는 자동 재발송하지 않는다. 국내 견적은 누락 단가 입력·합계/PDF 확인을 연결하고, 무역 문서는 기존 검토 화면으로 이동한다. 자유 본문 편집·새 메일 작성·Gmail 과거 전체 동기화는 제공하지 않는다. 목록은 30초, 상세는 처리 중일 때 5초마다 갱신하며 숨긴 탭은 조회를 멈춘다. 개발 React 3000/FastAPI 8000과 기존 프록시는 유지한다.
+
+수신은 스팸·휴지통·본인 발신을 먼저 제외한다. 나머지는 같은 사용자 키의 OpenAI **Decisions `gpt-6-luna`**로 광고·개인·업무 무관만 보수적으로 제외하고 기존 LangGraph의 일반/거래/답장 불필요 판단을 사용한다. no-reply·프로모션/소셜 라벨만으로 업무 메일을 버리지 않는다. 분류 오류는 원문을 보존해 ‘확인 필요’로 표시하고 본인 확인 후 재처리한다. 추가 환경변수는 없고 Decisions의 `local_worker`는 미지원이다.
+
+server는 로그인 여부와 독립적으로 감시 갱신을 확인한다. 재시작 시 DB의 미완료 분류는 복구하고 이미 저장된 후보는 재사용한다. 그래프 실행 중 중단은 자동 재실행하지 않고 확인 필요로 남긴다. **수집·복구는 단일 앱 프로세스**를 전제로 하며 무료 서버 절전 중 상시 실행을 보장하지 않는다. API/데이터 계약은 `docs/CONTRACT.md` 7·9.1절, 계획과 검증은 `docs/plans/mailbox.md`·`docs/test-records/20261116_mailbox.md`다.
 
 **현재 구현 범위:** 로컬 환경 키와 연결된 user_id별 Gmail 수집, 서버 사용자별 저장 키/개인 PC 위임, 장치 연결·작업 큐·Windows/macOS/Linux 실행기를 제공한다. 지식 문서 비전/임베딩은 stored_key/local을 지원하며 local_worker는 미지원이다. 실제 키·Google 식별자는 채팅·Codex·Issue·PR·레포에 넣지 않는다.
+
+### 대화형 업무 도우미
+
+- 기존 실행 명령으로 백엔드와 React를 실행한 뒤 `/app/agent`(개발 예: `http://127.0.0.1:3000/app/agent`)에서 요청한다. 새 메뉴 **업무 도우미**로도 이동한다.
+- 본인 수집 메일 검색/원문·답장 후보, PI/PO/CI/PL 작성·보완·조회·발급을 기존 마스터 LangGraph와 업무 도구로 연결했다. 예: “거래처 메일을 찾아 답장 후보를 확인해 줘.”
+- 실제 결과를 읽어 다음 도구를 고르고 부족한 사실은 질문한다. 후보 직접 선택과 최종 발송 승인, 문서/PL 합계 승인은 각각 받는다. 메일을 자동 발송하지 않는다.
+- 기존 본인 OpenAI 키·모델과 PostgreSQL을 사용한다. `uv sync`로 공식 PostgresSaver 의존성을 설치한다. 대화·승인은 DB에 저장하므로 새로고침/재시작 후 이어가며, 중단된 외부 실행은 상태 확인 후 처리한다. 최초 실행 때 public 체크포인트 표를 준비할 권한이 필요하다. 운영 DB 적용은 별도 확인한다.
+- 단일 앱 프로세스·사용자별 실행 1건·요청당 최대 12회 모델 호출이다. local_worker의 대화형 도구 실행, 지식 문서 검색, Calendar 실행은 아직 연결하지 않았다. 계획/검증 경계는 `docs/plans/master-agent.md`·계약 17.4절이다.
 
 ### 개인 PC AI 실행 — HTTPS 서버와 연결
 

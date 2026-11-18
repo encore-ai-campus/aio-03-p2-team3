@@ -49,12 +49,14 @@ class SqlMailboxStore:
             if user is None:
                 return None
             watch = session.get(GmailWatch, user_id)
+            cursor = (watch.history_id if watch and watch.topic == LOCAL_TOPIC
+                      and watch.status != "stopped" and watch.last_error not in TERMINAL_ERRORS else None)
             if watch is None:
                 watch = GmailWatch(user_id=user_id)
                 session.add(watch)
-            watch.topic, watch.history_id, watch.expiration = LOCAL_TOPIC, None, None
+            watch.topic, watch.history_id, watch.expiration = LOCAL_TOPIC, cursor, None
             watch.last_renewed_at, watch.status, watch.last_error = now, "error", "local_connect"
-            return Mailbox(user_id, user.email, None, now)
+            return Mailbox(user_id, user.email, cursor, now)
 
     def advance(self, mailbox, cursor):
         with self.database.session() as session:

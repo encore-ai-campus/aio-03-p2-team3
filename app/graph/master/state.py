@@ -21,3 +21,9 @@ class WorkflowState(TypedDict):
     error: str | None
     summary: dict
     reflection_enabled: bool
+    agent_mode: bool
+    agent_calls: int
+    messages: list[dict]
+    tool_call: dict | None
+    dialog_question: str | None
+    turn: int

@@ -3,6 +3,14 @@
 세팅 3-2-1(LLM)·3-2-2(외부 API)의 선택과, 요청자가 2026-11-09에 정한 Gmail 견적 MVP의 API 변경을 기록한다(`docs/plans/gmail-quote-mvp.md#3`, R-04·D-03). 환경변수는 `docs/CONTRACT.md` 11절을 기준으로 `.env.example`·README에 반영한다. [Request]
 나중에 기능을 더하며 다른 LLM·API를 더하거나 바꾸면 요청자에게 묻고 이 파일을 고친다(`.work/TASK.md` 이 레포의 규칙). [Request]
 
+## 회사 메일의 자동 처리 제외 — OpenAI Decisions (2026-11-16)
+
+- 사용자 선택: 광고·개인·업무 무관만 앞에서 제외하고 나머지는 기존 LangGraph에 전달한다. `client.decisions.create(model="gpt-6-luna")`의 `exclude/keep` 한 질문을 사용한다. 설치된 OpenAI SDK 3.49.0을 재사용하며 별도 패키지·키·새 그래프는 추가하지 않는다.
+- `exclude`와 confidence ≥ 0.95를 함께 만족할 때만 제외한다. 나머지는 회사 업무 가능성을 보존한다. 오류/거부/잘못된 응답은 원문을 보존한 `needs_review`로 남긴다. 사용자 수동 확인으로 기존 그래프를 실행할 수 있다.
+- 키는 기존 `UserKeyAccess`의 local 환경 키 또는 server 본인 저장 키를 사용한다. `local_worker`의 Decisions는 미지원이며 서버 공용 키로 대체하지 않는다. 모델 선택 `OPENAI_MODEL`은 기존 생성 호출에 적용하고 Decisions 지원 모델과 구분한다.
+- 실제 합성 예시 9건에서 업무 6건 모두 통과, 광고 1건 제외, 개인/취미 2건은 저확신으로 통과했다. 작은 표본이며 정확도 보장이 아니다. 자세한 검증과 실제 Gmail 확인은 `docs/test-records/20261116_mailbox.md`에 구분한다.
+- 출처: [Decisions 안내](https://developers.openai.com/api/docs/guides/decisions). 호출 선택·confidence 검증은 `app/llm/mail_gate.py`, 저장/실패 경계는 계약 7·9.1절이다.
+
 ## 지식 문서 비전 AI 추출 방식 (2026-11-16 구현, 11/13 사용자 선택)
 
 - 사용자 선택: 지식 문서는 전부 비전 AI로 읽는다. 후속 구현 요청에서 기존 사용자 OpenAI 키/현재 설정 모델 + `text-embedding-3-small` 1536차원과 조항 parent-child를 선택했다. `app/knowledge/`에 구현하며 기존 메일/무역 추출 코드와 그래프는 유지한다.

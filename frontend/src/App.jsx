@@ -5,6 +5,8 @@ import Layout from "./components/Layout"
 import DashboardPage from "./pages/DashboardPage"
 import LoginPage from "./pages/LoginPage"
 import PlaceholderPage from "./pages/PlaceholderPage"
+import MailboxPage from "./mail/MailboxPage"
+import AgentPage from "./agent/AgentPage"
 import SettingsPage from "./pages/SettingsPage"
 import PIPage from "./pages/PIPage"
 import KnowledgePage from "./knowledge/KnowledgePage"
@@ -47,7 +49,9 @@ export default function App() {
             <Route element={<Layout />}>
               <Route index element={<DashboardPage />} />
               <Route path="status" element={<PlaceholderPage sub="오늘 확인할 업무와 최근 문서를 모았어요." title="작업현황" />} />
-              <Route path="inbox" element={<PlaceholderPage sub="답장 내용을 확인하고 보낼 후보를 선택하세요." title="받은 메일" />} />
+              <Route path="inbox" element={<MailboxPage />} />
+              <Route path="agent" element={<AgentPage />} />
+              <Route path="agent/:conversationId" element={<AgentPage />} />
               <Route path="documents" element={<KnowledgePage />} />
               <Route path="activity" element={<PlaceholderPage sub="처리 단계와 오류를 확인하는 작업 이력입니다." title="실행 기록" />} />
               <Route path="settings" element={<SettingsPage />} />

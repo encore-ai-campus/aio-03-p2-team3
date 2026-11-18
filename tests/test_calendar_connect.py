@@ -184,7 +184,7 @@ def test_user_isolation_shared_grant_and_service_disconnect(connected_app):
     finish(client, a)
     client.post('/api/gmail/logout', headers=bearer(a))
     assert me(client, a)['calendar']['connected']
-    assert me(client, a)['gmail']['watch'] == 'stopped'
+    assert me(client, a)['gmail']['watch'] == 'active'
     # Gmail revoke가 같은 클라이언트 grant를 폐기한 공급자 응답
     calendar.check_error = TokenExpired('shared_grant_revoked')
     client.post('/api/gmail/disconnect', headers=bearer(a))

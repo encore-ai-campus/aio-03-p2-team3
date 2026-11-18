@@ -1,13 +1,13 @@
 """Gmail 감시 등록·갱신·중지(CONTRACT 7·10절, 계획 6절).
 
 - 로그인할 때 `register_watch()`로 등록한다.
-- 크론 없이 로그인·알림 수신·화면 요청 때 `renew_watch_if_due()`를 부른다. 마지막 갱신이
+- 로그인·알림·화면 요청과 앱 lifespan 주기 작업에서 `renew_watch_if_due()`를 부른다. 마지막 갱신이
   `WATCH_RENEW_AFTER_HOURS`(24시간)를 넘었거나 지난번 등록이 실패했으면 다시 등록한다
   (Gmail은 최소 7일마다 다시 호출해야 하고 하루 1번을 권장한다).
-- 로그아웃하면 `stop_watch()`로 멈춘다. 멈춘(`stopped`) 사용자와 다시 로그인이 필요한
+- 연결 해제하면 `stop_watch()`로 멈춘다. 멈춘(`stopped`) 사용자와 다시 연결이 필요한
   (`token_expired`) 사용자는 갱신하지 않는다.
 - `history_id`: 처음 등록하거나 멈췄다가 다시 등록할 때만 watch 응답 값으로 정한다. 켜져 있는 감시를
-  갱신할 때는 알림 처리(7)가 이어서 읽을 수 있게 그대로 둔다. 로그아웃한 동안 온 메일은 처리하지 않는다.
+  갱신할 때는 알림 처리(7)가 이어서 읽을 수 있게 그대로 둔다. 앱 로그아웃은 수집을 멈추지 않는다.
 """
 
 from datetime import datetime, timedelta
@@ -15,7 +15,8 @@ import logging
 
 from app.clients.gmail import GoogleError, TokenExpired, _error_label
 from app.config import LIMITS
-from app.db.models import GmailWatch
+from sqlalchemy import select
+from app.db.models import GmailWatch, GoogleToken
 from app.services.auth import GoogleAccess, get_access_token, utcnow
 
 log = logging.getLogger(__name__)
@@ -39,6 +40,12 @@ def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = No
         from app.db.local_gmail import SqlMailboxStore
 
         return connect_local(access, user_id, SqlMailboxStore(access.database), now)
+    def stamp(session):
+        watch, token = session.get(GmailWatch, user_id), session.get(GoogleToken, user_id)
+        return (watch.status, watch.last_renewed_at) if watch else None, token.refresh_token_enc if token else None
+
+    with access.database.session() as session:
+        started = stamp(session)
     try:
         token = get_access_token(access, user_id, now)
         response = access.google.watch(token, access.topic)
@@ -48,11 +55,17 @@ def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = No
         label = _error_label(error.__cause__ or error, include_reason=True)
         log.warning("사용자 %s: Gmail 감시 등록 실패 (%s)", user_id, label)
         with access.database.session() as session:
+            session.get(GmailWatch, user_id, with_for_update=True)
+            if stamp(session) != started:
+                return "stopped"  # 요청 중 연결 해제/재연결된 상태를 덮지 않는다.
             watch = _watch_row(session, user_id, access.topic)
             watch.status = "error"
             watch.last_error = f"watch_failed: {label}"[:200]
         return "error"
     with access.database.session() as session:
+        session.get(GmailWatch, user_id, with_for_update=True)
+        if stamp(session) != started:
+            return "stopped"
         watch = _watch_row(session, user_id, access.topic)
         if watch.history_id is None or watch.status == "stopped":
             watch.history_id = response.history_id
@@ -74,6 +87,19 @@ def renew_watch_if_due(access: GoogleAccess, user_id: int, now: datetime | None 
     if due:
         register_watch(access, user_id, now)
     return due
+
+
+def renew_connected_watches(access: GoogleAccess) -> None:
+    """화면 방문 없이 연결된 서버 계정만 갱신한다. 중지 계정은 켜지 않는다."""
+    if access.local_mode:
+        return
+    with access.database.session() as session:
+        owners = list(session.scalars(select(GmailWatch.user_id).join(
+            GoogleToken, GoogleToken.user_id == GmailWatch.user_id,
+        ).where(GmailWatch.topic == access.topic, GmailWatch.status != "stopped",
+                GoogleToken.refresh_token_enc.is_not(None), GoogleToken.refresh_token_enc != "")))
+    for owner in owners:
+        renew_watch_if_due(access, owner)
 
 
 def stop_watch(access: GoogleAccess, user_id: int) -> None:

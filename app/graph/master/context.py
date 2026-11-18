@@ -41,6 +41,7 @@ class Dependencies:
     planner: Callable[[str, WorkContext], Plan] | None = None
     repair: Callable[[Task, WorkResult, WorkContext], dict] | None = None
     repair_limit: int = 3
+    choose: Callable[[list[dict], WorkContext], dict] | None = None
 
 
 @dataclass

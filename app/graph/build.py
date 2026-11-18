@@ -16,7 +16,7 @@ def build_workflow(*, dependencies: Dependencies, checkpointer):
     rechecks = [f"{domain}_recheck" for domain in ("mail", "documents", "calendar")]
     executes = [f"{domain}_execute" for domain in ("mail", "documents", "calendar")]
     for name in ("load_context", "plan", "validate_plan", "select_task", "inspect_result",
-                 "reflect", "ask_user", "await_approval", "cancel_action", "mark_execution", "record_result", "finish"):
+                 "reflect", "ask_user", "agent_question", "await_approval", "cancel_action", "mark_execution", "record_result", "finish"):
         graph.add_node(name, getattr(nodes, name))
     for domain in ("mail", "documents", "calendar"):
         graph.add_node(f"{domain}_prepare", nodes.prepare)
@@ -28,10 +28,12 @@ def build_workflow(*, dependencies: Dependencies, checkpointer):
         graph.add_edge(f"{domain}_execute", "select_task")
     graph.add_edge(START, "load_context")
     graph.add_edge("load_context", "plan")
-    graph.add_edge("plan", "validate_plan")
+    graph.add_conditional_edges("plan", lambda state: state["next"] if state.get("agent_mode") else "validate_plan",
+                                ["validate_plan", "finish", "plan", "agent_question"])
+    graph.add_edge("agent_question", "plan")
     routes = {
         "validate_plan": ["select_task", "finish"],
-        "select_task": [*prepares, "finish"],
+        "select_task": [*prepares, "finish", "plan"],
         "inspect_result": ["record_result", "ask_user", "await_approval", "reflect"],
         "reflect": [*prepares, "record_result"],
         "ask_user": prepares,

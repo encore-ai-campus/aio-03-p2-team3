@@ -35,6 +35,9 @@ class ExistingDocuments:
     def __init__(self, *, database, storage=None, key_cipher=None):
         self.database, self.storage, self.key_cipher = database, storage, key_cipher
 
+    def schema(self, kind):
+        return {"kind": kind, "input_schema": IMPLEMENTATIONS[kind][1].model_json_schema()}
+
     def get(self, actor_id, command):
         ops, _, repository, _, _ = IMPLEMENTATIONS[command.kind]
         try:
