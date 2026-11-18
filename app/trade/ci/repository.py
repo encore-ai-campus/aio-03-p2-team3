@@ -63,6 +63,21 @@ class SQLCI(SQLDocuments):
                 raise DocumentError("SOURCE_PI_NOT_APPROVED", "먼저 선택한 PI 버전을 검토하고 승인하세요")
             return deepcopy(version.payload)
 
+    def latest_approved_source_pi(self, document_id):
+        with user_lock(self.database, self.user_id), self.database.session() as session:
+            version = session.scalar(select(TradeDocumentVersion).join(
+                TradeDocument, TradeDocument.id == TradeDocumentVersion.document_id).join(
+                TradeProposal, (TradeProposal.document_id == TradeDocumentVersion.document_id)
+                & (TradeProposal.revision == TradeDocumentVersion.revision)).where(
+                TradeDocument.id == document_id, TradeDocument.user_id == self.user_id,
+                TradeDocument.doc_kind == "PI", TradeDocumentVersion.user_id == self.user_id,
+                TradeProposal.user_id == self.user_id, TradeProposal.status == "approved"
+            ).order_by(TradeDocumentVersion.revision.desc()).limit(1))
+            if version is None:
+                raise DocumentError("SOURCE_PI_NOT_APPROVED", "다시 적용할 최신 승인 PI 버전을 찾을 수 없습니다")
+            return {**deepcopy(version.payload), "trade_doc_id": document_id,
+                    "revision": version.revision, "document_type": "PI"}
+
 
 def ci_repository(database, user_id):
     return SQLCI(database, user_id, "CI")

@@ -75,6 +75,17 @@ def revise(document_id, revision, command: PLInput, *, repository: PLRepository,
     return result(repository.replace(document_id, revision, document, review_reference))
 
 
+def refresh_settings(document_id, revision, *, repository: PLRepository):
+    previous = repository.get(document_id)
+    check_revision(previous, revision)
+    context = repository.context(None)
+    values = common.refresh_settings_values(previous, context, "PL", PLInput, PLItem)
+    document = prepare_pl(values, context)
+    document["packing_approval_log"] = [*previous.get("packing_approval_log", []),
+                                        {"action": "modify", "at": datetime.now(timezone.utc).isoformat()}]
+    return result(repository.replace(document_id, revision, document))
+
+
 def packing_review(document_id, *, repository: PLRepository):
     document = repository.get(document_id)
     payload = {"document_id": document_id, "revision": document["revision"], "document": document}

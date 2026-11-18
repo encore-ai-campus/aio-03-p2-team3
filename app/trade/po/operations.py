@@ -34,6 +34,14 @@ def revise(document_id, revision, command: POInput, *, repository: PORepository,
     return result(repository.replace(document_id, revision, document, review_reference))
 
 
+def refresh_settings(document_id, revision, *, repository: PORepository):
+    previous = repository.get(document_id)
+    common.check_revision(previous, revision)
+    context = repository.context(previous.get("currency"))
+    values = common.refresh_settings_values(previous, context, "PO", POInput, POItem)
+    return result(repository.replace(document_id, revision, prepare_po(values, context)))
+
+
 def check(document):
     issuer = document.get("issuer") or {}
     issuer_key = name_key(issuer.get("legal_name_en") or issuer.get("company_name"))

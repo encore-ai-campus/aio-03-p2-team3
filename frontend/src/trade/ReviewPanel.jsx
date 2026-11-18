@@ -1,7 +1,7 @@
 import PrivateImage from "../components/PrivateImage"
 import DocumentSnapshot from "./DocumentSnapshot"
 
-export default function ReviewPanel({ proposal, token, kind = "pi", busy, dirty, modifying, onDecision, onModify, onDownload, headingRef }) {
+export default function ReviewPanel({ proposal, token, kind = "pi", busy, dirty, modifying, onDecision, onModify, onDownload, onRefreshSettings, headingRef }) {
   const payload = proposal.payload
   const statuses = { pending: "승인 대기", approved: "발급 완료", cancelled: "검토 취소", superseded: "새 검토 필요" }
   const base = `/trade/${kind}/${proposal.document_id}/reviews/${proposal.id}/branding`
@@ -19,11 +19,14 @@ export default function ReviewPanel({ proposal, token, kind = "pi", busy, dirty,
       <div><dt>발급 형식</dt><dd>{payload.formats.map((format) => format.toUpperCase()).join(" · ")}</dd></div>
     </dl></details>
     {proposal.status === "pending" && <div className="form-actions">
+      {onRefreshSettings && <button className="btn" type="button" disabled={busy || modifying} onClick={onRefreshSettings}>최신 설정 정보 적용</button>}
       <button className="btn" type="button" disabled={busy || modifying} onClick={() => onDecision("cancel")}>검토 취소</button>
       <button className="btn" type="button" disabled={busy || modifying} onClick={onModify}>수정</button>
       <button className="btn blue" type="button" disabled={busy || dirty || modifying} onClick={() => onDecision("approve")}>승인하고 파일 발급</button>
     </div>}
-    {proposal.status === "approved" && <div className="form-actions">{proposal.files.map((file) =>
-      <button className="btn blue" key={file.id} type="button" disabled={busy} onClick={() => onDownload(file)}>{file.file_format.toUpperCase()} 다운로드</button>)}</div>}
+    {proposal.status === "approved" && <div className="form-actions">
+      {onRefreshSettings && <button className="btn" type="button" disabled={busy} onClick={onRefreshSettings}>최신 설정 정보 적용</button>}
+      {proposal.files.map((file) => <button className="btn blue" key={file.id} type="button" disabled={busy} onClick={() => onDownload(file)}>{file.file_format.toUpperCase()} 다운로드</button>)}
+    </div>}
   </section>
 }

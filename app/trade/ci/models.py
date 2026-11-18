@@ -7,6 +7,7 @@ from app.trade.common.models import DocumentInput, DocumentRepository, InputMode
 
 class CIRepository(DocumentRepository, Protocol):
     def source_pi(self, document_id: int, revision: int) -> dict: ...
+    def latest_approved_source_pi(self, document_id: int) -> dict: ...
 
 
 class CIInput(InputModel):

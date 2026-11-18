@@ -47,7 +47,7 @@ jobs:
     # 필수 검사 이름을 유지하고, 범위 확인 실패를 성공/skip으로 숨기지 않는다.
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     # 테스트 DB는 전부 PostgreSQL이다(3절). service 컨테이너를 띄워 TEST_DATABASE_URL로 쓴다.
     services:
       postgres:
@@ -88,7 +88,13 @@ jobs:
 
       - name: Office 페이지 변환기 설치
         if: needs.check.outputs.run_tests == 'true'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer libreoffice-calc fonts-noto-cjk
+        timeout-minutes: 4
+        run: |
+          # 지역 미러에서 글꼴 다운로드가 멈춰 Ubuntu 기본 아카이브를 사용한다.
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=30 install -y \
+            --no-install-recommends libreoffice-writer libreoffice-calc fonts-noto-cjk
 
       - name: 프론트·브라우저 시험 준비
         if: needs.check.outputs.run_tests == 'true'

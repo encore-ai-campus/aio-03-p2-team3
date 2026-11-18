@@ -9,7 +9,7 @@ from app.llm.client import use_backend
 from app.trade.common.models import DocumentContext, DocumentError
 from app.trade.pi.agent import extract_pi as langchain_extract_pi
 from app.trade.pi.models import PIInput
-from app.trade.pi.operations import create_pi, extract_pi, get_pi, revise_pi
+from app.trade.pi.operations import create_pi, extract_pi, get_pi, refresh_issuer, revise_pi
 from app.trade.pi.repository import pi_repository
 from tests.fakes.llm import FakeLLM
 from tests.fakes.storage import FakeStorage
@@ -85,6 +85,21 @@ def test_pi_revision_uses_snapshot_and_rejects_stale_revision():
     assert revised.document["issuer"]["legal_name_en"] == "Testworks Trading Co"
     with pytest.raises(DocumentError, match="최신 PI"):
         revise_pi(created.document_id, 1, pi_input(), repository=repository)
+
+
+def test_refresh_issuer_uses_current_settings_and_preserves_transaction_values():
+    repository = MemoryPIRepository()
+    created = create_pi(pi_input(), repository=repository)
+    repository.settings.issuer.update(legal_name_en="Changed Company", address="Changed Address",
+                                     contact="New Contact", phone="New Phone", email="new@example.invalid",
+                                     ceo_name="New Signer")
+    refreshed = refresh_issuer(created.document_id, 1, repository=repository)
+    assert refreshed.revision == 2
+    assert refreshed.document["issuer"]["ceo_name"] == "New Signer"
+    assert refreshed.document["seller"]["legal_name"] == "Changed Company"
+    assert refreshed.document["seller"]["address"] == "Changed Address"
+    assert refreshed.document["items"][0]["unit_price"] == created.document["items"][0]["unit_price"]
+    assert refreshed.document["total"] == created.document["total"]
 
 
 def test_pi_sql_store_is_scoped_to_user_and_document_kind(database):

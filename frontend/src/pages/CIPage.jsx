@@ -6,6 +6,8 @@ import CIForm, { CISummary } from "../trade/CIForm"
 import CISourcePicker from "../trade/CISourcePicker"
 import DocumentSnapshot from "../trade/DocumentSnapshot"
 import ReviewPanel from "../trade/ReviewPanel"
+import RenderFailureHelp from "../trade/RenderFailureHelp"
+import MissingFieldsDialog, { updateMissingField } from "../trade/MissingFieldsDialog"
 import { canCreateCI, ciDraft, ciMissing, ciPayload, emptyCI, piFieldLabel, sourceLabel } from "../trade/ci-input"
 
 const STATUS = { needs_input: "입력 필요", ready: "검토 가능", issued: "발급 완료" }
@@ -31,6 +33,7 @@ export default function CIPage() {
   const [reload, setReload] = useState(0)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState("")
+  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const mutation = useRef(null)
   const created = useRef(null)
   const question = useRef(null)
@@ -46,6 +49,7 @@ export default function CIPage() {
   }
 
   function accept(document, review = null) {
+    setQuickFixOpen(false)
     const saved = ciDraft(document.input)
     setResource(document)
     setDraft(saved)
@@ -155,6 +159,20 @@ export default function CIPage() {
     })
   }
 
+  function refreshSettings() {
+    perform(async (signal) => {
+      const document = await apiFetch(`${base}/${resource.document_id}/refresh-settings`, {
+        token, signal, method: "POST", body: { revision: resource.revision } })
+      const selected = await readSource(document.input.source_pi_id, document.input.source_revision, signal)
+      return { document, selected }
+    }, ({ document, selected }) => {
+      accept(document)
+      setSource(selected.source)
+      setOriginal(selected.document)
+      setNotice("최신 설정과 같은 PI의 최신 승인 버전을 새 CI 버전에 적용했습니다. 선적 정보를 확인하고 다시 검토해 주세요. 이전 발급 파일은 보존됩니다.")
+    })
+  }
+
   function propose() {
     if (!canCreateCI(source, draft)) return
     perform((signal) => apiFetch(`${base}/${resource.document_id}/reviews`, { token, signal, method: "POST",
@@ -184,6 +202,7 @@ export default function CIPage() {
       {documentId && <button className="btn" type="button" disabled={busy || loading} onClick={() => setReload((value) => value + 1)}>최신본 다시 읽기</button>}</div>
     {error && <div className="settings-load-error" role="alert" tabIndex={-1} ref={errorBox}><p>{error.message}</p>
       {error.status === 409 && <p>입력은 보존했습니다. PI 상태를 다시 확인하거나 최신 CI를 다시 읽고 재검토해 주세요. 최신 CI를 읽으면 현재 입력을 교체하므로 필요한 내용은 먼저 복사해 두세요.</p>}
+      {error?.code === "RENDER_FAILED" && <RenderFailureHelp />}
       {error.code === "SOURCE_PI_CHANGE_REQUIRES_NEW_CI" && <Link to="/trade/ci">새 CI 작성</Link>}</div>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {loading && <p role="status">CI와 원본 버전을 읽는 중입니다…</p>}
@@ -227,17 +246,24 @@ export default function CIPage() {
           {!allowed && <p className="section-note">선적 정보는 미리 입력할 수 있습니다. 선택한 PI를 보완·승인하고 상태를 다시 확인하면 CI 생성이 가능합니다.</p>}
         </section>}
         {screen === "review" && current && (finalReview ? <ReviewPanel kind="ci" proposal={proposal} token={token} busy={busy} dirty={dirty} modifying={modifying} headingRef={question}
-          onDecision={decide} onModify={editShipment} onDownload={(file) => perform((signal) => downloadFile(file, token, signal), () => setNotice("파일 다운로드를 요청했습니다."))} />
+          onDecision={decide} onModify={editShipment} onRefreshSettings={refreshSettings}
+          onDownload={(file) => perform((signal) => downloadFile(file, token, signal), () => setNotice("파일 다운로드를 요청했습니다."))} />
           : <section className="pi-question"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
             <p className="pi-question-note">원본 PI의 승인 버전·거래가격·출하 수량·FOC와 선적 정보를 확인하세요.</p>
             {dirty && <p className="form-error">보존한 변경사항을 먼저 저장한 뒤 검토해 주세요.</p>}
-            {missing.length > 0 && <div className="pi-missing"><p>아직 입력할 내용이 있어요.</p><button className="btn" type="button" disabled={!canEdit} onClick={() => { setOnlyMissing(missing); setScreen("shipment") }}>선적 정보 보완</button></div>}
+            {missing.length > 0 && <div className="pi-missing"><p>선적 정보의 누락된 값만 팝업에서 입력할 수 있습니다.</p>
+              <button className="btn" type="button" disabled={!canEdit} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
             {current.issues.length > 0 && <ul className="document-issues" role="alert">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
             <DocumentSnapshot kind="ci" document={current.document} />
             <fieldset className="editor-checks" disabled={busy || current.status !== "ready"}><legend>발급 형식</legend>{["pdf","xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous,format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
             <div className="form-actions"><button className="btn" type="button" disabled={!canEdit} onClick={editShipment}>선적 정보 수정</button>
+              {current && <button className="btn" type="button" title="최신 설정과 같은 PI의 최신 승인 버전을 새 CI 버전에 적용합니다. 이전 발급 파일은 보존됩니다."
+                disabled={busy || loading || ["sent", "sending"].includes(current.status)} onClick={refreshSettings}>최신 설정 정보 적용</button>}
               <button className="btn blue" type="button" disabled={!canEdit || !allowed || dirty || modifying || current.status !== "ready" || !formats.length || proposal?.status === "pending"} onClick={propose}>최종 검토 만들기</button></div>
           </section>)}
+      <MissingFieldsDialog open={quickFixOpen} kind="CI" draft={draft} missing={missing} issues={current?.issues} busy={busy} dirty={dirty}
+        onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (proposal?.status === "pending") setModifying(true) }}
+        onSave={save} onClose={() => setQuickFixOpen(false)} />
       </div>{screen !== "start" && <CISummary source={source} original={original} draft={draft} />}</div>
     </>}
   </div>
