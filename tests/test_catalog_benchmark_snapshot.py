@@ -15,6 +15,9 @@ spec.loader.exec_module(snapshot)
 def catalog_engine(database_url):
     engine = create_engine(database_url.replace('postgresql://', 'postgresql+psycopg://', 1))
     with engine.begin() as connection:
+        # 테스트 DB는 앱 스키마가 이미 만들어진 세션 템플릿의 복제본이다(#282). 이 시험은 읽기 경계만 보는
+        # 최소 표를 쓰므로, 이 테스트 전용 DB 안의 같은 이름 표를 먼저 지운다.
+        connection.execute(text('DROP TABLE IF EXISTS price_list_items, users CASCADE'))
         connection.execute(text('CREATE TABLE users (id int PRIMARY KEY, email text)'))
         connection.execute(text('''CREATE TABLE price_list_items (
             id int PRIMARY KEY, user_id int, item_name text, product_code text,
