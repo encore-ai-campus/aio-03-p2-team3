@@ -23,6 +23,9 @@ services:
         sync: false
       - key: SESSION_SECRET
         sync: false
+      # 분리 배포는 프론트와 서버가 다른 사이트라 OAuth 연결 대기 상태 쿠키를 공유한다(HTTPS 전제).
+      - key: SESSION_SAME_SITE
+        value: "none"
       - key: APP_BASE_URL
         sync: false
       - key: FRONTEND_ORIGINS
