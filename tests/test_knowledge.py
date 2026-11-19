@@ -126,10 +126,11 @@ def test_pipeline_uses_real_pgvector_parent_ranges_and_model_swap(database):
     assert {c["dimensions"] for c in repository.chunks(1, document["id"])["children"]} == {5}
 
 
-def test_missing_page_waits_for_complete_review_and_revision_fencing(database):
+def test_empty_extraction_waits_for_correction_and_checks_revision(database):
     repository, storage, document = setup_document(database)
-    extractor, embedder = FakeExtractor(missing=True), FakeEmbedder()
+    extractor, embedder = FakeExtractor(missing=True, content=""), FakeEmbedder()
     assert run(repository, storage, extractor, embedder, FakeRenderer(2)) == "needs_review"
+    assert repository.claim() is None
     detail = repository.read(1, document["id"])
     assert not embedder.calls and len(detail["pages"]) == 2 and not detail["pages"][1]["complete"]
     body = {"attempt_id": detail["attempt_id"], "revision": detail["revision"],
@@ -145,6 +146,20 @@ def test_missing_page_waits_for_complete_review_and_revision_fencing(database):
     assert run(repository, storage, extractor, embedder) == "ready"
     assert len(extractor.calls) == 1 and len(embedder.calls) == 1
     assert repository.read(1, document["id"])["published_pages"][1]["text"] == body["pages"][1]["text"]
+
+
+def test_claim_resumes_existing_transcription_without_reextracting(database):
+    repository, storage, document = setup_document(database)
+    pages = [PageText(number=1, text=TEXT, uncertain=["가상 경고"]).model_dump()]
+    with database.session() as session:
+        session.execute(update(KnowledgeDocument).where(KnowledgeDocument.id == document["id"]).values(
+            status="needs_review", pages=pages, raw_pages=pages, warnings=["transcription_requires_review"]))
+
+    extractor, embedder = FakeExtractor(), FakeEmbedder()
+    assert run(repository, storage, extractor, embedder) == "ready"
+    assert not extractor.calls and len(embedder.calls) == 1
+    assert repository.claim() is None
+    assert repository.read(1, document["id"])["warnings"] == ["transcription_requires_review"]
 
 
 @pytest.mark.parametrize("invalid", ["nan", "inf", "dimension", "count"])
@@ -260,7 +275,7 @@ def test_provider_adapters_preserve_mapping_and_request_options():
     assert [(c["timeout"], c["max_retries"]) for c in calls if "api_key" in c] == [(180, 3), (30, 0)]
 
 
-def test_upload_review_ready_and_owner_isolation_over_http(database_url):
+def test_upload_auto_embeds_with_warnings_and_preserves_owner_isolation(database_url):
     jwks, storage = FakeJwks(), FakeStorage()
     extractor, embedder = FakeExtractor(uncertain=True), FakeEmbedder()
     app = create_app(Settings(database_url=database_url, session_secret="test-only"),
@@ -274,9 +289,10 @@ def test_upload_review_ready_and_owner_isolation_over_http(database_url):
         path = f"/api/knowledge/documents/{document_id}"
         for _ in range(200):
             detail = client.get(path, headers=headers).json()
-            if detail["status"] == "needs_review": break
+            if detail["status"] == "ready": break
             time.sleep(.02)
-        assert detail["status"] == "needs_review" and not embedder.calls
+        assert detail["status"] == "ready" and len(embedder.calls) == 1
+        assert "transcription_requires_review" in detail["warnings"]
         assert client.get(path + "/download", headers=headers).content == png()
         assert client.get(path + "/pages/1", headers=headers).headers["content-type"].startswith("image/png")
         result = client.put(path + "/extraction", headers=headers, json={"attempt_id": detail["attempt_id"],
@@ -287,6 +303,7 @@ def test_upload_review_ready_and_owner_isolation_over_http(database_url):
             if detail["status"] == "ready": break
             time.sleep(.02)
         assert detail["status"] == "ready" and detail["child_count"] > 0
+        assert len(embedder.calls) == 2
         assert client.get(path + "/chunks", headers=headers).json()["parents"]
         other = {"Authorization": f"Bearer {jwks.token(sub=uuid4())}"}
         for suffix in ("", "/download", "/pages/1", "/chunks"):
