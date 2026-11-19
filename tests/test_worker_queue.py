@@ -464,8 +464,8 @@ def test_worker_mode_selection_no_longer_changes_key_path(web):
     assert UserKeyAccess(database, 1, client.app.state.google_access.cipher, config).read() == "fake-user-key"
 
 
-def test_legacy_user_migration_preserves_data_and_default_mode(database_url):
-    db = Database(database_url)
+def test_legacy_user_migration_preserves_data_and_default_mode(empty_database_url):
+    db = Database(empty_database_url)
     try:
         with db.engine.begin() as connection:
             connection.exec_driver_sql("""CREATE TABLE users (id INTEGER PRIMARY KEY, google_sub VARCHAR NOT NULL UNIQUE,

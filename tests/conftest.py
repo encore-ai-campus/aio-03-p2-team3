@@ -44,9 +44,41 @@ def postgres_uri(tmp_path_factory):
         yield server.get_uri()
 
 
+@pytest.fixture(scope="session")
+def schema_template(postgres_uri):
+    """세션당 한 번 앱 시작과 같은 마이그레이션으로 스키마를 완성한 템플릿 DB.
+
+    테스트 DB는 이것을 복제해 테스트마다 테이블 DDL·Alembic 체인을 다시 만들지 않는다."""
+    name = f"template_{uuid4().hex}"
+    with psycopg.connect(postgres_uri, autocommit=True) as connection:
+        connection.execute(f'CREATE DATABASE "{name}"')
+    try:
+        db = Database(urlunsplit(urlsplit(postgres_uri)._replace(path=f"/{name}")))
+        db.create_tables()
+        db.close()
+        yield name
+    finally:
+        with psycopg.connect(postgres_uri, autocommit=True) as connection:
+            connection.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
 @pytest.fixture
-def database_url(postgres_uri):
-    """테스트별 독립 DB. SQL 순서를 공유하지 않아 데이터가 새지 않는다."""
+def database_url(postgres_uri, schema_template):
+    """테스트별 독립 DB. SQL 순서를 공유하지 않아 데이터가 새지 않는다.
+
+    스키마는 세션 템플릿을 복제해 이미 완성된 상태로 시작한다(앱 시작 마이그레이션 결과와 같다)."""
+    name = f"test_{uuid4().hex}"
+    with psycopg.connect(postgres_uri, autocommit=True) as connection:
+        connection.execute(f'CREATE DATABASE "{name}" TEMPLATE "{schema_template}"')
+    parts = urlsplit(postgres_uri)
+    yield urlunsplit(parts._replace(path=f"/{name}"))
+    with psycopg.connect(postgres_uri, autocommit=True) as connection:
+        connection.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+@pytest.fixture
+def empty_database_url(postgres_uri):
+    """스키마 없는 빈 DB. 마이그레이션·확장 설치 자체를 검사하는 테스트가 쓴다."""
     name = f"test_{uuid4().hex}"
     with psycopg.connect(postgres_uri, autocommit=True) as connection:
         connection.execute(f'CREATE DATABASE "{name}"')
@@ -59,7 +91,6 @@ def database_url(postgres_uri):
 @pytest.fixture
 def database(database_url):
     db = Database(database_url)
-    db.create_tables()
     with db.session() as session:
         session.add(User(id=1, google_sub="fake-sub-1", email="demo@example.invalid"))
         # 명시적 id로 심으면 시퀀스가 그대로라 이후 save_login 사용자와 겹친다. 다음 id를 2로 맞춘다.

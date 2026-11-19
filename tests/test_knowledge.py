@@ -232,8 +232,8 @@ def test_parent_child_foreign_key_rejects_cross_scope_and_dimensions(database):
     assert repository.read(1, document["id"])["status"] == "ready"
 
 
-def test_extension_in_existing_schema_and_repeated_migration(database_url):
-    db = Database(database_url)
+def test_extension_in_existing_schema_and_repeated_migration(empty_database_url):
+    db = Database(empty_database_url)
     with db.engine.begin() as connection:
         connection.exec_driver_sql("CREATE SCHEMA extensions")
         connection.exec_driver_sql("CREATE EXTENSION vector WITH SCHEMA extensions")
