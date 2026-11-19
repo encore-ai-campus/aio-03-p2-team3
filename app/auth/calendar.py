@@ -28,9 +28,11 @@ def _digest(state):
 
 def _to_app(request, notice):
     # 운영의 같은 출처 배포는 상대 주소, 별도 React 화면은 설정한 첫 출처로 복귀한다(Gmail과 같다).
+    # 기본 경로는 FRONTEND_BASE_PATH(비우면 같은 출처 배포 기본값 /app, 루트 정적 사이트는 "/")를 따른다.
     origin = next((value.strip().rstrip("/") for value in
                    request.app.state.settings.frontend_origins.split(",") if value.strip()), "")
-    return RedirectResponse(f"{origin}/app/settings?calendar={notice}", status_code=303)
+    base = request.app.state.settings.frontend_base_path.strip().rstrip("/")
+    return RedirectResponse(f"{origin}{base}/settings?calendar={notice}", status_code=303)
 
 
 def _start(request, user_id, google_sub, consent=False):

@@ -1,7 +1,7 @@
 import FollowupPanel from "./FollowupPanel"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { apiFetch } from "../api"
+import { APP_BASE, apiFetch } from "../api"
 import { useAuth } from "../useAuth"
 import "./mailbox.css"
 import QuotePanel from "./QuotePanel"
@@ -86,7 +86,7 @@ function tradeLink(candidate) {
   if (!candidate.trade_doc_id || !candidate.document) return null
   const kind = candidate.document.kind.toLowerCase()
   const standalone = candidate.document.draft?._ci_standalone ? "/standalone" : ""
-  return <a className="btn" href={`/app/trade/${kind}${standalone}/${candidate.trade_doc_id}`}>관련 문서 검토하기</a>
+  return <a className="btn" href={`${APP_BASE}/trade/${kind}${standalone}/${candidate.trade_doc_id}`}>관련 문서 검토하기</a>
 }
 
 export default function MailboxPage() {

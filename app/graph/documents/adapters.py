@@ -67,7 +67,7 @@ class ExistingDocuments:
             values.append({"document_id": result.document_id, "kind": kind, "revision": result.revision,
                 "title": draft.get("document_number") or draft["doc_no"], "counterparty": common.counterparty_name(draft),
                 "status": result.status, "missing_fields": result.missing_fields, "issues": result.issues,
-                "url": f"/app/trade/{kind.lower()}/{result.document_id}"})
+                "url": f"/trade/{kind.lower()}/{result.document_id}"})
         return {"draft_documents": values, "next_cursor": cursor}
 
     def search_issued(self, actor_id, command):

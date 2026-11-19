@@ -38,7 +38,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 
 - 기본 화면: `http://127.0.0.1:8000/`(`/inbox`로 이동). 상태 확인: `http://127.0.0.1:8000/healthz` → `{"status":"ok"}`. 화면·상태 확인에는 API 키가 필요 없다.
 - 위 Uvicorn 명령은 기본 `AI_RUNTIME=server`의 사용자별 DB 키 방식이다. 개인 `.env` 키를 쓰려면 아래 전용 로컬 실행 절차를 따른다.
-- Render 빌드 명령: `bash scripts/render-build.sh`(아래 같은 출처 UI 배포 안내). 시작 명령: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- Render 배포: `render.yaml`이 서버 웹 서비스(빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`)와 프론트 정적 사이트를 분리 선언한다(아래 분리 배포 안내).
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
 - 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 필요하며, 기본 서버 모드에서는 `GMAIL_PUBSUB_TOPIC`도 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 로컬 모드는 아래 개인 OAuth 설정을 사용한다. 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py tests/test_local_gmail.py`로 실행한다.
 - Supabase 로그인 404: `SUPABASE_URL`은 `https://<project-id>.supabase.co` 형식의 프로젝트 API 주소다. `/dashboard/project/...` 관리 화면 주소를 넣지 않는다. `.env`를 고쳤는데 이전 주소가 계속 전달되면 개발 서버를 멈추고 터미널의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`를 `unset`한 뒤 `npm run dev`로 다시 시작한다. 이미 실행 환경에 있는 값이 `.env`보다 우선한다([Vite 안내](https://vite.dev/guide/env-and-mode#env-loading-priorities)).
@@ -67,19 +67,16 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - Parent-child: 조항 경계를 우선한 부모 원문(최대 8000자)과 1000자/겹침 150자의 자식을 연결한다. 크기는 문자 기준이며 최적 검색 성능을 주장하지 않는다. 자식만 임베딩하고 부모의 원본 페이지/원문 범위·처리 버전·모델 프로필을 보존한다. 모델/차원을 바꿔도 기존 벡터가 자동 변환되지는 않으며 본인 문서를 재처리해야 한다.
 - 검증: `uv run pytest tests/test_knowledge.py tests/test_knowledge_browser.py`는 실제 pgvector·페이지 렌더링·React/FastAPI와 가짜 AI/Storage로 시험한다. `npm ci --prefix frontend`, LibreOffice, `uv run playwright install chromium`을 먼저 준비한다. 외부 AI 호출/실제 문서 일괄 적재/운영 배포/검색 품질 평가는 수행하지 않는다. API·상태/오류·저장 불변식은 [계약 18절](docs/CONTRACT.md#18-지식-문서-수집과-벡터-저장)에 있다.
 
-### Render 같은 출처 UI 배포 — 계획 21.1 선행 작업
+### Render 분리 배포 — 서버 웹 서비스 + 프론트 정적 사이트
 
-`scripts/render-build.sh`는 레포 루트에서 `uv sync --locked`로 기존 Python 설치를 유지한 뒤, `frontend/`에서 `npm ci --include=dev` → `npm run build`를 실행하고 `dist/index.html` 생성을 확인한다. Vite 같은 개발 의존성은 `NODE_ENV=production`에서도 빌드에 필요하다. 어느 단계든 실패하면 빌드가 실패하며 서버 시작 단계로 넘어가지 않는다. UI 소스·Vite 설정·package/lockfile은 이 선행 작업에서 바꾸지 않는다.
+`render.yaml`은 두 서비스를 선언한다. 서버는 웹 서비스로 빌드 `uv sync --locked`·시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`·`/healthz` 확인을 유지한다. 프론트는 정적 사이트로 `frontend/`를 루트 디렉터리로 빌드하되 `npm run build -- --base=/`로 루트 경로에 올리고 `dist`를 공개하며, `/*` → `/index.html` 재작성으로 상세 주소 새로고침을 복구한다. Blueprint로 관리하며 main push마다 선언 파일이 자동 반영된다.
 
-- 저장소의 `render.yaml`은 기존 Python 서비스에 적용할 빌드·시작·`/healthz` 설정을 선언한다. **Dashboard에서 만든 기존 서비스는 파일 추가만으로 Build Command가 바뀌지 않는다.** 해당 서비스 Settings → Build & Deploy에서 Build Command를 `bash scripts/render-build.sh`로 설정하고 기존 Start Command를 유지한다. 같은 서비스를 Blueprint로 관리하는 경우에만 선언 파일을 동기화한다.
-- Render Environment에 `NODE_VERSION=22.16.0`을 설정한다(Vite 8 요구 버전 충족). 공개 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`는 **빌드 시점**에 필요하다. 값이 바뀌면 프론트를 다시 빌드해야 하며 서버 재시작만으로 이미 생성된 JS는 바뀌지 않는다. 기존 Vite 설정이 두 공개값만 브라우저로 전달한다. 별도 `VITE_*`·`frontend/.env`는 만들지 않는다.
-- `SUPABASE_SECRET_KEY`·`DATABASE_URL`·`GOOGLE_OAUTH_CLIENT_SECRET`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`·Pub/Sub 인증값은 기존 서버 환경으로 유지한다. 프론트 코드/공개 환경변수에 복사하지 않는다. 루트 `.env.example`과 계약 11절이 전체 설정 목록이며 실제 값은 커밋하지 않는다. 운영 DB 주소·암호화 키는 이 작업에서 교체하지 않는다.
-- 빌드 후 같은 FastAPI의 `/app/`로 접속한다. `/app`는 `/app/`로 이동하고, `/app/trade/pi/123` 같은 상세 주소의 GET/HEAD는 `index.html`로 복구된다. JS/CSS는 `/app/assets/`에서 올바른 형식으로 제공하며 누락 자산은 404다. HTML/자산은 `Cache-Control: no-cache`와 ETag/Last-Modified로 재검증한다. 빌드가 없는 개발 환경에서 UI 주소는 503이며 API·기존 화면은 계속 쓸 수 있다.
-- 기존 `/`→`/inbox`, `/api`와 없는 API의 JSON 404, `/auth/google/callback`, `/gmail/push`, `/docs`·`/healthz`·`/about`·`/privacy`·`/terms`·`/static`은 유지한다. Gmail callback 주소를 `/app/`로 옮기지 않는다. Supabase의 앱 로그인 반환 허용 주소는 같은 출처의 `/app/login`이며 Google 공급자 callback 설정과 별개다.
+- 정적 사이트 빌드 시점 환경: 공개 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`에 더해 `VITE_API_BASE_URL`(서버 서비스 주소, 예: `https://aio3-gmail-quote.onrender.com`)이 필요하다. 프론트는 이 값을 `/api` 요청의 접두 주소로 쓰고, 비워 두면 같은 출처 상대 경로(로컬 vite 프록시·서버 `/app` 제공)로 동작한다. 값이 바뀌면 프론트를 다시 빌드해야 하며 서버 재시작만으로 이미 생성된 JS는 바뀌지 않는다. Vite는 두 공개값과 `VITE_API_BASE_URL`만 브라우저로 전달한다. 별도 `frontend/.env`는 만들지 않는다.
+- 서버 환경: 기존 `DATABASE_URL`·`SUPABASE_URL`·`SUPABASE_SECRET_KEY`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`·`GOOGLE_OAUTH_*`·Pub/Sub 값을 유지하고, 분리 배포용으로 `FRONTEND_ORIGINS`(정적 사이트 주소), `FRONTEND_BASE_PATH=/`(콜백 복귀 기본 경로를 루트로), `APP_BASE_URL`(서버 서비스 주소)을 맞춘다. OAuth 콜백·API가 프론트에 심는 화면 주소는 기본 경로 접두 없이 발행하고 프론트가 실제 서비스 경로(`import.meta.env.BASE_URL`)로 바꿔 표시한다. 실제 값은 커밋하지 않고 루트 `.env.example`과 계약 11절이 전체 목록이다. 운영 DB 주소·암호화 키는 이 작업에서 교체하지 않는다.
+- 같은 출처 제공(기존 방식, `scripts/render-build.sh`)은 로컬 점검용으로 유지한다. 서버 설치와 프론트 빌드를 한 서비스에 준비하면 FastAPI의 `/app/`에서 React를 그대로 제공한다(기본 Vite base `/app/`). 브라우저 테스트도 이 구성으로 검증한다. 운영은 분리 배포를 기본으로 한다.
+- 기존 `/`→`/inbox`, `/api`와 없는 API의 JSON 404, `/auth/google/callback`, `/gmail/push`, `/docs`·`/healthz`·`/about`·`/privacy`·`/terms`·`/static`은 서버에 그대로 유지한다. Gmail callback 주소를 옮기지 않는다. Supabase의 앱 로그인 반환 허용 주소는 정적 사이트의 `/login`이며 Google 공급자 callback 설정과 별개다. 서비스를 처음 만들 때 `GOOGLE_OAUTH_REDIRECT_URI`를 서버 주소로 맞추고 Google Cloud 콘솔에 등록한다.
 
-완료 확인: 빌드 로그의 Python 설치·`npm ci`·`npm run build` 성공과 `frontend/dist/index.html`, `/app/`·상세 주소 직접 열기/새로고침·JS/CSS 200/조건부 304, 누락 자산/API 404, 미인증 API 응답, Google callback의 기존 state 검사·리디렉션, Gmail 알림의 403/400/인증된 204, 공개 페이지/health 응답을 확인한다. 자동 검사는 `uv run pytest tests/test_frontend_serving.py`와 `frontend/`의 lint/test/`check:env`다. `check:env`는 가짜 값으로 공개 두 값 전달과 서버 비밀값 제외를 검사한다.
-
-이 단계는 UI 개발과 병행하는 빌드/제공 준비다. 실제 Render 설정 적용·배포 커밋·실제 로그인/Gmail 성공은 아직 미확인이다. 전체 화면/API 연결·모바일/키보드·오류 시나리오는 20절 뒤 21.2절(#149), 실제 DB/Storage 이전과 운영 전환은 사람의 22절(#150)에 남긴다.
+완료 확인: 두 서비스 빌드 로그, `/healthz`, 정적 사이트 루트·상세 주소 직접 열기/새로고침·JS/CSS 200, 프론트에서 서버 `/api` 호출(브라우저 콘솔 CORS 오류 없음), Google 로그인·Gmail 연결 완주를 확인한다. 자동 검사는 `uv run pytest` 전체와 `frontend/`의 lint/test/`check:env`, 같은 출처 회귀는 `tests/test_frontend_serving.py`가 지킨다. 전체 화면/API 연결·모바일/키보드·오류 시나리오는 계획 21.2절(#149), 실제 DB/Storage 이전과 운영 전환은 사람의 22절(#150)에 남긴다.
 
 ## 산출물 위치
 

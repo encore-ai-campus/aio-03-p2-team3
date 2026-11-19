@@ -132,6 +132,15 @@ def test_calendar_callback_returns_to_configured_frontend_origin(database_url):
         assert result.headers["location"] == "http://127.0.0.1:3000/app/settings?calendar=connected"
 
 
+def test_calendar_callback_returns_to_root_frontend_base(database_url):
+    # 분리 배포(루트 정적 사이트)에서는 기본 경로를 "/"로 지정해 /settings로 복귀한다.
+    settings = replace(settings_of(database_url), gmail_pubsub_topic="",
+                       frontend_origins="https://ui.example.invalid", frontend_base_path="/")
+    with calendar_client(database_url, settings) as (client, jwks, _calendar):
+        result = complete(client, start_calendar(client, jwks.token()))
+        assert result.headers["location"] == "https://ui.example.invalid/settings?calendar=connected"
+
+
 def test_calendar_only_refresh_disconnect_reconnect_and_encryption(connected_app):
     client, jwks, gmail, calendar = connected_app
     token = jwks.token()

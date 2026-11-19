@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AuthContext } from "./AuthContext"
-import { fetchMe } from "./api"
+import { APP_BASE, fetchMe } from "./api"
 import { supabase } from "./supabase"
 
 // 인증 컨텍스트: Supabase 세션 하나를 앱 전체가 공유한다.
@@ -74,7 +74,7 @@ export function AuthProvider({ children }) {
   async function signInWithGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/app/login` },
+      options: { redirectTo: `${window.location.origin}${APP_BASE}/login` },
     })
     if (error) {
       setState((prev) => ({ ...prev, notice: `Google 로그인을 시작하지 못했습니다. ${error.message}` }))

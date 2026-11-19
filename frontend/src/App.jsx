@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom"
+import { APP_BASE } from "./api"
 import { AuthProvider } from "./AuthProvider"
 import { useAuth } from "./useAuth"
 import Layout from "./components/Layout"
@@ -43,7 +44,7 @@ function LegacyKnowledgeRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/app">
+      <BrowserRouter basename={APP_BASE}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth />}>

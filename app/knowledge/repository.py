@@ -196,7 +196,7 @@ class SqlRepository:
         query = query.order_by(KnowledgeDocument.created_at.desc(), KnowledgeDocument.id).limit(5)
         with self._session() as session:
             return [{"document_id": row.id, "filename": row.original_filename, "status": row.status,
-                     "indexed": row.published_attempt_id is not None, "url": f"/app/documents?document={row.id}"}
+                     "indexed": row.published_attempt_id is not None, "url": f"/documents?document={row.id}"}
                     for row in session.execute(query)]
 
     def counterparties(self, owner: int) -> list[dict]:
@@ -269,7 +269,7 @@ class SqlRepository:
         ).where(KnowledgeParent.user_id == owner, FileAsset.user_id == owner).order_by(nearest.c.score.desc(), KnowledgeParent.id)
         with self._session() as session:
             return [{"clause_id": row.id, "document_id": row.document_id, "filename": row.original_filename,
-                     "text": row.text, "sources": row.sources, "url": f"/app/documents?document={row.document_id}"}
+                     "text": row.text, "sources": row.sources, "url": f"/documents?document={row.document_id}"}
                     for row in session.execute(query)]
 
     def chunks(self, owner: int, document_id: str, offset: int = 0) -> dict:

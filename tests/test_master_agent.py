@@ -342,7 +342,7 @@ def test_knowledge_chat_opens_uploads_and_answers_from_the_published_owner_profi
         found = ask("문서함에 있는 테이블오더 문서 볼 수 있어?", filename="테이블오더")["data"]
         assert found["knowledge_status"] == "found" and not embedder.calls
         assert [document["url"] for document in found["knowledge_documents"]] == [
-            f"/app/documents?document={contract['id']}"]
+            f"/documents?document={contract['id']}"]
 
         retry = repository.retry(owner, contract["id"], contract["attempt_id"])
         parents, children = build_chunks([PageText(number=1, text="게시 전의 후보 문구")])
