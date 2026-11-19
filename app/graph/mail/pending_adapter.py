@@ -3,7 +3,9 @@
 처리한 메일 표(`processed_messages`)의 상태 연결은 알림 수신 작업(7)에서 채운다.
 """
 
-from app.db.models import ReplyCandidate as ReplyCandidateRow
+from sqlalchemy import select
+
+from app.db.models import ProcessedMessage, ReplyCandidate as ReplyCandidateRow
 from app.graph.state import AgentState
 from app.runlog.logger import current_database
 from app.services.memory import save_run_memory
@@ -29,4 +31,18 @@ def save_pending(state: AgentState) -> dict:
                     status="pending",
                 ))
             save_run_memory(session, state, end_reason)
+            availability = state.get("calendar_availability")
+            knowledge = state.get("knowledge_evidence")
+            if availability or knowledge:
+                row = session.scalar(select(ProcessedMessage).where(
+                    ProcessedMessage.user_id == state["user_id"],
+                    ProcessedMessage.gmail_message_id == state["message_id"],
+                ).with_for_update())
+                if row is not None:
+                    sources = [{key: clause[key] for key in ("clause_id", "document_id", "filename", "sources")}
+                               for clause in knowledge["clauses"]] if knowledge else []
+                    row.inbound_context = {
+                        "calendar": availability,
+                        "knowledge": {**knowledge, "clauses": sources} if knowledge else None,
+                    }
     return {"end_reason": end_reason}

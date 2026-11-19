@@ -205,6 +205,7 @@ class ProcessedMessage(Base, Owned, Created):
     run_id: Mapped[str | None] = mapped_column(String)
     received_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     triage: Mapped[dict | None] = mapped_column(JSON_VALUE)
+    inbound_context: Mapped[dict | None] = mapped_column(JSON_VALUE)
 
 
 class ThreadMessage(Base, Owned):

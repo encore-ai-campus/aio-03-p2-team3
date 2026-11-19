@@ -1,5 +1,6 @@
 """PI/PO/CI/PL의 기존 operations/repository를 연결하는 조립 경계."""
 
+from functools import partial
 from app.graph.schemas import ExecutionResult, WorkflowError
 from app.knowledge import operations as knowledge
 from app.knowledge.repository import SqlRepository
@@ -38,9 +39,11 @@ IMPLEMENTATIONS = {
 
 
 class ExistingDocuments:
-    def __init__(self, *, database, storage=None, key_cipher=None, knowledge_adapters=None):
+    def __init__(self, *, database, storage=None, key_cipher=None, knowledge_adapters=None,
+                 knowledge_plan=None, knowledge_rerank=None):
         self.database, self.storage, self.key_cipher = database, storage, key_cipher
         self.knowledge_adapters = knowledge_adapters
+        self.knowledge_plan, self.knowledge_rerank = knowledge_plan, knowledge_rerank
 
     def schema(self, kind):
         return {"kind": kind, "input_schema": IMPLEMENTATIONS[kind][1].model_json_schema()}
@@ -81,7 +84,9 @@ class ExistingDocuments:
         try:
             return knowledge.search(SqlRepository(self.database), actor_id, filename=command.filename,
                 document_id=str(command.document_id) if command.document_id else None,
-                query=command.query, get_embedder=embedder)
+                query=command.query, get_embedder=embedder,
+                plan_query=partial(self.knowledge_plan, actor_id) if self.knowledge_plan else None,
+                rerank=partial(self.knowledge_rerank, actor_id) if self.knowledge_rerank else None)
         except KnowledgeError as error:
             raise WorkflowError(error.code) from None
 

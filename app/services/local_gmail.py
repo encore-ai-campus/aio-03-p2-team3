@@ -77,9 +77,9 @@ def _auth_failed(error):
 
 
 class LocalGmailCollector:
-    def __init__(self, access, store: MailboxStore, *, interval=POLL_SECONDS):
+    def __init__(self, access, store: MailboxStore, *, interval=POLL_SECONDS, graph=None):
         self.access, self.store = access, store
-        self.interval = interval
+        self.interval, self.graph = interval, graph
         self.stopping = Event()
         self.wakeup = asyncio.Event()
 
@@ -136,7 +136,7 @@ class LocalGmailCollector:
             if not active():
                 return
             gmail = access.google.gmail(get_access_token(access, mailbox.id))
-            latest = collect_history(access, mailbox, gmail, mailbox.cursor, should_continue=active)
+            latest = collect_history(access, mailbox, gmail, mailbox.cursor, should_continue=active, graph=self.graph)
         except Exception as error:
             if not active():
                 return
