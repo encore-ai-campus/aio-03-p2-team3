@@ -69,6 +69,8 @@ class PricedItem(InputModel):
     source: Text | None = None
     # 사용자 입력의 명시적 거래 단가 변경 요청. AI 결과에서는 항상 False로 덮어쓴다.
     confirm_price_override: bool = False
+    # 사용자가 단가표와 다른 품목 식별 정보를 문서에 쓰기로 명시적으로 확인한다.
+    confirm_product_override: bool = False
 
 
 @dataclass(frozen=True)

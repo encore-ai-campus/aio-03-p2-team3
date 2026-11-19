@@ -43,7 +43,6 @@ function PLEditor() {
   const [packingReload, setPackingReload] = useState(0)
   const [settings, setSettings] = useState(null)
   const [settingsError, setSettingsError] = useState("")
-  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const question = useRef(null)
   const errorBox = useRef(null)
   const packingErrorBox = useRef(null)
@@ -52,7 +51,6 @@ function PLEditor() {
   const base = "/trade/pl"
 
   function accept(document, review = null, next = { key: "review", fields: null }) {
-    setQuickFixOpen(false)
     setResource(document)
     setDraft(plDraft(document.input))
     setProposal(review)
@@ -106,12 +104,16 @@ function PLEditor() {
     const controller = new AbortController()
     setSettings(null)
     apiFetch("/trade/settings", { token, signal: controller.signal }).then((data) => {
-      if (!controller.signal.aborted) { setSettings(data); setSettingsError("") }
+      if (!controller.signal.aborted) {
+        setSettings(data); setSettingsError("")
+        if (!documentId) setDraft((previous) => ({ ...previous, seller: { ...previous.seller,
+          legal_name: data.company?.legal_name_en || data.company?.company_name || "", address: data.company?.address || "" } }))
+      }
     }).catch((failure) => {
       if (!controller.signal.aborted) setSettingsError(failure.message)
     })
     return () => controller.abort()
-  }, [token])
+  }, [token, documentId])
 
   useEffect(() => {
     question.current?.focus()
@@ -139,17 +141,26 @@ function PLEditor() {
   function edit(key) {
     setNotice("")
     if (proposal?.status === "pending") setModifying(true)
+    const companyName = settings?.company?.legal_name_en || settings?.company?.company_name
+    const companyAddress = settings?.company?.address || ""
+    if (companyName && (draft.seller?.legal_name !== companyName || draft.seller?.address !== companyAddress)) {
+      setDraft((previous) => ({ ...previous, seller: { ...previous.seller, legal_name: companyName, address: companyAddress } }))
+      setDirty(true)
+    }
     setScreen({ key, fields: null })
   }
 
   function startManual() {
     const company = settings?.company ?? {}
+    const companyName = company.legal_name_en || company.company_name
     setDraft((previous) => ({ ...previous, seller: {
-      ...Object.fromEntries(["address", "contact", "phone", "email", "registration_details"].map((key) => [key, previous.seller[key] || company[key] || ""])),
-      legal_name: previous.seller.legal_name || company.legal_name_en || company.company_name || "",
+      ...Object.fromEntries(["contact", "phone", "email", "registration_details"].map((key) => [key, previous.seller[key] || company[key] || ""])),
+      address: company.address || "",
+      legal_name: companyName,
     } }))
     setGuided(false)
-    edit("buyer")
+    setNotice("")
+    setScreen({ key: "buyer", fields: null })
   }
 
   function next() {
@@ -242,6 +253,15 @@ function PLEditor() {
   }
 
   const current = resource && String(resource.document_id) === documentId ? resource : null
+  const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
+  const issuerAddress = settings?.company?.address || ""
+  useEffect(() => {
+    if (current?.status === "needs_input" && !proposal && issuerName
+        && (draft.seller?.legal_name !== issuerName || draft.seller?.address !== issuerAddress)) {
+      setDraft((previous) => ({ ...previous, seller: { ...previous.seller, legal_name: issuerName, address: issuerAddress } }))
+      setDirty(true)
+    }
+  }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, issuerAddress, draft.seller?.legal_name, draft.seller?.address])
   const pending = proposal?.status === "pending"
   const canEdit = !busy && !loading && (!documentId || current)
   const stepIndex = PL_STEPS.findIndex((entry) => entry.key === screen.key)
@@ -309,9 +329,6 @@ function PLEditor() {
       : <section className="pi-question" aria-label="서버 계산 결과"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
         <p className="pi-question-note">포장 합계 승인과 파일 발급 승인은 별개예요. 원본·계산 합계와 선적 조건을 확인하세요.</p>
         {dirty && <p className="form-error">아직 저장하지 않은 변경사항이 있어요. 저장한 뒤 검토해 주세요.</p>}
-        {(current.missing_fields.length > 0 || current.issues.length > 0) && <div className="pi-missing"><p>아직 입력할 내용이 있어요. 팝업에서 필요한 값만 입력하고 저장할 수 있습니다.</p>
-          <button type="button" className="btn" disabled={!canEdit} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
-        {current.issues.length > 0 && <ul className="document-issues" role="alert">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
         {current.status === "needs_input" && <p className="section-note">표시된 항목을 수정한 뒤 다시 저장해 주세요. 발행 회사·직인은 <Link to="/settings">회사 설정</Link>에서 확인할 수 있어요.</p>}
         <DocumentSnapshot kind="pl" document={current.document} />
         {packingError && <p className="form-error" role="alert" tabIndex={-1} ref={packingErrorBox}>{packingError}</p>}
@@ -325,10 +342,12 @@ function PLEditor() {
           <button className="btn" type="button" disabled={!canEdit || (!dirty && !modifying)} onClick={save}>{modifying ? "수정 저장·재검토" : "변경사항 저장"}</button>
           <button className="btn blue" type="button" disabled={busy || dirty || modifying || pending || current.status !== "ready" || !current.document.packing_totals?.approved || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
       </section>)}
-      <MissingFieldsDialog open={quickFixOpen} kind="PL" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+      <MissingFieldsDialog open={Boolean(current && screen.key === "review" && !finalReview)} kind="PL" draft={draft} missing={current?.missing_fields} issues={current?.issues}
+        packingIssues={[...(packing?.payload.document.packing_totals?.issues ?? []),
+          ...(packing?.payload.document.packing_totals && !packing.payload.document.packing_totals.quantity_complete ? ["Source quantity total is invalid"] : [])]} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
-        onSave={save} onClose={() => setQuickFixOpen(false)} />
-      {settingsError && <p className="section-note" role="status">기본 설정을 가져오지 못했어요. 직접 입력할 수 있습니다. {settingsError}</p>}
+        onSave={save} onOpenStep={edit} />
+      {settingsError && <p className="section-note" role="status">회사 설정을 불러오지 못해 당사 회사명을 자동 적용할 수 없습니다. <Link to="/settings">설정 확인</Link> · {settingsError}</p>}
       </div>
       {!["start", "source"].includes(screen.key) && <PLSummary draft={draft} current={current} dirty={dirty} disabled={!canEdit} onEdit={edit} />}
       </div>
@@ -349,7 +368,7 @@ function PLSummary({ draft, current, dirty, disabled, onEdit }) {
   return <aside className="pi-summary" aria-label="작성 내용 요약">
     <button type="button" className="pi-summary-toggle" aria-expanded={open} aria-controls="pi-summary-content" onClick={() => setOpen(!open)}>작성 내용 {open ? "접기" : "보기"}</button>
     <div id="pi-summary-content" className={open ? "open" : ""}>
-      <h2>작성 중인 PL</h2><p className="pi-summary-number">{draft.document_number || "문서번호 미입력"}</p>
+      <h2>작성 중인 PL</h2><p className="pi-summary-number">{draft.document_number || "승인·발급 시 문서번호 자동 생성"}</p>
       <dl>{PL_STEPS.map((step) => <div key={step.key}><dt>{step.label}<button type="button" disabled={disabled} onClick={() => { setOpen(false); onEdit(step.key) }}>{step.label} 수정</button></dt><dd>{summaries[step.key]}</dd></div>)}</dl>
       {totals && <div className="pi-summary-total"><span>{dirty ? "마지막 저장 포장 합계" : "서버 포장 합계"}</span>
         <strong>{totals.calculated.package_count ?? "확인 필요"}</strong>

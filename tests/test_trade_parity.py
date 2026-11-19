@@ -303,7 +303,8 @@ def test_apply_verified_prices_match_where_rules_are_unchanged(ref):
         assert ported_draft["currency"] == reference_draft["currency"]
         assert ported_draft.get("product_family") == reference_draft.get("product_family")
         for ported_item, reference_item in zip(ported_draft["items"], reference_draft["items"]):
-            for key in ("unit_price", "master_price", "product_id", "price_basis"):
+            assert ported_item["product_id"] == "p1"
+            for key in ("unit_price", "master_price", "price_basis"):
                 assert ported_item.get(key) == reference_item.get(key)
         # 문구만 바뀐 안내(회사 이름→catalog)는 접두어로 서로 대응하는지 확인한다.
         assert [e.startswith("Confirm a transaction-specific price for ")

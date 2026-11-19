@@ -7,9 +7,11 @@ def editable_values(document, fields, item_fields):
     for role in ("buyer", "seller"):
         values[role] = {key: (document.get(role) or {}).get(key) for key in Party.model_fields}
     values["items"] = [{**{key: item[key] for key in item_fields
-                          if key != "confirm_price_override" and item.get(key) is not None},
+                          if key not in {"confirm_price_override", "confirm_product_override"} and item.get(key) is not None},
                         **({"confirm_price_override": item.get("price_override_confirmed") is True}
-                           if "confirm_price_override" in item_fields else {})}
+                           if "confirm_price_override" in item_fields else {}),
+                        **({"confirm_product_override": item.get("product_match_confirmed") is True}
+                           if "confirm_product_override" in item_fields else {})}
                        for item in document.get("items", [])]
     return values
 

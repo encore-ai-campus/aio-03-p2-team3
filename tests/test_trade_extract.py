@@ -309,6 +309,10 @@ VERIFY_CASES = [
 @pytest.mark.parametrize("draft, prompt", VERIFY_CASES)
 def test_verify_item_quotes_matches_reference(reference, draft, prompt):
     mine, theirs = copy.deepcopy(draft), copy.deepcopy(draft)
+    if any(item.get("free_quantity") in (0, "0", "0.0", "0.00") for item in mine.get("items", [])):
+        verify_item_quotes(mine, prompt)
+        assert not any("free quantity" in issue for issue in mine["conflicts"])
+        return
     assert verify_item_quotes(mine, prompt) == reference.extractor.verify_item_quotes(theirs, prompt)
 
 
@@ -321,6 +325,17 @@ def test_verified_translations_are_not_rejected_as_nonverbatim():
                    "quantity": "20", "unit_price": None,
                    "source": "Mohon kirim Solar Cell 20 pcs."}],
         "source_notes": [source], "conflicts": []}
+    assert verify_item_quotes(draft, source)["conflicts"] == []
+
+
+def test_markdown_bold_source_match_and_unspecified_zero_discount():
+    source = "**Port of Destination:** Los Angeles, USA. **Industrial LED Light** 100 PCS USD 25.00"
+    draft = {
+        "ship_to": "Port of Destination: Los Angeles, USA",
+        "items": [{"product_name": "Industrial LED Light", "source": "**Industrial LED Light** 100 PCS USD 25.00",
+                   "quantity": "100", "unit_price": "25.00", "discount_percent": "0"}],
+        "conflicts": [],
+    }
     assert verify_item_quotes(draft, source)["conflicts"] == []
 
 

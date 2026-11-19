@@ -24,6 +24,7 @@ class PLItem(Package):
     unit: Text | None = None
     volume_cbm: Number = None
     source: Text | None = None
+    confirm_product_override: bool = False
 
 
 class PLInput(DocumentInput):

@@ -14,13 +14,12 @@ from app.trade.pi.samples import update_sample
 
 def prepare_pi(values: dict, context: DocumentContext) -> dict:
     draft = deepcopy(values)
+    draft["document_number"] = None
     for item in draft.get("items", []):
         if item.get("is_sample") is True:
             update_sample(item, name=item.get("product_name"), capacity=item.get("capacity"),
                           quantity=item.get("quantity") if item.get("quantity") is not None else item.get("paid_quantity"),
                           unit=item.get("unit"), price=item.get("unit_price"))
-            if item.get("discount_percent") is None:
-                item["discount_percent"] = "0"
     result = common.prepare_priced(draft, context, "PI")
     for source, calculated in zip(draft.get("items", []), result["items"]):
         if source.get("discount_percent") is None and "discount_percent" in source:
@@ -57,7 +56,7 @@ def pi_result(document: dict) -> DocumentResult:
 
 
 def completion_fields(inputs):
-    fields = [key for key in ("document_number", "currency", "incoterms", "payment_terms", "product_family")
+    fields = [key for key in ("currency", "incoterms", "payment_terms", "product_family")
               if _missing(inputs.get(key), True)]
     fields.extend(f"{role}.{key}" for role in ("buyer", "seller") for key in ("legal_name", "address")
                   if _missing(inputs[role].get(key), True))
@@ -104,13 +103,18 @@ def completion_command(result: DocumentResult, changes: dict) -> PIInput:
 
 def create_pi(command: PIInput, *, repository: PIRepository) -> DocumentResult:
     values = command.model_dump(mode="json")
-    document = prepare_pi(values, repository.context(command.currency))
+    context = repository.context(command.currency)
+    document = prepare_pi(values, context)
     return pi_result(repository.create(document))
 
 
 def extract_pi(text: str, *, repository: PIRepository, extractor: Callable[[str], dict]) -> DocumentResult:
-    values = extractor(text)
-    document = prepare_pi(values, repository.context(values.get("currency")))
+    values = deepcopy(extractor(text))
+    for item in values.get("items", []):
+        if item.get("discount_percent") is None:
+            item["discount_percent"] = "0"
+    context = repository.context(values.get("currency"))
+    document = prepare_pi(values, context)
     return pi_result(repository.create(document))
 
 

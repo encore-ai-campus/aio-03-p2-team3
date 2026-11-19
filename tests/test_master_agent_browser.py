@@ -146,13 +146,12 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         page.get_by_role('button', name='요청하기', exact=True).click()
         expect(region.get_by_role('heading', name='PI 초안 보완')).to_be_visible(timeout=20000)
         expect(region.get_by_label('답변', exact=True)).to_have_count(0)
-        expect(region.get_by_text('거래 조건 · 1개', exact=True)).to_be_visible()
+        expect(region.get_by_label('PI 문서번호', exact=True)).to_have_count(0)
         expect(region.get_by_text('품목 1 · Virtual Serum', exact=True)).to_be_visible()
         expect(region.get_by_role('combobox', name='할인율', exact=True)).to_have_value('')
         expect(region.get_by_role('link', name='PI 문서 열기')).to_have_attribute('href', '/app/trade/pi/1')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.screenshot(path=str(tmp_path / 'agent-pi-completion-mobile.png'), full_page=True)
-        region.get_by_label('PI 문서번호', exact=True).fill('PI-100')
         region.get_by_role('combobox', name='할인율', exact=True).select_option('none')
         region.get_by_role('button', name='저장하고 계속').click()
         expect(approval).to_be_visible(timeout=20000)
@@ -168,14 +167,17 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         assert download.value.suggested_filename.endswith('.pdf')
         assert len(google.mailbox.called('send')) == 1 and not errors
         page.screenshot(path=str(tmp_path / 'agent-mobile.png'), full_page=True)
-        choices.calls.extend([('search_trade_documents', {'document_number': 'PI-100'}), '발급된 PI를 찾았습니다.'])
-        page.get_by_label('업무 요청', exact=True).fill('PI-100 발급본 찾아줘')
+        with httpx.Client(base_url=base) as client:
+            issued = client.get('/api/trade/pi/1', headers=auth(token)).json()
+        number = issued['document']['document_number']
+        choices.calls.extend([('search_trade_documents', {'document_number': number}), '발급된 PI를 찾았습니다.'])
+        page.get_by_label('업무 요청', exact=True).fill(f'{number} 발급본 찾아줘')
         page.get_by_role('button', name='요청하기', exact=True).click()
         expect(page.get_by_text('발급된 PI를 찾았습니다.', exact=True)).to_be_visible(timeout=20000)
         row.click()
         found = page.get_by_role('list', name='작업 결과').locator('li.step').filter(has_text='발급 문서 검색')
         found.get_by_role('button', name='발급 문서 검색 완료').click()
-        expect(found.get_by_text('PI-100', exact=True)).to_be_visible()
+        expect(found.get_by_text(number, exact=True)).to_be_visible()
         expect(found.get_by_text('버전 2', exact=False)).to_be_visible()
         with page.expect_download() as download:
             found.get_by_role('button', name=re.compile(r'\.pdf 다운로드$')).click()
@@ -240,7 +242,8 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         copy.focus()
         page.keyboard.press("Enter")
         expect(answer.get_by_role("button", name="복사됨", exact=True)).to_be_visible()
-        assert page.evaluate("navigator.clipboard.readText()") == code.locator("code").text_content()
+        copied = page.evaluate("navigator.clipboard.readText()").replace("\r\n", "\n")
+        assert copied == code.locator("code").text_content()
         page.screenshot(path=str(tmp_path / "agent-markdown-mobile.png"), full_page=True)
         choices.calls.extend([
             ("search_mail", {"query": "테스트용", "field": "body", "reply_status": "replied"}),
@@ -376,13 +379,14 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
 
         with httpx.Client(base_url=base, headers=auth(token)) as client:
             draft = client.post("/api/trade/pi",
-                json=pi_input(document_number="PI-BROWSER-DRAFT", payment_terms=None).model_dump(mode="json"))
+                json=pi_input(document_number=None, payment_terms=None).model_dump(mode="json"))
             assert draft.is_success, draft.text
         choices.calls.extend([("list_trade_drafts", {"kind": "PI"}), "작성 중인 PI를 찾았습니다."])
         ask("작성 중인 테스트 PI", "작성 중인 PI를 찾았습니다.")
         page.get_by_role("button", name="무역서류 초안 조회 완료").click()
         drafts = page.get_by_role("region", name="작성 중인 무역서류")
-        expect(drafts.get_by_text("PI · PI-BROWSER-DRAFT")).to_be_visible()
+        draft_number = draft.json()["document"]["doc_no"]
+        expect(drafts.get_by_role("heading", name=f"PI · {draft_number}", exact=True)).to_be_visible()
         expect(drafts.get_by_text("지급 조건", exact=False)).to_be_visible()
         expect(drafts.get_by_role("link", name="이어서 작성")).to_have_attribute("href", re.compile(r"/app/trade/pi/\d+$"))
 
@@ -427,7 +431,7 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         page.get_by_role("button", name="요청하기", exact=True).click()
         question = page.get_by_role("region", name="추가 정보 입력")
         expect(question.get_by_role("heading", name="PI 초안 보완")).to_be_visible(timeout=20000)
-        expect(question.get_by_text("거래 조건 · 5개")).to_be_visible()
+        expect(question.get_by_text("거래 조건 · 4개")).to_be_visible()
         expect(question.get_by_role("link", name="계좌 설정 열기")).to_have_attribute("href", "/app/settings?section=banks")
         question.get_by_text("거래처 · 2개").click()
         expect(question.get_by_label("회사명 (영문)", exact=True)).to_be_visible()

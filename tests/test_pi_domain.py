@@ -38,7 +38,9 @@ class MemoryPIRepository:
     def context(self, currency):
         return deepcopy(self.settings)
 
-    def create(self, document):
+    def create(self, document, *, prepare=None):
+        if prepare is not None:
+            document = prepare("PI-TEST-1")
         result = {**deepcopy(document), "trade_doc_id": 1, "doc_no": "PI-TEST-1", "revision": 1}
         self.documents[1] = result
         return deepcopy(result)
@@ -65,6 +67,17 @@ def test_pi_creates_without_database_or_graph_and_preserves_zero_quantity():
     assert result.document_type == "PI" and result.status == "ready"
     assert result.document["items"][0]["master_price"] is True
     assert result.document["total"] == "0.00"
+
+
+def test_pi_leaves_number_unassigned_and_defaults_discount_to_zero():
+    values = pi_input(document_number=None, items=[{
+        "product_name": "Virtual Serum", "capacity": "50ml", "quantity": "10", "unit": "PCS",
+        "price_basis": "PCS", "discount_percent": None,
+    }]).model_dump(mode="json")
+    result = extract_pi("source", repository=MemoryPIRepository(), extractor=lambda _: values)
+    assert result.document["document_number"] is None
+    assert result.document["items"][0]["discount_percent"] == "0"
+    assert result.status == "ready"
 
 
 def test_pi_direct_and_extracted_facts_use_the_same_business_calculation():

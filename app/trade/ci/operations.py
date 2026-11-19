@@ -14,7 +14,7 @@ from app.trade.common.results import document_result, editable_values
 from app.trade.common.models import PricedItem
 
 
-def prepare_ci(command: CIInput, source, conflicts=()):
+def prepare_ci(command: CIInput, source, conflicts=(), issuer=None):
     draft = deepcopy(source)
     for key in ("trade_doc_id", "doc_no", "revision", "bank", "proposal_id", "files"):
         draft.pop(key, None)
@@ -23,12 +23,17 @@ def prepare_ci(command: CIInput, source, conflicts=()):
         item["source_line_total"] = item["line_total"]
         item["source"] = f"Approved PI {command.source_pi_id} revision {command.source_revision}; FOC if unit price is zero"
     values = command.model_dump(mode="json")
-    # CI 문서번호는 따로 명시한다. 나머지 미지정 항목만 원본에서 가져온다.
-    draft["document_number"] = values.pop("document_number")
+    # CI 번호는 최종 승인·발급 시 서버가 생성한다.
+    draft["document_number"] = None
+    values.pop("document_number", None)
     for key, value in values.items():
         if value is not None or key in {"shipment_reference", "country_of_origin"}:
             draft[key] = value
     draft = prepare_ci_import(draft, requested_type="CI", has_attachments=True)
+    issuer = issuer if issuer is not None else draft.get("issuer")
+    if issuer is not None:
+        draft["issuer"] = deepcopy(issuer)
+        apply_issuer_defaults(draft, "CI", issuer, fix_name=True, fix_address=True)
     draft["bank"] = None
     draft["conflicts"] = list(conflicts)
     document = calculate(draft)
@@ -41,12 +46,16 @@ def prepare_ci(command: CIInput, source, conflicts=()):
 def prepare_standalone(command, context, values=None):
     draft = deepcopy(values if values is not None else command.model_dump(mode="json"))
     draft.pop("mode", None)
+    draft["document_number"] = None
     draft.update(document_type="PI", doc_kind="PI", issuer=deepcopy(context.issuer), bank=None)
-    apply_issuer_defaults(draft, "PI", context.issuer)
-    apply_company_profiles(draft, context.counterparties)
+    apply_issuer_defaults(draft, "PI", context.issuer, fix_name=True, fix_address=True)
+    apply_company_profiles(draft, context.counterparties, preserve_entered_name=True)
     for item in draft.get("items", []):
+        item["product_match_confirmed"] = item.pop("confirm_product_override", False) is True
         confirmed = item.pop("confirm_price_override", False)
         # 단독 CI는 직접 입력이므로 원문 근거로 단가 확인을 대신할 수 없다.
+        if values is not None and item.get("discount_percent") is None:
+            item["discount_percent"] = "0"
         item["source"] = None
         item["price_override_confirmed"] = confirmed is True
         if item.get("unit_price") is not None:
@@ -114,7 +123,8 @@ def revise(document_id, revision, command: CIInput | StandaloneCIInput, *, repos
         raise DocumentError("CI_MODE_CHANGE_REQUIRES_NEW_CI", "다른 작성 방식은 새 CI로 작성하세요")
     if previous.get("source_pi_id") and (previous["source_pi_id"], previous["source_revision"]) != (command.source_pi_id, command.source_revision):
         raise DocumentError("SOURCE_PI_CHANGE_REQUIRES_NEW_CI", "다른 PI 버전은 새 CI로 작성하세요")
-    document = prepare_ci(command, repository.source_pi(command.source_pi_id, command.source_revision))
+    source = repository.source_pi(command.source_pi_id, command.source_revision)
+    document = prepare_ci(command, source)
     return result(repository.replace(document_id, revision, document, review_reference))
 
 
@@ -130,7 +140,7 @@ def refresh_settings(document_id, revision, *, repository: CIRepository):
         source = repository.latest_approved_source_pi(previous["source_pi_id"])
         command = CIInput.model_validate({key: (source["revision"] if key == "source_revision" else previous.get(key))
                                           for key in CIInput.model_fields})
-        document = prepare_ci(command, source)
+        document = prepare_ci(command, source, issuer=context.issuer)
         old_issuer = source.get("issuer") or {}
         new_issuer = context.issuer or {}
         old_name = next((old_issuer.get(key) for key in ("legal_name_en", "legal_name", "company_name")
@@ -145,7 +155,7 @@ def refresh_settings(document_id, revision, *, repository: CIRepository):
                 seller[key] = new_value
         document["seller"] = seller
         document["issuer"] = deepcopy(context.issuer)
-        apply_company_profiles(document, context.counterparties)
+        apply_company_profiles(document, context.counterparties, preserve_entered_name=True)
         document = calculate(document)
     return result(repository.replace(document_id, revision, document))
 

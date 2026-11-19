@@ -175,11 +175,7 @@ def test_document_tool_missing_facts_revises_same_document_and_issues_real_files
         assert state['waiting']['fields'] == ['pi_changes']
         card = state['working']['data']['pi_completion']
         assert card['document_id'] == 2 and card['revision'] == 1
-        assert set(card['fields']) == {'document_number', 'payment_terms', 'items.0.discount_percent'}
-        state = complete(state, {'document_number': 'PI-TAKEN', 'items.0.discount_percent': '0'})
-        card = state['working']['data']['pi_completion']
-        assert card['error'] == 'PI_NUMBER_DUPLICATE' and card['revision'] == 1
-        assert card['attempted']['items.0.discount_percent'] == '0'
+        assert set(card['fields']) == {'payment_terms', 'items.0.discount_percent'}
         state = complete(state, {'buyer.legal_name': 'Unexpected Change'})
         card = state['working']['data']['pi_completion']
         assert card['error'] == 'PI_COMPLETION_INVALID' and card['revision'] == 1
@@ -189,19 +185,19 @@ def test_document_tool_missing_facts_revises_same_document_and_issues_real_files
         externally_revised = client.put('/api/trade/pi/2', headers=auth(token),
             json={'revision': 1, 'document': {**saved['input'], 'remarks': 'External edit'}})
         assert externally_revised.status_code == 200, externally_revised.text
-        state = complete(state, {'document_number': 'PI-STALE'})
+        state = complete(state, {'payment_terms': 'Stale T/T'})
         card = state['working']['data']['pi_completion']
         assert card['error'] == 'document_changed' and card['revision'] == 2
         assert state['working']['data']['input']['document_number'] is None
         state = complete(state, {'payment_terms': 'T/T'})
         card = state['working']['data']['pi_completion']
         assert card['revision'] == 3
-        assert set(card['fields']) == {'document_number', 'items.0.discount_percent'}
-        state = complete(state, {'document_number': 'PI-100', 'items.0.discount_percent': '0'})
+        assert set(card['fields']) == {'items.0.discount_percent'}
+        state = complete(state, {'items.0.discount_percent': '0'})
         assert state['status'] == 'needs_approval', state
         assert state['waiting']['action']['payload']['revision'] == 4
         saved = client.get('/api/trade/pi/2', headers=auth(token)).json()
-        assert saved['input']['document_number'] == 'PI-100'
+        assert saved['input']['document_number'] is None
         assert saved['input']['remarks'] == 'External edit'
         assert saved['input']['items'][0]['discount_percent'] == '0'
         with client.app.state.database.session() as s:
@@ -264,17 +260,22 @@ def test_issued_search_finds_the_original_files_for_the_authenticated_owner(data
         response = client.put(f"/api/trade/pi/{first}", headers=headers, json={"revision": 1, "document": change})
         assert response.status_code == 200 and response.json()["revision"] == 2, response.text
 
+        repo = SQLReviews(database, account, "PI")
+        assert len(repo.search_issued(document_number=None, counterparty="acme",
+                                      issued_from=None, issued_to=None)["issued_documents"]) == 3
+
         response = client.post("/api/agent/conversations", headers=headers, json={"message": "지난달 Acme에 발급한 PI를 찾아줘"})
         assert response.status_code == 202, response.text
         state = read(client, token, response.json()["id"])
         assert state["status"] == "completed"
         matches = state["results"][0]["data"]["issued_documents"]
         assert [(hit["document_number"], hit["revision"], hit["issued_on"]) for hit in matches] == [
-            ("PI-LATEST", 1, "2026-10-31"), ("PI-ORIGINAL", 1, "2026-10-01")]
+            (last["issued_document_number"], 1, "2026-10-31"),
+            (original["issued_document_number"], 1, "2026-10-01")]
         assert [hit["files"] for hit in matches] == [last["files"], original["files"]]
         assert client.get(matches[1]["files"][0]["download_url"], headers=headers).content.startswith(b"%PDF")
         assert client.get(matches[1]["files"][0]["download_url"], headers=auth(other_token)).status_code == 404
-        assert any("PI-ORIGINAL" in message.content for message in choices.observed if message.type == "tool")
+        assert any(original["issued_document_number"] in message.content for message in choices.observed if message.type == "tool")
         assert {"label": "발급 문서 검색", "status": "completed"} in state["progress"]["steps"]
 
         repo = SQLReviews(database, account, None)
@@ -292,7 +293,7 @@ def test_issued_search_finds_the_original_files_for_the_authenticated_owner(data
                 file = original["files"][0]
                 session.add(TradeArtifact(id=uuid4().hex, user_id=account, proposal_id=proposal_id,
                     filename=file["filename"], file_format="pdf", media_type=file["media_type"], content_hash=file["content_hash"]))
-        limited = repo.search_issued(document_number="PI-ORIG", counterparty=None, issued_from=None, issued_to=None)
+        limited = repo.search_issued(document_number=original["issued_document_number"], counterparty=None, issued_from=None, issued_to=None)
         assert [match["issued_on"] for match in limited["issued_documents"]] == [
             f"2026-10-{day:02}" for day in range(12, 2, -1)]
 

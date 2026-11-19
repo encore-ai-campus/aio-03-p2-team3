@@ -1,4 +1,5 @@
 """React가 쓰는 실제 ASGI 요청으로 설정 → 작성 → 검토/선택 → 파일을 확인한다."""
+import re
 from hashlib import sha256
 from contextlib import contextmanager
 from io import BytesIO
@@ -18,6 +19,20 @@ from tests.test_pi_domain import pi_input
 from tests.test_trade_flow import seal_png
 
 
+def configure_issuer(client):
+    assert client.put("/api/trade/settings/company", json={
+        "company_name": "Testworks Trading", "legal_name_en": "Testworks Trading Co",
+        "address": "7 Test-ro, Seoul", "ceo_name": "Example Signer"}).status_code == 200
+    assert client.put("/api/trade/settings/banks/USD", json={
+        "beneficiary": "Testworks Trading", "bank_name": "Example Bank", "branch": "Example Branch",
+        "swift": "EXAMPLE", "account_number": "000-0000", "bank_address": "1 Bank-ro, Seoul"}).status_code == 200
+    assert client.put("/api/trade/settings/prices", json={
+        "item_name": "Virtual Serum", "capacity": "50ml", "role": "sale", "currency": "USD",
+        "unit_price": "8", "price_basis": "PCS"}).status_code == 200
+    assert client.post("/api/trade/settings/branding/seal", files={
+        "image": ("seal.png", seal_png(), "image/png")}).status_code == 200
+
+
 @contextmanager
 def configured_client(database_url):
     app = create_app(Settings(database_url=database_url, session_secret="fake-test-session-key"),
@@ -28,17 +43,7 @@ def configured_client(database_url):
             session.add_all([User(id=1, google_sub="fake-sub-1", email="one@example.invalid"),
                              User(id=2, google_sub="fake-sub-2", email="two@example.invalid")])
         client.headers["X-CSRF-Token"] = client.get("/api/session").json()["csrf_token"]
-        assert client.put("/api/trade/settings/company", json={
-            "company_name": "Testworks Trading", "legal_name_en": "Testworks Trading Co",
-            "address": "7 Test-ro, Seoul", "ceo_name": "Example Signer"}).status_code == 200
-        assert client.put("/api/trade/settings/banks/USD", json={
-            "beneficiary": "Testworks Trading", "bank_name": "Example Bank", "branch": "Example Branch",
-            "swift": "EXAMPLE", "account_number": "000-0000", "bank_address": "1 Bank-ro, Seoul"}).status_code == 200
-        assert client.put("/api/trade/settings/prices", json={
-            "item_name": "Virtual Serum", "capacity": "50ml", "role": "sale", "currency": "USD",
-            "unit_price": "8", "price_basis": "PCS"}).status_code == 200
-        assert client.post("/api/trade/settings/branding/seal", files={
-            "image": ("seal.png", seal_png(), "image/png")}).status_code == 200
+        configure_issuer(client)
         yield client
 
 
@@ -79,6 +84,8 @@ def test_pi_http_end_to_end_approval_and_idempotent_download(pi_client):
     response = decide(client, proposal, "approve")
     assert response.status_code == 200, response.text
     approved = response.json()
+    number = approved["issued_document_number"]
+    assert re.fullmatch(r"PI-\d{8}-001", number)
     assert approved["status"] == "approved" and approved["decision"] == "approve"
     assert {file["file_format"] for file in approved["files"]} == {"pdf", "xlsx"}
     for file in approved["files"]:
@@ -88,12 +95,12 @@ def test_pi_http_end_to_end_approval_and_idempotent_download(pi_client):
         assert download.headers["cache-control"] == "private, no-store"
         if file["file_format"] == "pdf":
             text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(download.content)).pages)
-            assert "PI-100" in text and "80.00" in text and "APPROVED DOCUMENT" in text
+            assert number in text and "80.00" in text and "APPROVED DOCUMENT" in text
             assert "DRAFT - NOT FOR ISSUE" not in text
         else:
             with ZipFile(BytesIO(download.content)) as archive:
                 sheet = archive.read("xl/worksheets/sheet1.xml").decode()
-            assert "PI-100" in sheet and "$80.00" in sheet
+            assert number in sheet and "$80.00" in sheet
     repeated = decide(client, proposal, "approve")
     assert repeated.status_code == 200
     assert repeated.json()["files"] == approved["files"]
@@ -125,11 +132,14 @@ def test_modify_creates_new_proposal_and_keeps_version_history(pi_client):
     assert new["id"] != old["id"] and new["revision"] == 2 and new["status"] == "pending"
     assert decide(pi_client, old, "approve").status_code == 409
     version = pi_client.get(f"/api/trade/pi/{created['document_id']}/versions/1").json()
-    assert version["document_number"] == "PI-100"
-    assert decide(pi_client, new, "approve").status_code == 200
+    assert version["document_number"] is None
+    approved = decide(pi_client, new, "approve")
+    assert approved.status_code == 200
+    number = approved.json()["issued_document_number"]
+    assert re.fullmatch(r"PI-\d{8}-001", number)
     with pi_client.app.state.database.session() as session:
         assert session.get(TradeProposal, old["id"]).decision == "modify"
-        assert session.get(TradeDocumentVersion, (created["document_id"], 2)).payload["document_number"] == "PI-CHANGED"
+        assert session.get(TradeDocumentVersion, (created["document_id"], 2)).payload["document_number"] == number
 
 
 def test_modify_incomplete_input_returns_normal_needs_input(pi_client):
@@ -151,50 +161,51 @@ def test_edit_invalidates_previous_proposal_and_stale_input(pi_client):
     assert decide(pi_client, old, "approve").status_code == 409
 
 
-def test_pi_number_is_unique_for_owner_on_create_and_rename(pi_client):
-    first = create_pi(pi_client)
-    values = pi_input().model_dump(mode="json")
-    values["document_number"] = "  PI-100  "
-    duplicate = pi_client.post("/api/trade/pi", json=values)
-    assert duplicate.status_code == 409 and duplicate.json()["error"]["code"] == "PI_NUMBER_DUPLICATE"
-    renamed = pi_input(document_number="PI-RENAMED").model_dump(mode="json")
-    assert pi_client.put(f"/api/trade/pi/{first['document_id']}", json={"revision": 1, "document": renamed}).status_code == 200
-    assert pi_client.post("/api/trade/pi", json=values).status_code == 409
-    second = create_pi(pi_client, pi_input(document_number="PI-OTHER").model_dump(mode="json"))
-    values["document_number"] = "PI-100"
-    response = pi_client.put(f"/api/trade/pi/{second['document_id']}", json={"revision": 1, "document": values})
-    assert response.status_code == 409
-    values["document_number"] = "PI-OTHER"
-    assert pi_client.put(f"/api/trade/pi/{second['document_id']}", json={"revision": 1, "document": values}).status_code == 200
-    values["document_number"] = None
-    assert all(pi_client.post("/api/trade/pi", json=values).status_code == 201 for _ in range(2))
+def test_pi_number_is_allocated_per_owner_at_approval(pi_client):
+    first, second = (create_pi(pi_client) for _ in range(2))
+    assert first["document"]["document_number"] is None
+    assert second["document"]["document_number"] is None
+
+    # Approving the later draft first must allocate the first issue number.
+    for sequence, draft in enumerate((second, first), 1):
+        approved = decide(pi_client, propose(pi_client, draft), "approve")
+        assert approved.status_code == 200, approved.text
+        assert re.fullmatch(rf"PI-\d{{8}}-{sequence:03d}", approved.json()["issued_document_number"])
+
     pi_client.app.dependency_overrides[current_user_id] = lambda: 2
-    assert pi_client.post("/api/trade/pi", json=pi_input().model_dump(mode="json")).status_code == 201
-    assert first["document_id"] != second["document_id"]
+    configure_issuer(pi_client)
+    third = create_pi(pi_client)
+    approved = decide(pi_client, propose(pi_client, third), "approve")
+    assert approved.status_code == 200, approved.text
+    assert re.fullmatch(r"PI-\d{8}-001", approved.json()["issued_document_number"])
 
 
-def test_pi_number_cannot_be_created_simultaneously_through_separate_connections(pi_client):
+def test_pi_numbers_are_unique_when_issued_through_separate_connections(pi_client):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
     from app.db.engine import Database
-    from app.trade.common.models import DocumentError
-    from app.trade.pi.repository import pi_repository
+    from app.trade.review.repository import SQLReviews
+
+    proposals = [propose(pi_client, create_pi(pi_client)) for _ in range(2)]
     original = pi_client.app.state.database
     other = Database(original.engine.url.render_as_string(hide_password=False))
     barrier = Barrier(2)
 
-    def create(database):
-        barrier.wait()
-        try:
-            pi_repository(database, 1).create({"document_type": "PI", "document_number": "PI-RACE", "status": "needs_input"})
-            return "created"
-        except DocumentError as error:
-            return error.code
+    def reserve(database, proposal):
+        barrier.wait(timeout=10)
+        return SQLReviews(database, 1, "PI").reserve_document_number(
+            proposal["id"], proposal["revision"], proposal["content_hash"])
 
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(create, (original, other)))
-        assert sorted(results) == ["PI_NUMBER_DUPLICATE", "created"]
+            jobs = [pool.submit(reserve, db, proposal)
+                    for db, proposal in zip((original, other), proposals)]
+            numbers = [job.result(timeout=20) for job in jobs]
+        assert {number.rsplit("-", 1)[1] for number in numbers} == {"001", "002"}
+        for number, proposal in zip(numbers, proposals):
+            approved = decide(pi_client, proposal, "approve")
+            assert approved.status_code == 200, approved.text
+            assert approved.json()["issued_document_number"] == number
     finally:
         other.engine.dispose()
 
@@ -336,13 +347,14 @@ def test_ai_http_extraction_uses_pi_agent_without_mail_graph(pi_client):
     assert len(fake.calls) == 1
 
 
-def test_ai_extraction_rejects_existing_pi_number(pi_client):
+def test_ai_extraction_does_not_adopt_source_pi_number(pi_client):
     from app.llm.client import use_backend
     from tests.fakes.llm import FakeLLM
     create_pi(pi_client)
     with use_backend(FakeLLM([pi_input().model_dump(mode="json")])):
         response = pi_client.post("/api/trade/pi/extract", json={"text": "PI-100"})
-    assert response.status_code == 409 and response.json()["error"]["code"] == "PI_NUMBER_DUPLICATE"
+    assert response.status_code == 201, response.text
+    assert response.json()["document"]["document_number"] is None
 
 
 def test_reload_after_new_database_connection_keeps_approved_files(pi_client):

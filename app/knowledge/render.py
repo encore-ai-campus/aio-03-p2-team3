@@ -23,7 +23,10 @@ class PageRenderer:
     def __init__(self, office_command: str = "", timeout: int = 120):
         self.office_command, self.timeout = office_command, timeout
 
-    def render(self, data: bytes, filename: str, page_number: int | None = None) -> RenderedDocument:
+    def render(self, data: bytes, filename: str, page_number: int | None = None,
+               max_pages: int = MAX_PAGES) -> RenderedDocument:
+        if not 1 <= max_pages <= MAX_PAGES:
+            raise ValueError(f"max_pages must be between 1 and {MAX_PAGES}")
         name, _ = validate_upload(filename, data)
         with TemporaryDirectory(prefix="knowledge-") as temporary:
             directory = Path(temporary)
@@ -34,7 +37,7 @@ class PageRenderer:
             environment.update(HOME=temporary, TMPDIR=temporary, TEMP=temporary, TMP=temporary,
                                PYTHONPATH=str(Path(__file__).resolve().parents[2]))
             command = [sys.executable, "-m", "app.knowledge.render", str(source), str(directory),
-                       self.office_command, str(page_number or 0)]
+                       self.office_command, str(page_number or 0), str(max_pages)]
             try:
                 with subprocess.Popen(command, cwd=temporary, env=environment,
                                       start_new_session=os.name == "posix",
@@ -55,7 +58,7 @@ class PageRenderer:
             manifest_path = directory / "manifest.json"
             if not manifest_path.exists():
                 raise KnowledgeError("render_failed", "문서를 변환하지 못했습니다. 손상·암호화 여부를 확인해 주세요.")
-            manifest = json.loads(manifest_path.read_text())
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             if returncode or "error" in manifest:
                 raise KnowledgeError(manifest.get("error", "render_failed"), manifest.get("message", "문서 변환에 실패했습니다."),
                                      manifest.get("status", 422))
@@ -92,7 +95,8 @@ def _office_pdf(source: Path, directory: Path, office_command: str):
     return output
 
 
-def _render_child(source: Path, directory: Path, office_command: str, page_number: int):
+def _render_child(source: Path, directory: Path, office_command: str, page_number: int,
+                  max_pages: int = MAX_PAGES):
     from PIL import Image, ImageOps
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS
     warnings.simplefilter("error", Image.DecompressionBombWarning)
@@ -117,8 +121,8 @@ def _render_child(source: Path, directory: Path, office_command: str, page_numbe
         import pypdfium2 as pdfium
         with pdfium.PdfDocument(source) as pdf:
             page_count = len(pdf)
-            if len(pdf) < 1 or len(pdf) > MAX_PAGES:
-                raise KnowledgeError("page_limit", "변환 후 총 1~50페이지 문서만 지원합니다.")
+            if len(pdf) < 1 or len(pdf) > max_pages:
+                raise KnowledgeError("page_limit", f"변환 후 총 1~{max_pages}페이지 문서만 지원합니다.")
             if page_number > len(pdf):
                 raise KnowledgeError("page_not_found", "해당 페이지가 없습니다.", 404)
             indices = [page_number - 1] if page_number else range(len(pdf))
@@ -156,13 +160,14 @@ def main():
             resource.setrlimit(resource.RLIMIT_AS, (1536 * 1024 * 1024,) * 2)
             resource.setrlimit(resource.RLIMIT_CPU, (100, 100))
             resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_UNPACKED_BYTES,) * 2)
-        manifest = _render_child(source, directory, sys.argv[3], int(sys.argv[4]))
+        manifest = _render_child(source, directory, sys.argv[3], int(sys.argv[4]),
+                                 int(sys.argv[5]) if len(sys.argv) > 5 else MAX_PAGES)
         status = 0
     except KnowledgeError as error:
         manifest, status = {"error": error.code, "message": error.message, "status": error.status}, 1
     except Exception:
         manifest, status = {"error": "render_failed", "message": "페이지 변환에 실패했습니다. 파일의 손상·암호화 여부를 확인해 주세요."}, 1
-    (directory / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False))
+    (directory / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
     return status
 
 

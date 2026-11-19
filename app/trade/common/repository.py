@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from copy import deepcopy
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import CompanyBankAccount, CompanyProfile, TradeArtifact, TradeDocument, TradeDocumentVersion, TradeProposal, User, utcnow
@@ -29,9 +29,25 @@ class SQLDocuments:
     def _snapshot(row):
         if not isinstance(row.draft, dict):
             raise DocumentError("INVALID_STORED_DOCUMENT", "저장된 문서 형식을 확인하세요")
-        return {**deepcopy(row.draft), "trade_doc_id": row.id, "doc_no": row.doc_no,
+        draft = deepcopy(row.draft)
+        draft.pop("_issue_number_reservation", None)
+        if row.status != "issued":
+            draft["document_number"] = None
+        issues = [issue for issue in draft.get("blocking_issues", [])
+                  if "document number" not in str(issue).casefold().replace("_", " ")]
+        conflicts = [issue for issue in draft.get("conflicts", [])
+                     if not str(issue).startswith("Document number was not found verbatim in the prompt")]
+        draft.update(blocking_issues=issues, conflicts=conflicts,
+                     missing_fields=[field for field in draft.get("missing_fields", [])
+                                     if str(field).strip().casefold() not in {"document_number", "document number"}])
+        if row.status == "needs_input" and not issues:
+            row_status = "ready"
+            draft.update(status="ready", ready_for_issue=True)
+        else:
+            row_status = row.status
+        return {**draft, "trade_doc_id": row.id, "doc_no": row.doc_no,
                 "doc_kind": row.doc_kind, "document_type": row.doc_kind,
-                "revision": row.revision, "status": row.status,
+                "revision": row.revision, "status": row_status,
                 "created_at": row.created_at.isoformat()}
 
     def context(self, currency):
@@ -49,31 +65,10 @@ class SQLDocuments:
         with user_lock(self.database, self.user_id), self.database.session() as session:
             return self._snapshot(self._owned(session, document_id))
 
-    def _check_pi_number(self, session, document, exclude_id=None):
-        number = str(document.get("document_number") or "").strip()
-        if self.document_type != "PI" or not number:
-            return
-        query = select(TradeDocument.id).where(
-            TradeDocument.user_id == self.user_id, TradeDocument.doc_kind == "PI",
-            func.trim(TradeDocument.draft["document_number"].as_string()) == number,
-        )
-        if exclude_id is not None:
-            query = query.where(TradeDocument.id != exclude_id)
-        history = select(TradeDocumentVersion.document_id).join(
-            TradeDocument, TradeDocument.id == TradeDocumentVersion.document_id,
-        ).where(
-            TradeDocument.user_id == self.user_id, TradeDocument.doc_kind == "PI",
-            TradeDocumentVersion.user_id == self.user_id,
-            func.trim(TradeDocumentVersion.payload["document_number"].as_string()) == number,
-        )
-        if exclude_id is not None:
-            history = history.where(TradeDocumentVersion.document_id != exclude_id)
-        if session.scalar(query.limit(1)) is not None or session.scalar(history.limit(1)) is not None:
-            raise DocumentError("PI_NUMBER_DUPLICATE", "이미 사용 중인 PI 문서번호입니다. 다른 번호를 입력해 주세요.", 409)
-
     def create(self, document):
         if document.get("document_type") != self.document_type:
             raise DocumentError("DOCUMENT_TYPE_MISMATCH", "문서 종류가 일치하지 않습니다", 400)
+        document = {**document, "document_number": None}
         today = datetime.now(timezone(timedelta(hours=9))).date()
         prefix = f"{self.document_type}-{today:%Y%m%d}-"
         for attempt in range(3):
@@ -82,12 +77,13 @@ class SQLDocuments:
                     user = session.scalar(select(User).where(User.id == self.user_id).with_for_update())
                     if user is None:
                         raise DocumentError("USER_NOT_FOUND", "로그인이 필요합니다", 401)
-                    self._check_pi_number(session, document)
                     numbers = session.scalars(select(TradeDocument.doc_no).where(
                         TradeDocument.user_id == self.user_id, TradeDocument.doc_no.startswith(prefix))).all()
-                    sequence = max((int(number[len(prefix):]) for number in numbers), default=0) + 1
+                    sequence_numbers = [number[len(prefix):] for number in numbers]
+                    sequence = max((int(number) for number in sequence_numbers if number.isdigit()), default=0) + 1
+                    doc_no = f"{prefix}{sequence:03d}"
                     row = TradeDocument(user_id=self.user_id, thread_id="", run_id="", doc_kind=self.document_type,
-                                        doc_no=f"{prefix}{sequence:03d}", draft=deepcopy(document),
+                                        doc_no=doc_no, draft=deepcopy(document),
                                         status=document["status"], revision=1)
                     session.add(row)
                     session.flush()
@@ -103,13 +99,10 @@ class SQLDocuments:
         if document.get("document_type") != self.document_type:
             raise DocumentError("DOCUMENT_TYPE_MISMATCH", "문서 종류가 일치하지 않습니다", 400)
         with user_lock(self.database, self.user_id), self.database.session() as session:
-            if self.document_type == "PI":
-                session.scalar(select(User.id).where(User.id == self.user_id).with_for_update())
             row = self._owned(session, document_id)
             if row.revision != revision or row.status in {"sent", "sending"}:
                 raise DocumentError("REVISION_CONFLICT", "최신 문서를 다시 확인하세요")
-            if str(document.get("document_number") or "").strip() != str(row.draft.get("document_number") or "").strip():
-                self._check_pi_number(session, document, document_id)
+            document = {**document, "document_number": None}
             result = {**deepcopy(document), "trade_doc_id": row.id, "doc_no": row.doc_no,
                       "doc_kind": self.document_type, "revision": revision + 1}
             claimed = session.execute(update(TradeDocument).where(

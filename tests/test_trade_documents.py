@@ -54,6 +54,16 @@ def test_explicit_zero_quantity_is_valid_and_kept_in_every_document_type():
             assert len(result["items"]) == 1
 
 
+def test_optional_empty_fields_and_stale_missing_paths_do_not_block():
+    data = sample_trade(document_number="PI-20261118-001", incoterms="FOB Busan", payment_terms="T/T",
+                        missing_fields=["buyer.contact", "seller.registration_details", "bill_to",
+                                        "items.0.discount_percent", "document_number"])
+    data["seller"]["address"] = "7 Test Road, Seoul"
+    data["items"][0]["discount_percent"] = "0"
+    result = calculate(data)
+    assert not any("Confirm missing information" in issue for issue in result["blocking_issues"])
+
+
 def test_missing_negative_and_nonfinite_quantities_remain_invalid():
     for value in (None, "", "-1", "invalid", "NaN", "Infinity"):
         doc = sample_trade()
