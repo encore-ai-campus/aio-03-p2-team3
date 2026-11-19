@@ -22,8 +22,8 @@ from tests.fakes.storage import FakeStorage, storage_error
 from tests.test_pi_api import configured_client, create_pi, decide, propose
 
 
-def test_existing_postgres_data_and_constraints_are_upgraded(database_url):
-    db = Database(database_url)
+def test_existing_postgres_data_and_constraints_are_upgraded(empty_database_url):
+    db = Database(empty_database_url)
     try:
         with db.engine.begin() as connection:
             User.__table__.create(connection)
