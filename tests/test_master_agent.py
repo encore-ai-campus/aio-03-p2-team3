@@ -154,22 +154,54 @@ def test_document_tool_missing_facts_revises_same_document_and_issues_real_files
     from sqlalchemy import select, func
     jwks, google, storage = FakeJwks(), FakeGmailGoogle(), FakeStorage()
     token = jwks.token()
+    incomplete = pi_input(document_number=None, payment_terms=None).model_dump(mode='json')
+    incomplete['items'][0]['discount_percent'] = None
     choices = Choices([('document_schema', {'kind': 'PI'}),
-        ('prepare_document', {'kind': 'PI', 'values': pi_input(payment_terms=None).model_dump(mode='json')}),
-        ('ask_user', {'question': '결제 조건을 알려 주세요.'}),
-        ('prepare_document', {'kind': 'PI', 'document_id': 1, 'revision': 1, 'values': pi_input().model_dump(mode='json')}),
-        ('prepare_issue', {'kind': 'PI', 'document_id': 1, 'revision': 2}), '문서를 발급했습니다.'])
+        ('prepare_document', {'kind': 'PI', 'values': incomplete}),
+        ('prepare_issue', {'kind': 'PI', 'document_id': 2, 'revision': 4}), '문서를 발급했습니다.'])
     with TestClient(app_for(database_url, jwks, google, choices, storage=storage)) as client:
         company(client, token)
+        duplicate = client.post('/api/trade/pi', headers=auth(token),
+                                json=pi_input(document_number='PI-TAKEN').model_dump(mode='json'))
+        assert duplicate.status_code < 300, duplicate.text
         response = client.post('/api/agent/conversations', headers=auth(token), json={'message': 'PI를 작성해 줘'})
         key = response.json()['id']
         state = read(client, token, key)
-        assert state['waiting']['message'] == '결제 조건을 알려 주세요.', state
-        state = resume(client, token, key, state, {'task_id': 'agent', 'answers': {'response': 'T/T'}})
+
+        def complete(state, changes):
+            return resume(client, token, key, state, {'task_id': state['waiting']['task_id'],
+                          'answers': {'pi_changes': changes}})
+
+        assert state['waiting']['fields'] == ['pi_changes']
+        card = state['working']['data']['pi_completion']
+        assert card['document_id'] == 2 and card['revision'] == 1
+        assert set(card['fields']) == {'payment_terms', 'items.0.discount_percent'}
+        state = complete(state, {'buyer.legal_name': 'Unexpected Change'})
+        card = state['working']['data']['pi_completion']
+        assert card['error'] == 'PI_COMPLETION_INVALID' and card['revision'] == 1
+        state = complete(state, {'items.0.discount_percent': '101'})
+        assert state['working']['data']['pi_completion']['error'] == 'PI_COMPLETION_INVALID'
+        saved = client.get('/api/trade/pi/2', headers=auth(token)).json()
+        externally_revised = client.put('/api/trade/pi/2', headers=auth(token),
+            json={'revision': 1, 'document': {**saved['input'], 'remarks': 'External edit'}})
+        assert externally_revised.status_code == 200, externally_revised.text
+        state = complete(state, {'payment_terms': 'Stale T/T'})
+        card = state['working']['data']['pi_completion']
+        assert card['error'] == 'document_changed' and card['revision'] == 2
+        assert state['working']['data']['input']['document_number'] is None
+        state = complete(state, {'payment_terms': 'T/T'})
+        card = state['working']['data']['pi_completion']
+        assert card['revision'] == 3
+        assert set(card['fields']) == {'items.0.discount_percent'}
+        state = complete(state, {'items.0.discount_percent': '0'})
         assert state['status'] == 'needs_approval', state
-        assert state['waiting']['action']['payload']['revision'] == 2
+        assert state['waiting']['action']['payload']['revision'] == 4
+        saved = client.get('/api/trade/pi/2', headers=auth(token)).json()
+        assert saved['input']['document_number'] is None
+        assert saved['input']['remarks'] == 'External edit'
+        assert saved['input']['items'][0]['discount_percent'] == '0'
         with client.app.state.database.session() as s:
-            assert s.scalar(select(func.count()).select_from(TradeDocument)) == 1
+            assert s.scalar(select(func.count()).select_from(TradeDocument)) == 2
         waiting = state['waiting']
         state = resume(client, token, key, state, {'action_id': waiting['action']['id'],
             'content_hash': waiting['content_hash'], 'decision': 'approve'})
@@ -228,17 +260,22 @@ def test_issued_search_finds_the_original_files_for_the_authenticated_owner(data
         response = client.put(f"/api/trade/pi/{first}", headers=headers, json={"revision": 1, "document": change})
         assert response.status_code == 200 and response.json()["revision"] == 2, response.text
 
+        repo = SQLReviews(database, account, "PI")
+        assert len(repo.search_issued(document_number=None, counterparty="acme",
+                                      issued_from=None, issued_to=None)["issued_documents"]) == 3
+
         response = client.post("/api/agent/conversations", headers=headers, json={"message": "지난달 Acme에 발급한 PI를 찾아줘"})
         assert response.status_code == 202, response.text
         state = read(client, token, response.json()["id"])
         assert state["status"] == "completed"
         matches = state["results"][0]["data"]["issued_documents"]
         assert [(hit["document_number"], hit["revision"], hit["issued_on"]) for hit in matches] == [
-            ("PI-LATEST", 1, "2026-10-31"), ("PI-ORIGINAL", 1, "2026-10-01")]
+            (last["issued_document_number"], 1, "2026-10-31"),
+            (original["issued_document_number"], 1, "2026-10-01")]
         assert [hit["files"] for hit in matches] == [last["files"], original["files"]]
         assert client.get(matches[1]["files"][0]["download_url"], headers=headers).content.startswith(b"%PDF")
         assert client.get(matches[1]["files"][0]["download_url"], headers=auth(other_token)).status_code == 404
-        assert any("PI-ORIGINAL" in message.content for message in choices.observed if message.type == "tool")
+        assert any(original["issued_document_number"] in message.content for message in choices.observed if message.type == "tool")
         assert {"label": "발급 문서 검색", "status": "completed"} in state["progress"]["steps"]
 
         repo = SQLReviews(database, account, None)
@@ -256,7 +293,7 @@ def test_issued_search_finds_the_original_files_for_the_authenticated_owner(data
                 file = original["files"][0]
                 session.add(TradeArtifact(id=uuid4().hex, user_id=account, proposal_id=proposal_id,
                     filename=file["filename"], file_format="pdf", media_type=file["media_type"], content_hash=file["content_hash"]))
-        limited = repo.search_issued(document_number="PI-ORIG", counterparty=None, issued_from=None, issued_to=None)
+        limited = repo.search_issued(document_number=original["issued_document_number"], counterparty=None, issued_from=None, issued_to=None)
         assert [match["issued_on"] for match in limited["issued_documents"]] == [
             f"2026-10-{day:02}" for day in range(12, 2, -1)]
 
@@ -305,7 +342,7 @@ def test_knowledge_chat_opens_uploads_and_answers_from_the_published_owner_profi
         found = ask("문서함에 있는 테이블오더 문서 볼 수 있어?", filename="테이블오더")["data"]
         assert found["knowledge_status"] == "found" and not embedder.calls
         assert [document["url"] for document in found["knowledge_documents"]] == [
-            f"/app/documents?document={contract['id']}"]
+            f"/documents?document={contract['id']}"]
 
         retry = repository.retry(owner, contract["id"], contract["attempt_id"])
         parents, children = build_chunks([PageText(number=1, text="게시 전의 후보 문구")])

@@ -33,14 +33,12 @@ export default function POPage() {
   const [settings, setSettings] = useState(null)
   const [settingsError, setSettingsError] = useState("")
   const [sourceText, setSourceText] = useState("")
-  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const errorBox = useRef(null)
   const question = useRef(null)
   const mutation = useRef(null)
   const base = "/trade/po"
 
   function accept(document, review = null, next = { key: "review", fields: null }) {
-    setQuickFixOpen(false)
     setResource(document)
     setDraft(poDraft(document.input))
     setProposal(review)
@@ -90,12 +88,16 @@ export default function POPage() {
     const controller = new AbortController()
     setSettings(null)
     apiFetch("/trade/settings", { token, signal: controller.signal }).then((data) => {
-      if (!controller.signal.aborted) { setSettings(data); setSettingsError("") }
+      if (!controller.signal.aborted) {
+        setSettings(data); setSettingsError("")
+        if (!documentId) setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer,
+          legal_name: data.company?.legal_name_en || data.company?.company_name || "", address: data.company?.address || "" } }))
+      }
     }).catch((failure) => {
       if (!controller.signal.aborted) setSettingsError(failure.message)
     })
     return () => controller.abort()
-  }, [token])
+  }, [token, documentId])
 
   useEffect(() => {
     question.current?.focus()
@@ -108,17 +110,26 @@ export default function POPage() {
   function edit(key) {
     setNotice("")
     if (proposal?.status === "pending") setModifying(true)
+    const companyName = settings?.company?.legal_name_en || settings?.company?.company_name
+    const companyAddress = settings?.company?.address || ""
+    if (companyName && (draft.buyer?.legal_name !== companyName || draft.buyer?.address !== companyAddress)) {
+      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: companyName, address: companyAddress } }))
+      setDirty(true)
+    }
     setScreen({ key, fields: null })
   }
 
   function startManual() {
     const company = settings?.company ?? {}
+    const companyName = company.legal_name_en || company.company_name
     setDraft((previous) => ({ ...previous, buyer: {
-      ...Object.fromEntries(["address", "contact", "phone", "email", "registration_details"].map((key) => [key, previous.buyer[key] || company[key] || ""])),
-      legal_name: previous.buyer.legal_name || company.legal_name_en || company.company_name || "",
+      ...Object.fromEntries(["contact", "phone", "email", "registration_details"].map((key) => [key, previous.buyer[key] || company[key] || ""])),
+      address: company.address || "",
+      legal_name: companyName,
     } }))
     setGuided(false)
-    edit("seller")
+    setNotice("")
+    setScreen({ key: "seller", fields: null })
   }
 
   function next() {
@@ -197,6 +208,15 @@ export default function POPage() {
   }
 
   const current = resource && String(resource.document_id) === documentId ? resource : null
+  const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
+  const issuerAddress = settings?.company?.address || ""
+  useEffect(() => {
+    if (current?.status === "needs_input" && !proposal && issuerName
+        && (draft.buyer?.legal_name !== issuerName || draft.buyer?.address !== issuerAddress)) {
+      setDraft((previous) => ({ ...previous, buyer: { ...previous.buyer, legal_name: issuerName, address: issuerAddress } }))
+      setDirty(true)
+    }
+  }, [current?.document_id, current?.revision, current?.status, proposal, issuerName, issuerAddress, draft.buyer?.legal_name, draft.buyer?.address])
   const pending = proposal?.status === "pending"
   const canEdit = !busy && !loading && (!documentId || current)
   const stepIndex = PO_STEPS.findIndex((entry) => entry.key === screen.key)
@@ -263,9 +283,6 @@ export default function POPage() {
       : <section className="pi-question" aria-label="서버 계산 결과"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
         <p className="pi-question-note">저장된 내용으로 계산한 금액이에요. 구매자·공급처와 거래 조건을 함께 확인하세요.</p>
         {dirty && <p className="form-error">아직 저장하지 않은 변경사항이 있어요. 저장한 뒤 검토해 주세요.</p>}
-        {(current.missing_fields.length > 0 || current.issues.length > 0) && <div className="pi-missing"><p>아직 입력할 내용이 있어요. 팝업에서 필요한 값만 입력하고 저장할 수 있습니다.</p>
-          <button type="button" className="btn" disabled={!canEdit} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
-        {current.issues.length > 0 && <ul className="document-issues" role="alert">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
         {current.status === "needs_input" && <p className="section-note">표시된 항목을 수정한 뒤 다시 저장해 주세요. 발행 회사·직인은 <Link to="/settings">회사 설정</Link>에서 확인할 수 있어요.</p>}
         <DocumentSnapshot kind="po" document={current.document} />
         <fieldset className="editor-checks" disabled={busy || pending || current.status !== "ready"}><legend>발급 형식</legend>{["pdf","xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous, format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
@@ -275,10 +292,10 @@ export default function POPage() {
           <button className="btn" type="button" disabled={!canEdit || (!dirty && !modifying)} onClick={save}>{modifying ? "수정 저장·재검토" : "변경사항 저장"}</button>
           <button className="btn blue" type="button" disabled={busy || dirty || modifying || pending || current.status !== "ready" || !formats.length} onClick={propose}>최종 검토 만들기</button></div>
       </section>)}
-      <MissingFieldsDialog open={quickFixOpen} kind="PO" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
+      <MissingFieldsDialog open={Boolean(current && screen.key === "review" && !finalReview)} kind="PO" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (pending) setModifying(true) }}
-        onSave={save} onClose={() => setQuickFixOpen(false)} />
-      {settingsError && <p className="section-note" role="status">기본 설정을 가져오지 못했어요. 직접 입력할 수 있습니다. {settingsError}</p>}
+        onSave={save} onOpenStep={edit} />
+      {settingsError && <p className="section-note" role="status">회사 설정을 불러오지 못해 당사 회사명을 자동 적용할 수 없습니다. <Link to="/settings">설정 확인</Link> · {settingsError}</p>}
       </div>
       {!["start", "source"].includes(screen.key) && <POSummary draft={draft} current={current} dirty={dirty} disabled={!canEdit} onEdit={edit} />}
       </div>
@@ -297,7 +314,7 @@ function POSummary({ draft, current, dirty, disabled, onEdit }) {
   return <aside className="pi-summary" aria-label="작성 내용 요약">
     <button type="button" className="pi-summary-toggle" aria-expanded={open} aria-controls="pi-summary-content" onClick={() => setOpen(!open)}>작성 내용 {open ? "접기" : "보기"}</button>
     <div id="pi-summary-content" className={open ? "open" : ""}>
-      <h2>작성 중인 PO</h2><p className="pi-summary-number">{draft.document_number || "문서번호 미입력"}</p>
+      <h2>작성 중인 PO</h2><p className="pi-summary-number">{draft.document_number || "승인·발급 시 문서번호 자동 생성"}</p>
       <dl>{PO_STEPS.map((step) => <div key={step.key}><dt>{step.label}<button type="button" disabled={disabled} onClick={() => { setOpen(false); onEdit(step.key) }}>{step.label} 수정</button></dt><dd>{summaries[step.key]}</dd></div>)}</dl>
       {current && <div className="pi-summary-total"><span>{dirty ? "마지막 저장 금액" : "저장된 합계"}</span><strong>{current.document.currency} {current.document.total ?? "확인 필요"}</strong></div>}
       <p className="section-note">{dirty ? "변경한 내용은 저장하면 계산에 반영돼요." : "전체 확인 후 승인한 내용으로 파일을 발급해요."}</p>

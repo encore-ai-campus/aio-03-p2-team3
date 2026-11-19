@@ -42,7 +42,7 @@ def _mentioned(prompt, profile):
 
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/counterparties.py apply_company_profiles
-def apply_company_profiles(draft, profiles, *, prompt=''):
+def apply_company_profiles(draft, profiles, *, prompt='', preserve_entered_name=False):
     """Fill missing recipient fields; explicit order values always take priority."""
     dtype = draft.get('document_type')
     if dtype not in {'PI', 'PO', 'CI', 'PL'}:
@@ -75,9 +75,10 @@ def apply_company_profiles(draft, profiles, *, prompt=''):
         return draft
     profile = matches[0]
     applied = {}
-    # The exact registered legal name replaces only a recognized name alias.
-    party['legal_name'] = profile['legal_name']
-    if supplied_name != profile['legal_name'] or role + '.legal_name' in previous.get('fields', {}):
+    # Standalone documents keep names the user supplied.
+    if not preserve_entered_name or not supplied_name:
+        party['legal_name'] = profile['legal_name']
+    if party.get('legal_name') != supplied_name or role + '.legal_name' in previous.get('fields', {}):
         applied[role + '.legal_name'] = profile['legal_name']
     for field in ('address', 'contact', 'phone', 'email', 'registration_details'):
         value = profile.get(field)

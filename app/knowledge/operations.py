@@ -121,11 +121,12 @@ def process_claimed(repository: Repository, storage: Storage, renderer: Renderer
                 raise KnowledgeError("profile_mismatch", "비전 응답의 모델 프로필이 다릅니다.")
             pages, warnings = _reconcile(result, rendered.pages, [*rendered.warnings, *result.warnings])
             values = [p.model_dump() for p in pages]
-            status = "needs_review" if warnings else "chunking"
+            has_text = "empty_transcription_requires_review" not in warnings
+            status = "chunking" if has_text else "needs_review"
             if not repository.update_attempt(document_id, attempt_id, raw_pages=values, pages=values,
-                                             approved=not warnings, warnings=warnings, status=status):
+                                             approved=has_text, warnings=warnings, status=status):
                 return "stale"
-            if warnings:
+            if not has_text:
                 return "needs_review"
         stage = "chunking"
         if not repository.update_attempt(document_id, attempt_id, status=stage):

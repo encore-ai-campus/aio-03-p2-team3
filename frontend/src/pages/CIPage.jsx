@@ -33,7 +33,6 @@ export default function CIPage() {
   const [reload, setReload] = useState(0)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState("")
-  const [quickFixOpen, setQuickFixOpen] = useState(false)
   const mutation = useRef(null)
   const created = useRef(null)
   const question = useRef(null)
@@ -49,7 +48,6 @@ export default function CIPage() {
   }
 
   function accept(document, review = null) {
-    setQuickFixOpen(false)
     const saved = ciDraft(document.input)
     setResource(document)
     setDraft(saved)
@@ -251,9 +249,6 @@ export default function CIPage() {
           : <section className="pi-question"><h2 tabIndex={-1} ref={question}>전체 내용을 확인해 주세요</h2>
             <p className="pi-question-note">원본 PI의 승인 버전·거래가격·출하 수량·FOC와 선적 정보를 확인하세요.</p>
             {dirty && <p className="form-error">보존한 변경사항을 먼저 저장한 뒤 검토해 주세요.</p>}
-            {missing.length > 0 && <div className="pi-missing"><p>선적 정보의 누락된 값만 팝업에서 입력할 수 있습니다.</p>
-              <button className="btn" type="button" disabled={!canEdit} onClick={() => setQuickFixOpen(true)}>누락 항목 입력</button></div>}
-            {current.issues.length > 0 && <ul className="document-issues" role="alert">{current.issues.map((issue,index) => <li key={index}>{issue.message}</li>)}</ul>}
             <DocumentSnapshot kind="ci" document={current.document} />
             <fieldset className="editor-checks" disabled={busy || current.status !== "ready"}><legend>발급 형식</legend>{["pdf","xlsx"].map((format) => <label key={format}><input type="checkbox" checked={formats.includes(format)} onChange={(event) => setFormats((previous) => event.target.checked ? [...previous,format] : previous.filter((value) => value !== format))} /> {format.toUpperCase()}</label>)}</fieldset>
             <div className="form-actions"><button className="btn" type="button" disabled={!canEdit} onClick={editShipment}>선적 정보 수정</button>
@@ -261,9 +256,9 @@ export default function CIPage() {
                 disabled={busy || loading || ["sent", "sending"].includes(current.status)} onClick={refreshSettings}>최신 설정 정보 적용</button>}
               <button className="btn blue" type="button" disabled={!canEdit || !allowed || dirty || modifying || current.status !== "ready" || !formats.length || proposal?.status === "pending"} onClick={propose}>최종 검토 만들기</button></div>
           </section>)}
-      <MissingFieldsDialog open={quickFixOpen} kind="CI" draft={draft} missing={missing} issues={current?.issues} busy={busy} dirty={dirty}
+      <MissingFieldsDialog open={Boolean(current && screen === "review" && !finalReview)} kind="CI" draft={draft} missing={current?.missing_fields} issues={current?.issues} busy={busy} dirty={dirty}
         onChange={(path,value) => { setDraft((previous) => updateMissingField(previous,path,value)); setDirty(true); if (proposal?.status === "pending") setModifying(true) }}
-        onSave={save} onClose={() => setQuickFixOpen(false)} />
+        onSave={save} />
       </div>{screen !== "start" && <CISummary source={source} original={original} draft={draft} />}</div>
     </>}
   </div>

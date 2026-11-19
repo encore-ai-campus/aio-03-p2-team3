@@ -99,6 +99,8 @@ class Settings:
     app_base_url: str = ""
     reflection_enabled_default: bool = False
     frontend_origins: str = ""
+    # OAuth 콜백이 돌려주는 React 화면의 기본 경로. 같은 출처 /app 배포는 기본값, 루트로 서비스하는 분리 배포는 비운다.
+    frontend_base_path: str = "/app"
     session_same_site: str = "lax"
     supabase_url: str = ""  # 서버 JWT 검증·Storage 호출 공통(CONTRACT 11절. 5절부터 JWT 검증에 쓴다)
     supabase_secret_key: str = field(default="", repr=False)  # 서버 전용 비밀 키(CONTRACT 11절. 7절부터 Gmail 연결 계정 확인에 쓴다)
@@ -136,6 +138,8 @@ def get_settings(env_file: str | None = None) -> Settings:
     values = {name: os.getenv(name.upper(), "") for name in Settings.__dataclass_fields__
               if name != "openai_api_key"}
     values["ai_runtime"] = values["ai_runtime"].strip() or "server"
+    # 비우면 같은 출처 배포 기본값 /app, 루트로 서비스하는 분리 배포는 "/"로 지정한다.
+    values["frontend_base_path"] = values["frontend_base_path"].strip() or "/app"
     if values["ai_runtime"] == "local":
         values["openai_api_key"] = os.getenv("OPENAI_API_KEY", "")
     values["reflection_enabled_default"] = (

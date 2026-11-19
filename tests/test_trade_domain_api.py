@@ -91,6 +91,8 @@ def test_each_domain_cancel_modify_approve_download_and_version_history(pi_clien
     approved = choice(client, kind, new_proposal, "approve")
     assert approved.status_code == 200, approved.text
     assert choice(client, kind, new_proposal, "approve").json()["files"] == approved.json()["files"]
+    number = approved.json()["issued_document_number"]
+    assert number.startswith(kind.upper() + "-") and number.endswith("-001")
     for file in approved.json()["files"]:
         download = client.get(file["download_url"])
         assert download.status_code == 200
@@ -100,11 +102,11 @@ def test_each_domain_cancel_modify_approve_download_and_version_history(pi_clien
         else:
             with ZipFile(BytesIO(download.content)) as archive:
                 text = archive.read("xl/worksheets/sheet1.xml").decode()
-        assert kind.upper() + "-CHANGED" in text
+        assert number in text
         if kind in {"ci", "pl", "po"}:
             assert "BANK INFORMATION" not in text and "000-0000" not in text
     base = f"/api/trade/{kind}/{document['document_id']}"
-    assert client.get(base + f"/versions/{document['revision']}").json()["document_number"] == (kind.upper() + "-100" if kind != "pl" else "DRAFT")
+    assert client.get(base + f"/versions/{document['revision']}").json()["document_number"] is None
     assert client.get(base).json()["files"] == approved.json()["files"]
     assert any(row["document_id"] == document["document_id"] for row in client.get(f"/api/trade/{kind}").json())
     client.app.dependency_overrides[current_user_id] = lambda: 2

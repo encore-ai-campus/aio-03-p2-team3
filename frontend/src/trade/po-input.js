@@ -26,7 +26,7 @@ export const PO_STEPS = [
   { key: "seller", label: "공급처", question: "어느 회사에서 구매하나요?", note: "공급처의 영문 회사명과 주소를 알려주세요." },
   { key: "buyer", label: "구매자", question: "구매자 정보를 확인해 주세요", note: "PO의 구매자는 문서를 발행하는 우리 회사입니다." },
   { key: "items", label: "품목", question: "어떤 상품을 얼마나 구매하나요?", note: "품목과 수량·매입 단가를 표에서 바로 수정하세요." },
-  { key: "terms", label: "거래 조건", question: "거래 조건을 알려주세요", note: "문서번호와 납품·지급 조건을 확인해 주세요." },
+  { key: "terms", label: "거래 조건", question: "거래 조건을 알려주세요", note: "납품·지급 조건을 확인해 주세요." },
 ]
 
 export function poSectionFor(path) {
@@ -41,10 +41,9 @@ function blank(value) {
 
 // 질문할 빈칸만 고른다. 금액·가격 검증과 발급 가능 여부는 기존 서버가 판단한다.
 export function poMissing(draft) {
-  const paths = ["product_family", "document_number", "currency", "incoterms", "payment_terms"]
-  for (const role of ["buyer", "seller"]) {
-    for (const key of ["legal_name", "address"]) paths.push(`${role}.${key}`)
-  }
+  const paths = ["product_family", "currency", "incoterms", "payment_terms"]
+  for (const role of ["buyer", "seller"]) for (const key of ["legal_name", "address"])
+    if (role !== "buyer" || !["legal_name", "address"].includes(key)) paths.push(`${role}.${key}`)
   if (!draft.items.length) paths.push("items")
   draft.items.forEach((row, index) => {
     for (const key of ["product_name", "unit", "price_basis", "discount_percent"]) paths.push(`items.${index}.${key}`)

@@ -10,7 +10,8 @@ export default function ReviewPanel({ proposal, token, kind = "pi", busy, dirty,
     <p className="section-note">아래 {kind === "pi" ? "문서·회사·계좌·이미지" : "문서·회사·이미지"}를 고정한 검토입니다. 승인하면 파일을 발급하며 메일은 발송하지 않습니다.</p>
     {dirty && <p className="form-error">입력한 변경사항을 먼저 저장하고 다시 검토해 주세요.</p>}
     {modifying && <p className="form-success">위 입력을 수정한 뒤 ‘수정 저장·재검토’를 눌러 주세요.</p>}
-    <DocumentSnapshot kind={kind} document={payload.document} />
+    <DocumentSnapshot kind={kind} document={{ ...payload.document,
+      document_number: proposal.issued_document_number || payload.document.document_number }} />
     <div className="review-branding"><div><h3>직인</h3><PrivateImage path={`${base}/seal`} token={token} label="직인" /></div>
       {payload.logo_sha256 && <div><h3>로고</h3><PrivateImage path={`${base}/logo`} token={token} label="로고" /></div>}</div>
     <details className="review-proof"><summary>고정된 버전·파일 정보</summary><dl>

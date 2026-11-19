@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { apiFetch } from "../api"
+import { apiFetch, appHref } from "../api"
 import { useAuth } from "../useAuth"
 import { dateKey, formatEventWhen } from "../calendar/useCalendarEvents"
 import ReviewCard from "./ReviewCard"
@@ -63,11 +63,11 @@ function KnowledgeResult({ data }) {
   return <>
     {KNOWLEDGE_STATUS[data.knowledge_status] && <p>{KNOWLEDGE_STATUS[data.knowledge_status]}</p>}
     {data.knowledge_documents?.length > 0 && <div className="attach-row">{data.knowledge_documents.map(document =>
-      <a className="attach-chip" href={document.url} target="_blank" rel="noreferrer" key={document.document_id}>
+      <a className="attach-chip" href={appHref(document.url)} target="_blank" rel="noreferrer" key={document.document_id}>
         {FILE_ICON}{document.filename}</a>)}</div>}
     {data.knowledge_clauses?.map(clause => <article className="cite-card" key={clause.clause_id}>
       <div className="cite-src">
-        <a className="file-chip" href={clause.url} target="_blank" rel="noreferrer">{FILE_ICON}{clause.filename}</a>
+        <a className="file-chip" href={appHref(clause.url)} target="_blank" rel="noreferrer">{FILE_ICON}{clause.filename}</a>
         {clause.sources.map((source, index) => <span className="page-chip" key={index}>{source.source || `${source.page}p`}</span>)}
       </div>
       <p className="cite-text">{QUOTE_ICON}<span>{clause.text}</span></p>
@@ -354,6 +354,7 @@ export default function AgentPage() {
           {view?.error && <p className="form-error" role="alert">{ERRORS[view.error] || `처리 상태를 확인해 주세요. (${view.error})`}</p>}
           {!timelineAbove && timeline}
           {view?.waiting && <ReviewCard key={`${view.revision}-${view.waiting.task_id || view.waiting.action?.id}`} waiting={view.waiting}
+            piCompletion={view.waiting.fields?.includes("pi_changes") ? view.working?.data?.pi_completion : undefined}
             results={view.working?.data?.candidates ? [{ data: view.working.data }] : (view.results || [])} busy={running} onResume={response => send(`/${view.id}/resume`, { revision: view.revision, response })} />}
           {["interrupted", "review"].includes(view?.status) && <div className="card agent-recover">
             <p>{view.results?.some(item => item.status === "unknown" && item.domain === "calendar") || view.working?.action?.domain === "calendar"

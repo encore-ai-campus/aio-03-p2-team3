@@ -10,8 +10,9 @@ from uuid import uuid4
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text,
-    UniqueConstraint, delete, func, literal_column, select, union_all, update,
+    UniqueConstraint, delete, func, literal_column, or_, select, union_all, update,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -195,7 +196,7 @@ class SqlRepository:
         query = query.order_by(KnowledgeDocument.created_at.desc(), KnowledgeDocument.id).limit(5)
         with self._session() as session:
             return [{"document_id": row.id, "filename": row.original_filename, "status": row.status,
-                     "indexed": row.published_attempt_id is not None, "url": f"/app/documents?document={row.id}"}
+                     "indexed": row.published_attempt_id is not None, "url": f"/documents?document={row.id}"}
                     for row in session.execute(query)]
 
     def counterparties(self, owner: int) -> list[dict]:
@@ -268,7 +269,7 @@ class SqlRepository:
         ).where(KnowledgeParent.user_id == owner, FileAsset.user_id == owner).order_by(nearest.c.score.desc(), KnowledgeParent.id)
         with self._session() as session:
             return [{"clause_id": row.id, "document_id": row.document_id, "filename": row.original_filename,
-                     "text": row.text, "sources": row.sources, "url": f"/app/documents?document={row.document_id}"}
+                     "text": row.text, "sources": row.sources, "url": f"/documents?document={row.document_id}"}
                     for row in session.execute(query)]
 
     def chunks(self, owner: int, document_id: str, offset: int = 0) -> dict:
@@ -339,10 +340,20 @@ class SqlRepository:
 
     def claim(self) -> dict | None:
         with self._session() as session:
-            row = session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.status == "queued")
+            # 이전 버전에서 경고로 대기하던 미수정 전사만 이어서 처리한다.
+            waiting_transcription = (
+                (KnowledgeDocument.status == "needs_review")
+                & (KnowledgeDocument.pages == KnowledgeDocument.raw_pages)
+                & (func.jsonb_array_length(KnowledgeDocument.raw_pages) > 0)
+                & ~KnowledgeDocument.warnings.cast(JSONB).contains(["empty_transcription_requires_review"])
+            )
+            row = session.scalar(select(KnowledgeDocument).where(
+                or_(KnowledgeDocument.status == "queued", waiting_transcription))
                                  .order_by(KnowledgeDocument.created_at).with_for_update(skip_locked=True).limit(1))
             if row is None:
                 return None
+            if row.status == "needs_review":
+                row.approved = True
             row.status = "chunking" if row.approved else "extracting"
             row.lease_until = utcnow() + timedelta(seconds=LEASE_SECONDS)
             session.flush()

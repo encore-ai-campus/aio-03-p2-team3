@@ -148,6 +148,20 @@ def test_callback_returns_to_configured_react_origin(database_url, monkeypatch, 
             assert me(client, token)["gmail"]["connected"] is True
 
 
+def test_callback_returns_to_root_frontend_base(database_url):
+    # 분리 배포(루트 정적 사이트)에서는 기본 경로를 "/"로 지정해 /settings로 복귀한다.
+    jwks, fake = FakeJwks(), FakeGoogle()
+    settings = replace(settings_of(database_url),
+                       google_oauth_redirect_uri="http://127.0.0.1:8000/auth/google/callback",
+                       frontend_origins="https://ui.example.invalid", frontend_base_path="/")
+    with make_client(database_url, jwks, fake, settings) as client:
+        client.base_url = "http://127.0.0.1:3000"
+        url = start_connect(client, jwks.token())
+        result = client.get(settings.google_oauth_redirect_uri,
+                            params={"state": state_of(url), "code": "fake-code"}, follow_redirects=False)
+        assert result.headers["location"] == "https://ui.example.invalid/settings?gmail=connected"
+
+
 @pytest.mark.parametrize("origin", ["http://localhost:3000", "http://[", "http://127.0.0.1:3000"])
 def test_connect_checks_browser_host_before_google_consent(database_url, origin):
     jwks, fake = FakeJwks(), FakeGoogle()

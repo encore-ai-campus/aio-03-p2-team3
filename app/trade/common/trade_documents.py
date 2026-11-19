@@ -93,6 +93,61 @@ def _has_chinese(value):
     return isinstance(value, str) and re.search(r"[\u3400-\u9fff]", value) is not None
 
 
+def _missing_entry_path(entry):
+    text = str(entry).strip().casefold()
+    text = re.sub(r"^confirm missing information:\s*", "", text)
+    text = re.sub(r"^item\s+(\d+)\s+", r"items.\1.", text)
+    aliases = {"document.number": "document_number", "ship.to": "ship_to", "bill.to": "bill_to",
+               "country.of.origin": "country_of_origin", "issue.date": "issue_date",
+               "shipment.reference": "shipment_reference", "registration.details": "registration_details",
+               "discount.percent": "discount_percent", "free.quantity": "free_quantity",
+               "product.code": "product_code", "product.name": "product_name", "unit.price": "unit_price",
+               "paid.quantity": "paid_quantity", "shipped.quantity": "shipped_quantity"}
+    text = aliases.get(text.replace(" ", "."), text)
+    parts = [part.strip().replace(" ", "_") for part in re.split(r"[./:-]+", text) if part.strip()]
+    if parts and parts[0] == "items" and len(parts) > 1 and parts[1].isdigit():
+        parts[1] = str(max(0, int(parts[1]) - 1))
+    return tuple(int(part) if part.isdigit() else part for part in parts)
+
+
+def _value_at(data, path):
+    value = data
+    for part in path:
+        if isinstance(value, dict):
+            value = value.get(part)
+        elif isinstance(value, list) and isinstance(part, int) and part < len(value):
+            value = value[part]
+        else:
+            return None
+    return value
+
+
+def _skip_missing_entry(data, entry):
+    path = _missing_entry_path(entry)
+    if path == ("document_number",):
+        return True
+    optional = {
+        ("ship_to",), ("bill_to",), ("remarks",), ("issue_date",),
+        ("buyer", "contact"), ("buyer", "phone"), ("buyer", "email"), ("buyer", "registration_details"),
+        ("seller", "contact"), ("seller", "phone"), ("seller", "email"), ("seller", "registration_details"),
+    }
+    if data.get("document_type") != "CI":
+        optional.add(("country_of_origin",))
+    if data.get("document_type") not in {"CI", "PL"}:
+        optional.add(("shipment_reference",))
+    if path in optional and not _value_at(data, path):
+        return True
+    if path and _value_at(data, path) not in (None, "", [], {}):
+        return True
+    if len(path) == 3 and path[0] == "items" and isinstance(path[1], int):
+        if path[1] >= len(data.get("items") or []):
+            return True
+        if path[2] in {"discount_percent", "free_quantity"}:
+            value = _value_at(data, path)
+            return value in (None, "", "0", "0.0", "0.00")
+    return False
+
+
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/trade_documents.py _has_english_parenthetical
 def _has_english_parenthetical(value):
     return isinstance(value, str) and re.search(r"\([^()]*[A-Za-z][^()]*\)", value) is not None
@@ -106,7 +161,7 @@ def _plain_decimal(value):
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/trade_documents.py validate_and_calculate
 # (발행사 역할 검사만 계약 15.4절대로 issuer_key 일반화. 머리글 참고)
-def validate_and_calculate(data, *, issuer_key):
+def validate_and_calculate(data, *, issuer_key, require_document_number=True):
     """Validate extracted user data, calculate sums, and identify issue blockers."""
     # Issue date is a system field: the issue date is always the current Seoul date.
     data = {**data, "issue_date": current_issue_date()}
@@ -158,8 +213,10 @@ def validate_and_calculate(data, *, issuer_key):
     if doc_type in DOC_TYPES:
         validate_header(data, str(issuer_key or "").strip(), block)
 
-    if not data.get("document_number"):
+    if require_document_number and not data.get("document_number"):
         block("Document number is required or must be marked DRAFT")
+    if require_document_number and _has_chinese(data.get("document_number")):
+        block("Document Number must be translated into English")
     if not data.get("incoterms"):
         block("Incoterms and named place")
 
@@ -237,7 +294,7 @@ def validate_and_calculate(data, *, issuer_key):
         validate_packing(data, calculated, issues, block)
 
     for field in ("incoterms", "payment_terms", "remarks", "ship_to", "bill_to", "country_of_origin",
-                  "document_number", "issue_date", "shipment_reference", "actual_package_count"):
+                  "issue_date", "shipment_reference", "actual_package_count"):
         if _has_chinese(data.get(field)):
             block(f"{field.replace('_', ' ').title()} must be translated into English")
     for i, package in enumerate(data.get("packages") or [], 1):
@@ -247,6 +304,8 @@ def validate_and_calculate(data, *, issuer_key):
     for issue in data.get("conflicts", []):
         block(f"Resolve conflicting information: {issue}")
     for field in data.get("missing_fields", []):
+        if _skip_missing_entry(data, field):
+            continue
         block(f"Confirm missing information: {field}")
 
     return {**data, "items": calculated, "subtotal": format(total, "f"), "total": format(total, "f"),

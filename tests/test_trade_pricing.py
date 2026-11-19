@@ -13,6 +13,7 @@
 import pytest
 
 from app.trade.common.pricing import (
+    apply_catalog_product_matches,
     apply_verified_catalog_prices,
     build_trade_catalog,
     is_supplier_alias,
@@ -103,6 +104,27 @@ def test_no_exact_matches_do_not_infer_price():
     assert draft['currency'] is None  # 가격을 찾하지 못했으므로 통화도 정하지 않는다
     assert any('Exact catalog product match for Unrelated product' in issue
                for issue in draft['missing_fields'])
+
+
+def test_catalog_match_fills_product_code_and_capacity_without_overwriting_input():
+    draft = {"document_type": "PI", "items": [
+        {"product_name": "Test Cream", "capacity": None, "product_code": None},
+        {"product_name": "Test Cream", "capacity": "Entered size", "product_code": "ENTERED"},
+    ]}
+    catalog = {"products": [{"id": "p1", "item_name": "Test Cream", "capacity": "50 ml",
+                             "source_code": "SKU-50"}]}
+    apply_catalog_product_matches(draft, catalog)
+    assert (draft["items"][0]["capacity"], draft["items"][0]["product_code"]) == ("50 ml", "SKU-50")
+    assert (draft["items"][1]["capacity"], draft["items"][1]["product_code"]) == ("Entered size", "ENTERED")
+
+
+def test_matched_catalog_without_optional_metadata_does_not_block():
+    draft = {"document_type": "PI", "items": [{"product_name": "Test Cream"}]}
+    catalog = {"products": [{"id": "p1", "item_name": "Test Cream", "capacity": None,
+                             "source_code": None}]}
+    apply_catalog_product_matches(draft, catalog)
+    assert not draft.get("missing_fields")
+    assert draft["items"][0]["product_id"] == "p1"
 
 
 # --- 원본 test_supabase_catalog.py 이식(Supabase 대신 사용자 단가표) ---

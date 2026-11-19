@@ -1,4 +1,5 @@
 import { Fragment, useId } from "react"
+import { Link } from "react-router-dom"
 import ProductCandidates from "./ProductCandidates"
 import { selectProduct } from "./product-selection"
 import { newPLItem, newPackage, PACKAGE_FIELDS } from "./pl-input"
@@ -14,6 +15,7 @@ function Field({ label, value, onChange, multiline = false, ...props }) {
 }
 
 export default function PLForm({ token, draft, setDraft, step, fields = null, settings, missing = [], disabled, onDirty, onShowAll }) {
+  const issuerName = settings?.company?.legal_name_en || settings?.company?.company_name
   const wanted = (path) => fields === null || fields.includes(path)
   function change(key,value) { onDirty(); setDraft((previous) => ({ ...previous, [key]: value })) }
   function party(role,key,value) { onDirty(); setDraft((previous) => ({ ...previous, [role]: { ...previous[role], [key]: value } })) }
@@ -33,8 +35,9 @@ export default function PLForm({ token, draft, setDraft, step, fields = null, se
           const selected = settings.counterparties.find((row) => row.company_key === event.target.value)
           if (selected) change("buyer", Object.fromEntries(["legal_name","address","contact","phone","email","registration_details"].map((key) => [key,selected[key] ?? ""])))
         }}><option value="">거래처 선택</option>{settings.counterparties.map((row) => <option value={row.company_key} key={row.company_key}>{row.legal_name}</option>)}</select></div>}
-      {fields && draft[step]?.legal_name && <p className="pi-context">{draft[step].legal_name}</p>}
-      <div className="settings-fields pi-party-fields">{[["legal_name","회사명 (영문)"],["address","주소 (영문)"]].filter(([key]) => wanted(`${step}.${key}`)).map(([key,label]) =>
+      {step === "seller" && <p className="section-note">판매자 회사명·주소는 회사 설정값으로 자동 적용됩니다. {issuerName || <Link to="/settings">회사 설정에 등록해 주세요</Link>}</p>}
+      {fields && draft[step]?.legal_name && step !== "seller" && <p className="pi-context">{draft[step].legal_name}</p>}
+      <div className="settings-fields pi-party-fields">{[["legal_name","회사명 (영문)"],["address","주소 (영문)"]].filter(([key]) => !(step === "seller" && ["legal_name", "address"].includes(key)) && wanted(`${step}.${key}`)).map(([key,label]) =>
         <Field key={key} label={label} value={draft[step]?.[key]} multiline={key === "address"} rows={2} aria-invalid={missing.includes(`${step}.${key}`) || undefined} onChange={(value) => party(step,key,value)} />)}</div>
       {!fields && <details className="pi-optional"><summary>담당자·연락처·등록 정보</summary><div className="settings-fields">{[["contact","담당자"],["phone","전화"],["email","이메일"],["registration_details","등록 정보"]].map(([key,label]) =>
         <Field key={key} label={label} value={draft[step]?.[key]} onChange={(value) => party(step,key,value)} />)}</div></details>}
@@ -69,10 +72,12 @@ export default function PLForm({ token, draft, setDraft, step, fields = null, se
         {[["document_number","PL 문서번호"],["shipment_reference","선적 참조"],["hs_code","HS 코드"],["incoterms","납품 조건"],
           ["actual_package_count","원본 포장 수"],["container_count","원본 컨테이너 표기"],["declared_net_weight_kg","원본 순중량 (kg)"],
           ["declared_gross_weight_kg","원본 총중량 (kg)"],["declared_volume_cbm","원본 부피 (CBM)"],["declared_total_quantity","원본 총수량"],["declared_total_quantity_unit","원본 수량 단위"]].filter(([key]) => wanted(key)).map(([key,label]) =>
-          <Field key={key} label={label} value={draft[key]} aria-invalid={missing.includes(key) || undefined} onChange={(value) => change(key,value)} />)}
+          <Field key={key} label={label} value={draft[key]} aria-invalid={key !== "document_number" && missing.includes(key) || undefined}
+            readOnly={key === "document_number"} placeholder={key === "document_number" ? "승인·발급 시 자동 생성" : undefined}
+            onChange={(value) => key !== "document_number" && change(key,value)} />)}
       </div>{!fields && <details className="pi-optional"><summary>배송지·청구지·비고</summary><div className="settings-fields">{[["ship_to","배송지"],["bill_to","청구지"],["remarks","비고"]].map(([key,label]) =>
         <Field key={key} label={label} value={draft[key]} multiline rows={2} onChange={(value) => change(key,value)} />)}</div></details>}
-      <p className="section-note">컨테이너가 없는 선적은 비워도 됩니다. 원본 단위와 ‘2 x 40FT’ 같은 표기를 그대로 보존해요.</p>
+      <p className="section-note">PL 문서번호는 최종 승인·발급 시 최신 순번으로 자동 생성됩니다. 컨테이너가 없는 선적은 비워도 됩니다. 원본 단위와 ‘2 x 40FT’ 같은 표기를 그대로 보존해요.</p>
     </>}
   </fieldset>
 }

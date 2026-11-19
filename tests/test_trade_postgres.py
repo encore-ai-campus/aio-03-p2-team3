@@ -234,10 +234,12 @@ def test_postgres_approval_sql_failure_rolls_back_and_retry_reuses_objects(datab
                                       file_format="pdf", filename="PI.pdf", media_type="application/pdf",
                                       content_hash="c" * 64, content=b"%PDF-fake"))
         repository = SQLReviews(database, 1, "PI", storage=storage)
-        files = render_pi_files(proposal["payload"],
+        number = repository.reserve_document_number(proposal["id"], proposal["revision"], proposal["content_hash"])
+        document = {**proposal["payload"]["document"], "document_number": number}
+        files = render_pi_files({**proposal["payload"], "document": document},
                                 repository.proposal_branding(repository.get(proposal["id"])))
         with pytest.raises(IntegrityError):
-            repository.approve(proposal["id"], proposal["revision"], proposal["content_hash"], files)
+            repository.approve(proposal["id"], proposal["revision"], proposal["content_hash"], files, document)
         with database.session() as session:
             assert session.get(TradeProposal, proposal["id"]).status == "pending"
             assert session.get(TradeDocument, created["document_id"]).status == "ready"
@@ -262,7 +264,9 @@ def test_postgres_existing_issued_key_with_different_bytes_fails(database_url):
         created = create_pi(client)
         proposal = propose(client, created)
         repository = SQLReviews(database, 1, "PI", storage=storage)
-        files = render_pi_files(proposal["payload"],
+        number = repository.reserve_document_number(proposal["id"], proposal["revision"], proposal["content_hash"])
+        document = {**proposal["payload"]["document"], "document_number": number}
+        files = render_pi_files({**proposal["payload"], "document": document},
                                 repository.proposal_branding(repository.get(proposal["id"])))
         pdf = next(file for file in files if file.file_format == "pdf")
         key = issued_object_key(1, proposal["id"], "pdf", sha256(pdf.content).hexdigest())

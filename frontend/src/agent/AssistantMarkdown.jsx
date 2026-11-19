@@ -1,7 +1,9 @@
 import { useState } from "react"
-import Markdown from "react-markdown"
+import Markdown, { defaultUrlTransform } from "react-markdown"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
+
+import { appHref } from "../api"
 
 const markdownFence = /^ {0,3}(\x60{3,}|~{3,})(?:md|markdown)[ \t]*\r?\n([\s\S]*?)\r?\n {0,3}\1[ \t]*$/i
 
@@ -58,5 +60,8 @@ export default function AssistantMarkdown({ text }) {
   // A reply wrapped as a Markdown document is prose. Other code fences are preserved.
   const cleaned = text.replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, "")
   const source = cleaned.match(markdownFence)?.[2] ?? text
-  return <Markdown skipHtml remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>{source}</Markdown>
+  // 답변 마크다운의 /app 링크는 실제 서비스 경로(같은 출처 /app·정적 사이트 루트)로 바꾼다.
+  const urlTransform = (url) => appHref(defaultUrlTransform(url))
+  return <Markdown skipHtml remarkPlugins={[remarkGfm, remarkBreaks]} components={components}
+    urlTransform={urlTransform}>{source}</Markdown>
 }

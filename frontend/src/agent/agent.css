@@ -261,6 +261,16 @@
 .q-field > span { font-size: 12px; font-weight: 750; color: #4c586b }
 .q-field small { font-size: 11px; color: #687387; font-weight: 500 }
 .q-field select, .q-field input, .q-field textarea { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid #d6dce6; border-radius: 9px; font: inherit; font-size: 12.5px; background: #fff; color: var(--ink); resize: vertical; transition: border-color .18s cubic-bezier(.2,0,0,1), box-shadow .18s cubic-bezier(.2,0,0,1) }
+.pi-completion-groups { display: grid; gap: 10px; margin-bottom: 14px }
+.pi-completion-groups details { min-width: 0; padding: 10px 12px; border: 1px solid #ecdfc3; border-radius: 9px }
+.pi-completion-groups summary { cursor: pointer; font-size: 13px; font-weight: 750 }
+.pi-completion-groups details[open] summary { margin-bottom: 10px }
+.pi-completion-groups fieldset { min-width: 0; border: 0; padding: 0; margin: 0 0 14px }
+.pi-completion-groups fieldset:last-child { margin-bottom: 0 }
+.pi-completion-groups legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 750; overflow-wrap: anywhere }
+.pi-completion-discount { display: grid; gap: 8px }
+.pi-completion-override { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px }
+.pi-completion-actions { flex-wrap: wrap }
 .q-field textarea.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px }
 .q-field select:focus-visible, .q-field input:focus-visible, .q-field textarea:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px #315df51f; outline: none }
 

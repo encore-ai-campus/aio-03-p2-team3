@@ -3,6 +3,22 @@
 // - 오류 정규화: 서버 오류 본문 {"error": {"code", "message"}}를 ApiError(status, code, message)로 바꾼다.
 // - 401 처리: 401도 ApiError로 던지고 AuthContext이 로컬 세션을 정리한 뒤 로그인 복구 안내로 이어진다.
 
+// SPA가 실제 서비스되는 기본 경로(Vite base와 함께 정해진다). 같은 출처 /app 배포는 "/app", 루트 정적 사이트는 "".
+// 라우터 basename은 빈 값을 받지 않으므로 쓰는 쪽에서 || "/"로 보정한다.
+// Vite 밖(node --test)에서는 import.meta.env가 없으므로 선택 접근으로 기본값을 쓴다.
+const env = import.meta.env ?? {}
+export const APP_BASE = (env.BASE_URL || "/").replace(/\/+$/, "")
+
+// 분리 배포에서는 VITE_API_BASE_URL(서버 주소)로 /api를 보내고,
+// 같은 출처 실행(로컬 vite 프록시·서버 /app 제공)에서는 비워 상대 경로를 쓴다.
+const API_BASE = (env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "")
+
+// 서버가 알려준 /app 접두 화면 주소를 실제 서비스 경로로 바꾼다. 접두가 없으면 그대로 둔다.
+export const appHref = (url) => {
+  if (!url.startsWith("/app")) return url
+  return APP_BASE + (url.slice(4) || "/")
+}
+
 export class ApiError extends Error {
   constructor(status, code, message) {
     super(message)
@@ -18,7 +34,7 @@ export async function apiFetch(path, { method = "GET", token, body, signal, resp
   if (body !== undefined && !isForm) headers["Content-Type"] = "application/json"
   let response
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${API_BASE}/api${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
