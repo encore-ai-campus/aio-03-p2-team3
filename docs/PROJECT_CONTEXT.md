@@ -203,7 +203,7 @@
 - 과거 시험별 상세 결과와 구현 경위는 각 병합 PR, `docs/test-records/`, [축약 전 문서](https://github.com/encore-ai-campus/aio-03-p2-team3/blob/c6b16007f824450fc5cfd23e77da877beaf87930/docs/PROJECT_CONTEXT.md)에 보존돼 있다. KE KOREA 원본 동일성·알려진 오류 점검 기록은 `test-records/20261110_kekorea_port_err_check.md`다.
 
 ## 7. 배포
-마지막 갱신: 2026-11-19 · 수신 근거·계약 연결 마이그레이션
+마지막 갱신: 2026-11-19 · Render 분리 배포(웹 서비스+정적 사이트)
 
 - `20261119_inbound_context`는 기존 문서함에 계약 거래처 연결, 키워드 검색 인덱스와 수신 메일 근거 필드를 추가한다. 기존 문서는 연결 정보를 비워 두고 문서함 상세에서 설정한다. 운영에서 수신 확장은 로컬 실행 또는 서버의 저장된 사용자 키 경로를 사용한다. 기존 개인 PC 프로토콜 v1은 분류 v2를 유지하며 문서함 임베딩은 지원하지 않는다.
 - `20261119_chat_mail`이 사용자별 새 메일 초안과 후속 알림 표를 추가한다. 앱은 시작 시 및 60초마다 수집된 답장을 확인하며, 사용자 화면은 기한 도달 알림을 30초마다 확인한다.
@@ -213,7 +213,8 @@
 - 대화형 API는 기존 DATABASE_URL에 대화 표와 공식 체크포인트를 저장한다. 앱 시작의 Alembic이 소유권 표를 준비하고 최초 대화 실행 때 saver가 public 표 4개를 준비해 RLS/공개 역할 접근을 제한한다. 실행 중 재시작은 interrupted로 남기고 본인의 명시적 상태 확인으로 이어간다. 운영 DB 적용/실제 모델·발송 확인은 별도다.
 - 단독 CI 작성은 `/app/trade/ci/standalone`과 `/app/trade/ci/standalone/{id}`를 사용한다. 기존 PI 연결 CI는 기존 주소를 사용한다. 실제 운영 연결은 확인하지 않았다.
 - Render 설정 기록(2026-11-10): `https://aio3-gmail-quote.onrender.com`, 무료·Singapore·main 병합 시 자동 배포, 빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`. 당시 설정 기록이며 이번 문서 갱신에서 현재 운영 상태를 재확인하지 않았다.
-- 계획 21.1절(#149)은 6·7절을 선행으로 UI 개발과 병행한다. `render.yaml`·`scripts/render-build.sh`가 `uv sync --locked` → `npm ci --include=dev` → `npm run build`와 기존 서버 시작을 연결한다. FastAPI는 `frontend/dist`만 `/app/`에서 제공하며 상세 주소는 `index.html`로 복구하고 누락 자산은 404로 반환한다. `/api`·Google callback·Gmail Pub/Sub·공개 약관·기존 `/static`과 `/`→`/inbox`는 유지한다. 빌드가 없는 개발 환경에서도 서버는 동작하고 UI만 503이다. `frontend/` 파일은 수정하지 않았다. Dashboard 관리 서비스에는 README 절차대로 Build Command/Node 버전을 적용해야 하며 실제 Render 설정·배포 커밋·운영 응답은 미확인이다. 전체 UI 통합 검증/진입 전환은 20절 뒤 21.2절, 실제 운영 전환은 사람의 22절이다. #149는 후속 검증까지 열어 둔다.
+- 운영 배포는 분리 구조다(2026-11-19). `render.yaml`이 서버 웹 서비스(빌드 `uv sync --locked`, `/healthz`)와 프론트 정적 사이트(`npm run build -- --base=/`, `dist` 공개, `/*`→`/index.html` 재작성)를 선언하고 Blueprint로 관리한다. 프론트는 빌드 시점 `VITE_API_BASE_URL`을 `/api` 접두 주소로 쓰고, 서버는 `FRONTEND_ORIGINS`(정적 사이트 주소)·`FRONTEND_BASE_PATH=/`(콜백 복귀 루트)·`APP_BASE_URL`을 맞춘다. 서버가 API로 심는 화면 주소는 `/documents`처럼 기본 경로 없이 발행하고 프론트가 `import.meta.env.BASE_URL`로 실제 경로를 만든다(같은 출처 `/app` 제공·마크다운 링크 모두 동일 규칙). 초기 서비스 생성 시 `GOOGLE_OAUTH_REDIRECT_URI`를 서버 주소로 맞추고 Google Cloud 콘솔 등록이 필요하다(사람 확인). 실제 Render 생성·배포·로그인 완주는 이 문서 갱신 시점 미확인이다.
+- 계획 21.1절(#149)의 같은 출처 제공은 로컬 점검·브라우저 테스트용으로 유지한다. `scripts/render-build.sh`가 `uv sync --locked` → `npm ci --include=dev` → `npm run build`와 기존 서버 시작을 연결하고 FastAPI는 `frontend/dist`만 `/app/`에서 제공하며 상세 주소는 `index.html`로 복구하고 누락 자산은 404로 반환한다(기본 Vite base `/app/`). `/api`·Google callback·Gmail Pub/Sub·공개 약관·기존 `/static`과 `/`→`/inbox`는 유지한다. 빌드가 없는 개발 환경에서도 서버는 동작하고 UI만 503이다. 전체 UI 통합 검증/진입 전환은 20절 뒤 21.2절, 실제 운영 전환은 사람의 22절이다. #149는 후속 검증까지 열어 둔다.
 - 배포 기반 검증은 전체 PostgreSQL `uv run pytest` 923 passed·2 skipped, 규칙 검사 경고 0개, 프론트 lint/test/공개값 검사·실제 빌드와 Chromium smoke를 통과했다. 상세 주소/자산·콜백/알림 경로와 서버 비밀값 제외 근거는 [진행 현황](plans/react-supabase/PROGRESS.md)의 21.1절에 있다. 전체 UI 완주·실제 운영 성공과 구분한다.
 - 앱 DB는 PostgreSQL 전용이다. `DATABASE_URL`이 비었거나 비PostgreSQL이면 시작을 거부하며 SQLite 자동 생성은 없다. Alembic 대상은 `public`으로 고정해 Supabase `auth`·`storage`를 건드리지 않는다. `20261112_react_worker_merge`가 Supabase 전환/기존 worker 분기를 합친다. 운영 반영 전 DB 백업과 기존 `TOKEN_ENCRYPTION_KEY` 유지가 필요하다. SQLite 등 기존 원본은 `app.db.copy_data`, 회사 이미지/발급 바이너리는 backfill 명령으로 복사·해시 검증하며 원본·바이너리 열은 아직 삭제하지 않았다([전환 계획](plans/react-supabase/PLAN.md) 4·9·10·22절).
 - `20261116_mail_triage`는 캘린더 OAuth 변경 뒤 기존 메일 표에 nullable 분류 결과를 추가한다. 기존 메일은 자동 재분류하지 않으며 운영 DB 적용은 별도 확인한다.

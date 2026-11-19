@@ -1,4 +1,4 @@
-# 기존 Dashboard 관리 서비스는 README의 Build Command 적용 절차를 따른다.
+# 서버는 웹 서비스로, React 앱은 정적 사이트로 분리 배포한다(README 분리 배포 절).
 services:
   - type: web
     name: aio3-gmail-quote
@@ -6,17 +6,57 @@ services:
     branch: main
     region: singapore
     plan: free
-    buildCommand: bash scripts/render-build.sh
+    buildCommand: uv sync --locked
     startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     envVars:
-      - key: NODE_VERSION
-        value: "22.16.0"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false
+      # 정적 사이트는 루트 경로로 서비스하므로 콜백 복귀 기본 경로를 "/"로 둔다(비우면 기본값 /app).
+      - key: FRONTEND_BASE_PATH
+        value: "/"
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
+      - key: GMAIL_PUBSUB_TOPIC
+        sync: false
+      - key: PUBSUB_PUSH_AUDIENCE
+        sync: false
+      - key: PUBSUB_PUSH_SERVICE_ACCOUNT
+        sync: false
+      - key: PUBSUB_PUSH_TOKEN
+        sync: false
+  - type: static
+    name: aio3-gmail-quote-ui
+    branch: main
+    rootDir: frontend
+    buildCommand: npm ci && npm run build -- --base=/
+    publishPath: dist
+    routes:
+      # SPA 새로고침·상세 주소를 index.html로 복구한다.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
-      - key: DATABASE_URL
+      # 서버 웹 서비스 주소(예: https://aio3-gmail-quote.onrender.com). 같은 출처 실행에서는 비운다.
+      - key: VITE_API_BASE_URL
         sync: false

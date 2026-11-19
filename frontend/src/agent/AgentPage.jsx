@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { apiFetch } from "../api"
+import { apiFetch, appHref } from "../api"
 import { useAuth } from "../useAuth"
 import { dateKey, formatEventWhen } from "../calendar/useCalendarEvents"
 import ReviewCard from "./ReviewCard"
@@ -63,11 +63,11 @@ function KnowledgeResult({ data }) {
   return <>
     {KNOWLEDGE_STATUS[data.knowledge_status] && <p>{KNOWLEDGE_STATUS[data.knowledge_status]}</p>}
     {data.knowledge_documents?.length > 0 && <div className="attach-row">{data.knowledge_documents.map(document =>
-      <a className="attach-chip" href={document.url} target="_blank" rel="noreferrer" key={document.document_id}>
+      <a className="attach-chip" href={appHref(document.url)} target="_blank" rel="noreferrer" key={document.document_id}>
         {FILE_ICON}{document.filename}</a>)}</div>}
     {data.knowledge_clauses?.map(clause => <article className="cite-card" key={clause.clause_id}>
       <div className="cite-src">
-        <a className="file-chip" href={clause.url} target="_blank" rel="noreferrer">{FILE_ICON}{clause.filename}</a>
+        <a className="file-chip" href={appHref(clause.url)} target="_blank" rel="noreferrer">{FILE_ICON}{clause.filename}</a>
         {clause.sources.map((source, index) => <span className="page-chip" key={index}>{source.source || `${source.page}p`}</span>)}
       </div>
       <p className="cite-text">{QUOTE_ICON}<span>{clause.text}</span></p>
