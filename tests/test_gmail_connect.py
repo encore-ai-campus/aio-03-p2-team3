@@ -473,3 +473,29 @@ def test_connect_without_topic_uses_polling_collection(database_url):
         with client.app.state.database.session() as session:
             watch = session.get(GmailWatch, me(client, token)["user_id"])
         assert (watch.status, watch.topic) == ("active", "local:history")
+
+
+def test_gmail_connect_completes_without_session_cookie(database_url):
+    # 분리 배포: Google 왕복 사이에 세션 쿠키가 오지 않아도 서명 state로 연결이 완성된다.
+    jwks, fake = FakeJwks(), FakeGoogle()
+    with make_client(database_url, jwks, fake) as client:
+        token = jwks.token()
+        url = start_connect(client, token)
+        client.cookies.clear()
+        result = client.get(settings_of(database_url).google_oauth_redirect_uri,
+                            params={"state": state_of(url), "code": "fake-code"}, follow_redirects=False)
+        assert result.headers["location"] == "/app/settings?gmail=connected"
+        assert me(client, token)["gmail"]["connected"] is True
+
+
+def test_forged_state_without_cookie_is_rejected(database_url):
+    jwks, fake = FakeJwks(), FakeGoogle()
+    with make_client(database_url, jwks, fake) as client:
+        token = jwks.token()
+        url = start_connect(client, token)
+        client.cookies.clear()
+        tampered = state_of(url)[:-4] + "AAAA"
+        result = client.get(settings_of(database_url).google_oauth_redirect_uri,
+                            params={"state": tampered, "code": "fake-code"}, follow_redirects=False)
+        assert result.headers["location"] == "/login?notice=login_failed"
+        assert me(client, token)["gmail"]["connected"] is False

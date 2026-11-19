@@ -804,3 +804,17 @@ def test_calendar_http_mutation_uses_etag_and_occurrence_id(monkeypatch):
     monkeypatch.setattr("app.clients.calendar.httpx.delete", lambda *a, **kw: httpx.Response(412))
     with pytest.raises(CalendarChanged):
         google.change_event("fake-token", event_id, '"v1"', None)
+
+
+def test_calendar_callback_completes_without_session_cookie(database_url):
+    # 분리 배포: 쿠키 없이 돌아온 콜백이 DB 일회성 state로 Calendar 연결을 완성한다.
+    settings = replace(settings_of(database_url), gmail_pubsub_topic="")
+    with calendar_client(database_url, settings) as (client, jwks, _calendar):
+        token = jwks.token()
+        start = start_calendar(client, token)
+        state = parse_qs(urlparse(start).query)["state"][0]
+        client.cookies.clear()
+        result = client.get("/auth/google/callback",
+                            params={"state": state, "code": "fake-code"}, follow_redirects=False)
+        assert result.headers["location"] == "/app/settings?calendar=connected"
+        assert me(client, token)["calendar"]["connected"] is True

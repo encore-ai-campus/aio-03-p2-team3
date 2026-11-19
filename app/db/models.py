@@ -100,7 +100,9 @@ class CalendarEventReceipt(Base, Created):
 
 
 class CalendarOAuthAttempt(Base):
-    """서명 쿠키를 복원해도 재사용하지 못하는 일회성 서버 state·암호화 PKCE."""
+    """쿠키가 없어도 재사용하지 못하는 일회성 서버 state·암호화 PKCE.
+
+    Calendar와 Gmail 연결이 함께 쓴다(`service` 구분). 대기 행 조회로 콜백이 쿠키 없이 자립한다."""
     __tablename__ = "calendar_oauth_attempts"
     state_hash: Mapped[str] = mapped_column(String, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -109,6 +111,7 @@ class CalendarOAuthAttempt(Base):
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
     consent: Mapped[bool] = mapped_column(Boolean)
     consumed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    service: Mapped[str] = mapped_column(String(16), default="calendar", server_default="calendar")
 
 
 class UserOpenAIKey(Base, Updated):

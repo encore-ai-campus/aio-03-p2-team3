@@ -101,14 +101,28 @@ def events(request: Request, start: str, end: str, user_id: int = Depends(bearer
         raise GmailConnectionError(error.status, error.code, error.message) from error
 
 
+def has_pending_attempt(request, state) -> bool:
+    """쿠키 없이 온 콜백을 Calendar 연결로 인식하는 근거. 미소비·유효한 대기 행이 있는지 본다."""
+    access = request.app.state.calendar_access
+    if not state:
+        return False
+    with access.database.session() as session:
+        return session.scalar(select(CalendarOAuthAttempt.state_hash).where(
+            CalendarOAuthAttempt.state_hash == _digest(state),
+            CalendarOAuthAttempt.consumed.is_(False),
+            CalendarOAuthAttempt.expires_at > utcnow(),
+        ).limit(1)) is not None
+
+
 def complete_callback(request, pending, state, code, error):
     access = request.app.state.calendar_access
-    if not state or not secrets.compare_digest(state, pending.get("state", "")):
+    if not state:
+        return _to_app(request, "login_failed")
+    if pending.get("state") and not secrets.compare_digest(state, pending["state"]):
         # 변조된 콜백도 원래 대기 state를 소비한다.
-        if pending.get("state"):
-            with access.database.session() as session:
-                session.execute(delete(CalendarOAuthAttempt).where(
-                    CalendarOAuthAttempt.state_hash == _digest(pending["state"])))
+        with access.database.session() as session:
+            session.execute(delete(CalendarOAuthAttempt).where(
+                CalendarOAuthAttempt.state_hash == _digest(pending["state"])))
         return _to_app(request, "login_failed")
     # 원자적 소비는 쿠키 재생·동시 콜백에도 딱 한 요청만 코드를 교환하게 한다.
     # 소비된 행은 최종 저장까지 남겨 해제/새 연결이 진행 중 콜백도 취소할 수 있게 한다.
