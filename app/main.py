@@ -36,7 +36,7 @@ from app.graph.wiring import make_workflow
 from app.graph.service import AgentService
 from app.db.agent import ConversationStore
 from app.db.checkpoints import checkpoints
-from app.mail import candidates, inbox, push as gmail_push, api as mail_api
+from app.mail import candidates, inbox, push as gmail_push, api as mail_api, followups
 from app.quote import router as quotes
 from app.runlog import router as runs
 from app.services.auth import GoogleAccess, make_cipher
@@ -144,6 +144,19 @@ def create_app(settings: Settings | None = None, google=None,
                     pass
 
         gmail_task = asyncio.create_task(maintain_gmail())
+        async def refresh_mail_followups():
+            while not worker_stop.is_set():
+                try:
+                    await asyncio.to_thread(followups.refresh_due, database)
+                except Exception as error:
+                    logging.getLogger(__name__).warning("후속 알림 확인 실패 (%s)", type(error).__name__)
+                try:
+                    await asyncio.wait_for(worker_stop.wait(), timeout=60)
+                except TimeoutError:
+                    pass
+
+        followup_task = asyncio.create_task(refresh_mail_followups())
+
         async def clean_worker_queue():
             while not worker_stop.is_set():
                 try:
@@ -166,6 +179,7 @@ def create_app(settings: Settings | None = None, google=None,
             worker_stop.set()
             if gmail_task:
                 await gmail_task
+            await followup_task
             if worker_task:
                 await worker_task  # 정리 스레드가 끝난 다음 DB를 닫는다.
             if collector:

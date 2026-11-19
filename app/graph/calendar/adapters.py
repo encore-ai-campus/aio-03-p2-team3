@@ -8,10 +8,11 @@
 from cryptography.fernet import InvalidToken
 from sqlalchemy.exc import IntegrityError
 
-from app.auth.calendar import calendar_access_token
-from app.clients.calendar import CalendarRejected
+from app.services.calendar import CalendarEventsError, calendar_access_token, list_primary_events
+from app.clients.calendar import CalendarChanged, CalendarDenied, CalendarRejected, calendar_can_write
 from app.clients.gmail import GoogleError, TokenExpired
 from app.db.models import CalendarEventReceipt, CalendarToken
+from app.graph.calendar.changes import same_slot
 from app.graph.calendar.schemas import BusySnapshot, CalendarInput, Interval
 from app.graph.schemas import ExecutionResult, PreparedAction, WorkflowError, content_hash
 from app.services.auth import GoogleAccess, utcnow
@@ -43,6 +44,103 @@ class ExistingCalendar:
     @property
     def database(self):
         return self.access.database
+
+    def list_events(self, actor_id: int, start: str, end: str) -> dict:
+        try:
+            return list_primary_events(self.access, actor_id, start, end)
+        except CalendarEventsError as error:
+            code = "calendar_unavailable" if error.status >= 500 else error.code
+            raise WorkflowError(code) from error
+
+    def _change_access(self, session, actor_id):
+        stored = self._token(session, actor_id)
+        if stored is None:
+            raise WorkflowError("calendar_not_connected")
+        if not calendar_can_write(stored.scopes):
+            raise WorkflowError("calendar_write_required")
+        try:
+            return self._access_token(session, stored)
+        except ConnectionDropped as error:
+            raise WorkflowError("calendar_not_connected") from error
+        except ProviderDown as error:
+            raise WorkflowError("calendar_unavailable") from error
+
+    def event_for_change(self, actor_id, event_id):
+        with self.database.session() as session:
+            token = self._change_access(session, actor_id)
+            try:
+                event = self.access.google.event_for_change(token, event_id)
+            except CalendarDenied as error:
+                raise WorkflowError("calendar_write_required") from error
+            except GoogleError as error:
+                raise WorkflowError("calendar_unavailable") from error
+        if event is None:
+            raise WorkflowError("calendar_event_changed")
+        return event
+
+    def competing_events(self, actor_id, event_id, start, end):
+        with self.database.session() as session:
+            token = self._change_access(session, actor_id)
+            try:
+                events = self.access.google.list_events(token, "primary", time_min=start, time_max=end, include_details=True)
+            except GoogleError as error:
+                raise WorkflowError("calendar_unavailable") from error
+        return [event for event in events if event["id"] != event_id and not event["transparent"]]
+
+    @staticmethod
+    def _change_receipt(action, stored):
+        if stored.content_hash != action.content_hash:
+            return ExistingCalendar._result(action, "failed", "idempotency_conflict")
+        original = action.payload["event"]
+        new_time = action.payload["new_time"]
+        event = {key: original[key] for key in ("id", "summary", "start", "end", "all_day")}
+        receipt = {"event_id": stored.event_id, "calendar_id": stored.calendar_id,
+                   "calendar_event": {**event, **(new_time or {})},
+                   "calendar_outcome": "moved" if new_time else "cancelled"}
+        return ExecutionResult(status="succeeded", action_id=action.id, content_hash=action.content_hash, receipt=receipt)
+
+    def _save_change(self, session, actor_id, action):
+        receipt = CalendarEventReceipt(action_id=action.id, user_id=actor_id,
+            event_id=action.payload["event"]["id"], calendar_id="primary", content_hash=action.content_hash)
+        session.add(receipt)
+        session.flush()
+        return self._change_receipt(action, receipt)
+
+    def change(self, actor_id: int, action: PreparedAction) -> ExecutionResult:
+        event_id = action.payload["event"]["id"]
+        with user_lock(self.database, actor_id), self.database.session() as session:
+            receipt = session.get(CalendarEventReceipt, action.id)
+            if receipt is not None:
+                return self._change_receipt(action, receipt)
+            try:
+                token = self._change_access(session, actor_id)
+            except WorkflowError as error:
+                return self._result(action, "failed", error.code)
+            try:
+                self.access.google.change_event(token, event_id, action.version, action.payload["new_time"])
+            except CalendarChanged:
+                return self._result(action, "failed", "calendar_event_changed")
+            except CalendarDenied:
+                return self._result(action, "failed", "calendar_write_required")
+            except CalendarRejected:
+                return self._result(action, "failed", "calendar_rejected")
+            except GoogleError:
+                return self._result(action, "unknown", UNCONFIRMED)
+            return self._save_change(session, actor_id, action)
+
+    def lookup_change(self, actor_id: int, action: PreparedAction) -> ExecutionResult:
+        with user_lock(self.database, actor_id), self.database.session() as session:
+            receipt = session.get(CalendarEventReceipt, action.id)
+            if receipt is not None:
+                return self._change_receipt(action, receipt)
+            try:
+                token = self._change_access(session, actor_id)
+                event = self.access.google.event_for_change(token, action.payload["event"]["id"])
+            except (WorkflowError, GoogleError):
+                return self._result(action, "unknown", UNCONFIRMED)
+            new_time = action.payload["new_time"]
+            applied = event is None if new_time is None else event is not None and same_slot(event, new_time)
+            return self._save_change(session, actor_id, action) if applied else self._result(action, "unknown", UNCONFIRMED)
 
     def read_busy(self, actor_id: int, query: CalendarInput) -> BusySnapshot:
         """요청한 캘린더 전부를 담는다(빈 캘린더도). 조회 오류 캘린더가 있으면 실패한다."""

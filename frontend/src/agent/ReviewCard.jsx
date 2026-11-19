@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import DocCard from "./DocCard"
+import { CalendarChangeCard } from "./CalendarChangeCard"
 
 /* 시안 docs/plans/agent-chat-ui — 확인 카드: 배지 + 메일 프레임 + 문서 카드(승인), 항목별 입력(질문). */
 
@@ -73,7 +74,11 @@ export default function ReviewCard({ waiting, results, busy, onResume }) {
   const approval = waiting.kind === "approval"
   const action = waiting.action
   const payload = action?.payload
-  const mail = approval && action.domain === "mail"
+  const editingReply = approval && action.operation === "edit_reply"
+  const mail = approval && action.domain === "mail" && !editingReply
+  const calendar = approval && action.domain === "calendar"
+  const calendarTitle = { create: "이 일정을 등록할까요?", move_event: "이 일정의 시각을 변경할까요?", cancel_event: "이 일정을 취소할까요?" }
+  const calendarApprove = { create: "확인하고 등록", move_event: "확인하고 변경", cancel_event: "확인하고 일정 취소" }
   const packing = action?.operation === "approve_packing"
   const candidates = [...new Map(results.flatMap(item => item.data?.candidates || [])
     .filter(item => item && ["pending", "send_failed"].includes(item.status)).map(item => [item.id, item])).values()]
@@ -95,9 +100,13 @@ export default function ReviewCard({ waiting, results, busy, onResume }) {
     {approval ? <>
       <header className="review-head">
         <Badge tone="blue">승인 대기</Badge>
-        <h2 className="review-title">{mail ? "이 메일을 보내도 될까요?" : packing ? "포장 합계를 승인할까요?" : "이 문서를 발급할까요?"}</h2>
+        <h2 className="review-title">{editingReply ? "이 답장 초안을 수정할까요?" : mail ? "이 메일을 보내도 될까요?" : calendar ? calendarTitle[action.operation] : packing ? "포장 합계를 승인할까요?" : "이 문서를 발급할까요?"}</h2>
       </header>
-      {mail ? <>
+      {editingReply ? <div className="mail-frame reply-edit-review">
+        <div className="mail-subject">{payload.original.label} · {payload.changes.subject}</div>
+        <div className="mail-body"><b>수정 전</b><p>{payload.original.body}</p></div>
+        <div className="mail-body"><b>수정 후</b><p>{payload.changes.body}</p></div>
+      </div> : mail ? <>
         <div className="mail-frame">
           <div className="mail-head">
             <span className="mail-dir">{REPLY_ICON}</span>
@@ -110,7 +119,7 @@ export default function ReviewCard({ waiting, results, busy, onResume }) {
         {payload.files?.length > 0 && <AttachChips files={payload.files} />}
         {payload.document && <MailDocumentCard payload={payload} />}
         <p className="review-note">같은 메일 대화로 발송됩니다. 문서 발급과 메일 발송은 별개입니다.</p>
-      </> : <>
+      </> : calendar ? <CalendarChangeCard action={action} /> : <>
         {payload.preview?.document ? <DocCard hero chip={payload.kind} chipClass={payload.kind?.toLowerCase()}
           number={payload.preview.document.document_number || "승인·발급 시 문서번호 자동 생성"}
           parties={tradePartyNames(payload.preview.document)}
@@ -121,8 +130,8 @@ export default function ReviewCard({ waiting, results, busy, onResume }) {
         <p className="review-note">{packing ? "원본과 계산 합계가 같은지 확인한 뒤 승인해 주세요." : "문서 발급은 메일 발송과 별개입니다. 승인 버전의 내용이 고정됩니다."}</p>
       </>}
       <footer className="review-actions">
-        <button className="btn" disabled={busy} onClick={() => decide("cancel")}>취소</button>
-        <button className="btn blue" disabled={busy} onClick={() => decide("approve")}>{mail ? <>{SEND_ICON}확인하고 보내기</> : "확인하고 승인"}</button>
+        <button className="btn" disabled={busy} onClick={() => decide("cancel")}>{calendar ? "그만두기" : "취소"}</button>
+        <button className="btn blue" disabled={busy} onClick={() => decide("approve")}>{editingReply ? "수정 내용 저장" : mail ? <>{SEND_ICON}확인하고 보내기</> : calendar ? calendarApprove[action.operation] : "확인하고 승인"}</button>
       </footer>
     </> : <form onSubmit={answer}>
       <header className="review-head">

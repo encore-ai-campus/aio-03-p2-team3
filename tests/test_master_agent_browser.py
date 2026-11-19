@@ -1,5 +1,6 @@
 """실제 React/API/체크포인트와 가짜 모델·Gmail의 사용자 승인 경로."""
 import json
+import re
 import os
 from pathlib import Path
 import subprocess
@@ -42,13 +43,15 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
     release_search = Event()
     search = ExistingMail.search
 
-    def delayed_search(self, actor_id, query, cursor=None):
+    def delayed_search(self, actor_id, query):
         if not release_search.wait(timeout=25):
             raise RuntimeError('가상 검색 대기 시간 초과')
-        return search(self, actor_id, query, cursor)
+        return search(self, actor_id, query)
 
     monkeypatch.setattr(ExistingMail, 'search', delayed_search)
-    app = app_for(database_url, jwks, google, choices, storage=FakeStorage(),
+    from tests.test_calendar_connect import FakeCalendar
+    calendar = FakeCalendar()
+    app = app_for(database_url, jwks, google, choices, storage=FakeStorage(), calendar=calendar,
                   knowledge_adapters=lambda *_: (FakeRenderer(), FakeExtractor(), FakeEmbedder()))
     session = {'access_token': token, 'refresh_token': 'fake-refresh', 'token_type': 'bearer',
         'expires_at': int(time.time()) + 3600, 'expires_in': 3600,
@@ -117,7 +120,8 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         approval = page.get_by_role('region', name='작업 최종 확인')
         expect(approval).to_be_visible(timeout=20000)
         expect_stopped('승인 대기')
-        expect(approval.get_by_text('받는 사람: sender@example.invalid', exact=True)).to_be_visible()
+        expect(approval.locator('.mail-to').get_by_text('받는 사람', exact=True)).to_be_visible()
+        expect(approval.locator('.mail-to').get_by_text('sender@example.invalid', exact=True)).to_be_visible()
         expect(approval.get_by_text('가상 답장 본문 2', exact=True)).to_be_visible()
         assert not google.mailbox.called('send')
         page.set_viewport_size({'width': 390, 'height': 844})
@@ -147,7 +151,7 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         page.locator('.work-row').first.click()  # 접힌 작업 타임라인을 펼친 뒤 단계를 연다(채팅 UI 개편).
         page.get_by_text('파일 발급 · 완료', exact=True).click()
         with page.expect_download() as download:
-            page.get_by_role('button', name='다운로드').filter(has_text='.pdf').click()
+            page.get_by_role('button', name=re.compile(r'\.pdf 다운로드$')).click()
         assert download.value.suggested_filename.endswith('.pdf')
         assert len(google.mailbox.called('send')) == 1 and not errors
         page.screenshot(path=str(tmp_path / 'agent-mobile.png'), full_page=True)
@@ -158,10 +162,10 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         row.click()
         found = page.get_by_role('list', name='작업 결과').locator('li.step').filter(has_text='발급 문서 검색')
         found.get_by_role('button', name='발급 문서 검색 완료').click()
-        expect(found.get_by_text('PI PI-100', exact=True)).to_be_visible()
-        expect(found.get_by_text('발급 버전 1', exact=False)).to_be_visible()
+        expect(found.get_by_text('PI-100', exact=True)).to_be_visible()
+        expect(found.get_by_text('버전 1', exact=False)).to_be_visible()
         with page.expect_download() as download:
-            found.get_by_role('button', name='다운로드').filter(has_text='.pdf').click()
+            found.get_by_role('button', name=re.compile(r'\.pdf 다운로드$')).click()
         assert download.value.suggested_filename.endswith('.pdf')
         page.get_by_label('업무 요청', exact=True).fill('가상 모델 오류를 확인해 줘')
         page.get_by_role('button', name='요청하기', exact=True).click()
@@ -178,9 +182,229 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         expect(page.get_by_text('문서함 파일을 찾았습니다.', exact=True)).to_be_visible(timeout=20000)
         row.click()
         page.get_by_role('button', name='문서함 검색 완료').click()
-        page.get_by_role('link', name='테이블오더.pdf 열기').click()
-        expect(page).to_have_url(f'{base}/app/documents?document={document_id}')
-        page.get_by_role('button', name='원본 보기').click()
-        expect(page.get_by_role('img', name='업로드한 원본 1페이지')).to_be_visible(timeout=10000)
+        with context.expect_page() as opened:
+            page.get_by_role('link', name='테이블오더.pdf', exact=True).click()
+        document_page = opened.value
+        expect(document_page).to_have_url(f'{base}/app/documents?document={document_id}')
+        document_page.get_by_role('button', name='원본 보기').click()
+        expect(document_page.get_by_role('img', name='업로드한 원본 1페이지')).to_be_visible(timeout=10000)
+        document_page.close()
+        fence = chr(96) * 3
+        choices.calls.append("\n".join([
+            fence + "markdown", "# 납기 검토", "",
+            "**확인 필요**", "", "- 발주 확인", "- 검수 완료", "",
+            "| 품목 | 납기 |", "| --- | --- |", "| SC-110 | 영업일 21일 |", "",
+            "| 거래처 참조 번호 | 선적 확인 시각 | 품질검사 담당자 | 요청 수량 및 단위 |",
+            "| --- | --- | --- | --- |", "| FW-2026 | 오전 10시 | 구매팀 | 100개 |", "",
+            "> 계약서 제1조를 참고해 주세요.", "",
+            "[문서함](/app/documents) · [위험한 주소](javascript:alert%281%29)", "",
+            '<img src="https://example.invalid/pixel" onerror="void(0)">', "",
+            fence + "python", "product = " + repr("SC-" + "1" * 90), fence, fence,
+        ]))
+        context.grant_permissions(["clipboard-read", "clipboard-write"])
+        page.get_by_label("업무 요청", exact=True).fill("납기 검토 내용과 예제 코드 보여줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(page.get_by_role("heading", name="납기 검토", exact=True)).to_be_visible(timeout=20000)
+        answer = page.locator(".msg-agent").last
+        expect(answer.locator("strong")).to_have_text("확인 필요")
+        expect(answer.get_by_role("listitem")).to_have_count(2)
+        expect(answer.get_by_role("cell", name="영업일 21일")).to_be_visible()
+        expect(answer.locator("blockquote")).to_have_text("계약서 제1조를 참고해 주세요.")
+        expect(answer.get_by_role("link", name="문서함")).to_have_attribute("href", "/app/documents")
+        expect(answer.get_by_text("위험한 주소")).to_be_visible()
+        expect(answer.get_by_role("link", name="위험한 주소")).to_have_count(0)
+        expect(answer.locator("img")).to_have_count(0)
+        tables = answer.get_by_role("region", name="표 · 가로 스크롤")
+        assert tables.first.evaluate("(el) => el.scrollWidth === el.clientWidth")
+        table = tables.last
+        code = answer.get_by_role("region", name="코드 · 가로 스크롤")
+        for region in (table, code):
+            assert region.evaluate("(el) => el.scrollWidth > el.clientWidth")
+            region.focus()
+            expect(region).to_be_focused()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        copy = answer.get_by_role("button", name="복사", exact=True)
+        copy.focus()
+        page.keyboard.press("Enter")
+        expect(answer.get_by_role("button", name="복사됨", exact=True)).to_be_visible()
+        assert page.evaluate("navigator.clipboard.readText()") == code.locator("code").text_content()
+        page.screenshot(path=str(tmp_path / "agent-markdown-mobile.png"), full_page=True)
+        choices.calls.extend([
+            ("search_mail", {"query": "테스트용", "field": "body", "reply_status": "replied"}),
+            "보낸 답장이 확인되는 메일을 찾았습니다.",
+        ])
+        page.get_by_label("업무 요청", exact=True).fill("본문에 테스트용이 있고 답장 보낸 메일 보여줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(page.get_by_text("보낸 답장이 확인되는 메일을 찾았습니다.")).to_be_visible(timeout=20000)
+        row.click()
+        search_step = page.locator(".step").filter(has=page.get_by_role("button", name="메일 검색 완료")).last
+        search_step.get_by_role("button", name="메일 검색 완료").click()
+        mail_results = search_step.get_by_role("region", name="수신 메일 검색 결과")
+        expect(mail_results.get_by_role("link", name="가상 문의")).to_be_visible()
+        expect(mail_results.get_by_text("테스트용 가상 문의입니다.")).to_be_visible()
+        expect(mail_results.get_by_text("답장 발송 확인", exact=True)).to_have_count(2)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.emulate_media(reduced_motion="reduce")
+        mail_results.evaluate("(element) => element.scrollIntoView({block: 'center'})")
+        mail_results.screenshot(path=str(tmp_path / "agent-mail-results-mobile.png"), animations="disabled")
+        from app.db.models import Counterparty, PriceListItem
+        with app.state.database.session() as session:
+            session.add(Counterparty(user_id=owner, company_key="fictionalpha", legal_name="Fiction Alpha",
+                                     aliases=["알파"], contact="가상 담당자", email="alpha@example.invalid"))
+            session.add(PriceListItem(user_id=owner, item_name="V-Cera Serum", product_code="SC-110",
+                party_key="fictionalpha", role="sale", currency="USD", unit_price_text="12.50", unit="each"))
+        choices.calls.extend([
+            ("search_trade_prices", {"product": "SC-110", "counterparty": "알파", "role": "sale", "currency": "USD"}),
+            ("search_counterparties", {"query": "알파"}),
+            "등록 단가와 거래처 연락처를 확인했습니다.",
+        ])
+        page.get_by_label("업무 요청", exact=True).fill("알파의 SC-110 판매 단가와 담당자 이메일 알려줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(page.get_by_text("등록 단가와 거래처 연락처를 확인했습니다.")).to_be_visible(timeout=20000)
+        row.click()
+        page.get_by_role("button", name="등록 단가 조회 완료").click()
+        page.get_by_role("button", name="거래처 정보 조회 완료").click()
+        price_result = page.get_by_role("region", name="등록 단가 조회 결과")
+        contact_result = page.get_by_role("region", name="등록 거래처 조회 결과")
+        expect(price_result.get_by_text("USD 12.50", exact=False)).to_be_visible()
+        expect(price_result.get_by_text("Fiction Alpha", exact=True)).to_be_visible()
+        expect(contact_result.get_by_text("alpha@example.invalid", exact=True)).to_be_visible()
+        expect(contact_result.get_by_text("가상 담당자", exact=True)).to_be_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.screenshot(path=str(tmp_path / "agent-trade-directory-mobile.png"), full_page=True)
+        from datetime import timedelta
+        from app.clients.calendar import CALENDAR_SCOPES
+        from app.db.models import CalendarToken
+        with app.state.database.session() as session:
+            account = app.state.calendar_access
+            session.add(CalendarToken(user_id=owner, google_sub="calendar-fixture",
+                scopes=list(CALENDAR_SCOPES), access_token_enc=account.cipher.encrypt("calendar-access"),
+                refresh_token_enc=account.cipher.encrypt("calendar-refresh"),
+                expires_at=utcnow() + timedelta(hours=1)))
+        event = {"id": "occurrence-fixture", "summary": "알파 정기 미팅", "all_day": False,
+                 "start": "2042-11-22T10:00:00+09:00", "end": "2042-11-22T11:00:00+09:00"}
+        calendar.events = [event]
+        calendar.changed_events[event["id"]] = {**event, "etag": "1",
+            "recurring_series": False, "recurring_instance": True}
+        choices.calls.extend([
+            ("list_calendar_events", {"start": "2042-11-22T00:00:00+09:00", "end": "2042-11-23T00:00:00+09:00"}),
+            ("prepare_move_calendar_event", {"event_id": event["id"], "new_start": "2042-11-22T15:00:00+09:00"}),
+            "알파 정기 미팅을 오후 3시로 옮겼습니다.",
+        ])
+        page.get_by_label("업무 요청", exact=True).fill("11월 22일 알파 정기 미팅 10시에서 15시로 옮겨줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(approval.get_by_role("heading", name="이 일정의 시각을 변경할까요?")).to_be_visible(timeout=20000)
+        expect(approval.get_by_text("선택한 반복 일정 한 회차")).to_be_visible()
+        expect(approval.get_by_text("2042-11-22 10:00")).to_be_visible()
+        expect(approval.get_by_text("2042-11-22 15:00")).to_be_visible()
+        assert not calendar.called("change_event")
+        page.screenshot(path=str(tmp_path / "agent-calendar-change-mobile.png"), full_page=True)
+        approval.get_by_role("button", name="확인하고 변경").click()
+        expect(page.get_by_text("알파 정기 미팅을 오후 3시로 옮겼습니다.")).to_be_visible(timeout=20000)
+        assert len(calendar.called("change_event")) == 1
+        calendar.events = [calendar.changed_events[event["id"]]]
+        choices.calls.extend([
+            ("list_calendar_events", {"start": "2042-11-22T00:00:00+09:00", "end": "2042-11-23T00:00:00+09:00"}),
+            ("prepare_cancel_calendar_event", {"event_id": event["id"]}),
+            "알파 정기 미팅의 한 회차를 취소했습니다.",
+        ])
+        page.get_by_label("업무 요청", exact=True).fill("그날 15시 알파 정기 미팅만 취소해줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(approval.get_by_role("heading", name="이 일정을 취소할까요?")).to_be_visible(timeout=20000)
+        expect(approval.get_by_text("선택한 반복 일정 한 회차")).to_be_visible()
+        expect(approval.get_by_text("2042-11-22 15:00")).to_be_visible()
+        assert len(calendar.called("change_event")) == 1
+        approval.get_by_role("button", name="확인하고 일정 취소").click()
+        expect(page.get_by_text("알파 정기 미팅의 한 회차를 취소했습니다.")).to_be_visible(timeout=20000)
+        assert len(calendar.called("change_event")) == 2 and event["id"] not in calendar.changed_events
+        from app.services.mailbox import edit_candidate
+        from app.db.mailbox import MailStore
+        from tests.fakes.gmail import encoded
+        from tests.test_chat_mail_workflows import append_mail
+        from app.mail.followups import refresh_due
+
+        def ask(message, answer):
+            page.get_by_label("업무 요청", exact=True).fill(message)
+            page.get_by_role("button", name="요청하기", exact=True).click()
+            expect(page.get_by_text(answer, exact=True)).to_be_visible(timeout=20000)
+            row.click()
+
+        choices.calls.extend([("prepare_new_mail", {"recipients": ["buyer@example.invalid"],
+            "subject": "신규 초안", "body": "가상 초안 본문"}), "새 메일 초안을 준비했습니다."])
+        ask("buyer@example.invalid에 새 초안을 써 줘", "새 메일 초안을 준비했습니다.")
+        page.get_by_role("button", name="새 메일 초안 완료").click()
+        compose = page.get_by_role("region", name="새 메일 초안")
+        expect(compose.get_by_label("받는 사람")).to_have_value("buyer@example.invalid")
+        compose.get_by_label("본문").fill("모바일에서 수정한 초안")
+        compose.get_by_role("button", name="초안 저장").click()
+        expect(compose.get_by_text("초안 수정 내용을 저장했습니다.")).to_be_visible()
+        page.reload()
+        expect(page.get_by_text("새 메일 초안을 준비했습니다.")).to_be_visible()
+        row.click()
+        page.get_by_role("button", name="새 메일 초안 완료").click()
+        expect(compose.get_by_label("본문")).to_have_value("모바일에서 수정한 초안")
+
+        original = "가상 답장 본문 1"
+        # 첫 스레드의 보내지 않은 후보도 먼저 한 후보만 있는 새 스레드에서 확인한다.
+        (edit_id,) = add_mail(type("Client", (), {"app": app})(), owner, message_id="edit-fixture",
+                              thread_id="edit-thread", kinds=("general",))
+        edit_candidate(MailStore(app.state.database), owner, edit_id, subject="Re: 가상 문의", body=original + "\n배송 조건은 유지합니다.",
+                       expected_subject="Re: 가상 문의", expected_body=original)
+        choices.calls.extend([("get_mail", {"thread_id": "edit-thread"}),
+            ("prepare_edit_reply", {"candidate_id": edit_id, "body": "수정한 첫 문장입니다.\n배송 조건은 유지합니다."}),
+            "기존 답장에 수정을 저장했습니다."])
+        page.get_by_label("업무 요청", exact=True).fill("첫 문장만 바꿔줘")
+        page.get_by_role("button", name="요청하기", exact=True).click()
+        expect(approval.get_by_text("수정 전", exact=True)).to_be_visible(timeout=20000)
+        expect(approval.get_by_text("수정 후", exact=True)).to_be_visible()
+        expect(approval.get_by_text("배송 조건은 유지합니다.", exact=False)).to_have_count(2)
+        approval.get_by_role("button", name="수정 내용 저장").click()
+        expect(page.get_by_text("기존 답장에 수정을 저장했습니다.", exact=True)).to_be_visible(timeout=20000)
+
+        choices.calls.extend([("prepare_document", {"kind": "PI",
+            "values": pi_input(document_number="PI-BROWSER-DRAFT", payment_terms=None).model_dump(mode="json")}),
+            ("list_trade_drafts", {"kind": "PI"}), "작성 중인 PI를 찾았습니다."])
+        ask("작성 중인 테스트 PI", "작성 중인 PI를 찾았습니다.")
+        page.get_by_role("button", name="무역서류 초안 조회 완료").click()
+        drafts = page.get_by_role("region", name="작성 중인 무역서류")
+        expect(drafts.get_by_text("PI · PI-BROWSER-DRAFT")).to_be_visible()
+        expect(drafts.get_by_text("지급 조건", exact=False)).to_be_visible()
+        expect(drafts.get_by_role("link", name="이어서 작성")).to_have_attribute("href", re.compile(r"/app/trade/pi/\d+$"))
+
+        google.mailbox.raw_messages["fake-message"]["payload"]["parts"] = [
+            {"filename": "가상 선적.txt", "mimeType": "text/plain", "body": {"data": encoded("fixture"), "size": 7}}]
+        choices.calls.extend([("get_mail", {"thread_id": "fake-thread"}),
+            ("list_mail_attachments", {"thread_id": "fake-thread", "message_id": "fake-message"}),
+            "원본 첨부 한 개를 찾았습니다."])
+        ask("가상 문의 원본 첨부 보여 줘", "원본 첨부 한 개를 찾았습니다.")
+        page.get_by_role("button", name="메일 첨부 조회 완료").click()
+        files = page.get_by_role("region", name="원본 메일 첨부")
+        expect(files.get_by_text("가상 선적.txt")).to_be_visible()
+        with page.expect_download() as downloaded:
+            files.get_by_role("button", name="원본 받기").click()
+        assert downloaded.value.suggested_filename == "가상 선적.txt"
+        assert downloaded.value.path().read_bytes() == b"fixture"
+
+        due = utcnow() + timedelta(days=3)
+        append_mail(app.state.database, owner, "fake-thread", "followup-out", utcnow(), "out")
+        choices.calls.extend([("search_sent_mail", {"query": "발송 조건"}),
+            ("register_mail_followup", {"thread_id": "fake-thread", "due_at": due.isoformat()}),
+            "답장이 없으면 알림으로 알려 드리겠습니다."])
+        ask("가상 문의에 사흘 답 없으면 알려줘", "답장이 없으면 알림으로 알려 드리겠습니다.")
+        page.get_by_role("button", name="후속 알림 등록 완료").click()
+        reminders = page.get_by_role("region", name="메일 후속 알림")
+        expect(reminders.get_by_text("답장 대기")).to_be_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.screenshot(path=str(tmp_path / "agent-mail-work-mobile.png"), full_page=True)
+        refresh_due(app.state.database, now=due + timedelta(seconds=1))
+        page.reload()
+        notice = page.get_by_role("complementary", name="답장 대기 알림")
+        expect(notice).to_be_visible(timeout=10000)
+        notice.get_by_role("link", name="후속 알림 관리").click()
+        expect(page.get_by_role("heading", name="메일 후속 알림")).to_be_visible()
+        page.get_by_role("button", name="발송 조건 fake-thread 알림 취소").click()
+        expect(page.get_by_text("알림 취소", exact=True)).to_be_visible()
+        expect(notice).to_have_count(0)
+        assert len(google.mailbox.called("send")) == 1
         assert not errors
         browser.close()

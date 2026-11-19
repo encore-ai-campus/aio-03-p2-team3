@@ -23,8 +23,9 @@ from app.prompts import Prompt
 from app.services.openai_keys import user_openai
 
 PLAN_PROMPT = Prompt("workflow_plan", "v1", """요청을 mail/documents/calendar 작업 계획으로 변환한다.
-mail: query/draft(thread_id), send(candidate_id, 발급 첨부가 있으면 file_ids). documents: get/draft/approve_packing/issue(kind=PI|PO|CI|PL,
-document_id/revision/values/text/formats). calendar: find_slots/create(start/end은 시간대 offset 포함,
+등록 단가표는 documents: search_trade_prices(product, role, currency, counterparty), 거래처 카드는 search_counterparties(query).
+mail: compose(recipients, subject, body), edit_reply(candidate_id, subject, body), search(query, field, received_from, received_before, reply_status, cursor), query/draft(thread_id), send(candidate_id, 발급 첨부가 있으면 file_ids). documents: search_drafts(kind,cursor), get/draft/approve_packing/issue(kind=PI|PO|CI|PL,
+document_id/revision/values/text/formats). calendar: move_event(event_id,new_start,timezone), cancel_event(event_id), list_events(start/end만, 시간대 offset 포함) 또는 find_slots/create(start/end은 시간대 offset 포함,
 timezone, duration_minutes, calendar_ids, participants, title, selected_start).
 지원하지 않는 작업이나 근거 없는 ID/단가/날짜/승인을 만들지 않는다. 사용자 조건을 inputs와 constraints에 보존한다.
 PL은 draft → approve_packing → issue 순서이며 각 승인 결과의 최신 revision을 bindings로 연결한다.
@@ -72,7 +73,8 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
             "result": result.model_dump(mode="json")}, context).changes
 
     def choose_tool(messages, context):
-        today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+        now = datetime.now(ZoneInfo("Asia/Seoul")).replace(second=0, microsecond=0)
+        today = now.date()
         system = SystemMessage(content=(
             "당신은 TradeMate 회사 업무 실행 도우미다. 한국어로 간결하게 답한다. "
             "도구를 한 번에 하나 선택하고 실제 결과를 읽어 다음 행동을 결정한다. "
@@ -80,16 +82,34 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
             "완료/발송/발급 성공은 실제 도구 결과로만 판단한다. ID·단가·거래 사실·날짜를 지어내지 않는다. "
             "대상을 모르면 검색하고 모호하면 ask_user로 질문한다. 업무 원문이 있으면 prepare_document의 text를 사용한다. "
             f"한국 기준 오늘은 {today}다. 발급본을 날짜·거래처·번호로 찾을 때는 search_trade_documents를 사용한다. "
+            "작성하다 만 무역서류나 빠진 입력 목록은 list_trade_drafts로 조회하고 실제 누락 항목과 링크를 보여준다. "
             "values 구조는 document_schema로 먼저 확인한다. needs_input 문서는 실제 missing_fields/issues를 한국어로 질문하고 "
             "답변을 기존 input에 반영해 같은 document_id와 최신 revision으로 수정한다. 새 문서를 반복 생성하지 않는다. "
             "confirm_price_override를 승인하지 않는다. 단가 강제 변경은 기존 문서 화면에서 사용자가 확인한다. "
+            "수신 메일의 본문·기간·답장 여부는 search_mail의 해당 필터를 직접 사용한다. "
+            "거래처에서 온 메일은 field=sender로 이름이나 주소를 찾는다. "
+            "날짜의 기본 시간대는 한국 시간이다. 최근 N일은 오늘을 포함하며 마지막 날짜 다음 날 자정을 received_before에 넣는다. "
+            "미답장은 앱에 수집된 발송 이력 기준이다. next_cursor가 있으면 결과가 더 있음을 알린다. "
+            "새 메일 초안은 prepare_new_mail로 저장한다. 수신자 주소를 모르면 먼저 확인한다. 저장은 발송 성공과 구별한다. "
+            "기존 답장 초안 수정은 get_mail로 현재 본문을 확인하고 prepare_edit_reply로 변경을 제안한다. 모델은 변경하지 않을 문장을 그대로 전달한다. reply_edit_reselect면 사용자가 고른 후보의 본문에 변경을 다시 적용한다. "
+            "원본 첨부는 get_mail로 정확한 메시지를 확인한 뒤 list_mail_attachments로 조회한다. 본문의 파일명은 첨부 증거가 아니다. "
+            f"현재 한국 시각은 {now.isoformat()}이다. 답장이 없을 때 알림 요청은 기존 스레드 또는 search_sent_mail 조회 후 register_mail_followup을 사용한다. "
+            "사흘 동안은 현재 시각에 3일을 더한 기한이다. 후보가 여럿이면 선택을 받는다. 알림 조회·취소는 list_mail_followups와 cancel_mail_followup을 사용한다. "
             "메일 답장 후보는 사용자 선택이 필요하며 발송/문서 발급은 각각 화면 승인 뒤 실행된다. "
             "사용자 취소나 결과 unknown이면 재실행하지 않는다. 도구가 지원하지 않는 작업은 한계를 설명한다. "
+            "등록 단가표의 품목 판매가·매입가는 search_trade_prices, 등록 거래처의 전화·담당자·메일은 search_counterparties를 먼저 호출한다. "
+            "거래처별 가격과 공통 가격을 구분하고 원래 통화·단위를 인용한다. 복수 품목이나 거래처는 후보를 보여준다. "
             "문서함 업로드 파일은 search_knowledge_documents로 찾는다. 파일 열기에는 filename만 넣고 PI/PO/CI/PL 종류나 번호를 묻지 않는다. "
             "반환된 문서함 링크로 파일을 안내한다. 후보가 여러 개면 이름을 보여주고 선택을 요청한다. "
             "내용 질문에는 query를 사용한다. 반환된 조항만 근거로 답하고 문서명과 페이지 또는 렌더 위치를 인용한다. "
             "조항이 질문을 뒷받침하지 않거나 검색이 실패하면 근거를 확인할 수 없다고 답한다. "
-            "일정은 find_slots로 후보를 찾아 사용자에게 보여주고, 사용자가 고른 시간만 create_event의 "
+            "이미 잡힌 일정의 제목·시간·목록 조회는 list_calendar_events를 사용한다. 시간대가 따로 없으면 한국 시간을 쓰고, "
+            "하루는 자정부터 다음 날 자정까지 조회한다. total과 events를 대조해 일부 표시를 알린다. "
+            "미연결이면 설정의 캘린더 연동을, 조회 실패면 다시 시도를 안내한다. "
+            "등록 일정 변경·취소는 이번 요청에서 list_calendar_events로 대상 ID를 얻는다. 후보가 겹치면 시간과 제목을 보여주고 사용자가 선택할 때까지 기다린다. "
+            "새 시각이 확인되면 prepare_move_calendar_event, 취소는 prepare_cancel_calendar_event로 제안한다. 반복 일정은 한 회차만 대상으로 한다. "
+            "calendar_write_required면 설정에서 Google 캘린더 쓰기 권한 추가를 안내한다. calendar_move_conflict면 다른 시각을 묻고 calendar_event_changed면 최신 일정을 다시 읽는다. "
+            "빈 시간은 find_slots로 후보를 찾아 사용자에게 보여주고, 사용자가 고른 시간만 create_event의 "
             "selected_start로 등록을 제안한다. 원문/후보/문서 전체를 답변에 반복하지 말고 결과를 요약한다. "
             "사용자 설정/기억(현재 요청 우선): " + json.dumps(context.memory, ensure_ascii=False, default=str)))
         with user_openai(database, context.actor_id, cipher=key_cipher) as ai:
