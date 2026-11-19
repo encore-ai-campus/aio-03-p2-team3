@@ -18,19 +18,25 @@ NODE_LABELS = {"load_context": "대화 맥락 불러오기", "plan": "다음 작
                "reflect": "작업 결과 재검토", "cancel_action": "작업 취소"}
 PREPARE_LABELS = {
     ("mail", "search"): "메일 검색", ("mail", "query"): "메일 원문 조회",
-    ("mail", "draft"): "답장 초안 작성", ("mail", "send"): "답장 발송 준비",
+    ("mail", "attachments"): "메일 첨부 조회", ("mail", "search_sent"): "발송 메일 검색",
+    ("mail", "register_followup"): "후속 알림 등록", ("mail", "list_followups"): "후속 알림 조회",
+    ("mail", "cancel_followup"): "후속 알림 취소",
+    ("mail", "edit_reply"): "답장 초안 수정",
+    ("mail", "compose"): "새 메일 초안 저장", ("mail", "draft"): "답장 초안 작성", ("mail", "send"): "답장 발송 준비",
     ("documents", "get"): "문서 조회", ("documents", "schema"): "문서 입력 조건 확인",
     ("documents", "search_trade_prices"): "등록 단가 조회",
     ("documents", "search_counterparties"): "거래처 정보 조회",
+    ("documents", "search_drafts"): "무역서류 초안 조회",
     ("documents", "search_issued"): "발급 문서 검색",
     ("documents", "search_knowledge"): "문서함 검색",
     ("documents", "draft"): "문서 초안 작성", ("documents", "issue"): "파일 발급 준비",
     ("documents", "approve_packing"): "포장 합계 승인 준비",
     ("calendar", "list_events"): "캘린더 일정 조회",
+    ("calendar", "move_event"): "일정 변경 준비", ("calendar", "cancel_event"): "일정 취소 준비",
     ("calendar", "find_slots"): "일정 후보 조회", ("calendar", "create"): "일정 등록 준비",
 }
-EXECUTE_LABELS = {"send": "답장 발송", "issue": "파일 발급", "approve_packing": "포장 합계 승인",
-                  "create": "일정 등록"}
+EXECUTE_LABELS = {"edit_reply": "답장 초안 저장", "send": "답장 발송", "issue": "파일 발급", "approve_packing": "포장 합계 승인",
+                  "create": "일정 등록", "move_event": "일정 변경", "cancel_event": "일정 취소"}
 
 
 class Conversations(Protocol):

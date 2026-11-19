@@ -7,6 +7,7 @@ from app.knowledge.schemas import KnowledgeError
 from app.services.openai_keys import user_openai
 from app.trade.common import operations as common
 from app.trade.common.models import DocumentError
+from app.trade.common.repository import list_unissued
 from app.trade.common.rendering import render_approved_files
 from app.trade.review import operations as review
 from app.trade.review.models import Decision, ReviewRequest
@@ -53,6 +54,18 @@ class ExistingDocuments:
     def search_counterparties(self, actor_id, command):
         with self.database.session() as session:
             return lookup.contacts(command.query, counterparty_profiles(session, actor_id))
+
+    def search_drafts(self, actor_id, command):
+        drafts, cursor = list_unissued(self.database, actor_id, **command.model_dump())
+        values = []
+        for draft in drafts:
+            kind = draft["document_type"]
+            result = IMPLEMENTATIONS[kind][0].result(draft)
+            values.append({"document_id": result.document_id, "kind": kind, "revision": result.revision,
+                "title": draft.get("document_number") or draft["doc_no"], "counterparty": common.counterparty_name(draft),
+                "status": result.status, "missing_fields": result.missing_fields, "issues": result.issues,
+                "url": f"/app/trade/{kind.lower()}/{result.document_id}"})
+        return {"draft_documents": values, "next_cursor": cursor}
 
     def search_issued(self, actor_id, command):
         repository = SQLReviews(self.database, actor_id, command.kind)

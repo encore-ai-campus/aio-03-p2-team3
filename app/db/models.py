@@ -235,6 +235,32 @@ class ThreadMemory(Base, Updated):
     last_result: Mapped[dict | None] = mapped_column(JSON_VALUE)
 
 
+class MailComposeDraft(Base, Owned, Created, Updated):
+    __tablename__ = "mail_compose_drafts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    recipients: Mapped[list] = mapped_column(JSON_VALUE)
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+
+
+class MailFollowup(Base, Owned, Created):
+    __tablename__ = "mail_followups"
+    __table_args__ = (
+        UniqueConstraint("user_id", "anchor_id", "due_at", name="uq_mail_followup_anchor_due"),
+        Index("ix_mail_followups_status_due", "status", "due_at"),
+        Index("ix_mail_followups_user_created", "user_id", "created_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    thread_id: Mapped[str] = mapped_column(String)
+    anchor_id: Mapped[int] = mapped_column(ForeignKey("thread_messages.id"))
+    anchor_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    due_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    status: Mapped[str] = mapped_column(String(12), default="pending", server_default="pending")
+
+
 class ReplyCandidate(Base, Owned, Created):
     __tablename__ = "reply_candidates"
     # 스레드 상세가 (user_id, thread_id)의 후보를 만든 순서로 읽고, 메일함 폴링이

@@ -29,8 +29,8 @@ class Choices:
                                         "args": args}]).model_dump()
 
 
-def app_for(url, jwks, google, choices, settings=None, storage=None, knowledge_adapters=None):
-    return create_app(settings or settings_of(url), google=google, agent_choose=choices, storage=storage,
+def app_for(url, jwks, google, choices, settings=None, storage=None, knowledge_adapters=None, calendar=None):
+    return create_app(settings or settings_of(url), google=google, calendar=calendar, agent_choose=choices, storage=storage,
         knowledge_adapters=knowledge_adapters,
         supabase_auth=TokenVerifier(SUPABASE_URL, fetch_jwks=jwks.serve))
 

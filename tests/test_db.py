@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateTable
@@ -12,7 +12,7 @@ from app.db.models import Base, ProcessedMessage, RunEvent, User
 def test_contract_tables_and_postgres_jsonb(database):
     assert set(inspect(database.engine).get_table_names()) == {
         "users", "google_tokens", "calendar_tokens", "calendar_event_receipts", "calendar_oauth_attempts", "user_openai_keys", "gmail_watches", "processed_messages", "thread_messages",
-        "thread_memory", "reply_candidates", "approvals", "deal_terms", "quotes",
+        "thread_memory", "mail_compose_drafts", "mail_followups", "reply_candidates", "approvals", "deal_terms", "quotes",
         "trade_documents", "user_preferences", "company_profiles", "company_branding",
         "company_bank_accounts",
         "price_list_items", "counterparties", "counterparty_history", "runs", "run_events", "alembic_version",
@@ -23,6 +23,15 @@ def test_contract_tables_and_postgres_jsonb(database):
     }
     ddl = str(CreateTable(RunEvent.__table__).compile(dialect=postgresql.dialect()))
     assert "JSONB" in ddl
+    with database.engine.connect() as connection:
+        private = connection.execute(text("""
+            SELECT relname, relrowsecurity, EXISTS (
+                SELECT 1 FROM aclexplode(relacl) WHERE grantee = 0
+            ) FROM pg_class
+            WHERE oid IN ('public.mail_compose_drafts'::regclass, 'public.mail_followups'::regclass)
+            ORDER BY relname
+        """)).all()
+    assert private == [("mail_compose_drafts", True, False), ("mail_followups", True, False)]
 
 
 def test_deduplication_is_per_user(database):

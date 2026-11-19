@@ -4,7 +4,7 @@ from typing import Protocol
 from datetime import datetime, timezone
 
 from app.graph.documents.schemas import (
-    CounterpartySearch, DocumentInput, IssuedDocumentSearch, KnowledgeDocumentSearch, TradePriceSearch,
+    CounterpartySearch, DocumentInput, DraftDocumentSearch, IssuedDocumentSearch, KnowledgeDocumentSearch, TradePriceSearch,
 )
 from app.graph.schemas import Evidence, ExecutionResult, PreparedAction, Question, WorkResult, content_hash
 
@@ -19,6 +19,7 @@ class DocumentPort(Protocol):
     def get(self, actor_id: int, command: DocumentInput) -> dict: ...
     def search_trade_prices(self, actor_id: int, command: TradePriceSearch) -> dict: ...
     def search_counterparties(self, actor_id: int, command: CounterpartySearch) -> dict: ...
+    def search_drafts(self, actor_id: int, command: DraftDocumentSearch) -> dict: ...
     def search_issued(self, actor_id: int, command: IssuedDocumentSearch) -> dict: ...
     def search_knowledge(self, actor_id: int, command: KnowledgeDocumentSearch) -> dict: ...
     def draft(self, actor_id: int, command: DocumentInput) -> dict: ...
@@ -30,7 +31,7 @@ class DocumentPort(Protocol):
 
 
 class DocumentNodes:
-    operations = frozenset({"schema", "get", "draft", "approve_packing", "issue", "search_issued", "search_knowledge", "search_trade_prices", "search_counterparties"})
+    operations = frozenset({"schema", "get", "draft", "approve_packing", "issue", "search_issued", "search_knowledge", "search_trade_prices", "search_counterparties", "search_drafts"})
 
     def __init__(self, port: DocumentPort):
         self.port = port
@@ -42,6 +43,9 @@ class DocumentNodes:
         if task.operation == "search_counterparties":
             command = CounterpartySearch.model_validate(task.inputs)
             return WorkResult(status="completed", data=self.port.search_counterparties(context.actor_id, command))
+        if task.operation == "search_drafts":
+            command = DraftDocumentSearch.model_validate(task.inputs)
+            return WorkResult(status="completed", data=self.port.search_drafts(context.actor_id, command))
         if task.operation == "search_issued":
             command = IssuedDocumentSearch.model_validate(task.inputs)
             return WorkResult(status="completed", data=self.port.search_issued(context.actor_id, command))
