@@ -38,6 +38,7 @@ dev = [
     "playwright==1.65.2",
     "pypdf==7.0.0",
     "pytest==9.2.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.uv]

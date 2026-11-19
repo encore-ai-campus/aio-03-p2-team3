@@ -133,7 +133,7 @@
 - `app/runlog/`가 노드·전이·도구·성찰·오류/재시도·소요 시간을 기록한다. `/runs`·`/runs/{run_id}`·`/export`는 본인 기록만 개인정보를 가려 제공한다. 실행 종료 이유와 승인 뒤 발송 상태는 구분한다. 상세: 계약 8절, `app/runlog/router.py`.
 
 ## 6. 시험·평가
-마지막 갱신: 2026-11-19 · 무역 추출 Sol low 프로필 시험, 업무 도우미 PI 보완 시험 · 문서 원문 자동 임베딩 검증, 수신 일정·계약 근거 시험, LLM 카탈로그 선별 40회 실측·기능별 모델 프로필 수동 상향 구현·카탈로그 후보 계약(초안)
+마지막 갱신: 2026-11-19 · 세션 템플릿 DB 복제·병렬 실행으로 시험 가속, 무역 추출 Sol low 프로필 시험, 업무 도우미 PI 보완 시험 · 문서 원문 자동 임베딩 검증, 수신 일정·계약 근거 시험, LLM 카탈로그 선별 40회 실측·기능별 모델 프로필 수동 상향 구현·카탈로그 후보 계약(초안)
 
 - 문서 원문 자동 임베딩은 `tests/test_knowledge.py` 32개 통과(slow 매개변수 포함)·`tests/test_mail_analysis.py` 12개 통과, 프런트 단위 검사 24개 통과, 규칙 검사 경고 0개로 확인했다. 업로드→자동 임베딩→수정문 저장 갱신의 느린 브라우저 시험(`tests/test_knowledge_browser.py`)은 최신 main 리베이스 충돌 조정을 거쳤고 로컬 `pytest -m slow` 확인과 CI 필수 검사는 이 PR에서 확인한다.
 
@@ -210,7 +210,7 @@
 ## 7. 배포
 마지막 갱신: 2026-11-19 · 무역 추출 Sol low 상향 값 추가, 공용 LLM 키·Gmail 폴링 수집 통일, Render 분리 배포(웹 서비스+정적 사이트), 수신 근거·계약 연결 마이그레이션, 기능별 모델 상향 환경변수
 
-- LLM 키는 실행 환경의 `OPENAI_API_KEY` 공용 키가 우선이다(2026-11-19). 로컬·서버 모두 `.env`/Render에서 읽고 DB에 저장하지 않는다. 서버에서 이 값을 비워 둘 때만 각 사용자가 `/settings`에 등록한 암호화 키를 쓴다. 개인 PC 위임(`local_worker`) 경로는 폐지했고 서버는 언제나 직접 실행한다(`app/services/openai_keys.py`, 관련 시험 3건 삭제·README 개인 PC 절에 폐지 안내). CI의 `windows-worker` 잡도 이 검사 대상 소멸로 제거했다. `tests` 잡은 기존처럼 `-m 'not slow'`로 브라우저 등 무거운 검사를 제외하고 돈다.
+- LLM 키는 실행 환경의 `OPENAI_API_KEY` 공용 키가 우선이다(2026-11-19). 로컬·서버 모두 `.env`/Render에서 읽고 DB에 저장하지 않는다. 서버에서 이 값을 비워 둘 때만 각 사용자가 `/settings`에 등록한 암호화 키를 쓴다. 개인 PC 위임(`local_worker`) 경로는 폐지했고 서버는 언제나 직접 실행한다(`app/services/openai_keys.py`, 관련 시험 3건 삭제·README 개인 PC 절에 폐지 안내). CI의 `windows-worker` 잡도 이 검사 대상 소멸로 제거했다. `tests` 잡은 기존처럼 `-m 'not slow'`로 브라우저 등 무거운 검사를 제외하고 돈다. 시험 DB는 세션당 1회 앱 시작 마이그레이션으로 스키마를 완성한 템플릿을 두고 테스트별로 복제한다(`tests/conftest.py`, 마이그레이션·확장 설치를 직접 검사하는 시험은 `empty_database_url`). CI/로컬 모두 `-n 4` 병렬 실행으로 non-slow 전체를 약 75초(로컬 기준)에 돈다.
 - Gmail 새 메일 수집은 토픽이 없으면 로컬과 같은 30초 폴링으로 통일했다(2026-11-19). `register_watch`·`renew_*`·`stop_watch`가 토픽 없는 서버에서 `local:history` 수집 경로를 쓰고 수집기가 항상 뜨며, 토픽을 지정한 서버는 기존 Pub/Sub 푸시를 유지한다. `GMAIL_PUBSUB_TOPIC`은 로그인 필수 값에서 빼 선택 값이 됐다.
 
 - 기능별 모델 상향(오류 대응용): Render Environment에 `LLM_PROFILE_DEFAULT_STRUCTURED`/`LLM_PROFILE_TRADE_EXTRACTION`=`sol-medium`(무역 추출은 `sol-low`도 가능, 요청자 결정: 무역 추출만 `LLM_PROFILE_TRADE_EXTRACTION=sol-low`), `LLM_PROFILE_VISION_TRANSCRIPTION`=`terra-low`를 넣으면 재배포 뒤 새 호출부터 적용된다. 비우거나 지우면 baseline, `luna-medium`은 명시 복귀다. 잘못된 이름은 배포 시작 실패로 나타난다. 사용하는 키(공용 `OPENAI_API_KEY` 또는 본인 등록 키)의 프로젝트에 상향 모델 권한·요금이 필요하다. 절차는 README 'LLM·외부 API와 키 발급'.

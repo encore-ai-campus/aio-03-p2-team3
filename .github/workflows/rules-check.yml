@@ -85,6 +85,7 @@ jobs:
 
       - name: 테스트
         if: needs.check.outputs.run_tests == 'true'
-        run: uv run --locked pytest -m 'not slow'
+        # 워커 4개가 세션 템플릿 DB를 각자 복제해 병렬로 돈다(conftest 참고).
+        run: uv run --locked pytest -m 'not slow' -n 4
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
