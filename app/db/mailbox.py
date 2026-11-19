@@ -185,7 +185,7 @@ class MailStore:
                                   "to_addrs": m.to_addrs, "subject": m.subject, "body": m.body_text,
                                   "sent_at": _time(m.sent_at)} for m in messages],
                     "processing": [{"id": p.id, "status": p.status, "triage": p.triage,
-                                    "notice": p.notice, "run_id": p.run_id} for p in processing],
+                                    "notice": p.notice, "run_id": p.run_id, "inbound_context": p.inbound_context} for p in processing],
                     "candidates": [self._candidate(s, owner, c) for c in candidates]}
 
     def candidate(self, owner, candidate_id):

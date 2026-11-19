@@ -1113,6 +1113,13 @@ TradeDocDraft(TypedDict, total=False):
 
 LangGraph의 interrupt는 노드를 처음부터 재실행할 수 있으므로 승인 대기 노드 앞에 비멱등 발송을 두지 않는다. 체크포인터와 장기 기억도 구분한다([공식 interrupt 문서](https://docs.langchain.com/oss/python/langgraph/interrupts), [공식 persistence 문서](https://docs.langchain.com/oss/python/langgraph/persistence)).
 
+### 수신 메일의 일정·계약 근거 (R-01·R-02·R-07·R-11)
+
+- 앱에서 구성한 수신 준비 Graph는 메일 분류 직후 캘린더와 문서 검색 조건을 적용한다. 날짜는 수신 시각을 해당 시간대로 변환해 계산하고 명시 시간대가 없으면 한국 시간을 사용한다. 날짜·시작 시각의 원문을 확인하며 소요 시간이 빠지면 추정하지 않는다. 과거 인용문은 추출 범위에서 제외한다.
+- 일정 조율은 본인의 Google 기본 캘린더에 30일 FreeBusy 조회를 한다. 입력 시각과 조회 범위, 시작·종료의 충돌을 검사해 두 대안까지 전달한다. 시각·길이 미정, 범위 밖, 권한 미연결·공급자 오류는 확인 질문·보류 초안을 만든다. 단독 일정 문의 후보는 확인한 상태를 기반으로 만들며, 바쁜 일정의 제목과 세부 내용을 외부에 전달하지 않는다.
+- 문서함 상세에서 Bearer `PUT /api/knowledge/documents/{id}/counterparty`로 본인 문서와 본인 등록 거래처를 연결하거나 해제한다. 등록 이메일 일치 발신자는 그 거래처의 게시본으로 검색을 제한한다. 미등록 발신자의 문의는 본인 전체 게시 문서 범위이며, 발견한 근거는 메일함 내부에서 검토한다. 발신자 일치에 근거한 검색 범위는 모델이 넓힐 수 없다.
+- 채팅과 수신이 한국어·영어 질의 생성, 키워드와 벡터 검색, 조항 재정렬을 공유한다. 조회 결과의 문서명·페이지를 `processed_messages.inbound_context`에 저장해 본인 메일함에서 보여 준다. 계약서 본문은 메일 처리 기록의 이 필드에 복사하지 않는다. 외부 회신은 기존 후보 검토·승인을 거친다.
+
 ### 17.4 대화형 업무 도우미 (2026-11-18)
 
 - `/app/agent`·`/app/agent/{id}`와 Bearer 전용 `/api/agent/conversations` GET/POST, `/{id}` GET, `/{id}/messages`·`resume`·`recover` POST를 제공한다. 소유자는 JWT에서 매핑한 내부 사용자이며 타인/없는 ID는 404, 인증 누락은 401이다. 변경 요청은 대화 revision을 확인하고 사용자별 동시 실행 1건만 접수한다. 실행은 기존 BackgroundTasks·단일 앱 프로세스 범위다.

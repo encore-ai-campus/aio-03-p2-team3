@@ -253,6 +253,12 @@ class AgentState(TypedDict):
     message_id: str
     thread_id: str
     email: EmailMessage
+    calendar_proposal: NotRequired[dict]
+    calendar_related: NotRequired[bool]
+    calendar_availability: NotRequired[dict]
+    schedule_only: NotRequired[bool]
+    contract_question: NotRequired[bool]
+    knowledge_evidence: NotRequired[dict | None]
     thread_context: ThreadContext | None
     long_term: LongTermMemory | None
     intent: Literal["general", "deal", "ignore"] | None

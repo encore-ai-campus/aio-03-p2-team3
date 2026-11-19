@@ -1,16 +1,21 @@
 """소유자별 수집 기록·임대와 pgvector의 원자적 교체. 외부 API를 호출하지 않는다."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import contextmanager
+from email.utils import parseaddr
 from datetime import timedelta
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text, UniqueConstraint, delete, func, select, update
+from sqlalchemy import (
+    CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text,
+    UniqueConstraint, delete, func, literal_column, select, union_all, update,
+)
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models import Base, Created, FileAsset, JSON_VALUE, UTCDateTime, utcnow
+from app.db.models import Base, Counterparty, Created, FileAsset, JSON_VALUE, UTCDateTime, utcnow
 from app.knowledge.schemas import (
     ACTIVE_STATUSES, CHUNK_VERSION, ChildChunk, KnowledgeError, ModelProfile,
     ParentChunk, ReviewRequest,
@@ -33,6 +38,7 @@ class KnowledgeDocument(Base, Created):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     file_id: Mapped[int] = mapped_column(ForeignKey("file_assets.id", ondelete="RESTRICT"), index=True)
+    counterparty_id: Mapped[int | None] = mapped_column(ForeignKey("counterparties.id", ondelete="SET NULL"), index=True)
     sha256: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(24), default="queued")
     attempt_id: Mapped[str] = mapped_column(String(36))
@@ -111,6 +117,7 @@ def _summary(session, row):
     file = session.get(FileAsset, row.file_id)
     return {"id": row.id, "filename": file.original_filename, "file_id": file.id,
             "content_type": file.content_type, "size_bytes": file.size_bytes, "sha256": row.sha256,
+            "counterparty_id": row.counterparty_id,
             "status": row.status, "attempt_id": row.attempt_id, "revision": row.revision,
             "error_code": row.error_code, "error_stage": row.error_stage,
             "published_attempt_id": row.published_attempt_id, "profile": row.profile,
@@ -191,25 +198,74 @@ class SqlRepository:
                      "indexed": row.published_attempt_id is not None, "url": f"/app/documents?document={row.id}"}
                     for row in session.execute(query)]
 
+    def counterparties(self, owner: int) -> list[dict]:
+        with self._session() as session:
+            rows = session.execute(select(Counterparty.id, Counterparty.legal_name, Counterparty.email)
+                .where(Counterparty.user_id == owner).order_by(Counterparty.legal_name, Counterparty.id))
+            return [dict(row._mapping) for row in rows]
+
+    def assign_counterparty(self, owner: int, document_id: str, counterparty_id: int | None) -> dict:
+        with self._session() as session:
+            row = _owned(session, owner, document_id, lock=True)
+            if counterparty_id is not None and session.scalar(select(Counterparty.id).where(
+                Counterparty.id == counterparty_id, Counterparty.user_id == owner)) is None:
+                raise KnowledgeError("counterparty_not_found", "등록한 거래처를 찾을 수 없습니다.", 404)
+            row.counterparty_id = counterparty_id
+            session.flush()
+            return _summary(session, row)
+
+    def mail_scope(self, owner: int, sender: str) -> tuple[tuple[int, ...] | None, bool]:
+        address = parseaddr(sender)[1].strip().casefold()
+        with self._session() as session:
+            ids = tuple(session.scalars(select(Counterparty.id).where(
+                Counterparty.user_id == owner, func.lower(func.trim(Counterparty.email)) == address))) if address else ()
+            # 중복 등록된 주소는 계약 당사자를 확정할 수 없으므로 넓혀 검색하지 않는다.
+            if len(ids) > 1:
+                return (), False
+            published = select(KnowledgeDocument.id).join(FileAsset).where(
+                KnowledgeDocument.user_id == owner, FileAsset.user_id == owner,
+                KnowledgeDocument.published_attempt_id.is_not(None))
+            if ids:
+                published = published.where(KnowledgeDocument.counterparty_id.in_(ids))
+            return ids or None, session.scalar(published.limit(1)) is not None
+
     def search_clauses(self, owner: int, *, document_id: str | None, vector: list[float],
-                       profile: ModelProfile) -> list[dict]:
-        distance = func.min(KnowledgeChild.embedding.cosine_distance(vector))
-        # ponytail: 본인·게시본·호환 프로필 범위에서 정확 검색한다. 사용량 측정 뒤 벡터 인덱스를 검토한다.
-        nearest = select(KnowledgeChild.parent_id, distance.label("distance")).join(
+                       profile: ModelProfile, terms: Sequence[str] = (),
+                       counterparty_ids: tuple[int, ...] | None = None, limit: int = 2) -> list[dict]:
+        scope = select(KnowledgeChild.parent_id).join(
             KnowledgeDocument, (KnowledgeDocument.id == KnowledgeChild.document_id)
             & (KnowledgeDocument.published_attempt_id == KnowledgeChild.attempt_id),
         ).where(KnowledgeDocument.user_id == owner, KnowledgeChild.user_id == owner,
                 KnowledgeChild.profile_id == profile.fingerprint, KnowledgeChild.dimensions == profile.dimensions)
         if document_id:
-            nearest = nearest.where(KnowledgeChild.document_id == document_id)
-        nearest = nearest.group_by(KnowledgeChild.parent_id).having(distance <= 0.65).order_by(
-            distance, KnowledgeChild.parent_id).limit(2).subquery()
+            scope = scope.where(KnowledgeChild.document_id == document_id)
+        if counterparty_ids is not None:
+            scope = scope.where(KnowledgeDocument.counterparty_id.in_(counterparty_ids))
+        distance = func.min(KnowledgeChild.embedding.cosine_distance(vector))
+        vector_rank = scope.add_columns(distance.label("metric")).group_by(KnowledgeChild.parent_id).having(
+            distance <= 0.65).order_by(distance, KnowledgeChild.parent_id).limit(8).subquery()
+        rankings = select(vector_rank.c.parent_id, (
+            1.0 / (10 + func.row_number().over(order_by=(vector_rank.c.metric, vector_rank.c.parent_id)))).label("score"))
+        if terms:
+            config = literal_column("'simple'::regconfig")
+            tokens = func.to_tsvector(config, KnowledgeChild.text)
+            keywords = func.to_tsquery(config, " | ".join(terms))
+            rank = func.max(func.ts_rank_cd(tokens, keywords))
+            keyword_rank = scope.add_columns(rank.label("metric")).where(tokens.op("@@")(keywords)).group_by(
+                KnowledgeChild.parent_id).order_by(rank.desc(), KnowledgeChild.parent_id).limit(8).subquery()
+            rankings = union_all(rankings, select(keyword_rank.c.parent_id, (
+                1.0 / (10 + func.row_number().over(order_by=(keyword_rank.c.metric.desc(), keyword_rank.c.parent_id))
+                       )).label("score")))
+        ranked = rankings.subquery()
+        score = func.sum(ranked.c.score)
+        nearest = select(ranked.c.parent_id, score.label("score")).group_by(ranked.c.parent_id).order_by(
+            score.desc(), ranked.c.parent_id).limit(limit).subquery()
         query = select(KnowledgeParent.id, KnowledgeParent.document_id, KnowledgeParent.text,
                        KnowledgeParent.sources, FileAsset.original_filename).join(
             nearest, nearest.c.parent_id == KnowledgeParent.id,
         ).join(KnowledgeDocument, KnowledgeDocument.id == KnowledgeParent.document_id).join(
             FileAsset, FileAsset.id == KnowledgeDocument.file_id,
-        ).where(KnowledgeParent.user_id == owner, FileAsset.user_id == owner).order_by(nearest.c.distance, KnowledgeParent.id)
+        ).where(KnowledgeParent.user_id == owner, FileAsset.user_id == owner).order_by(nearest.c.score.desc(), KnowledgeParent.id)
         with self._session() as session:
             return [{"clause_id": row.id, "document_id": row.document_id, "filename": row.original_filename,
                      "text": row.text, "sources": row.sources, "url": f"/app/documents?document={row.document_id}"}

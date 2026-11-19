@@ -2,6 +2,8 @@
 
 | 날짜 | 버전 | 변경 이유 |
 |---|---|---|
+| 2026-11-19 | analyze_email.v4 | 앱 수신 실행에서 계약 문의·일정 구분, 수신 기준과 시간대·시작·소요 시간 원문을 구조화한다. 기존 PC 계약은 v2. |
+| 2026-11-19 | knowledge_query_plan.v1 · knowledge_rerank.v1 | 한국어·영어 질의를 함께 생성하고 문서·거래처 범위를 검증한 뒤 실제 후보 조항을 재정렬한다. |
 | 2026-11-16 | analyze_email.v2 | 회사 업무 전반으로 역할을 넓힘. 수신 전 Decisions는 명백한 무관 메일만 제외하고, 기존 general/deal/ignore 판단·분기는 유지한다. 답장 불필요한 업무 알림은 ignore다. |
 | 2026-11-09 | analyze_email.v1 · draft_replies.v1 · extract_deal_terms.v1 · draft_followup_replies.v1 · summarize_thread.v1 · reflect_fix.v1 | 호출·버전 기록을 검증할 빈 틀. 업무 지시는 후속 작업에서 채움 |
 | 2026-11-10 | analyze_email.v1 · draft_replies.v1 | 빈 틀을 업무 지시로 채움(계획 8절). 실제 호출에 쓴 적이 없는 빈 틀이라 버전은 v1 그대로 둠. 이 줄 뒤로 고치면 v2부터 올림 |

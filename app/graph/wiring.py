@@ -44,7 +44,8 @@ class Repair(Contract):
 
 
 def make_workflow(*, database, checkpointer, access=None, storage=None, calendar=None, key_cipher=None,
-                  interactive=False, choose=None, knowledge_adapters=None):
+                  interactive=False, choose=None, knowledge_adapters=None, inbound_graph=None,
+                  knowledge_plan=None, knowledge_rerank=None):
     """서버 API 연결 전 Python 진입점. 운영에서는 durable saver와 실제 CalendarPort를 주입한다."""
     def load_context(actor_id, thread_id):
         with database.session() as session:
@@ -122,9 +123,11 @@ def make_workflow(*, database, checkpointer, access=None, storage=None, calendar
         return message.model_dump()
 
     dependencies = Dependencies(handlers={
-        "mail": MailNodes(ExistingMail(database=database, access=access, storage=storage, key_cipher=key_cipher)),
+        "mail": MailNodes(ExistingMail(database=database, access=access, storage=storage, key_cipher=key_cipher,
+                                    inbound_graph=inbound_graph)),
         "documents": DocumentNodes(ExistingDocuments(database=database, storage=storage, key_cipher=key_cipher,
-                                                     knowledge_adapters=knowledge_adapters)),
+                                                     knowledge_adapters=knowledge_adapters,
+                                                     knowledge_plan=knowledge_plan, knowledge_rerank=knowledge_rerank)),
         "calendar": CalendarNodes(calendar),
     }, load_context=load_context, planner=planner, repair=repair,
         choose=(choose or choose_tool) if interactive else None)

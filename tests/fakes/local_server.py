@@ -58,7 +58,7 @@ def serve():
 
         patch.setattr(main, "create_app", create_app)
         # 템플릿의 30초 안내와 운영 주기는 그대로 두고 실행 시험만 빨리 돌린다.
-        patch.setattr(main, "LocalGmailCollector", lambda access, store: LocalGmailCollector(access, store, interval=0.05))
+        patch.setattr(main, "LocalGmailCollector", lambda access, store, **options: LocalGmailCollector(access, store, interval=0.05, **options))
         sys.argv = ["app.local", "--port", args.port]
         try:
             local.main()

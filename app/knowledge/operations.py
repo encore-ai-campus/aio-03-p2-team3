@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.knowledge.chunking import build_chunks
 from app.knowledge.ports import DocumentExtractor, Embedder, Renderer, Repository, Storage
+from app.knowledge.retrieval import retrieve
 from app.knowledge.schemas import CHUNK_VERSION, KnowledgeError, MAX_TEXT_CHARS, PageText, ReviewRequest
 from app.knowledge.validation import validate_upload
 
@@ -34,7 +35,7 @@ def detail(repository: Repository, owner: int, document_id: str) -> dict:
 
 
 def search(repository: Repository, owner: int, *, filename: str | None, document_id: str | None,
-           query: str | None, get_embedder: Callable[[], Embedder]) -> dict:
+           query: str | None, get_embedder: Callable[[], Embedder], plan_query=None, rerank=None) -> dict:
     documents = repository.find_for_chat(owner, filename=filename, document_id=document_id) if filename or document_id else []
     result = {"knowledge_documents": documents, "knowledge_clauses": []}
     if (filename or document_id) and not documents:
@@ -45,11 +46,9 @@ def search(repository: Repository, owner: int, *, filename: str | None, document
         return {**result, "knowledge_status": "found"}
     if documents and not documents[0]["indexed"]:
         return {**result, "knowledge_status": "not_indexed"}
-    embedder = get_embedder()
-    batch = embedder.embed_documents([query])
-    batch.validate_for(1, embedder.profile)
-    clauses = repository.search_clauses(owner, document_id=documents[0]["document_id"] if documents else None,
-                                        vector=batch.vectors[0], profile=embedder.profile)
+    clauses = retrieve(repository, owner, query=query, get_embedder=get_embedder,
+                       document_id=documents[0]["document_id"] if documents else None,
+                       plan_query=plan_query, rerank=rerank)
     return {**result, "knowledge_status": "found" if clauses else "no_evidence", "knowledge_clauses": clauses}
 
 
