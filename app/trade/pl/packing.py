@@ -1,7 +1,7 @@
 """포장 명세(PL) 행 합계 비교 코어(kekorea-port 5절 D).
 
-원본: reference/kekorea/Quotation_KEKOREA/agent/packing.py — 복사본(고침 없음).
-바꾼 것은 import 경로(`Quotation_KEKOREA.agent...` → `app.trade...`)뿐이다. 계약 15.4절 일정
+원본: reference/kekorea/Quotation_KEKOREA/agent/packing.py — import 경로를 이식하고
+포장 행이 없는 경우 원본 포장 수·순중량·총중량을 검증하도록 확장했다. 계약 15.4절 일정
 대응으로 3절(B)이 원본 복사본을 먼저 넣었고, 5절(D)이 그 위에서 PL 승인 흐름
 (`app/trade/pl/packing_review.py`·`app/services/trade_docs.py`)을 이식했다. 검토 입력 정규화 문제까지
 더한 PL 합계 비교는 `packing_review.reconcile_packing`(래퍼)을 부른다(계약 15.5절).
@@ -31,11 +31,33 @@ def _plain(number):
     return format(number, "f") if number is not None else None
 
 
+def uses_source_totals(data):
+    """Use declared packing totals only when no row packing values were entered."""
+    return not data.get("packages") and not any(
+        item.get(field) not in (None, "")
+        for item in data.get("items") or []
+        for field in ("package_count", "net_weight_kg", "gross_weight_kg", "volume_cbm")
+    )
+
+
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/packing.py reconcile_packing
 def reconcile_packing(data):
     """Return calculated totals and discrepancies; printed totals are never overwritten."""
     items = data.get("items") or []
     issues, discrepancies = [], []
+    source_totals_only = uses_source_totals(data)
+    if source_totals_only:
+        count = _number(data.get("actual_package_count"))
+        net = _number(data.get("declared_net_weight_kg"))
+        gross = _number(data.get("declared_gross_weight_kg"))
+        if count is None or count <= 0 or count != count.to_integral_value():
+            issues.append("Source package count total is invalid")
+        if net is None or net <= 0:
+            issues.append("Source net weight (kg) total is invalid")
+        if gross is None or gross <= 0:
+            issues.append("Source gross weight (kg) total is invalid")
+        if net is not None and gross is not None and net > gross:
+            issues.append("Source net weight exceeds gross weight")
     quantities = {}
     quantity_complete = bool(items)
     for index, item in enumerate(items, 1):
@@ -76,7 +98,8 @@ def reconcile_packing(data):
         declared = _number(declared_raw)
         if declared_raw not in (None, "") and declared is None:
             message = f"Source {label} total is invalid"
-            (discrepancies if total is not None else issues).append(message)
+            if message not in issues:
+                (discrepancies if total is not None else issues).append(message)
         elif total is not None and declared is not None and total != declared:
             discrepancies.append(f"Source {label} total {_plain(declared)} differs from row sum {_plain(total)}")
 
@@ -96,6 +119,7 @@ def reconcile_packing(data):
         if containers is None or containers != containers.to_integral_value():
             issues.append("Container count must be a non-negative whole number")
 
-    return {"quantities": {unit: _plain(value) for unit, value in quantities.items()},
+    return {"source_totals_only": source_totals_only,
+            "quantities": {unit: _plain(value) for unit, value in quantities.items()},
             "quantity_complete": quantity_complete, "calculated": calculated,
             "issues": issues, "discrepancies": discrepancies}

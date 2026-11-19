@@ -10,16 +10,17 @@ export default function PackingReview({ view, current, dirty, disabled, onReload
     {dirty && <p className="form-error" role="alert">미저장 변경사항을 먼저 저장하고 합계를 다시 확인해 주세요.</p>}
     {!matched && <p className="section-note">현재 버전의 포장 합계를 읽어 주세요.</p>}
     {matched && totals && <>
+      {totals.source_totals_only && <p className="section-note">포장 행 없이 입력한 원본 포장 수·순중량·총중량을 사용합니다. 행별 계산 값은 없으며, 원본 합계를 확인한 뒤 승인해 주세요.</p>}
       <p className="section-note">표를 좌우로 밀어 원본과 계산 값을 비교해 주세요. 키보드는 표에 초점을 둔 뒤 방향키로 이동할 수 있어요.</p>
       <div className="table-scroll" role="region" aria-label="원본과 서버 계산 합계 · 가로 스크롤" tabIndex={0}><table className="document-table"><caption className="sr-only">원본과 서버 계산 합계</caption><thead><tr><th scope="col">항목</th><th scope="col">원본 합계</th><th scope="col">서버 계산 합계</th></tr></thead>
-        <tbody>{PACKING_TOTAL_FIELDS.map(([field,label,key]) => <tr key={field}><th scope="row">{label}</th><td>{original?.[field] ?? "미입력"}</td><td>{totals.calculated[key] ?? "계산 불가"}</td></tr>)}</tbody></table></div>
+        <tbody>{PACKING_TOTAL_FIELDS.map(([field,label,key]) => <tr key={field}><th scope="row">{label}</th><td>{original?.[field] ?? "미입력"}</td><td>{totals.calculated[key] ?? (totals.source_totals_only ? "행별 계산 없음" : "계산 불가")}</td></tr>)}</tbody></table></div>
       <p className="section-note">단위별 계산 수량 · PCS와 KG는 각각 확인해 주세요.</p>
       <dl className="packing-quantities" aria-label="단위별 계산 수량">{Object.entries(totals.quantities).map(([unit,value]) => <div key={unit}><dt>{unit}</dt><dd>{value}</dd></div>)}</dl>
       <p className="section-note">원본 총수량: {original?.declared_total_quantity ?? "미입력"} {original?.declared_total_quantity_unit}<br />원본 컨테이너: {original?.container_count || "없음"}</p>
       <p className="section-note">별도 포장 행 순중량: {totals.packages_total.net_weight_kg ?? "없음"} kg · 총중량: {totals.packages_total.gross_weight_kg ?? "없음"} kg</p>
       {totals.changes.length > 0 && <div className="pi-missing"><p>승인 시 반영할 변경</p><ul>{totals.changes.map((change) => <li key={change.field}>{PACKING_TOTAL_FIELDS.find(([key]) => key === change.field)?.[1] ?? change.label}: {change.source} → {change.calculated}</li>)}</ul></div>}
       {totals.discrepancies.length > 0 && <div className="pi-missing"><p>원본과 계산의 차이</p><ul>{totals.discrepancies.map((message,index) => <li key={index}>{message}</li>)}</ul></div>}
-      {(totals.issues.length > 0 || !totals.quantity_complete) && <div className="form-error" role="alert"><p>포장 행과 수량·단위를 먼저 수정해 주세요.</p><ul>{totals.issues.map((message,index) => <li key={index}>{message}</li>)}</ul></div>}
+      {(totals.issues.length > 0 || !totals.quantity_complete) && <div className="form-error" role="alert"><p>포장 정보와 품목 수량·단위를 먼저 수정해 주세요.</p><ul>{totals.issues.map((message,index) => <li key={index}>{message}</li>)}</ul></div>}
       {totals.approved && <p className="form-success" role="status">포장 합계를 승인했습니다. 다른 누락 항목도 없으면 별도로 최종 검토를 만들 수 있습니다.</p>}
     </>}
     <div className="form-actions"><button className="btn" type="button" disabled={disabled} onClick={onEdit}>포장 행 수정</button>

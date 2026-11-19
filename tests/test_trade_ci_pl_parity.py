@@ -74,7 +74,9 @@ def test_packing_review_functions_match(ref):
         normalized = copy.deepcopy(data)
         reference_normalized = ref["packing_review"].normalize_packing_inputs(copy.deepcopy(normalized))
         ported_normalized = port_review.normalize_packing_inputs(copy.deepcopy(normalized))
-        assert port_review.reconcile_packing(ported_normalized) == \
+        comparison = port_review.reconcile_packing(ported_normalized)
+        assert comparison.pop("source_totals_only") is False
+        assert comparison == \
                ref["packing_review"].reconcile_packing(reference_normalized)
         assert port_review.packing_total_changes(copy.deepcopy(ported_normalized)) == \
                ref["packing_review"].packing_total_changes(copy.deepcopy(reference_normalized))

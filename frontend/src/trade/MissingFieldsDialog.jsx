@@ -47,6 +47,7 @@ function packingIssuePaths(issues) {
       paths.push(field)
     }
     if (/^Container count must be a non-negative whole number$/i.test(message)) paths.push("container_count")
+    if (/^Source net weight exceeds gross weight$/i.test(message)) paths.push("declared_net_weight_kg", "declared_gross_weight_kg")
     if (/^Source total quantity has conflicting units/i.test(message)) paths.push("declared_total_quantity_unit")
   }
   return paths

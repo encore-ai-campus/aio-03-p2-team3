@@ -233,7 +233,9 @@ def test_packing_and_ci_import_match(ref):
          "net_weight_kg": "0.5", "gross_weight_kg": "0.6"}],
         "declared_total_quantity": "10", "declared_total_quantity_unit": "PCS",
         "declared_net_weight_kg": "2", "container_count": "1"}
-    assert port_packing.reconcile_packing(copy.deepcopy(data)) == \
+    comparison = port_packing.reconcile_packing(copy.deepcopy(data))
+    assert comparison.pop("source_totals_only") is False
+    assert comparison == \
            ref["packing"].reconcile_packing(copy.deepcopy(data))
     ci_draft = {"document_type": "CI", "source_document_type": "PI", "currency": "USD",
                 "buyer": {"legal_name": "Example Buyer Ltd"}, "items": [

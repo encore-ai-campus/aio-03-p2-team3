@@ -3,6 +3,7 @@ from copy import deepcopy
 from hashlib import sha256
 from io import BytesIO
 from zipfile import ZipFile
+from xml.etree import ElementTree
 
 import pytest
 from pypdf import PdfReader
@@ -63,6 +64,58 @@ def ready_document(client, kind):
         return post(client, "/api/trade/ci", {"source_pi_id": original["document_id"], "source_revision": 1,
             "document_number": "CI-100", "shipment_reference": "SHIP-TEST", "country_of_origin": "Republic of Korea"})
     return packing_choice(client, post(client, "/api/trade/pl", pl_values()))
+
+
+def test_pl_source_totals_only_save_approve_issue_cancel_and_modify(pi_client):
+    values = pl_values()
+    values.update(items=[{"product_name": "Demo Light", "quantity": "100", "unit": "PCS"}],
+                  packages=[], actual_package_count=None, declared_net_weight_kg=None,
+                  declared_gross_weight_kg=None, declared_volume_cbm=None,
+                  declared_total_quantity="100", declared_total_quantity_unit="PCS")
+    initial = post(pi_client, "/api/trade/pl", values)
+    assert initial["document"]["packing_totals"]["issues"]
+    values.update(actual_package_count="1 carton", declared_net_weight_kg="1 kg", declared_gross_weight_kg="1 kg")
+    base = f"/api/trade/pl/{initial['document_id']}"
+    saved = pi_client.put(base, json={"revision": initial["revision"], "document": values})
+    assert saved.status_code == 200, saved.text
+    document = saved.json()
+    totals = document["document"]["packing_totals"]
+    assert totals["source_totals_only"] and not totals["issues"]
+    assert all(value is None for value in totals["calculated"].values())
+    assert pi_client.post(base + "/reviews", json={"revision": document["revision"]}).status_code == 409
+    approved = packing_choice(pi_client, document)
+    assert approved["status"] == "ready", approved
+    assert approved["document"]["packages"] == []
+    assert approved["document"]["actual_package_count"] == "1"
+    assert approved["input"]["actual_package_count"] == "1 carton"
+    proposal = review(pi_client, "pl", approved)
+    issued = choice(pi_client, "pl", proposal, "approve")
+    assert issued.status_code == 200, issued.text
+    for file in issued.json()["files"]:
+        downloaded = pi_client.get(file["download_url"])
+        assert downloaded.status_code == 200
+        if file["file_format"] == "xlsx":
+            with ZipFile(BytesIO(downloaded.content)) as workbook:
+                sheet = ElementTree.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+            ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            rows = [[text.text for text in row.findall(".//s:t", ns)] for row in sheet.findall(".//s:row", ns)]
+            for label in ("Total packages", "Total net weight (kg)", "Total gross weight (kg)"):
+                assert [label, "1"] in rows
+        else:
+            text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(downloaded.content)).pages)
+            assert "TOTAL PACKAGES: 1" in text
+            assert "NET WEIGHT: 1 KG" in text and "GROSS WEIGHT: 1 KG" in text
+    cancelled = packing_choice(pi_client, approved, "cancel")
+    assert cancelled["status"] == "needs_input"
+    assert not cancelled["document"]["packing_totals"]["approved"]
+    assert cancelled["input"]["declared_net_weight_kg"] == "1 kg"
+    reapproved = packing_choice(pi_client, cancelled)
+    modified = pi_client.put(base, json={"revision": reapproved["revision"],
+        "document": {**values, "declared_net_weight_kg": "2 kg"}})
+    assert modified.status_code == 200, modified.text
+    assert modified.json()["status"] == "needs_input"
+    assert not modified.json()["document"]["packing_totals"]["approved"]
+    assert modified.json()["document"]["packing_totals"]["issues"]
 
 
 @pytest.mark.parametrize("kind", ["po", "ci", "pl"])

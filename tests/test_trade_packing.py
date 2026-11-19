@@ -14,10 +14,15 @@
 from io import BytesIO
 from zipfile import ZipFile
 
+import pytest
+
 from app.trade.pl.packing import reconcile_packing
 from app.trade.common.pricing import apply_verified_catalog_prices, build_trade_catalog
 from app.trade.common.renderers import _xlsx_bytes
 from app.services.trade_docs import finalize_draft
+from app.trade.pl.operations import prepare_pl
+from app.trade.pl.packing_review import apply_approved_packing_totals
+from app.trade.common.models import DocumentContext
 
 ISSUER_NAME = "Testworks Trading Co. Ltd"
 ISSUER_KEY = "testworkstrading"
@@ -80,6 +85,41 @@ def test_missing_row_value_is_not_treated_as_zero():
     doc = packing_example()
     doc["items"][0]["net_weight_kg"] = None
     assert reconcile_packing(doc)["calculated"]["net_weight_kg"] is None
+
+
+@pytest.mark.parametrize("field,value", [
+    ("actual_package_count", None), ("actual_package_count", "0"),
+    ("actual_package_count", "1.5"), ("actual_package_count", "-1"),
+    ("declared_net_weight_kg", None), ("declared_net_weight_kg", "0"),
+    ("declared_net_weight_kg", "NaN"), ("declared_net_weight_kg", "2"),
+    ("declared_gross_weight_kg", "-1"), ("declared_gross_weight_kg", "Infinity"),
+])
+def test_source_only_packing_rejects_invalid_totals_before_approval(field, value):
+    doc = packing_example()
+    doc.update(items=[{"product_name": "Demo", "quantity": "10", "unit": "PCS"}],
+               actual_package_count="1", declared_net_weight_kg="1", declared_gross_weight_kg="1",
+               declared_total_quantity=None, declared_volume_cbm=None)
+    doc[field] = value
+    prepared = prepare_pl(doc, DocumentContext())
+    assert prepared["packing_totals"]["source_totals_only"]
+    assert prepared["packing_totals"]["issues"]
+    assert prepared["status"] == "needs_input"
+    with pytest.raises(ValueError):
+        apply_approved_packing_totals(prepared)
+
+
+def test_partial_or_invalid_packing_rows_do_not_use_source_only_fallback():
+    doc = packing_example()
+    doc["items"] = [{"product_name": "Demo", "quantity": "10", "unit": "PCS",
+                     "net_weight_kg": "0"}]
+    assert not reconcile_packing(doc)["source_totals_only"]
+    doc["items"][0]["net_weight_kg"] = "invalid"
+    assert reconcile_packing(doc)["issues"]
+    doc["items"][0].pop("net_weight_kg")
+    doc["packages"] = [{"package_count": "1", "net_weight_kg": "2", "gross_weight_kg": "1"}]
+    prepared = prepare_pl(doc, DocumentContext())
+    assert not prepared["packing_totals"]["source_totals_only"]
+    assert any("Net weight cannot exceed gross weight" in issue for issue in prepared["blocking_issues"])
 
 
 def test_discrepancies_use_row_totals_without_overwriting_source():

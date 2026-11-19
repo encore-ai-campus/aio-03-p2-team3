@@ -19,6 +19,8 @@ def validate_packing(data, calculated, issues, block):
         block("Packing: " + issue)
     for discrepancy in packing["discrepancies"]:
         block("Packing source discrepancy: " + discrepancy)
+    if packing["source_totals_only"]:
+        return
     packages = data.get("packages") or []
     has_item_packing = any(item.get("net_weight_kg") or item.get("gross_weight_kg") or item.get("package_count") or item.get("volume_cbm") for item in calculated)
     if not has_item_packing and (not packages or not data.get("actual_package_count")):

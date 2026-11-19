@@ -170,7 +170,9 @@ def test_issuer_key_substring_allows_affiliate_names():
 def test_unconfirmed_packing_cannot_be_finalized():
     data = sample_trade(document_type="PL")
     data["packages"] = []
-    assert "Actual package count and weights" in calculate(data)["blocking_issues"]
+    issues = calculate(data)["blocking_issues"]
+    for field in ("package count", "net weight (kg)", "gross weight (kg)"):
+        assert f"Packing: Source {field} total is invalid" in issues
 
 
 # --- 가격 시드 테스트 3종을 가상 단가표로 옮긴 것(원본 load_local_seed 대신 build_trade_catalog) ---

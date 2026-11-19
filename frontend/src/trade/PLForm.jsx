@@ -60,7 +60,7 @@ export default function PLForm({ token, draft, setDraft, step, fields = null, se
         {draft.packages.map((row,index) => <div className="pl-package" key={row.rowId}><h3>포장 {index+1}</h3><div className="settings-fields">{PACKAGE_FIELDS.map((key) => itemField("packages",index,row,key))}</div>
           <button className="btn" type="button" aria-label={`포장 ${index+1} 삭제`} onClick={() => { onShowAll(); change("packages",draft.packages.filter((_,i) => i !== index)) }}>포장 삭제</button></div>)}
         <button className="btn" type="button" disabled={draft.packages.length >= 500} onClick={() => { onShowAll(); change("packages",[...draft.packages,newPackage()]) }}>포장 행 추가</button>
-      </details><p className="section-note">PCS·KG는 따로 입력해요. 중량·부피·합계는 저장 후 서버 결과로 확인합니다.</p>
+      </details><p className="section-note">포장 행 없이 진행하려면 선적 조건·합계에서 원본 포장 수·순중량·총중량을 입력해 주세요. PCS·KG는 따로 입력하며, 저장 후 합계를 확인하고 승인합니다.</p>
     </>}
     {step === "terms" && <>
       <div className="settings-fields">
