@@ -7,7 +7,8 @@
 3. 기한 계층 산식: 프로필별 최악 소요·큐 기한·프로토콜 상한·임대 대비 여유(측정값이 아니라 산술이다).
 4. 실패 처리 기준 구현(reference): 시간 초과 뒤 다른 모델 자동 호출 금지, 지연 결과 차단.
 
-운영 코드는 이 파일을 쓰지 않는다. 계약이 채택되기 전까지는 설계·검증 준비용이다.
+운영 코드(`app/llm/profiles.py`)는 계약 JSON을 직접 읽고, 이 검사기는 그 계약이 규칙을 지키는지만 본다.
+manual_upgrade(결정 2a)는 환경변수로 명시했을 때만 쓰는 수동 상향이며 품질 승인이 아니다.
 """
 import argparse
 import json
@@ -17,8 +18,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = REPO / "docs/plans/llm-model-profiles.contract.json"
-STATUSES = {"baseline", "explicit_return", "candidate", "measurement_prep", "approved"}
-SELECTABLE = {"baseline", "explicit_return", "approved"}
+STATUSES = {"baseline", "explicit_return", "candidate", "measurement_prep", "approved", "manual_upgrade"}
+SELECTABLE = {"baseline", "explicit_return", "approved", "manual_upgrade"}
+# 서버 설정 필드가 있는(운영에서 고를 수 있는) 기능. catalog_candidates는 기능 미구현, mail_gate는 고정.
+RUNTIME_SELECTABLE_FEATURES = ("default_structured", "trade_extraction", "vision_transcription")
 REQUIRED_FEATURES = {"default_structured", "trade_extraction", "catalog_candidates", "vision_transcription", "mail_gate"}
 SECRET_WORDS = {"key", "token", "secret", "password", "credential", "authorization", "apikey"}
 EXECUTION_MODE_NAMES = {"stored_key", "local_worker"}  # 기존 ai_execution_mode 열거값(비밀 필드가 아님)
@@ -91,7 +94,15 @@ def validate_contract(contract: dict) -> list[str]:
                 errors.append(f"{where}: baseline은 gpt-6-luna/default여야 합니다")
             if status == "explicit_return" and (model != "gpt-6-luna" or effort != "medium" or profile["model_source"] != "fixed"):
                 errors.append(f"{where}: 명시 복귀는 고정 gpt-6-luna medium이어야 합니다")
-            if status in {"candidate", "measurement_prep"} and not profile.get("values_origin"):
+            if status == "manual_upgrade":
+                if feature not in RUNTIME_SELECTABLE_FEATURES:
+                    errors.append(f"{where}: manual_upgrade는 {RUNTIME_SELECTABLE_FEATURES}에만 둘 수 있습니다")
+                if set(profile["modes"]) != {"stored_key"}:
+                    errors.append(f"{where}: manual_upgrade는 stored_key 경로만 가집니다(PC는 baseline 유지)")
+                for mode_values in profile["modes"].values():
+                    if mode_values.get("network_retries", 0) or mode_values.get("invalid_output_retries", 0):
+                        errors.append(f"{where}: manual_upgrade는 자동 재시도 0이어야 합니다")
+            if status in {"candidate", "measurement_prep", "manual_upgrade"} and not profile.get("values_origin"):
                 errors.append(f"{where}: 후보 값의 출처·미검증 표시(values_origin)가 없습니다")
             if status in {"candidate", "measurement_prep"} and status in SELECTABLE:
                 errors.append(f"{where}: 후보가 운영 선택 가능 상태입니다")
@@ -185,6 +196,13 @@ def check_code_facts(contract: dict, repo: Path = REPO) -> list[str]:
     mapped = {p for f in ("default_structured", "trade_extraction") for p in features[f]["prompt_ids"]}
     if names != mapped:
         errors.append(f"프롬프트 이름 불일치. 코드에만: {sorted(names - mapped)}, 계약에만: {sorted(mapped - names)}")
+
+    # 서버 설정 필드(get_settings가 대문자 환경변수로 읽는다)가 계약의 설정 이름과 같은지.
+    config_source = _read(repo, "app/config.py")
+    for feature in RUNTIME_SELECTABLE_FEATURES:
+        field = contract["selection"]["config_names"][feature].lower()
+        if not re.search(rf"^\s+{field}: str = \"\"", config_source, re.M):
+            errors.append(f"app/config.py Settings에 {field} 필드가 없습니다")
     return errors
 
 

@@ -79,6 +79,10 @@ class Settings:
     openai_api_key: str = field(default="", repr=False)
     openai_model: str = ""
     knowledge_vision_model: str = ""  # 비우면 기존 OPENAI_MODEL/기본 모델을 사용한다.
+    # 기능별 LLM 프로필(docs/plans/llm-model-profiles.contract.json). 비우면 baseline(현재와 같은 요청).
+    llm_profile_default_structured: str = ""
+    llm_profile_trade_extraction: str = ""
+    llm_profile_vision_transcription: str = ""
     knowledge_embedding_model: str = ""  # 비우면 사용자 선택 text-embedding-3-small.
     knowledge_embedding_dimensions: str = ""  # 비우면 1536, 모델/차원별 프로필을 분리한다.
     knowledge_office_command: str = ""  # 비우면 PATH의 soffice/libreoffice, 사용자 입력 명령은 받지 않는다.
@@ -103,6 +107,9 @@ class Settings:
     def __post_init__(self):
         if self.ai_runtime not in {"server", "local"}:
             raise ValueError("AI_RUNTIME은 server 또는 local이어야 합니다")
+        # 잘못된 프로필 이름은 시작 시 오류다(조용히 baseline으로 바꾸지 않는다).
+        from app.llm.profiles import validate_settings
+        validate_settings(self)
 
     @property
     def resolved_database_url(self) -> str:

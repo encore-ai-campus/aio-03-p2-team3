@@ -225,6 +225,7 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 - OpenAI API는 ChatGPT 구독과 별도로 과금된다. 키를 만든 프로젝트의 결제·사용 한도·선택 모델 이용 권한을 확인한다. 무료 이용이나 무제한 호출을 가정하지 않는다.
 - OAuth 게시·권한과 Pub/Sub 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 설정한다.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md`).
+- 기능별 모델 상향(오류 대응용, 2026-11-19): 기본은 모두 baseline(현재와 같은 요청)이다. 특정 작업에서 오류가 계속될 때만 Render Environment에 `LLM_PROFILE_DEFAULT_STRUCTURED`(메일 분석·답장·메일→견적 조건 추출 등)·`LLM_PROFILE_TRADE_EXTRACTION`(PI/PO/CI/PL 추출)에 `sol-medium`, `LLM_PROFILE_VISION_TRANSCRIPTION`(문서 이미지 전사)에 `terra-low`를 넣는다. 저장하면 재배포 뒤 새 호출부터 적용된다. 되돌릴 때는 변수를 지우거나 `luna-medium`을 넣는다. 잘못된 이름은 서버 시작 오류다. 상향 모델은 품질 실측 전이고 본인 키 프로젝트에 그 모델 권한·요금이 필요하다. 개인 PC 실행 방식은 항상 baseline이며 실행 기록 `llm_profile` 줄에 요청/적용 프로필이 남는다. 호출마다 `llm_call` 줄에 `profile_id`·모델·노력치·토큰 사용량(알 수 없으면 `usage_unknown_attempts`)이 남는다. 계약과 근거는 [모델 프로필 계획](docs/plans/llm-model-profiles.md).
 
 전환 적용 순서:
 

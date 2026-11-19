@@ -11,9 +11,9 @@
 
 | 구분 | 내용 |
 |---|---|
-| 구현(준비) | 계약 JSON, 이 문서, 무료 검사기와 테스트 17개. 운영 코드·`.env.example`·README·`CONTRACT.md`는 그대로다. |
-| 실측 | 이 작업의 유료 호출 0회. 1번 세션(측정)의 카탈로그 후보 PC 선별 40회(2026-11-18, `catalog_candidates`의 측정 준비값 90초/2048 · Luna medium 30·Sol medium 10)는 모두 completed·시간 초과 0건이고 Sol medium의 `reasoning_effort` 요청도 수락됐다. 질의 10개 선별이라 품질 게이트 통과가 아니며 이 계약의 값을 승인하지 않는다. 기한 표의 "최악" 값은 코드 상수에서 계산한 산술이며 측정이 아니다. |
-| 미확인 | 후보 모델의 품질·비용·지연(품질 게이트 미통과), 실제 청구, Render/프록시의 요청 시간 상한, 후보 모델의 `reasoning_effort` API 수락(카탈로그 Sol medium 외), 거래 추출·이미지 전사의 대표 반복. |
+| 구현 | 계약 JSON(결정 1a·2a 반영: `default_structured.sol-medium` 추가, 상향 프로필 상태 `manual_upgrade`), 서버 해석기 `app/llm/profiles.py`, `call_structured`·`get_backend`·비전 전사 경로의 프로필 적용, 설정 `LLM_PROFILE_DEFAULT_STRUCTURED`·`LLM_PROFILE_TRADE_EXTRACTION`·`LLM_PROFILE_VISION_TRANSCRIPTION`(비우면 baseline, 잘못된 값은 시작 오류), `error_detail`·`profile_id`·호출별 사용량 기록, 검사기·테스트(계약 18개, 해석기·호출 15개). 2026-11-19. |
+| 실측 | 이 작업들(계약·구현)의 유료 호출 0회. 상향 경로는 모의 HTTPS(실제 SDK 요청 본문)로만 확인했다. 1번 세션(측정)의 카탈로그 후보 PC 선별 40회(2026-11-18, `catalog_candidates`의 측정 준비값 90초/2048 · Luna medium 30·Sol medium 10)는 모두 completed·시간 초과 0건이고 Sol medium의 `reasoning_effort` 요청도 수락됐다. 질의 10개 선별이라 품질 게이트 통과가 아니며 이 계약의 값을 승인하지 않는다. 기한 표의 "최악" 값은 코드 상수에서 계산한 산술이며 측정이 아니다. |
+| 미확인 | 상향 프로필의 실제 품질·오류 감소 효과(품질 실측 없음, 결정 2a로 게이트 없이 수동 전환 허용), `default_structured`·`trade_extraction`의 Sol medium·비전 Terra low 실제 API 수락, Render에서의 실제 적용, 후보 모델의 품질·비용·지연(품질 게이트 미통과), 실제 청구, Render/프록시의 요청 시간 상한, 후보 모델의 `reasoning_effort` API 수락(카탈로그 Sol medium 외), 거래 추출·이미지 전사의 대표 반복. |
 
 ## 프로필 키 확정 [Request: 제안 키 · Claude proposal: 코드 대조와 추가]
 
@@ -38,12 +38,13 @@
 |---|---|---|---|
 | `<기능>.baseline` | `gpt-6-luna` · 기본(요청에 노력치 미전송, 공식 기본 medium) | baseline | 현재 요청 내용을 그대로 보존. 기존 `OPENAI_MODEL`/`KNOWLEDGE_VISION_MODEL` 덮어쓰기는 **이 프로필에만** 적용 |
 | `<기능>.luna-medium` | `gpt-6-luna` · medium(고정 모델) | explicit_return | 명시적 복귀 대상. 환경 변수로 모델이 바뀌지 않음 |
-| `trade_extraction.sol-medium` | `gpt-6.1-sol` · medium | candidate | 90초/8192는 측정 준비값 |
-| `vision_transcription.terra-low` | `gpt-6.1-terra` · low | candidate | 180초/10000. 가림 표시는 품질 부족 근거가 아니며 Terra medium은 제시하지 않음 |
+| `default_structured.sol-medium` | `gpt-6.1-sol` · medium | manual_upgrade | 결정 1a. 90초/8192·재시도 0·논리 기한 120초. 품질 실측 없음 |
+| `trade_extraction.sol-medium` | `gpt-6.1-sol` · medium | manual_upgrade | 90초/8192(측정 준비값을 결정 2a로 확정)·재시도 0·논리 기한 120초. PC 경로 없음 |
+| `vision_transcription.terra-low` | `gpt-6.1-terra` · low | manual_upgrade | 180초/10000·SDK 재시도 3(baseline과 같게). 가림 표시는 품질 부족 근거가 아니며 Terra medium은 제시하지 않음 |
 | `catalog_candidates.luna-medium` / `.sol-medium` | Luna·Sol · medium | measurement_prep | 90초/2048은 측정 준비값. `production_available: false` |
 
-- 허용 조합은 위 표뿐이다. `high/xhigh/max`(와 `none/minimal`)는 계약 검사에서 오류다. 일반 구조화에는 Luna만 허용한다. [Request]
-- 운영에서 고를 수 있는 상태는 `baseline`·`explicit_return`·`approved`뿐이다. 후보는 자동 승격하지 않는다(`never_auto_promote`). 프로필 선택은 서버 설정(`LLM_PROFILE_<기능>`, 비우면 baseline)이며 사용자별 선택이 아니다. 키·실행 방식은 계속 사용자별이다. [Claude proposal]
+- 허용 조합은 위 표뿐이다. `high/xhigh/max`(와 `none/minimal`)는 계약 검사에서 오류다. 일반 구조화는 Luna와 Sol medium만 허용한다(결정 1a, 2026-11-19: 메일→견적 단계 포함 `default_structured.sol-medium` 추가. 이전 규칙은 Luna만). [Request]
+- 운영에서 고를 수 있는 상태는 `baseline`·`explicit_return`·`approved`·`manual_upgrade`다. `manual_upgrade`(결정 2a)는 품질 게이트 없이 오류 대응용으로 기능별 환경변수에 명시했을 때만 쓰는 상향이며, 서버 저장 키 경로만 가지고 자동 재시도 0이다(검사기가 강제). 후보·측정 준비는 고를 수 없고 자동 승격하지 않는다(`never_auto_promote`). 프로필 선택은 서버 설정(`LLM_PROFILE_<기능>`, 비우면 baseline)이며 사용자별 선택이 아니다. 키·실행 방식은 계속 사용자별이다. [Request · Claude proposal]
 - 처리 기록마다 `profile_id`와 해석된 값(모델·노력치·timeout·출력 상한·실행 방식)을 남긴다. 이미 발급된 파일·이전 처리 결과는 설정을 바꿔도 소급해서 바꾸지 않고, 새 시도에만 새 프로필을 쓴다. [Request]
 
 ## 현재 기한·한도 지도(main 428139a, 코드 대조 완료)
@@ -111,6 +112,7 @@
 - 하는 사람: Claude.
 
 ## 2. 서버 프로필 해석기와 호출 경로
+- 진행(2026-11-19, PR #256): 결정 2a로 품질 게이트 전에 수동 상향만 구현했다. `app/llm/profiles.py`가 계약을 읽고, `call_structured`가 프롬프트 이름 → 기능 키 → 설정 프로필로 백엔드를 만든다. baseline은 기존 백엔드 생성과 같은 호출(요청 본문 동일을 모의 HTTPS로 확인). 상향은 시간 초과·invalid_output 재요청 없음, 논리 기한으로 다음 시도를 자른다. 매핑 밖 프롬프트(`workflow_plan`·`workflow_repair`·`knowledge_query_plan`·`knowledge_rerank`)와 도구 바인딩 호출은 baseline. 남은 것: 명시 복귀 후 동일 실패 자료 실제 재시험(사람, 유료).
 - 할 일: 프로필 표를 읽는 설정, `call_structured`/`ChatOpenAI`에 모델·노력치·timeout·출력 상한 적용, 서버 경로 `logical_deadline_seconds`, 처리별 `profile_id` 기록.
 - 완료 기준: baseline 선택 시 현재와 같은 요청, 명시 복귀 후 동일 실패 자료 재시험, 후보는 운영 선택 시 거부.
 - 영향받는 상태·도구·노드: `app/llm/client.py`, `app/config.py`, `.env.example`, `docs/CONTRACT.md` LLM 호출·환경변수 절.
@@ -119,6 +121,7 @@
 - 하는 사람: Codex.
 
 ## 3. PC 프로토콜·실행기·큐 기한
+- 판단(2026-11-19, PR #256, 코드 대조): 이번에는 PC 경로를 상향하지 않는다. 근거: ① PC는 `requested_model`이 PC `.env` 모델 목록과 같아야 받고(`adapter.py`→`unsupported_version`) 서버는 노력치·timeout·출력 상한을 보낼 수 없다(`JobRequest`·`Capabilities`가 `extra=forbid`, 6.4절). ② 큐 기한 120초가 세 곳(`adapter.py`·`service.py`·`protocol.py`)에 고정이고 PC 잔여 기한 상수 20초·`duration_ms` 상한 30000이라 90초 시도는 여유 0·진단 손실이다. 그래서 상향 프로필에는 local_worker 값을 두지 않고, PC 위임 시 baseline으로 실행하며 `llm_profile` 줄에 요청/적용 프로필을 남긴다(명시 거부 대신 유지: 서버 설정 하나로 PC 사용자 처리가 막히지 않게). 이 절은 그대로 남은 일이다.
 - 할 일: 프로필 해시 교환(버전 협상), 프로필별 큐 기한·잔여 기한·`duration_ms` 상한 연동, PC 출력 상한/모델 일치 검사 유지.
 - 완료 기준: 모델/스키마/프로필 불일치는 `unsupported_version`, 기한 부족은 호출 전 거부, 지연 결과 거부, 기존 PC 시험 통과.
 - 영향받는 상태·도구·노드: `app/worker/*`, `docs/CONTRACT.md` 6.4, README PC 실행 절.
@@ -127,6 +130,7 @@
 - 하는 사람: Codex.
 
 ## 4. 비전 프로필과 기존 문서 보존
+- 진행(2026-11-19, PR #256): 새 처리만 `LLM_PROFILE_VISION_TRANSCRIPTION`을 쓴다. 명시 프로필이면 처리 스냅샷에 별도 키 `vision_profile`을 고정하고(`ModelProfile` 필드 추가 없음), 키 없는 기존 스냅샷은 baseline으로 이어 간다. baseline 스냅샷은 기존과 같아 진행 중 처리와 섞이지 않는다. 남은 것: 실제 Terra low 전사 확인(사람, 유료).
 - 할 일: 비전 프로필 적용, 처리 스냅샷의 별도 메타, 명시적 재처리만 새 프로필 적용.
 - 완료 기준: 기존 문서·청크 불변, 새 문서만 후보 프로필, 모델 변경 뒤 진행 중 시도는 섞지 않음.
 - 영향받는 상태·도구·노드: `app/knowledge/extract.py`·`router.py`·스냅샷.
@@ -135,6 +139,7 @@
 - 하는 사람: Codex.
 
 ## 5. 오류 구분·사용량·복귀 기록
+- 진행(2026-11-19, PR #256): `LLMResult.error_detail`(`timeout`/`incomplete_output`/`access_denied`)과 `profile_id`, `llm_call` 줄의 프로필 값·토큰 사용량(실패 시도는 `usage_unknown_attempts`로 미상 집계), PC 위임 때 `llm_profile` 줄. 남은 것: `grounding_failed` 구분, 화면 오류 안내·프런트 대기/취소 안내, `work_unit_id` 단위 묶음.
 - 할 일: `error_detail`, 호출별 사용량·시도 기록, 복귀 이유·시각·프로필 ID 기록, 프런트 대기·취소 안내.
 - 완료 기준: 시간 초과·미완료·근거 오류·권한/잔액 오류가 화면·기록에서 구분, 미상 사용량은 미상으로 집계, 키 미기록.
 - 영향받는 상태·도구·노드: `app/llm/client.py`, `app/runlog/`, 프런트 오류 안내.

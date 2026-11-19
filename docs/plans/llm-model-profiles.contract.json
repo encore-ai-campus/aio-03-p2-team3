@@ -1,7 +1,7 @@
 {
   "contract_version": 1,
-  "status": "draft_not_adopted",
-  "note": "기능별 LLM 프로필 계약 초안. 운영 코드는 이 계약을 아직 읽지 않는다. 후보 값은 측정 준비값이며 검증된 운영 설정이 아니다. 서술·근거·미확인은 llm-model-profiles.md에 있다.",
+  "status": "adopted_baseline_default",
+  "note": "기능별 LLM 프로필 계약. 서버(app/llm/profiles.py)가 이 파일을 읽는다. 기본값은 모두 baseline(현재와 같은 요청)이며, 기능별 환경변수를 명시했을 때만 manual_upgrade 프로필로 상향한다(결정 2a, 2026-11-19). 상향 값은 측정 준비값이며 품질 게이트를 통과한 설정이 아니다. 서술·근거·미확인은 llm-model-profiles.md에 있다.",
   "analysis_base": {
     "repo": "encore-ai-campus/aio-03-p2-team3",
     "main_commit": "428139a",
@@ -20,7 +20,7 @@
     "gpt-6.1-terra": {"efforts": ["low"]}
   },
   "allowed_models_by_feature": {
-    "default_structured": ["gpt-6-luna"],
+    "default_structured": ["gpt-6-luna", "gpt-6.1-sol"],
     "trade_extraction": ["gpt-6-luna", "gpt-6.1-sol"],
     "catalog_candidates": ["gpt-6-luna", "gpt-6.1-sol"],
     "vision_transcription": ["gpt-6-luna", "gpt-6.1-terra"],
@@ -42,7 +42,11 @@
       "catalog_candidates": "LLM_PROFILE_CATALOG_CANDIDATES",
       "vision_transcription": "LLM_PROFILE_VISION_TRANSCRIPTION"
     },
-    "production_selectable_statuses": ["baseline", "explicit_return", "approved"],
+    "production_selectable_statuses": ["baseline", "explicit_return", "approved", "manual_upgrade"],
+    "manual_upgrade_rule": "결정 2a(2026-11-19): manual_upgrade는 품질 게이트 없이 오류 대응용으로 수동 전환을 허용한다. 해당 기능의 환경변수에 프로필 이름을 명시했을 때만 쓰고, 처리 기록에 profile_id를 남긴다. 변수를 지우거나 luna-medium을 고르면 복귀한다.",
+    "local_worker_policy": "상향·복귀 프로필은 stored_key 경로에만 적용한다. local_worker(개인 PC)는 선택과 관계없이 baseline으로 실행하고, 요청 프로필과 적용 프로필을 처리 기록에 함께 남긴다(PC 모델·출력 상한은 PC가 강제하고 서버가 수치를 보낼 수 없다, 6.4절).",
+    "unmapped_prompt_policy": "prompt_ids에 없는 구조화 호출(workflow_plan·workflow_repair·knowledge_query_plan·knowledge_rerank)과 도구 바인딩 호출은 선택과 관계없이 baseline으로 실행한다.",
+    "invalid_value_policy": "계약에 없는 이름, stored_key가 없는 프로필, 운영 선택 불가 상태(candidate·measurement_prep)는 서버 시작 시 오류다. 조용히 baseline으로 대체하지 않는다.",
     "never_auto_promote": true,
     "baseline_model_override": "baseline 프로필만 기존 OPENAI_MODEL/KNOWLEDGE_VISION_MODEL 덮어쓰기를 따른다. 그 밖의 프로필 모델은 고정이며 환경 변수로 바뀌지 않는다."
   },
@@ -70,6 +74,16 @@
           "modes": {
             "stored_key": {"timeout_seconds": 20, "max_output_tokens": null, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1},
             "local_worker": {"timeout_seconds": 20, "max_output_tokens": 2048, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1, "queue_deadline_seconds": 120}
+          }
+        },
+        "sol-medium": {
+          "status": "manual_upgrade",
+          "values_origin": "결정 1a(2026-11-19): 메일→견적 단계 오류 대응용 상향. 값은 거래 추출 측정 준비값(90초/8192)과 같다. 품질 실측 없음.",
+          "model": "gpt-6.1-sol",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
           }
         }
       }
@@ -100,16 +114,14 @@
           }
         },
         "sol-medium": {
-          "status": "candidate",
-          "values_origin": "측정 준비값(계획 2절 90초/8192). 통과 설정이 아니다.",
+          "status": "manual_upgrade",
+          "values_origin": "측정 준비값(계획 2절 90초/8192)을 결정 2a(2026-11-19)로 수동 상향값으로 확정. 재시도 0·논리 기한 120초. 품질 게이트 통과 설정이 아니다. PC 경로는 baseline 유지(selection.local_worker_policy).",
           "model": "gpt-6.1-sol",
           "model_source": "fixed",
           "reasoning_effort": "medium",
           "modes": {
-            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120},
-            "local_worker": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "queue_deadline_seconds": 120}
-          },
-          "unresolved": ["network_retries", "invalid_output_retries", "logical_deadline_seconds", "queue_deadline_seconds"]
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
+          }
         }
       }
     },
@@ -168,15 +180,14 @@
           }
         },
         "terra-low": {
-          "status": "candidate",
-          "values_origin": "측정 준비값(계획 2절 180초/10000, 단독 측정 SDK 재시도 0). 운영 재시도 정책은 미정.",
+          "status": "manual_upgrade",
+          "values_origin": "측정 준비값(계획 2절 180초/10000)을 결정 2a(2026-11-19)로 수동 상향값으로 확정. SDK 재시도는 baseline과 같은 3(재시도 정책을 암묵적으로 바꾸지 않음). 가림 표시를 오류 없이 다루는 것이 목적이며 품질 실측 없음.",
           "model": "gpt-6.1-terra",
           "model_source": "fixed",
           "reasoning_effort": "low",
           "modes": {
-            "stored_key": {"timeout_seconds": 180, "max_output_tokens": 10000, "sdk_max_retries": null}
-          },
-          "unresolved": ["sdk_max_retries"]
+            "stored_key": {"timeout_seconds": 180, "max_output_tokens": 10000, "sdk_max_retries": 3}
+          }
         }
       }
     },

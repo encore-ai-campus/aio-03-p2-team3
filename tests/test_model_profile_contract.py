@@ -34,12 +34,28 @@ def test_forbidden_efforts_are_rejected(contract, effort):
 
 
 def test_model_effort_pairs_are_limited_to_the_allowed_combinations(contract):
-    # Terra는 low만, Sol은 medium만, 일반 구조화에는 Luna만 허용한다.
+    # Terra는 low만, Sol은 medium만. 일반 구조화는 Luna와 Sol(결정 1a, 2026-11-19)만 허용하고 Terra는 안 된다.
     contract["features"]["vision_transcription"]["profiles"]["terra-low"]["reasoning_effort"] = "medium"
     assert any("terra" in e.lower() or "노력치" in e for e in checker.validate_contract(contract))
     contract = checker.load_contract()
-    contract["features"]["default_structured"]["profiles"]["luna-medium"]["model"] = "gpt-6.1-sol"
+    contract["features"]["default_structured"]["profiles"]["sol-medium"]["model"] = "gpt-6.1-terra"
     assert any("허용되지 않은" in e for e in checker.validate_contract(contract))
+    contract = checker.load_contract()
+    assert "gpt-6.1-sol" in contract["allowed_models_by_feature"]["default_structured"]
+
+
+def test_manual_upgrade_profiles_are_stored_key_only_without_retries(contract):
+    # 결정 2a: 상향은 서버 저장 키 경로에서만, 자동 재시도 없이.
+    profile = contract["features"]["trade_extraction"]["profiles"]["sol-medium"]
+    assert profile["status"] == "manual_upgrade" and set(profile["modes"]) == {"stored_key"}
+    profile["modes"]["local_worker"] = dict(profile["modes"]["stored_key"], queue_deadline_seconds=120)
+    assert any("stored_key 경로만" in e for e in checker.validate_contract(contract))
+    contract = checker.load_contract()
+    contract["features"]["default_structured"]["profiles"]["sol-medium"]["modes"]["stored_key"]["network_retries"] = 1
+    assert any("재시도 0" in e for e in checker.validate_contract(contract))
+    contract = checker.load_contract()
+    contract["features"]["catalog_candidates"]["profiles"]["sol-medium"]["status"] = "manual_upgrade"
+    assert any("manual_upgrade는" in e for e in checker.validate_contract(contract))
 
 
 def test_secret_like_fields_and_values_are_rejected(contract):
@@ -98,6 +114,15 @@ def test_new_prompt_without_profile_mapping_is_detected(tmp_path, contract):
 def test_deadline_arithmetic_marks_candidate_pc_profile_and_keeps_baseline_ok(contract):
     rows = {(r["profile"], r["mode"]): r for r in checker.deadline_report(contract)}
     assert rows[("trade_extraction.baseline", "local_worker")]["verdict"] == "ok"
+    # 결정 2a: 상향 프로필은 PC 경로가 없고(PC는 baseline), 서버 경로는 논리 기한 120초 안에 시도 1회다.
+    assert ("trade_extraction.sol-medium", "local_worker") not in rows
+    server = rows[("default_structured.sol-medium", "stored_key")]
+    assert server["deadline_s"] == 120 and server["worst_case_provider_s"] == 90 and server["notes"] == []
+    # PC 경로를 다시 붙이면 기한 산식이 여유 0·프로토콜 상한을 알려 준다(산식 자체의 회귀 검사).
+    profile = contract["features"]["trade_extraction"]["profiles"]["sol-medium"]
+    profile["modes"]["local_worker"] = dict(profile["modes"]["stored_key"], queue_deadline_seconds=120)
+    profile["modes"]["local_worker"].pop("logical_deadline_seconds")
+    rows = {(r["profile"], r["mode"]): r for r in checker.deadline_report(contract)}
     sol = rows[("trade_extraction.sol-medium", "local_worker")]
     assert sol["verdict"] == "feasible_zero_slack_no_retry"
     assert sol["required_min_queue_s"] == 120 == sol["protocol_cap_s"]
@@ -118,7 +143,8 @@ def test_baseline_server_path_has_no_logical_deadline_and_vision_lease_is_bounde
 
 
 def test_timeout_never_calls_another_model_automatically(contract):
-    for feature, profile, mode in (("trade_extraction", "sol-medium", "local_worker"),
+    for feature, profile, mode in (("trade_extraction", "sol-medium", "stored_key"),
+                                   ("default_structured", "sol-medium", "stored_key"),
                                    ("vision_transcription", "terra-low", "stored_key"),
                                    ("catalog_candidates", "sol-medium", "stored_key")):
         action = checker.route_failure(contract, feature=feature, profile_id=profile, mode=mode, error_kind="timeout")
@@ -128,7 +154,7 @@ def test_timeout_never_calls_another_model_automatically(contract):
 
 
 def test_other_profile_requires_explicit_choice_and_counts_previous_cost(contract):
-    action = checker.route_failure(contract, feature="trade_extraction", profile_id="sol-medium", mode="local_worker",
+    action = checker.route_failure(contract, feature="trade_extraction", profile_id="sol-medium", mode="stored_key",
                                    error_kind="invalid_output", explicit_profile_choice="luna-medium")
     assert action["action"] == "new_attempt_new_revision" and action["profile"] == "luna-medium"
     assert action["sum_costs_of_previous_attempts"] is True and action["replay_side_effects"] is False

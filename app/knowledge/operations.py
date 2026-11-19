@@ -103,6 +103,10 @@ def process_claimed(repository: Repository, storage: Storage, renderer: Renderer
     try:
         profile = {"extraction": extractor.profile.model_dump(), "embedding": embedder.profile.model_dump(),
                    "rendering": "pdfium-pages-v1", "chunking": CHUNK_VERSION}
+        # 명시 비전 프로필만 별도 키로 고정한다. baseline 스냅샷은 기존과 같아 진행 중 처리와 맞는다.
+        vision_profile = getattr(extractor, "profile_id", None)
+        if vision_profile and not vision_profile.endswith(".baseline"):
+            profile["vision_profile"] = vision_profile
         if job["profile"] and job["profile"] != profile:
             raise KnowledgeError("profile_mismatch", "처리 시도에 고정한 모델 프로필이 달라졌습니다.")
         if not repository.update_attempt(document_id, attempt_id, profile=profile):
