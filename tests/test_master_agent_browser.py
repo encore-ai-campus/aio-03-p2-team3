@@ -242,7 +242,8 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
         copy.focus()
         page.keyboard.press("Enter")
         expect(answer.get_by_role("button", name="복사됨", exact=True)).to_be_visible()
-        assert page.evaluate("navigator.clipboard.readText()") == code.locator("code").text_content()
+        copied = page.evaluate("navigator.clipboard.readText()").replace("\r\n", "\n")
+        assert copied == code.locator("code").text_content()
         page.screenshot(path=str(tmp_path / "agent-markdown-mobile.png"), full_page=True)
         choices.calls.extend([
             ("search_mail", {"query": "테스트용", "field": "body", "reply_status": "replied"}),
@@ -378,13 +379,14 @@ def test_agent_browser_question_reload_approval_once_and_mobile(database_url, tm
 
         with httpx.Client(base_url=base, headers=auth(token)) as client:
             draft = client.post("/api/trade/pi",
-                json=pi_input(document_number="PI-BROWSER-DRAFT", payment_terms=None).model_dump(mode="json"))
+                json=pi_input(document_number=None, payment_terms=None).model_dump(mode="json"))
             assert draft.is_success, draft.text
         choices.calls.extend([("list_trade_drafts", {"kind": "PI"}), "작성 중인 PI를 찾았습니다."])
         ask("작성 중인 테스트 PI", "작성 중인 PI를 찾았습니다.")
         page.get_by_role("button", name="무역서류 초안 조회 완료").click()
         drafts = page.get_by_role("region", name="작성 중인 무역서류")
-        expect(drafts.get_by_text("PI · PI-BROWSER-DRAFT")).to_be_visible()
+        draft_number = draft.json()["document"]["doc_no"]
+        expect(drafts.get_by_role("heading", name=f"PI · {draft_number}", exact=True)).to_be_visible()
         expect(drafts.get_by_text("지급 조건", exact=False)).to_be_visible()
         expect(drafts.get_by_role("link", name="이어서 작성")).to_have_attribute("href", re.compile(r"/app/trade/pi/\d+$"))
 
