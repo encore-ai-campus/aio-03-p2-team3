@@ -1,9 +1,9 @@
 """Gmail 연결 API — 앱 로그인(legacy) 흐름과 분리된 Bearer 전용 경로(CONTRACT 9.1절, 계획 7절).
 
 - `POST /api/gmail/connect`: 연결 시작. state·PKCE 검증값·연결할 내부 사용자·기대 Google
-  subject를 서명된 세션 쿠키에 잠깐 보관하고 Google 동의 화면 주소를 JSON으로 돌려준다.
-- `GET /auth/google/callback`(완성은 `complete_callback`): 대기 값에 내부 사용자가 있으면 이
-  흐름으로 완성해 React 앱(`/app/settings?gmail=…`)으로 안내한다. legacy 로그인은 그대로다.
+  subject를 일회성 DB 대기 행에 보관하고 Google 동의 화면 주소를 JSON으로 돌려준다.
+- `GET /auth/google/callback`(완성은 `complete_callback`): 대기 행을 찾아 이 흐름으로 완성해
+  React 앱(`/app/settings?gmail=…`)으로 안내한다. 세션 쿠키가 없는 분리 배포에서도 동작한다.
 - `POST /api/gmail/disconnect`: Google 토큰까지 폐기하는 연결 해제. `google_sub`는 남겨
   같은 계정만 다시 연결할 수 있게 한다.
 - `POST /api/gmail/logout`: 앱 로그아웃 호환 경로. 연결·수집은 유지한다.
@@ -16,17 +16,18 @@
 """
 
 import secrets
-import time
+from datetime import timedelta
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
+from app.auth.oauth_attempt import digest as _digest
 from app.auth.supabase import bearer_user_id
 from app.clients.gmail import GoogleError, TokenExpired, missing_scopes
-from app.db.models import GmailWatch, GoogleToken, User
+from app.db.models import CalendarOAuthAttempt, GmailWatch, GoogleToken, User
 from app.services.auth import (
     delete_login_tokens, google_refresh_token, has_refresh_token, missing_login_settings,
     store_login, stored_scopes, utcnow,
@@ -37,6 +38,36 @@ router = APIRouter(prefix="/api/gmail", tags=["gmail-connection"])
 
 # 연결 시작 state 유효 기간(초). 짧게만 살고, callback에서 한 번 쓰면 사라진다.
 STATE_TTL_SECONDS = 600
+
+
+def _start_attempt(request: Request, user_id: int, google_sub: str, consent: bool) -> str:
+    """일회성 대기 행을 만들고 Google 동의 화면 주소에 쓸 state를 돌려준다.
+
+    대기 값은 세션 쿠키가 아닌 서버 DB에 있어 분리 배포(쿠키 없는 콜백)에서도 완성된다."""
+    access = request.app.state.google_access
+    state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(64)
+    with access.database.session() as session:
+        session.execute(delete(CalendarOAuthAttempt).where(
+            (CalendarOAuthAttempt.expires_at <= utcnow()) | (CalendarOAuthAttempt.user_id == user_id)))
+        session.add(CalendarOAuthAttempt(
+            state_hash=_digest(state), user_id=user_id, google_sub=google_sub,
+            verifier_enc=access.cipher.encrypt(verifier), consent=consent, service="gmail",
+            expires_at=utcnow() + timedelta(seconds=STATE_TTL_SECONDS)))
+    # 같은 출처 실행은 세션 표시로 분기한다(쿠키가 없으면 콜백이 대기 행에서 직접 찾는다).
+    request.session["oauth"] = {"service": "gmail", "state": state}
+    return state, verifier
+
+
+def _discard_attempt(access, state: str | None) -> None:
+    if state:
+        with access.database.session() as session:
+            session.execute(delete(CalendarOAuthAttempt).where(
+                CalendarOAuthAttempt.state_hash == _digest(state)))
+
+
+def _discard_user_attempts(access, user_id: int) -> None:
+    with access.database.session() as session:
+        session.execute(delete(CalendarOAuthAttempt).where(CalendarOAuthAttempt.user_id == user_id))
 
 
 class GmailConnectionError(Exception):
@@ -95,11 +126,7 @@ def connect(request: Request, user_id: int = Depends(bearer_user_id)):
     with request.app.state.database.session() as session:
         has_stored_token = session.get(GoogleToken, user_id) is not None
     consent = has_stored_token and bool(missing_scopes(stored_scopes(access, user_id)))
-    state, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(64)
-    request.session["oauth"] = {
-        "state": state, "verifier": verifier, "consent": consent,
-        "user_id": user_id, "google_sub": expected, "at": time.time(),
-    }
+    state, verifier = _start_attempt(request, user_id, expected, consent)
     return {"authorization_url": access.google.authorization_url(state, verifier, consent=consent)}
 
 
@@ -118,6 +145,7 @@ def disconnect(request: Request, user_id: int = Depends(bearer_user_id)):
                                        "Google 토큰 폐기에 실패했습니다. 잠시 후 다시 시도해 주세요.") from error
     stop_watch(access, user_id)
     delete_login_tokens(access, user_id)
+    _discard_user_attempts(access, user_id)
     # 기존 revoke 의미를 유지한다. 공유 grant가 폐기되면 Calendar도 서버에서 재검증한다.
     from app.auth.calendar import calendar_status
     calendar_status(request, user_id)
@@ -132,29 +160,53 @@ def logout(request: Request, user_id: int = Depends(bearer_user_id)):
 
 def complete_callback(request: Request, pending: dict, state: str | None,
                       code: str | None, error: str | None) -> RedirectResponse:
-    """`GET /auth/google/callback`의 Gmail 연결 분기. 결과는 React 앱으로 안내한다."""
-    if not state or not secrets.compare_digest(state, pending["state"]):
+    """`GET /auth/google/callback`의 Gmail 연결 분기. 결과는 React 앱으로 안내한다.
+
+    대기 값은 일회성 DB 행에 있어 세션 쿠키가 없는 분리 배포에서도 완성된다."""
+    access = request.app.state.google_access
+    if not state:
         return _to_app(request, "login_failed")
-    if time.time() - pending.get("at", 0) > STATE_TTL_SECONDS:
+    if pending.get("state") and not secrets.compare_digest(state, pending["state"]):
+        # 세션이 알던 대기 state와 다르면 그 대기 행도 버린다.
+        _discard_attempt(access, pending["state"])
+        return _to_app(request, "login_failed")
+    with access.database.session() as session:
+        attempt = session.scalars(update(CalendarOAuthAttempt).where(
+            CalendarOAuthAttempt.state_hash == _digest(state),
+            CalendarOAuthAttempt.consumed.is_(False),
+            CalendarOAuthAttempt.service == "gmail").values(consumed=True)
+            .returning(CalendarOAuthAttempt)).first()
+        if attempt is not None:
+            # 같은 트랜잭션에서 대기 행을 치운다(재사용 차단 유지). 남겨 두면 사용자 병합이
+            # 빈 껍데기 사용자를 지울 때 외래 키로 막힌다.
+            session.execute(delete(CalendarOAuthAttempt).where(
+                CalendarOAuthAttempt.user_id == attempt.user_id,
+                CalendarOAuthAttempt.service == "gmail"))
+    if attempt is None:
+        return _to_app(request, "login_failed")
+    # 만료 확인은 대기 행 시각과 현재 TTL 상수를 함께 본다(운영이 TTL을 줄이면 진행 중 대기도 만료).
+    if (attempt.expires_at <= utcnow()
+            or attempt.expires_at - utcnow() > timedelta(seconds=STATE_TTL_SECONDS) + timedelta(seconds=1)):
         return _to_app(request, "expired")
     if error:
         return _to_app(request, "cancelled" if error == "access_denied" else "login_failed")
     if not code:
         return _to_app(request, "login_failed")
-    access = request.app.state.google_access
+    if access.cipher is None:
+        return _to_app(request, "config_missing")
     try:
-        login = access.google.exchange_code(code, pending["verifier"])
+        login = access.google.exchange_code(code, access.cipher.decrypt(attempt.verifier_enc))
     except GoogleError:
         return _to_app(request, "login_failed")
     if missing_scopes(login.scopes):
         return _to_app(request, "scope_missing")
     if not login.refresh_token and not has_refresh_token(access, login.sub):
         # 갱신 토큰이 없으면 알림 처리·발송을 할 수 없다. 한 번만 동의 화면을 다시 띄워 새로 받는다.
-        if pending.get("consent"):
+        if attempt.consent:
             return _to_app(request, "login_failed")
-        return _restart_with_consent(request, access, pending)
+        return _restart_with_consent(request, access, attempt)
     try:
-        user_id = _connect_user(access, pending, login)
+        user_id = _connect_user(access, {"user_id": attempt.user_id, "google_sub": attempt.google_sub}, login)
     except GmailConnectionError as rejected:
         return _to_app(request, rejected.code)
     except GoogleError:
@@ -163,11 +215,8 @@ def complete_callback(request: Request, pending: dict, state: str | None,
     return _to_app(request, "connected")
 
 
-def _restart_with_consent(request: Request, access, pending: dict) -> RedirectResponse:
-    state, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(64)
-    request.session["oauth"] = {
-        **pending, "state": state, "verifier": verifier, "consent": True, "at": time.time(),
-    }
+def _restart_with_consent(request: Request, access, attempt) -> RedirectResponse:
+    state, verifier = _start_attempt(request, attempt.user_id, attempt.google_sub, True)
     return RedirectResponse(access.google.authorization_url(state, verifier, consent=True),
                             status_code=303)
 

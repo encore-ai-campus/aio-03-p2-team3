@@ -10,8 +10,9 @@ import secrets
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from app.auth import gmail as gmail_connection
 from app.auth import calendar as calendar_connection
+from app.auth import gmail as gmail_connection
+from app.auth import oauth_attempt
 from app.clients.gmail import GoogleError, missing_scopes
 from app.db.models import GmailWatch, User
 from app.services.auth import has_refresh_token, missing_login_settings, save_login, stored_scopes
@@ -111,9 +112,17 @@ def google_callback(
     request: Request, code: str | None = None, state: str | None = None, error: str | None = None,
 ):
     pending = request.session.pop("oauth", None)
+    if pending is None and state:
+        # 분리 배포(프론트와 서버가 다른 사이트)는 세션 쿠키가 오지 않는다.
+        # 연결 대기 행(Calendar·Gmail)을 state 다이제스트로 찾아 쿠키 없이 분기한다.
+        service = oauth_attempt.pending_service(request, state)
+        if service == "gmail":
+            return gmail_connection.complete_callback(request, {}, state, code, error)
+        if service == "calendar":
+            return calendar_connection.complete_callback(request, {}, state, code, error)
     if isinstance(pending, dict) and pending.get("service") == "calendar":
         return calendar_connection.complete_callback(request, pending, state, code, error)
-    if isinstance(pending, dict) and "user_id" in pending:
+    if isinstance(pending, dict) and (pending.get("service") == "gmail" or "user_id" in pending):
         # 계획 7절: Bearer 연결 시작(/api/gmail/connect)이 만든 대기 값이다.
         return gmail_connection.complete_callback(request, pending, state, code, error)
     if not pending or not state or not secrets.compare_digest(state, pending["state"]):
