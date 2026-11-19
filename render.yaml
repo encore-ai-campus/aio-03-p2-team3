@@ -12,6 +12,9 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      # 공용 LLM 키. 채우면 모든 AI 호출이 이 키로 직접 실행되고, 비우면 각 사용자의 /settings 등록 키를 쓴다.
+      - key: OPENAI_API_KEY
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SECRET_KEY

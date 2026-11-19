@@ -1,4 +1,4 @@
-"""사용자별 OpenAI 키의 암호화 저장과 실행 범위. 서버 공용 키로 대체하지 않는다."""
+"""실행 환경 OpenAI 키(.env 우선)와 사용자별 키의 암호화 저장·실행 범위."""
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
@@ -8,25 +8,28 @@ from sqlalchemy import select
 from app.config import Settings, get_settings, validate_runtime
 from app.db.engine import Database
 from app.db.models import User, UserOpenAIKey
-from app.llm.client import OpenAIKeyError, use_user_key, use_worker_call
+from app.llm.client import OpenAIKeyError, use_user_key
 from app.services.auth import TokenCipher, make_cipher
 
 
 def local_key(settings: Settings) -> str:
-    """인증된 앱 작업이 사용하는 PC 키. 사용자/자료 권한은 각 진입점이 검증한다."""
-    try:
-        validate_runtime(settings)
-    except ValueError:
-        raise OpenAIKeyError("LOCAL_RUNTIME_REQUIRED", "전용 로컬 실행 명령으로 다시 시작해 주세요.") from None
+    """실행 환경의 공용 OpenAI 키(.env). 로컬은 전용 실행 검증을 지나고 서버는 그대로 쓴다.
+
+    서버에서 이 키가 비어 있으면 사용자가 /settings에 등록한 DB 키를 쓴다(개인 PC 위임은 폐지했다)."""
+    if settings.ai_runtime == "local":
+        try:
+            validate_runtime(settings)
+        except ValueError:
+            raise OpenAIKeyError("LOCAL_RUNTIME_REQUIRED", "전용 로컬 실행 명령으로 다시 시작해 주세요.") from None
     value = settings.openai_api_key.strip()
     if not value:
-        raise OpenAIKeyError("LOCAL_KEY_REQUIRED", "로컬 .env에 OPENAI_API_KEY를 지정하고 다시 시작하세요.")
+        raise OpenAIKeyError("LOCAL_KEY_REQUIRED", "실행 환경의 OPENAI_API_KEY를 지정하고 다시 시작하세요.")
     return value
 
 
 def key_registered(database: Database, user_id: int, *, settings: Settings | None = None) -> bool:
     configured = settings or get_settings()
-    if configured.ai_runtime == "local":
+    if configured.ai_runtime == "local" or configured.openai_api_key.strip():
         try:
             UserKeyAccess(database, user_id, None, configured).read()
             return True
@@ -79,12 +82,10 @@ class UserKeyAccess:
 
     def read(self) -> str:
         try:
-            if self.settings.ai_runtime == "local":
+            # .env 공용 키가 있으면 로컬·서버 모두 이를 먼저 쓴다. 서버에서 비워 둘 때만 DB 키를 읽는다.
+            if self.settings.ai_runtime == "local" or self.settings.openai_api_key.strip():
                 return local_key(self.settings)
             with self.database.session() as session:
-                user = session.get(User, self.user_id)
-                if user is not None and user.ai_execution_mode == "local_worker":
-                    raise OpenAIKeyError("LOCAL_WORKER_KEY_FORBIDDEN", "개인 PC 실행 방식에서는 서버 키를 읽지 않습니다.")
                 row = session.get(UserOpenAIKey, self.user_id)
                 encrypted = row.api_key_enc if row is not None else None
             if encrypted is None:
@@ -105,12 +106,9 @@ class UserKeyAccess:
 @contextmanager
 def user_openai(database: Database, user_id: int, *, settings: Settings | None = None,
                 cipher: TokenCipher | None = None):
+    """LLM 호출 범위를 연다. 개인 PC 위임(local_worker)은 폐지했고 언제나 실행 환경/DB 키로 직접 호출한다."""
     configured = settings or get_settings()
     access = UserKeyAccess(database, user_id,
                            None if configured.ai_runtime == "local" else cipher or make_cipher(configured), configured)
-    with database.session() as session:
-        user = session.get(User, user_id)
-        worker = configured.ai_runtime == "server" and user is not None and user.ai_execution_mode == "local_worker"
-    from app.worker.adapter import QueueCall
-    with use_user_key(access.read, configured), use_worker_call(QueueCall(access) if worker else None):
+    with use_user_key(access.read, configured):
         yield access

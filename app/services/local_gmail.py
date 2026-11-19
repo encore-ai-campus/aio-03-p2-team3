@@ -100,7 +100,7 @@ class LocalGmailCollector:
 
     def poll_once(self):
         access = self.access
-        if not access.local_mode or self.stopping.is_set():
+        if not access.polling or self.stopping.is_set():
             return
         try:
             validate_runtime(access.settings)

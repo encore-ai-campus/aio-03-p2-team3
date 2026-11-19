@@ -79,7 +79,7 @@ def sdk(monkeypatch):
 @pytest.fixture
 def web(database_url, sdk):
     settings = Settings(database_url=database_url, session_secret="fake-session-secret",
-                        token_encryption_key=Fernet.generate_key().decode(), openai_api_key="fake-server-key",
+                        token_encryption_key=Fernet.generate_key().decode(),
                         gmail_pubsub_topic="projects/fake/topics/fake", pubsub_push_token="fake-push-token")
     with TestClient(create_app(settings, google=FakeGmailGoogle())) as client:
         with client.app.state.database.session() as session:
@@ -285,3 +285,11 @@ def test_simultaneous_graph_runs_keep_keys_isolated(web, sdk, email):
     assert all(result["end_reason"] == "ignored" for result in results)
     with pytest.raises(llm.OpenAIKeyError):
         llm.get_backend(settings)
+
+
+def test_env_key_serves_all_users_without_db_registration(database):
+    # 서버도 .env 공용 키를 우선 쓴다. DB 등록 없이 모든 사용자가 AI 기능을 쓸 수 있다.
+    settings = Settings(openai_api_key="fake-shared-env-key")
+    assert key_registered(database, 1, settings=settings)
+    with user_openai(database, 1, settings=settings) as access:
+        assert access.read() == "fake-shared-env-key"

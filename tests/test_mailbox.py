@@ -95,7 +95,8 @@ def test_disconnect_while_classifying_does_not_enter_graph(access, monkeypatch, 
     assert MailStore(access.database).get(1, "fake-message")["status"] == "needs_review"
 
 
-def test_local_worker_decisions_is_held_without_server_key_fallback(access, settings, graph, monkeypatch, isolated_mail_decisions):
+def test_local_worker_keyless_decisions_is_held_like_any_user(access, settings, graph, monkeypatch, isolated_mail_decisions):
+    # PC 위임 폐지(2026-11-19): 실행 방식 표시와 무관하게 키가 없으면 일반 사용자와 같이 보류된다.
     from dataclasses import replace
     from app.db.models import User
     with access.database.session() as session:
@@ -104,7 +105,7 @@ def test_local_worker_decisions_is_held_without_server_key_fallback(access, sett
     access = replace(access, settings=settings)
     notify(access, graph)
     row = MailStore(access.database).get(1, "fake-message")
-    assert row["status"] == "needs_review" and row["notice"] == "local_worker_key_forbidden"
+    assert row["status"] == "needs_review" and row["notice"] == "openai_key_required"
     assert not rows(access.database, Run)
 
 

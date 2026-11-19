@@ -75,11 +75,12 @@ def local_web(tmp_path, database_url, sdk):
         yield client, settings
 
 
-def test_real_dotenv_loader_defaults_server_and_does_not_load_environment_key(tmp_path):
+def test_real_dotenv_loader_defaults_server_and_loads_environment_key(tmp_path):
     env = tmp_path / ".env"
-    env.write_text("OPENAI_API_KEY=fake-ignored-environment-key\nAI_RUNTIME=\n")
+    env.write_text("OPENAI_API_KEY=fake-shared-environment-key\nAI_RUNTIME=\n")
     settings = get_settings(str(env))
-    assert settings.ai_runtime == "server" and settings.openai_api_key == ""
+    # 서버도 공용 키를 .env에서 읽는다(비워 둘 때만 사용자별 DB 키를 쓴다).
+    assert settings.ai_runtime == "server" and settings.openai_api_key == "fake-shared-environment-key"
     env.write_text("AI_RUNTIME=local\nLOCAL_OWNER_GOOGLE_SUB=fake-owner\nOPENAI_API_KEY=fake-local\n")
     os.environ.pop("AI_RUNTIME", None)
     os.environ.pop("OPENAI_API_KEY", None)
@@ -270,14 +271,12 @@ def test_host_header_cannot_select_or_expose_local_mode(local_web, sdk):
     assert sdk == []
 
 
-def test_server_mode_still_refuses_env_key_for_any_user(local_web, sdk):
+def test_server_mode_uses_env_key_for_any_user_without_db_lookup(local_web, sdk):
     client, settings = local_web
     server_settings = replace(settings, ai_runtime="server")
     for user_id in (1, 2, 9999):
-        with user_openai(client.app.state.database, user_id, settings=server_settings):
-            with pytest.raises(llm.OpenAIKeyError) as error:
-                llm.get_backend()
-            assert error.value.code == "OPENAI_KEY_REQUIRED"
+        with user_openai(client.app.state.database, user_id, settings=server_settings) as access:
+            assert access.read() == settings.openai_api_key
     assert sdk == []
 
 

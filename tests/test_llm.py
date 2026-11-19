@@ -289,7 +289,8 @@ def test_openai_settings_load_env_and_ignore_previous_provider(monkeypatch, runt
     config.get_settings.cache_clear()
     try:
         settings = config.get_settings()
-        assert settings.openai_api_key == ("fake-openai-key" if runtime == "local" else "")
+        # 로컬·서버 모두 실행 환경의 공용 키를 읽는다(비운 서버만 사용자별 DB 키).
+        assert settings.openai_api_key == "fake-openai-key"
         assert settings.openai_model == "gpt-fake"
         assert not hasattr(settings, "gemini_api_key") and not hasattr(settings, "trade_extract_backend")
         assert "fake-openai-key" not in repr(settings)
