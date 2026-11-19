@@ -61,7 +61,7 @@ def open_uploaded_document(page, name):
     page.get_by_role("region", name="내 문서 목록").get_by_role("button", name=name).click()
 
 
-def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url, tmp_path, monkeypatch):
+def test_browser_upload_auto_embeds_and_saved_edits_refresh_chunks(database_url, tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     environment = {**os.environ, "SUPABASE_URL": SUPABASE_URL,
                    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_fake_for_browser_test", "FRONTEND_PORT": "5174"}
@@ -108,7 +108,9 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
         upload_with_picker(page, "가상 문서.png", "image/png", png())
         open_uploaded_document(page, "가상 문서.png")
         detail = page.get_by_role("region", name="문서 상세")
-        expect(detail.get_by_text("원문 확인 필요", exact=True)).to_be_visible(timeout=15000)
+        expect(detail.get_by_text("저장 완료", exact=True)).to_be_visible(timeout=15000)
+        expect(detail.get_by_role("heading", name="저장한 청크")).to_be_visible()
+        expect(detail.get_by_text("판독이 불확실한 부분을 원본과 비교해 수정해 주세요.")).to_be_visible()
         expect(detail.get_by_alt_text("원본에서 렌더링한 1페이지")).to_be_visible()
         editor = detail.get_by_label("추출문 · 원본과 비교해 수정하세요")
         final_text = "제1조 가상 최종 확인\n검수가 끝난 뒤 지급한다. 단, 예외 조건도 함께 보존한다."
@@ -121,16 +123,15 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
                 "revision": current["revision"], "confirm": False,
                 "pages": [{"number": 1, "text": "다른 창에서 저장한 가상 원문"}]})
             assert other.status_code == 200
-        detail.get_by_role("button", name="원문 확정 후 임베딩").click()
+        detail.get_by_role("button", name="수정 저장").click()
         expect(detail.get_by_text("서버의 원문 또는 상태가 바뀌었습니다.", exact=False)).to_be_visible()
-        expect(editor).to_have_value(final_text)
         expect(editor).to_have_value(final_text)
         with page.expect_response(lambda response: response.url == path and response.request.method == "GET"):
             detail.get_by_role("button", name="다시 읽기").click()
         detail.get_by_role("button", name="수정 초기화").click()
         expect(editor).to_have_value("다른 창에서 저장한 가상 원문")
         editor.fill(final_text)
-        detail.get_by_role("button", name="원문 확정 후 임베딩").click()
+        detail.get_by_role("button", name="수정 저장").click()
         expect(detail.get_by_text("저장 완료", exact=True)).to_be_visible(timeout=15000)
         expect(detail.get_by_role("heading", name="저장한 청크")).to_be_visible()
         detail.get_by_text("연결한 부모 조항 원문 보기").click()
@@ -178,7 +179,7 @@ def test_browser_upload_compare_conflict_confirm_chunks_and_mobile(database_url,
         page.screenshot(path=str(screenshot_dir / "knowledge-mobile.png"), full_page=True)
         page.keyboard.press("Tab")
         assert not errors
-        assert len(extractor.calls) == 1 and len(embedder.calls) == 1
+        assert len(extractor.calls) == 1 and len(embedder.calls) == 2
         page.set_viewport_size({"width": 1440, "height": 1000})
         original_pdf = pdf(2)
         page.get_by_role("button", name="문서 목록").click()
@@ -282,6 +283,9 @@ def test_local_browser_missing_key_retry_failure_and_recovery_without_gmail(data
             screenshot_dir = Path(os.environ.get('KNOWLEDGE_SCREENSHOT_DIR', str(tmp_path)))
             screenshot_dir.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(screenshot_dir / 'knowledge-local-failed.png'), full_page=True)
+            page.get_by_role('button', name='문서 목록').click()
+            expect(page.get_by_role('button', name='local-fake.png')).to_contain_text('처리 실패')
+            open_uploaded_document(page, 'local-fake.png')
             mode['fail'] = False
             detail.get_by_role('button', name='다시 추출·임베딩').click()
             expect(detail.get_by_text('저장 완료', exact=True)).to_be_visible(timeout=15000)

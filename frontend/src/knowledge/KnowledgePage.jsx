@@ -129,12 +129,12 @@ function DocumentDetail({ id, token, refresh, changed }) {
       const retry = kind === "retry"
       const data = await apiFetch(`${ROOT}/${id}/${retry ? "retry" : "extraction"}`, {
         method: retry ? "POST" : "PUT", token, signal: controller.signal,
-        body: retry ? { attempt_id: read.data.attempt_id } : { ...editor, confirm: kind === "confirm" },
+        body: retry ? { attempt_id: read.data.attempt_id } : { ...editor, confirm: true },
       })
       if (controller.signal.aborted) return
       dirty.current = false
       setRead((previous) => ({ ...previous, data: { ...previous.data, ...data } }))
-      setAction({ busy: false, error: "", notice: kind === "save" ? "수정문을 저장했습니다. 확인 후 확정해 주세요." : "처리를 요청했습니다." })
+      setAction({ busy: false, error: "", notice: "처리를 요청했습니다." })
       setReload((value) => value + 1)
       changed()
     } catch (error) {
@@ -184,14 +184,15 @@ function DocumentDetail({ id, token, refresh, changed }) {
             {currentPage?.uncertain.map((value, i) => <p className="knowledge-note" key={i}>{value}</p>)}
             <details><summary>AI가 추출한 최초 문장 보기</summary><pre>{data.raw_pages.find((page) => page.number === number)?.text || "전사된 내용이 없습니다."}</pre></details>
           </div></div>
-        <div className="knowledge-actions"><button className="btn" disabled={processing || action.busy} onClick={() => act("save")}>수정 저장</button>
-          <button className="btn blue" disabled={processing || action.busy || !editor.pages.some((page) => page.text.trim())} onClick={() => act("confirm")}>원문 확정 후 임베딩</button>
+        <div className="knowledge-actions"><button className="btn blue"
+          disabled={processing || action.busy || (!dirty.current && data.status !== "needs_review") || !editor.pages.some((page) => page.text.trim())}
+          onClick={() => act("save")}>수정 저장</button>
           <button className="link-button" disabled={processing || action.busy} onClick={() => {
             dirty.current = false
             setEditor({ attempt_id: data.attempt_id, revision: data.revision, pages: data.pages.map((page) => ({ number: page.number, text: page.text })) })
             setAction({ busy: false, error: "", notice: "서버에 저장된 원문을 불러왔습니다." })
           }}>수정 초기화</button></div>
-        <p className="section-note">확정하면 모든 페이지의 현재 수정문으로 청크와 벡터를 만듭니다. 다시 추출하면 새로운 비전 AI 요청이 발생합니다.</p>
+        <p className="section-note">추출한 원문은 자동으로 임베딩됩니다. 수정 내용을 저장하면 임베딩도 갱신됩니다.</p>
       </>}
       {action.error && <p role="alert" className="form-error">{action.error}</p>}
       {action.notice && !(data.status === "failed" && action.notice === "처리를 요청했습니다.") && <p role="status">{action.notice}</p>}
@@ -224,7 +225,7 @@ export default function KnowledgePage({ reloadKey = 0 }) {
     return () => clearTimeout(timer)
   }, [processing, refresh])
 
-  // 선택한 문서가 있으면 목록을 대체해 원문 대조·확정 화면만 보여 주고(한 영역에 한 화면),
+  // 선택한 문서가 있으면 목록을 대체해 원문 대조·수정 화면을 보여 주고,
   // 돌아가기는 ?document를 지운다. 목록 밑에 상세를 이어 붙이지 않는다(요청자 검토 2026-11-18).
   if (id) return <div className="knowledge-workspace">
     <button type="button" className="doc-back" onClick={() => setParams({ tab: "uploaded" })}>← 문서 목록</button>
