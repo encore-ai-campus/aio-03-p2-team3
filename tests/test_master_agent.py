@@ -29,8 +29,8 @@ class Choices:
                                         "args": args}]).model_dump()
 
 
-def app_for(url, jwks, google, choices, settings=None, storage=None, knowledge_adapters=None):
-    return create_app(settings or settings_of(url), google=google, agent_choose=choices, storage=storage,
+def app_for(url, jwks, google, choices, settings=None, storage=None, knowledge_adapters=None, calendar=None):
+    return create_app(settings or settings_of(url), google=google, calendar=calendar, agent_choose=choices, storage=storage,
         knowledge_adapters=knowledge_adapters,
         supabase_auth=TokenVerifier(SUPABASE_URL, fetch_jwks=jwks.serve))
 
@@ -374,3 +374,134 @@ def test_native_tool_binding_uses_owner_key_and_refuses_worker_fallback(database
             s.get(User, 1).ai_execution_mode = 'local_worker'
         result = runtime.start(actor_id=1, thread_id='no-worker-fallback', request='메일 검색')
         assert result['error'] == 'LOCAL_WORKER_KEY_FORBIDDEN' and len(requests) == 2
+
+
+def test_mail_search_filters_body_date_and_sent_reply_before_paging(database):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from app.db.models import Counterparty, ProcessedMessage, ReplyCandidate, ThreadMessage, User
+    from app.graph.mail.adapters import ExistingMail
+    from app.graph.mail.schemas import SearchInput
+    from app.graph.master.tools import AGENT_TOOLS
+
+    start = datetime(2026, 11, 19, tzinfo=ZoneInfo("Asia/Seoul"))
+    end = start + timedelta(days=1)
+    sender = "alpha@fiction.example.invalid"
+    keyword = "코발트독수리%_"
+
+    with database.session() as session:
+        outsider = User(email="second@example.invalid", google_sub="second")
+        session.add(outsider)
+        session.flush()
+        session.add(Counterparty(user_id=1, company_key="fiction-alpha", legal_name="Fiction Alpha",
+                                 aliases=["알파"], email=sender))
+
+        def receive(key, thread_id, at, *, subject="발주 요청", body=keyword, owner=1):
+            session.add(ThreadMessage(user_id=owner, thread_id=thread_id, gmail_message_id=key, direction="in",
+                from_addr=sender, subject=subject, body_text=body, to_addrs=[], sent_at=at))
+            session.add(ProcessedMessage(user_id=owner, thread_id=thread_id, gmail_message_id=key,
+                                          received_at=at, status="awaiting_approval"))
+
+        def send(key, thread_id, at, owner=1):
+            session.add(ThreadMessage(user_id=owner, thread_id=thread_id, gmail_message_id=key, direction="out",
+                from_addr="tester@example.invalid", subject="Re: 발주 요청", body_text="확인했습니다.",
+                to_addrs=[sender], sent_at=at))
+
+        receive("early", "early", start - timedelta(seconds=1))
+        receive("replied", "replied", start + timedelta(minutes=15))
+        send("sent-reply", "replied", start + timedelta(minutes=30))
+        receive("first", "followup", start)
+        send("sent-first", "followup", start + timedelta(hours=1))
+        receive("other", "other", start + timedelta(hours=2), owner=outsider.id)
+        receive("subject-only", "subject-only", start + timedelta(hours=3), subject=keyword, body="본문에 없음")
+        receive("literal", "literal", start, body="코발트독수리AB")
+        receive("older-only", "older", start)
+        receive("older-new", "older", end, body="다음 날 메일")
+        receive("boundary", "boundary", end)
+        receive("followup", "followup", start + timedelta(hours=4), body="가상 본문 " * 50 + keyword)
+        send("other-sent", "followup", start + timedelta(hours=5), owner=outsider.id)
+        session.add(ReplyCandidate(user_id=1, thread_id="followup", run_id="fixture-run", source_message_id="followup",
+                                   label="초안", kind="general", subject="Re: 발주", body="아직 보내지 않은 초안"))
+
+    options = dict(query=keyword, field="body", received_from=start, received_before=end, reply_status="unanswered")
+    task = AGENT_TOOLS["search_mail"].invoke(options)
+    assert task["inputs"]["received_before"] == end.isoformat()
+    mail = ExistingMail(database=database)
+    result = mail.search(1, SearchInput.model_validate(task["inputs"]))
+    assert [row["thread_id"] for row in result["threads"]] == ["followup", "older"]
+    assert keyword in result["threads"][0]["preview"] and result["threads"][0]["preview"].startswith("…")
+    assert all(row["reply_status"] == "unanswered" for row in result["threads"])
+    assert result["search_scope"]["field"] == "body"
+    replied = mail.search(1, SearchInput(**{**options, "reply_status": "replied"}))
+    assert [row["thread_id"] for row in replied["threads"]] == ["followup", "replied"]
+    assert all(row["reply_status"] == "replied" for row in replied["threads"])
+    for field in ("sender", "all"):
+        alias = mail.search(1, SearchInput(query="알파", field=field, received_from=start, received_before=end))
+        assert {row["thread_id"] for row in alias["threads"]} == {"followup", "older", "literal", "subject-only", "replied"}
+
+    from app.db.mailbox import MailStore
+
+    store = MailStore(database)
+    page_one = store.search_threads(1, **options, cursor=None, limit=1)
+    page_two = store.search_threads(1, **options, cursor=page_one["next_cursor"], limit=1)
+    assert [row["thread_id"] for row in page_one["items"] + page_two["items"]] == ["followup", "older"]
+    assert page_two["next_cursor"] is None
+    with pytest.raises(ValueError, match="invalid_mail_search_window"):
+        SearchInput(received_from=end, received_before=start)
+
+
+def test_registered_trade_directory_resolves_code_currency_and_party_scope(database):
+    from app.db.models import Counterparty, PriceListItem, User
+    from app.graph.documents.adapters import ExistingDocuments
+    from app.graph.documents.schemas import CounterpartySearch, TradePriceSearch
+    from app.graph.master.tools import AGENT_TOOLS
+
+    with database.session() as session:
+        other = User(email="other-dir@example.invalid", google_sub="other-dir")
+        session.add(other)
+        session.flush()
+        session.add_all([
+            Counterparty(user_id=1, company_key="fictionalpha", legal_name="Fiction Alpha",
+                         aliases=["알파", "공동 별칭"], email="alpha@example.invalid", phone="010-0000-0001"),
+            Counterparty(user_id=1, company_key="fictionbeta", legal_name="Fiction Beta",
+                         aliases=["공동 별칭"], email="beta@example.invalid"),
+            Counterparty(user_id=other.id, company_key="secret", legal_name="Private Other",
+                         aliases=["알파"], email="private@example.invalid"),
+        ])
+
+        def price(amount, *, party="", currency="USD", role="sale", code="SC-110",
+                  name="V-Cera Serum", owner=1):
+            session.add(PriceListItem(user_id=owner, item_name=name, product_code=code, party_key=party,
+                role=role, currency=currency, unit_price_text=amount, unit="each", price_basis="FOB"))
+
+        price("15.50")
+        price("12.50", party="fictionalpha")
+        price("11.00", party="fictionbeta")
+        price("1300", currency="KRW")
+        price("8.01", role="purchase")
+        price("27.00", currency="EUR", code="SC-111", name="SC110 misleading listing")
+        price("0.01", owner=other.id)
+
+    documents = ExistingDocuments(database=database)
+    task = AGENT_TOOLS["search_trade_prices"].invoke({
+        "product": "sc110", "currency": "usd", "role": "sale", "counterparty": "알파",
+    })
+    result = documents.search_trade_prices(1, TradePriceSearch.model_validate(task["inputs"]))
+    row, = result["prices"]
+    assert row["unit_price"] == "12.50" and row["currency"] == "USD"
+    assert row["scope"] == "counterparty" and row["counterparty"] == "Fiction Alpha"
+    assert row["unit"] == "each" and row["price_basis"] == "FOB"
+
+    def lookup(**overrides):
+        return documents.search_trade_prices(1, TradePriceSearch(
+            **{**task["inputs"], **overrides}))
+
+    assert lookup(currency="KRW")["prices"][0]["scope"] == "common"
+    assert lookup(role="purchase")["prices"][0]["unit_price"] == "8.01"
+    assert lookup(currency="EUR")["price_status"] == "not_found"
+    conflict = lookup(counterparty="공동 별칭")
+    assert conflict["price_status"] == "choose_counterparty" and conflict["prices"] == []
+    assert {card["legal_name"] for card in conflict["counterparties"]} == {"Fiction Alpha", "Fiction Beta"}
+    assert documents.search_counterparties(1, CounterpartySearch(query="알파"))["counterparties"][0]["email"] == "alpha@example.invalid"
+    assert documents.search_counterparties(1, CounterpartySearch(query="private@example.invalid"))["total"] == 0

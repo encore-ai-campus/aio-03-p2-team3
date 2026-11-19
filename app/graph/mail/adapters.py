@@ -6,13 +6,16 @@ from email.parser import BytesParser
 from email.policy import default as email_policy
 from hashlib import sha256
 
-from sqlalchemy import select
+from sqlalchemy import cast, func, select
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.models import (Approval, CompanyBranding, CompanyProfile, FileAsset, Quote, ReplyCandidate,
                            RunEvent, ThreadMessage, TradeArtifact, TradeDocument, TradeProposal)
+from app.graph.mail.schemas import SearchInput
 from app.graph.schemas import ExecutionResult, WorkflowError, content_hash
+from app.mail import attachments, compose, followups
 from app.services.auth import get_access_token
-from app.services import approval
+from app.services import approval, mailbox
 from app.services.locks import user_lock
 from app.runlog.logger import log_event
 from app.trade.review.repository import SQLReviews
@@ -47,14 +50,79 @@ class _ApprovedGmail:
 
 
 class ExistingMail:
-    def __init__(self, *, database, access=None, storage=None, key_cipher=None):
+    def __init__(self, *, database, access=None, storage=None, key_cipher=None, inbound_graph=None):
         self.database, self.access = database, access
         self.storage = storage
         self.key_cipher = key_cipher
+        self.inbound_graph = inbound_graph
 
-    def search(self, actor_id, query, cursor=None):
-        data = MailStore(self.database).threads(actor_id, query=query, cursor=cursor, limit=10)
-        return {"threads": data["items"], "next_cursor": data["next_cursor"]}
+    def search(self, actor_id: int, query: SearchInput) -> dict:
+        data = MailStore(self.database).search_threads(actor_id, **query.model_dump(), limit=10)
+        return {
+            "threads": data["items"], "next_cursor": data["next_cursor"],
+            "search_scope": query.model_dump(mode="json", exclude={"cursor"}),
+        }
+
+    def compose(self, actor_id, draft_id, command):
+        return compose.save_draft(self.database, actor_id, draft_id, command)
+
+    def search_sent(self, actor_id, query):
+        if not query:
+            return {"sent_threads": [], "has_more": False}
+        if "@" in query:
+            recipients = func.jsonb_array_elements_text(cast(ThreadMessage.to_addrs, JSONB)).column_valued("recipient")
+            matches = select(1).where(func.lower(recipients) == query.casefold()).correlate(ThreadMessage).exists()
+        else:
+            matches = ThreadMessage.subject.icontains(query, autoescape=True)
+        ranked = select(ThreadMessage.id, func.row_number().over(partition_by=ThreadMessage.thread_id,
+            order_by=(ThreadMessage.sent_at.desc(), ThreadMessage.id.desc())).label("rank")).where(
+                ThreadMessage.user_id == actor_id, ThreadMessage.direction == "out", matches).subquery()
+        with self.database.session() as session:
+            rows = list(session.scalars(select(ThreadMessage).join(ranked, ranked.c.id == ThreadMessage.id)
+                .where(ranked.c.rank == 1).order_by(ThreadMessage.sent_at.desc(), ThreadMessage.id.desc()).limit(11)))
+            return {"sent_threads": [
+                {"thread_id": row.thread_id, "subject": row.subject, "received_at": row.sent_at.isoformat(),
+                 "to_addrs": row.to_addrs} for row in rows[:10]
+            ], "has_more": len(rows) > 10}
+
+    def attachments(self, actor_id, command):
+        return attachments.list_files(self.database, self.access, actor_id, command.thread_id, command.message_id)
+
+    def register_followup(self, actor_id, command):
+        return followups.register(self.database, actor_id, command.thread_id, command.due_at)
+
+    def list_followups(self, actor_id, command):
+        return followups.list_items(self.database, actor_id, cursor=command.cursor)
+
+    def cancel_followup(self, actor_id, followup_id):
+        return followups.cancel(self.database, actor_id, followup_id)
+
+    def reply_edit_target(self, actor_id, candidate_id):
+        row = MailStore(self.database).candidate(actor_id, candidate_id)
+        if row is None:
+            raise WorkflowError("candidate_not_found")
+        return {key: row[key] for key in ("id", "thread_id", "status", "subject", "body", "label")}
+
+    def update_reply(self, actor_id, action):
+        original, changes = action.payload["original"], action.payload["changes"]
+        try:
+            saved = mailbox.edit_candidate(MailStore(self.database), actor_id, original["id"], **changes,
+                expected_subject=original["subject"], expected_body=original["body"])
+        except mailbox.MailError as error:
+            return ExecutionResult(status="failed", action_id=action.id, content_hash=action.content_hash, code=error.code)
+        return ExecutionResult(status="succeeded", action_id=action.id, content_hash=action.content_hash,
+                               receipt={"edited_reply": {key: saved[key] for key in original}})
+
+    def lookup_reply_edit(self, actor_id, action):
+        try:
+            current = self.reply_edit_target(actor_id, action.payload["original"]["id"])
+        except WorkflowError:
+            current = {}
+        matches = all(current.get(key) == value for key, value in action.payload["changes"].items())
+        return ExecutionResult(status="succeeded" if matches else "unknown", action_id=action.id,
+                               content_hash=action.content_hash,
+                               receipt={"edited_reply": current} if matches else None,
+                               code=None if matches else "reply_edit_unconfirmed")
 
     def thread(self, actor_id, thread_id):
         with self.database.session() as session:
@@ -76,7 +144,7 @@ class ExistingMail:
         email = next((message for message in reversed(messages) if message["direction"] == "in"), None)
         if email is None:
             raise WorkflowError("inbound_message_required")
-        result = start_run(user_id=actor_id, email=email, database=self.database, key_cipher=self.key_cipher)
+        result = start_run(user_id=actor_id, email=email, database=self.database, key_cipher=self.key_cipher, graph=self.inbound_graph)
         with self.database.session() as session:
             ids = list(session.scalars(select(ReplyCandidate.id).where(
                 ReplyCandidate.user_id == actor_id, ReplyCandidate.run_id == result["run_id"],

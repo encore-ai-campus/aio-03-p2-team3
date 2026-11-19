@@ -12,10 +12,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth.gmail import GmailConnectionError
 from app.auth.supabase import bearer_user_id
-from app.clients.calendar import CalendarDenied, missing_calendar_scopes
+from app.clients.calendar import CalendarDenied, calendar_can_write, missing_calendar_scopes
 from app.clients.gmail import GoogleError, TokenExpired
 from app.db.models import CalendarOAuthAttempt, CalendarToken, User
-from app.services.auth import ACCESS_TOKEN_MARGIN, make_cipher, utcnow
+from app.services.auth import make_cipher, utcnow
+from app.services.calendar import CalendarEventsError, calendar_access_token, list_primary_events
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar-connection"])
 STATE_TTL_SECONDS = 600
@@ -71,7 +72,10 @@ def connect(request: Request, user_id: int = Depends(bearer_user_id)):
     subject = request.app.state.supabase_auth.provider_google_subject(verified.sub)
     if not subject:
         raise GmailConnectionError(409, "google_identity_required", "Google로 다시 로그인해 본인 계정을 확인해 주세요.")
-    return {"authorization_url": _start(request, user_id, subject)}
+    access = request.app.state.calendar_access
+    with access.database.session() as session:
+        reconnecting = session.get(CalendarToken, user_id) is not None
+    return {"authorization_url": _start(request, user_id, subject, consent=reconnecting)}
 
 
 @router.post("/disconnect")
@@ -84,6 +88,15 @@ def disconnect(request: Request, user_id: int = Depends(bearer_user_id)):
     if request.session.get("oauth", {}).get("service") == "calendar":
         request.session.pop("oauth", None)
     return {"connected": False}
+
+
+@router.get("/events")
+def events(request: Request, start: str, end: str, user_id: int = Depends(bearer_user_id)):
+    """본인 주 캘린더의 기간 내 일정 목록."""
+    try:
+        return list_primary_events(request.app.state.calendar_access, user_id, start, end)
+    except CalendarEventsError as error:
+        raise GmailConnectionError(error.status, error.code, error.message) from error
 
 
 def complete_callback(request, pending, state, code, error):
@@ -152,17 +165,7 @@ def complete_callback(request, pending, state, code, error):
         return _to_app(request, "config_missing")
     except GoogleError as failure:
         return _to_app(request, failure.code if failure.code != "google_error" else "login_failed")
-    return _to_app(request, "connected")
-
-
-def calendar_access_token(session, access, stored: CalendarToken) -> str:
-    """CalendarToken의 접근 토큰. 만료가 가까우면 갱신해 같은 행에 저장한다.
-    상태 조회와 그래프 어댑터가 같은 갱신 로직을 쓴다(계획 2절)."""
-    if stored.expires_at - ACCESS_TOKEN_MARGIN <= utcnow():
-        fresh = access.google.refresh(access.cipher.decrypt(stored.refresh_token_enc))
-        stored.access_token_enc = access.cipher.encrypt(fresh.token)
-        stored.expires_at = fresh.expires_at
-    return access.cipher.decrypt(stored.access_token_enc)
+    return _to_app(request, "connected" if calendar_can_write(login.scopes) else "write_scope_missing")
 
 
 def calendar_status(request, user_id):
@@ -186,4 +189,4 @@ def calendar_status(request, user_id):
             return {"connected": False}
         except GoogleError as failure:
             return {"connected": False, "error": failure.code}
-    return {"connected": True}
+        return {"connected": True, "can_write": calendar_can_write(stored.scopes)}

@@ -1,5 +1,5 @@
 /* 시안 'trade-agent ui_시안.html'의 색 토큰·로그인 화면·사이드바 레이아웃·모바일 하단탐색을 그대로 옮겼다.
-   아직 연결 전인 화면(받은 메일·문서작성 대화·견적서·설정·실행 기록)의 전용 CSS는 해당 절에서 추가한다. */
+   아직 연결 전인 화면(받은 메일·문서작성 대화·견적서·설정)의 전용 CSS는 해당 절에서 추가한다. */
 
 :root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1c2431;background:#f5f6f8;font-synthesis:none;--ink:#1c2431;--muted:#7e8795;--line:#e8ebef;--blue:#315df5;--green:#168052;--amber:#9a690d;--card:#fff;--mobile-nav-height:calc(63px + env(safe-area-inset-bottom,0px))}
 *{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select,textarea{font:inherit}button{cursor:pointer}
@@ -133,3 +133,17 @@ body{color:var(--ink);background:#f4f6fa}
 @media(max-width:900px){.shell{grid-template-columns:214px minmax(0,1fr)}.content{padding:27px 25px 42px}.top{padding:0 25px}}
 @media(max-width:800px){.content{padding:24px 17px 36px}.page-title{font-size:25px}.page-sub{font-size:14px}.settings-panel{padding:20px}.pi-workspace .page-title{font-size:25px}}
 @media(max-width:600px){.content{padding:22px 16px 32px}.page-title{font-size:24px}.page-head{gap:12px;margin-bottom:20px}.card{padding:17px}.settings-panel{padding:16px}.settings-nav button{font-size:13px}.form-actions .btn{font-size:13px}.pi-main{padding:16px 0}.pi-main h2{font-size:24px}.pi-workspace .page-title{font-size:24px}}
+
+.followup-notice {
+  display: flex; align-items: center; gap: 12px 18px; flex-wrap: wrap;
+  margin-bottom: 16px; padding: 12px 14px; border: 1px solid #ecd8a7;
+  border-radius: 10px; background: #fff8e8; color: #694810; font-size: 13px;
+}
+.followup-notice div { display: grid; flex: 1 1 220px; gap: 3px; overflow-wrap: anywhere; }
+.followup-notice a { color: inherit; font-weight: 700; text-decoration: underline; }
+.followup-panel { display: grid; gap: 16px; max-width: 760px; min-width: 0; }
+.followup-panel header { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.followup-panel header h2 { margin: 0; }
+.followup-panel header a { color: #2449d8; font-weight: 700; }
+.followup-cancel-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.followup-cancel-list .btn { max-width: 100%; overflow-wrap: anywhere; }

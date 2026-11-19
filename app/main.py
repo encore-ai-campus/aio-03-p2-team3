@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager, contextmanager
+from functools import partial
 import asyncio
 import logging
 import secrets
@@ -26,17 +27,19 @@ from app.files import router as files_routes
 from app.files.service import FileError
 from app.files.storage import StorageClient
 from app.knowledge import router as knowledge_routes
+from app.knowledge.query_rewrite import plan_query, rerank
 from app.knowledge.repository import SqlRepository
 from app.knowledge.schemas import KnowledgeError
 from app.knowledge.worker import IngestionWorker
 from app.graph.calendar.adapters import ExistingCalendar
-from app.graph.run import get_graph
+from app.graph.build import build_graph
+from app.graph.mail.retrieval_adapter import analyze_with_knowledge
 from app.graph import api as agent_api
 from app.graph.wiring import make_workflow
 from app.graph.service import AgentService
 from app.db.agent import ConversationStore
 from app.db.checkpoints import checkpoints
-from app.mail import candidates, inbox, push as gmail_push, api as mail_api
+from app.mail import candidates, inbox, push as gmail_push, api as mail_api, followups
 from app.quote import router as quotes
 from app.runlog import router as runs
 from app.services.auth import GoogleAccess, make_cipher
@@ -63,7 +66,7 @@ SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
 
 def create_app(settings: Settings | None = None, google=None,
                supabase_auth: TokenVerifier | None = None, storage=None,
-               knowledge_adapters=None, calendar=None, agent_choose=None) -> FastAPI:
+               knowledge_adapters=None, calendar=None, agent_choose=None, knowledge_search_models=None) -> FastAPI:
     """google: Google 호출 객체. 비우면 실제 `GoogleClient`, 테스트는 가짜를 넣는다.
     supabase_auth: Supabase 토큰 검증기. 비우면 SUPABASE_URL로 만들고, 그것도 없으면 Bearer 인증 불가(503).
     storage: Storage 호출 객체. 비우면 SUPABASE_URL·SUPABASE_SECRET_KEY로 만들고, 없으면 파일 API 503.
@@ -86,7 +89,6 @@ def create_app(settings: Settings | None = None, google=None,
         database = get_database(config)
         app.state.settings = config
         app.state.database = database
-        app.state.graph = get_graph()
         app.state.supabase_auth = supabase_auth or (
             TokenVerifier(config.supabase_url, secret_key=config.supabase_secret_key)
             if config.supabase_url.strip() else None
@@ -117,16 +119,28 @@ def create_app(settings: Settings | None = None, google=None,
         app.state.calendar_access = GoogleAccess(
             database, calendar or CalendarClient(config), make_cipher(config), "", settings=config,
         )
+        calendar_port = ExistingCalendar(app.state.calendar_access)
+        knowledge_plan, knowledge_rerank = knowledge_search_models or (
+            (partial(plan_query, database, config), partial(rerank, database, config))
+            if knowledge_adapters is None else (None, None)
+        )
+        app.state.graph = build_graph(node_overrides={"analyze_email": partial(
+            analyze_with_knowledge, repository=app.state.knowledge_repository,
+            get_embedder=lambda owner: app.state.knowledge_adapters(owner, {})[2],
+            plan_query=knowledge_plan, rerank=knowledge_rerank, calendar=calendar_port,
+        )})
+
         @contextmanager
         def agent_runtime():
             with checkpoints(database) as saver:
                 yield make_workflow(database=database, checkpointer=saver, access=app.state.google_access,
                     storage=app.state.storage, key_cipher=make_cipher(config), interactive=True, choose=agent_choose,
                     knowledge_adapters=app.state.knowledge_adapters,
-                    calendar=ExistingCalendar(app.state.calendar_access))
+                    calendar=calendar_port, inbound_graph=app.state.graph,
+                    knowledge_plan=knowledge_plan, knowledge_rerank=knowledge_rerank)
 
         app.state.agent = AgentService(ConversationStore(database), agent_runtime)
-        collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database)) if config.ai_runtime == "local" else None
+        collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database), graph=app.state.graph) if config.ai_runtime == "local" else None
         app.state.local_gmail = collector
         task = asyncio.create_task(collector.run()) if collector else None
         worker_stop = asyncio.Event()
@@ -144,6 +158,19 @@ def create_app(settings: Settings | None = None, google=None,
                     pass
 
         gmail_task = asyncio.create_task(maintain_gmail())
+        async def refresh_mail_followups():
+            while not worker_stop.is_set():
+                try:
+                    await asyncio.to_thread(followups.refresh_due, database)
+                except Exception as error:
+                    logging.getLogger(__name__).warning("후속 알림 확인 실패 (%s)", type(error).__name__)
+                try:
+                    await asyncio.wait_for(worker_stop.wait(), timeout=60)
+                except TimeoutError:
+                    pass
+
+        followup_task = asyncio.create_task(refresh_mail_followups())
+
         async def clean_worker_queue():
             while not worker_stop.is_set():
                 try:
@@ -166,6 +193,7 @@ def create_app(settings: Settings | None = None, google=None,
             worker_stop.set()
             if gmail_task:
                 await gmail_task
+            await followup_task
             if worker_task:
                 await worker_task  # 정리 스레드가 끝난 다음 DB를 닫는다.
             if collector:

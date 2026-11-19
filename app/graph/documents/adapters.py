@@ -1,5 +1,6 @@
 """PI/PO/CI/PL의 기존 operations/repository를 연결하는 조립 경계."""
 
+from functools import partial
 from app.graph.schemas import ExecutionResult, WorkflowError
 from app.knowledge import operations as knowledge
 from app.knowledge.repository import SqlRepository
@@ -7,6 +8,7 @@ from app.knowledge.schemas import KnowledgeError
 from app.services.openai_keys import user_openai
 from app.trade.common import operations as common
 from app.trade.common.models import DocumentError
+from app.trade.common.repository import list_unissued
 from app.trade.common.rendering import render_approved_files
 from app.trade.review import operations as review
 from app.trade.review.models import Decision, ReviewRequest
@@ -25,6 +27,8 @@ from app.trade.ci.rendering import render_ci_files
 from app.trade.pl import agent as pl_agent, operations as pl
 from app.trade.pl.models import PLInput, PackingDecision
 from app.trade.pl.repository import pl_repository
+from app.trade.settings import lookup
+from app.trade.settings.repository import counterparty_profiles, trade_price_rows
 
 IMPLEMENTATIONS = {
     "PI": (pi, PIInput, pi_repository, pi_agent.extract_pi, render_pi_files),
@@ -35,12 +39,36 @@ IMPLEMENTATIONS = {
 
 
 class ExistingDocuments:
-    def __init__(self, *, database, storage=None, key_cipher=None, knowledge_adapters=None):
+    def __init__(self, *, database, storage=None, key_cipher=None, knowledge_adapters=None,
+                 knowledge_plan=None, knowledge_rerank=None):
         self.database, self.storage, self.key_cipher = database, storage, key_cipher
         self.knowledge_adapters = knowledge_adapters
+        self.knowledge_plan, self.knowledge_rerank = knowledge_plan, knowledge_rerank
 
     def schema(self, kind):
         return {"kind": kind, "input_schema": IMPLEMENTATIONS[kind][1].model_json_schema()}
+
+    def search_trade_prices(self, actor_id, command):
+        with self.database.session() as session:
+            prices = trade_price_rows(session, actor_id)
+            profiles = counterparty_profiles(session, actor_id)
+        return lookup.catalog_prices(**command.model_dump(), prices=prices, profiles=profiles)
+
+    def search_counterparties(self, actor_id, command):
+        with self.database.session() as session:
+            return lookup.contacts(command.query, counterparty_profiles(session, actor_id))
+
+    def search_drafts(self, actor_id, command):
+        drafts, cursor = list_unissued(self.database, actor_id, **command.model_dump())
+        values = []
+        for draft in drafts:
+            kind = draft["document_type"]
+            result = IMPLEMENTATIONS[kind][0].result(draft)
+            values.append({"document_id": result.document_id, "kind": kind, "revision": result.revision,
+                "title": draft.get("document_number") or draft["doc_no"], "counterparty": common.counterparty_name(draft),
+                "status": result.status, "missing_fields": result.missing_fields, "issues": result.issues,
+                "url": f"/app/trade/{kind.lower()}/{result.document_id}"})
+        return {"draft_documents": values, "next_cursor": cursor}
 
     def search_issued(self, actor_id, command):
         repository = SQLReviews(self.database, actor_id, command.kind)
@@ -56,7 +84,9 @@ class ExistingDocuments:
         try:
             return knowledge.search(SqlRepository(self.database), actor_id, filename=command.filename,
                 document_id=str(command.document_id) if command.document_id else None,
-                query=command.query, get_embedder=embedder)
+                query=command.query, get_embedder=embedder,
+                plan_query=partial(self.knowledge_plan, actor_id) if self.knowledge_plan else None,
+                rerank=partial(self.knowledge_rerank, actor_id) if self.knowledge_rerank else None)
         except KnowledgeError as error:
             raise WorkflowError(error.code) from None
 

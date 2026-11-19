@@ -1,4 +1,4 @@
-"""읽기 전용 Calendar OAuth와 연결 확인. 일정 본문을 읽거나 기록하지 않는다."""
+"""Calendar OAuth와 연결 확인, 일정 조회·등록 호출기."""
 from datetime import datetime
 from urllib.parse import quote
 import httpx
@@ -8,9 +8,12 @@ from app.clients.gmail import (
     TokenExpired, normalize_scopes,
 )
 
-CALENDAR_SCOPES = ("openid", "email", "https://www.googleapis.com/auth/calendar.readonly")
+CALENDAR_READ_SCOPES = ("openid", "email", "https://www.googleapis.com/auth/calendar.readonly")
+CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events.owned"
+CALENDAR_SCOPES = (*CALENDAR_READ_SCOPES, CALENDAR_WRITE_SCOPE)
 EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars"
 FREE_BUSY_URL = "https://www.googleapis.com/calendar/v3/freeBusy"
+LIST_EVENTS_MAX_PAGES = 12  # 250건×12페이지. 상한을 넘으면 잘린 목록 대신 실패한다.
 FORBIDDEN_SERVICE_REASONS = frozenset({"accessNotConfigured", "SERVICE_DISABLED"})
 FORBIDDEN_QUOTA_REASONS = frozenset({"rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded",
                                      "quotaExceeded", "RATE_LIMIT_EXCEEDED"})
@@ -26,12 +29,23 @@ class CalendarRejected(GoogleError):
     code = "calendar_rejected"
 
 
+class CalendarChanged(GoogleError):
+    code = "calendar_event_changed"
+
+
 class CalendarDisabled(GoogleError):
     code = "api_disabled"
 
 
 def missing_calendar_scopes(granted):
-    return normalize_scopes(CALENDAR_SCOPES) - normalize_scopes(granted)
+    return normalize_scopes(CALENDAR_READ_SCOPES) - normalize_scopes(granted)
+
+
+def calendar_can_write(granted):
+    return bool(normalize_scopes(granted) & {
+        CALENDAR_WRITE_SCOPE, "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/calendar",
+    })
 
 
 def _forbidden_reasons(response):
@@ -66,6 +80,19 @@ def _parse_instant(value):
     return moment
 
 
+def _normalize_event(item):
+    """화면이 쓰는 최소 필드. 시각은 Google 원문(offset dateTime 또는 종일 date)을 변환 없이 전달한다."""
+    start, end = item.get("start") or {}, item.get("end") or {}
+    if "date" in start or "date" in end:
+        begin, finish, all_day = start.get("date"), end.get("date"), True
+    else:
+        begin, finish, all_day = start.get("dateTime"), end.get("dateTime"), False
+    if not isinstance(begin, str) or not isinstance(finish, str):
+        raise ValueError("event_time_missing")
+    return {"id": item["id"], "summary": item.get("summary") or "",
+            "start": begin, "end": finish, "all_day": all_day}
+
+
 class CalendarClient(GoogleClient):
     scopes = CALENDAR_SCOPES
 
@@ -75,6 +102,12 @@ class CalendarClient(GoogleClient):
             options["prompt"] = "consent"
         url, _ = self._flow(code_verifier, state).authorization_url(**options)
         return url
+
+    def _fetch_token(self, code, code_verifier):
+        flow = self._flow(code_verifier)
+        # Google may grant the requested read scope while the user declines the write scope.
+        flow.oauth2session.scope = None
+        return flow.fetch_token(code=code)
 
     def check_calendars(self, access_token):
         try:
@@ -117,7 +150,99 @@ class CalendarClient(GoogleClient):
                 snapshot[calendar_id] = {"busy": busy, "errors": errors}
         except (ValueError, TypeError, KeyError) as error:
             raise GoogleUnavailable("calendar_response") from error
+        # A single primary lookup may be returned under the canonical calendar ID.
+        if calendar_ids == ["primary"] and len(snapshot) == 1:
+            return {"primary": next(iter(snapshot.values()))}
         return snapshot
+
+    def list_events(self, access_token, calendar_id, *, time_min, time_max, include_details=False):
+        """기간 내 일정 목록(읽기 전용). 종일 일정은 date, 나머지는 offset dateTime을 그대로 돌려준다."""
+        events, page_token = [], None
+        for _ in range(LIST_EVENTS_MAX_PAGES):
+            params = {"timeMin": time_min.isoformat(), "timeMax": time_max.isoformat(),
+                      "singleEvents": "true", "orderBy": "startTime", "maxResults": 250,
+                      "fields": "nextPageToken,items(id,summary,start,end)"}
+            if include_details:
+                params["fields"] = "nextPageToken,items(id,summary,start,end,status,transparency)"
+            if page_token:
+                params["pageToken"] = page_token
+            try:
+                response = httpx.get(
+                    f"{EVENTS_URL}/{quote(calendar_id)}/events", params=params,
+                    headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT_SECONDS,
+                )
+            except httpx.HTTPError as error:
+                raise GoogleUnavailable("calendar_transport") from error
+            _raise_calendar_error(response.status_code, response)
+            try:
+                data = response.json()
+                if not isinstance(data, dict) or not isinstance(data.get("items", []), list):
+                    raise ValueError()
+                for item in data["items"]:
+                    if include_details and item.get("status") == "cancelled":
+                        continue
+                    event = _normalize_event(item)
+                    if include_details:
+                        event["transparent"] = item.get("transparency") == "transparent"
+                    events.append(event)
+            except (ValueError, TypeError, KeyError) as error:
+                raise GoogleUnavailable("calendar_response") from error
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                return events
+        raise GoogleUnavailable("calendar_response")  # 페이지 상한 초과는 잘린 목록 대신 실패
+
+    def event_for_change(self, access_token, event_id):
+        """Read the current event version from the same primary calendar as the agenda."""
+        try:
+            response = httpx.get(
+                f"{EVENTS_URL}/primary/events/{quote(event_id, safe='')}",
+                params={"fields": "id,etag,status,summary,start,end,recurringEventId,recurrence"},
+                headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            raise GoogleUnavailable("calendar_transport") from error
+        if response.status_code in {404, 410}:
+            return None
+        _raise_calendar_error(response.status_code, response)
+        try:
+            item = response.json()
+            if item.get("status") == "cancelled":
+                return None
+            event = _normalize_event(item)
+            if event["id"] != event_id or not isinstance(item["etag"], str) or not item["etag"]:
+                raise ValueError("calendar_etag_missing")
+            return {**event, "etag": item["etag"], "recurring_instance": bool(item.get("recurringEventId")),
+                    "recurring_series": bool(item.get("recurrence"))}
+        except (TypeError, ValueError, KeyError, AttributeError) as error:
+            raise GoogleUnavailable("calendar_response") from error
+
+    def change_event(self, access_token, event_id, etag, new_time):
+        """Apply the approved partial change or cancellation only to the approved version."""
+        url = f"{EVENTS_URL}/primary/events/{quote(event_id, safe='')}"
+        headers = {"Authorization": f"Bearer {access_token}", "If-Match": etag}
+        options = {"headers": headers, "timeout": HTTP_TIMEOUT_SECONDS}
+        try:
+            if new_time is None:
+                response = httpx.delete(url, **options)
+                if response.status_code == 204:
+                    return
+            else:
+                def endpoint(key):
+                    if new_time["all_day"]:
+                        return {"date": new_time[key]}
+                    return {"dateTime": new_time[key], "timeZone": new_time["timezone"]}
+
+                response = httpx.patch(url, json={"start": endpoint("start"), "end": endpoint("end")}, **options)
+                if response.status_code == 200:
+                    return
+        except httpx.HTTPError as error:
+            raise GoogleUnavailable("calendar_transport") from error
+        if response.status_code in {404, 410, 412}:
+            raise CalendarChanged("calendar_event_changed")
+        if 400 <= response.status_code < 500 and response.status_code not in {401, 403, 429}:
+            raise CalendarRejected("calendar_change_rejected")
+        _raise_calendar_error(response.status_code, response)
 
     def insert_event(self, access_token, calendar_id, *, summary, start, end, timezone, attendees=(),
                      event_id=None):

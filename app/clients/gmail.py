@@ -161,12 +161,15 @@ class GoogleClient:
         url, _ = self._flow(code_verifier, state).authorization_url(**options)
         return url
 
+    def _fetch_token(self, code: str, code_verifier: str):
+        return self._flow(code_verifier).fetch_token(code=code)
+
     def exchange_code(self, code: str, code_verifier: str) -> GoogleLogin:
         from google.auth.transport.requests import Request
         from google.oauth2 import id_token
 
         try:
-            token = self._flow(code_verifier).fetch_token(code=code)
+            token = self._fetch_token(code, code_verifier)
             claims = id_token.verify_oauth2_token(
                 token["id_token"], Request(), self.settings.google_oauth_client_id,
                 clock_skew_in_seconds=10,

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { apiFetch, downloadFile } from "../api"
+import CounterpartyLink from "./CounterpartyLink"
 import { useAuth } from "../useAuth"
 import { KNOWLEDGE_ERRORS, KNOWLEDGE_ROOT } from "./upload.js"
 import "./knowledge.css"
@@ -159,6 +160,8 @@ function DocumentDetail({ id, token, refresh, changed }) {
         catch (error) { setAction({ busy: false, error: error.message, notice: "" }) }
       }}>원본 다운로드</button>
         <button className="btn" type="button" disabled={processing || action.busy || dirty.current} onClick={() => act("retry")}>다시 추출·임베딩</button></div>
+      <CounterpartyLink key={data.counterparty_id ?? "unlinked"} documentId={id} current={data.counterparty_id}
+        token={token} onChanged={() => setReload(value => value + 1)} />
       {showOriginal && <section id="document-original" aria-label="업로드한 원본 미리보기">
         <h3>업로드한 원본</h3>
         <OriginalPreview key={id} id={id} token={token} />

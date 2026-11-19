@@ -1,5 +1,6 @@
+import FollowupPanel from "./FollowupPanel"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { apiFetch } from "../api"
 import { useAuth } from "../useAuth"
 import "./mailbox.css"
@@ -89,6 +90,12 @@ function tradeLink(candidate) {
 }
 
 export default function MailboxPage() {
+  const [params] = useSearchParams()
+  const { state } = useAuth()
+  return params.get("followups") === "1" ? <FollowupPanel key={state.accessToken} token={state.accessToken} /> : <Mailbox />
+}
+
+function Mailbox() {
   const { state } = useAuth()
   const token = state.accessToken
   const [params, setParams] = useSearchParams()
@@ -223,6 +230,7 @@ export default function MailboxPage() {
     <div className="page-head enter" style={enter(0)}>
       <h1 className="page-title">받은 메일</h1>
       <p className="page-sub">원문과 AI 답장 초안을 확인하고, 보낼 답장을 골라 승인하세요.</p>
+      <Link className="doc-link" to="/inbox?followups=1">메일 후속 알림</Link>
     </div>
     <div className="mailbar enter" style={enter(1)}>
       <div className="tabs" role="tablist" aria-label="상태별 메일" ref={tabsRef}>
@@ -324,6 +332,27 @@ export default function MailboxPage() {
                     <button className="btn sm" type="button" disabled={busy}
                       onClick={() => act(`/mail/messages/${item.id}/process`, "POST")}>업무 메일로 확인 후 처리</button>}
                 </div>)}
+            </section>}
+            {processing.some(item => item.inbound_context) && <section className="sec enter" aria-label="초안에 참고한 자료">
+              <h3>초안에 참고한 자료</h3>
+              {processing.filter(item => item.inbound_context).map(item => {
+                const { calendar, knowledge } = item.inbound_context
+                const status = { available: "요청 시간에 일정 충돌이 없습니다.", busy: "요청 시간에 기존 일정이 겹칩니다.",
+                  unspecified: "요청 시간을 더 확인해야 합니다.", duration_required: "미팅에 필요한 시간을 확인해야 합니다.",
+                  outside_window: "요청 시간이 조회 기간을 벗어났습니다.", unavailable: "캘린더에서 가능 여부를 확인하지 못했습니다." }
+                return <div key={item.id}>
+                  {calendar && <p>{status[calendar.status]}</p>}
+                  {knowledge?.clauses.length > 0 && <>
+                    <p>{knowledge.scope === "counterparty" ? "거래처에 연결된 계약서" : "내 문서함의 검토 자료"}</p>
+                    <ul>{knowledge.clauses.map(clause => <li key={clause.clause_id}>
+                      <Link to={`/documents?document=${encodeURIComponent(clause.document_id)}`}>{clause.filename}</Link>
+                      {clause.sources.map((source, index) => <span key={index}> · {source.source || `페이지 ${source.page}`}</span>)}
+                    </li>)}</ul>
+                  </>}
+                  {knowledge?.status === "no_evidence" && <p>관련 조항을 찾지 못했습니다.</p>}
+                  {knowledge?.status === "unavailable" && <p>문서 검색을 완료하지 못했습니다.</p>}
+                </div>
+              })}
             </section>}
             <section className="sec enter" aria-label="AI 답장 초안"><h3>{IC.send} AI 답장 초안</h3>
               {!candidates.length && <p className="plain">{processing.some((item) => item.status === "processing")

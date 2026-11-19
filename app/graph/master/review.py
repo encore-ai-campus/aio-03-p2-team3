@@ -178,7 +178,8 @@ def _wrong_tool(state: AgentState) -> list[Finding]:
                     {"reply_mode": None, "selected_tool": "extract_deal_terms", "tool_reason": reason},
                     "extract_deal_terms",
                 )]
-    if mode == "general" and state["deal_terms"] is None and has_deal_signal(state["email"]):
+    if (mode == "general" and state["deal_terms"] is None and not state.get("contract_question")
+            and not state.get("schedule_only") and has_deal_signal(state["email"])):
         reason = "메일에 견적·주문 표현과 수량이 있어 일반 답장 대신 거래 항목을 추출함(성찰)"
         return [Finding(
             _issue("wrong_tool", "거래 내용이 있는데 일반 답장 경로로 감", "deal_keyword+quantity"),
@@ -295,6 +296,12 @@ def _source_text(state: AgentState) -> str:
         parts += [f"{m.get('subject') or ''}\n{m.get('body_text') or ''}" for m in context.get("recent_messages") or []]
     parts += [_dump(state["deal_terms"]), _dump(state["quote_draft"]), _dump(state["trade_doc_draft"]),
               _dump(long_term.get("price_list")), _dump(long_term.get("company")), _dump(preferences_of(state))]
+    availability = state.get("calendar_availability")
+    if availability and availability.get("start"):
+        parts.extend([availability["start"], *availability.get("alternatives", [])])
+    knowledge = state.get("knowledge_evidence")
+    if knowledge and knowledge.get("scope") == "counterparty":
+        parts.extend(clause["text"] for clause in knowledge["clauses"])
     return "\n".join(parts)
 
 

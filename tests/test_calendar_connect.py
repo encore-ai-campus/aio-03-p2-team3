@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import select
 
 from app.auth.supabase import TokenVerifier
-from app.clients.calendar import (CALENDAR_SCOPES, CalendarClient, CalendarDenied, CalendarDisabled,
+from app.clients.calendar import (CALENDAR_READ_SCOPES, CALENDAR_SCOPES, CalendarClient, CalendarDenied, CalendarDisabled,
                                  CalendarRejected)
 from app.clients.gmail import GoogleError, GoogleUnavailable, TokenExpired
 from app.db.models import CalendarOAuthAttempt, CalendarToken, GoogleToken
@@ -29,6 +29,11 @@ class FakeCalendar(FakeGoogle):
         self.check_error = None
         self.exchange_error = None
         self.verifiers = {}
+        self.events = []          # list_events가 돌려줄 기간 내 일정
+        self.list_error = None
+        self.changed_events = {}
+        self.conflicts = []
+        self.change_after_timeout = False
 
     def authorization_url(self, state, code_verifier, consent=False):
         self.verifiers[state] = code_verifier
@@ -46,6 +51,27 @@ class FakeCalendar(FakeGoogle):
         self.calls.append(("calendars", token))
         if self.check_error:
             raise self.check_error
+
+    def list_events(self, access_token, calendar_id, *, time_min, time_max, include_details=False):
+        self.calls.append(("list_events", access_token, calendar_id, time_min, time_max))
+        if self.list_error:
+            raise self.list_error
+        return [dict(event) for event in (self.conflicts if include_details else self.events)]
+
+    def event_for_change(self, token, event_id):
+        self.calls.append(("event_for_change", token, event_id))
+        event = self.changed_events.get(event_id)
+        return dict(event) if event is not None else None
+
+    def change_event(self, token, event_id, etag, new_time):
+        self.calls.append(("change_event", token, event_id, etag, new_time))
+        assert self.changed_events[event_id]["etag"] == etag
+        if new_time is None:
+            del self.changed_events[event_id]
+        else:
+            self.changed_events[event_id].update(**new_time, etag="2")
+        if self.change_after_timeout:
+            raise GoogleUnavailable("fake timeout after provider commit")
 
 
 @pytest.fixture
@@ -112,7 +138,7 @@ def test_calendar_only_refresh_disconnect_reconnect_and_encryption(connected_app
     user_id = me(client, token)['user_id']
     finish(client, token)  # Pub/Sub 토픽 없이 Calendar만 연결
     profile = me(client, token)
-    assert profile['calendar'] == {'connected': True}
+    assert profile['calendar'] == {'connected': True, 'can_write': True}
     assert profile['gmail']['connected'] is False and gmail.calls == []
     with client.app.state.database.session() as session:
         stored = session.get(CalendarToken, user_id)
@@ -382,6 +408,65 @@ def test_get_event_returns_status_and_treats_missing_as_none(monkeypatch):
         client.get_event('fake-access', 'primary', 'event-1')
 
 
+def test_list_events_paginates_and_normalizes_items(monkeypatch):
+    seoul = timezone(timedelta(hours=9))
+    start, end = datetime(2026, 11, 1, tzinfo=seoul), datetime(2026, 11, 30, 23, 59, 59, tzinfo=seoul)
+    pages = [
+        {'items': [{'id': 'event-1', 'summary': '주간 회의',
+                    'start': {'dateTime': '2026-11-18T10:00:00+09:00'}, 'end': {'dateTime': '2026-11-18T11:00:00+09:00'}},
+                   {'id': 'event-2', 'summary': None,
+                    'start': {'date': '2026-11-20'}, 'end': {'date': '2026-11-21'}}],
+         'nextPageToken': 'page-2'},
+        {'items': [{'id': 'event-3', 'summary': '거래처 방문',
+                    'start': {'dateTime': '2026-11-24T14:00:00Z'}, 'end': {'dateTime': '2026-11-24T15:00:00Z'}}]},
+    ]
+    def get(url, **kwargs):
+        assert url == 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
+        params = kwargs['params']
+        assert params['timeMin'] == start.isoformat() and params['timeMax'] == end.isoformat()
+        assert params['singleEvents'] == 'true' and params['orderBy'] == 'startTime'
+        if 'pageToken' in params:
+            assert params['pageToken'] == 'page-2'
+            return httpx.Response(200, json=pages[1])
+        return httpx.Response(200, json=pages[0])
+    monkeypatch.setattr(httpx, 'get', get)
+    found = CalendarClient(settings_of('postgresql://fake')).list_events(
+        'fake-access', 'primary', time_min=start, time_max=end)
+    assert found == [
+        {'id': 'event-1', 'summary': '주간 회의', 'start': '2026-11-18T10:00:00+09:00',
+         'end': '2026-11-18T11:00:00+09:00', 'all_day': False},
+        {'id': 'event-2', 'summary': '', 'start': '2026-11-20', 'end': '2026-11-21', 'all_day': True},
+        {'id': 'event-3', 'summary': '거래처 방문', 'start': '2026-11-24T14:00:00Z',
+         'end': '2026-11-24T15:00:00Z', 'all_day': False},
+    ]
+
+
+@pytest.mark.parametrize('status,payload,error', [
+    (401, {}, TokenExpired),
+    (403, {'error': {'errors': [{'reason': 'userRateLimitExceeded'}]}}, GoogleUnavailable),
+    (500, {}, GoogleUnavailable),
+    (200, {'items': [{'id': 'event-1', 'start': {}, 'end': {}}]}, GoogleUnavailable),
+])
+def test_list_events_failures_are_sanitized(monkeypatch, status, payload, error):
+    def get(url, **kwargs):
+        return httpx.Response(status, json=payload)
+    monkeypatch.setattr(httpx, 'get', get)
+    with pytest.raises(error):
+        CalendarClient(settings_of('postgresql://fake')).list_events(
+            'fake-access', 'primary', time_min=datetime(2026, 11, 1, tzinfo=timezone.utc),
+            time_max=datetime(2026, 11, 30, tzinfo=timezone.utc))
+
+
+def test_list_events_page_cap_fails_instead_of_truncating(monkeypatch):
+    def get(url, **kwargs):
+        return httpx.Response(200, json={'items': [], 'nextPageToken': 'more'})
+    monkeypatch.setattr(httpx, 'get', get)
+    with pytest.raises(GoogleUnavailable):
+        CalendarClient(settings_of('postgresql://fake')).list_events(
+            'fake-access', 'primary', time_min=datetime(2026, 11, 1, tzinfo=timezone.utc),
+            time_max=datetime(2026, 11, 30, tzinfo=timezone.utc))
+
+
 def test_disconnecting_during_provider_check_cannot_restore_token(connected_app):
     client, jwks, _, calendar = connected_app
     token = jwks.token()
@@ -447,3 +532,266 @@ def test_calendar_tables_are_server_only_and_existing_gmail_tokens_unchanged(con
         after = session.get(GoogleToken, user_id)
         assert (after.access_token_enc, after.refresh_token_enc, after.scopes) == before_values
     assert not gmail.called('revoke')
+
+
+def test_calendar_events_requires_connection(connected_app):
+    client, jwks, _gmail, calendar = connected_app
+    response = client.get('/api/calendar/events', headers=bearer(jwks.token()),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T23:59:59+09:00'})
+    assert response.status_code == 409
+    assert response.json()['error']['code'] == 'calendar_not_connected'
+    assert calendar.called('list_events') == []
+
+
+@pytest.mark.parametrize('start,end,code', [
+    ('2026-11-01T00:00:00', '2026-11-30T00:00:00+09:00', 'invalid_range'),      # offset 없는 start
+    ('not-a-date', '2026-11-30T00:00:00+09:00', 'invalid_range'),
+    ('2026-11-30T00:00:00+09:00', '2026-11-01T00:00:00+09:00', 'invalid_range'),  # end가 start보다 앞
+    ('2026-09-01T00:00:00+09:00', '2026-12-01T00:00:00+09:00', 'range_too_large'),
+])
+def test_calendar_events_validates_window(connected_app, start, end, code):
+    client, jwks, _gmail, calendar = connected_app
+    response = client.get('/api/calendar/events', headers=bearer(jwks.token()),
+                          params={'start': start, 'end': end})
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == code
+    assert calendar.called('list_events') == []
+
+
+def test_calendar_events_returns_primary_calendar_events(connected_app):
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    finish(client, token)
+    calendar.events = [{'id': 'event-1', 'summary': '주간 회의', 'start': '2026-11-18T10:00:00+09:00',
+                        'end': '2026-11-18T11:00:00+09:00', 'all_day': False}]
+    response = client.get('/api/calendar/events', headers=bearer(token),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T23:59:59+09:00'})
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload['calendar_id'] == 'primary'
+    assert payload['events'] == calendar.events
+    [(kind, access, calendar_id, window_start, window_end)] = calendar.called('list_events')
+    assert (kind, access, calendar_id) == ('list_events', 'calendar-access', 'primary')
+    seoul = timezone(timedelta(hours=9))
+    assert window_start == datetime(2026, 11, 1, tzinfo=seoul)
+    assert window_end == datetime(2026, 11, 30, 23, 59, 59, tzinfo=seoul)
+
+
+def test_calendar_events_refreshes_expired_token_before_listing(connected_app):
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    finish(client, token)
+    user_id = me(client, token)['user_id']
+    with client.app.state.database.session() as session:
+        stored = session.get(CalendarToken, user_id)
+        stored.expires_at = utcnow() - timedelta(minutes=1)
+    calendar.events = [{'id': 'event-1', 'summary': '회의', 'start': '2026-11-18T10:00:00+09:00',
+                        'end': '2026-11-18T11:00:00+09:00', 'all_day': False}]
+    response = client.get('/api/calendar/events', headers=bearer(token),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T00:00:00+09:00'})
+    assert response.status_code == 200, response.text
+    assert calendar.called('refresh') == [('refresh', 'calendar-refresh')]
+    assert calendar.called('list_events')[0][1] == 'fake-access-refreshed-1'
+
+
+@pytest.mark.parametrize('error,code', [
+    (GoogleUnavailable('공급자 장애'), 'google_unavailable'),
+    (TokenExpired('갱신 필요'), 'token_expired'),
+])
+def test_calendar_events_maps_provider_failures(connected_app, error, code):
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    finish(client, token)
+    calendar.list_error = error
+    response = client.get('/api/calendar/events', headers=bearer(token),
+                          params={'start': '2026-11-01T00:00:00+09:00', 'end': '2026-11-30T00:00:00+09:00'})
+    assert response.status_code == 502
+    assert response.json()['error']['code'] == code
+
+
+@pytest.mark.parametrize("scenario,expected_code", [
+    ("events", None), ("empty", None), ("capped", None),
+    ("unconnected", "calendar_not_connected"), ("unavailable", "calendar_unavailable"),
+    ("invalid_range", "invalid_range"),
+])
+def test_chat_reads_primary_calendar_agenda_without_approval(connected_app, monkeypatch, scenario, expected_code):
+    from app.graph import wiring
+    from langchain_core.messages import AIMessage
+
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    window = {"start": "2026-11-20T00:00:00+09:00", "end": "2026-11-21T00:00:00+09:00"}
+    if scenario == "invalid_range":
+        window["end"] = window["start"]
+    messages_seen = []
+
+    def choose(messages, _context):
+        messages_seen.append(messages)
+        if len(messages_seen) == 1:
+            return AIMessage("", tool_calls=[{"id": "agenda", "name": "list_calendar_events",
+                "args": window}]).model_dump()
+        return AIMessage("조회 결과를 확인했습니다.").model_dump()
+
+    original = wiring.make_workflow
+    monkeypatch.setattr("app.main.make_workflow", lambda **kwargs: original(**{**kwargs, "choose": choose}))
+    if scenario != "unconnected":
+        finish(client, token)
+    items = [
+        {"id": "event-1", "summary": "전시회", "start": "2026-11-20", "end": "2026-11-21", "all_day": True},
+        {"id": "event-2", "summary": "알파 미팅", "start": "2026-11-20T10:00:00+09:00",
+         "end": "2026-11-20T11:00:00+09:00", "all_day": False},
+    ]
+    if scenario == "events":
+        calendar.events = items
+    if scenario == "capped":
+        calendar.events = [{**items[1], "id": f"agenda-{index}"} for index in range(31)]
+    if scenario == "unavailable":
+        calendar.list_error = GoogleUnavailable("fake provider failure")
+
+    response = client.post("/api/agent/conversations", headers=bearer(token),
+                           json={"message": "내일 잡힌 일정과 시간을 알려줘."})
+    assert response.status_code == 202, response.text
+    state = client.get(f"/api/agent/conversations/{response.json()['id']}", headers=bearer(token)).json()
+    assert state["waiting"] is None
+    result, = state["results"]
+    assert result["operation"] == "list_events"
+    assert result["code"] == expected_code
+    assert result["status"] == ("failed" if expected_code else "completed")
+    if not expected_code:
+        assert result["data"]["events"] == calendar.events[:30]
+        assert result["data"]["total"] == len(calendar.events)
+        assert result["data"]["calendar_id"] == "primary"
+    calls = calendar.called("list_events")
+    assert len(calls) == int(scenario not in {"unconnected", "invalid_range"})
+    if calls:
+        assert calls[0][1:3] == ("calendar-access", "primary")
+
+
+def test_read_only_calendar_can_reauthorize_writes(connected_app):
+    client, jwks, _gmail, calendar = connected_app
+    token = jwks.token()
+    calendar.logins.append(fake_login(scopes=CALENDAR_READ_SCOPES,
+        access_token="read-access", refresh_token="read-refresh"))
+    callback = complete(client, start_calendar(client, token))
+    assert callback.headers["location"] == "/app/settings?calendar=write_scope_missing"
+    assert me(client, token)["calendar"] == {"connected": True, "can_write": False}
+    finish(client, token)
+    assert calendar.called("authorize")[-1][-1] is True
+    assert me(client, token)["calendar"] == {"connected": True, "can_write": True}
+
+
+@pytest.mark.parametrize("scenario", [
+    "move", "cancel", "all_day", "before_conflict", "after_conflict", "stale", "timeout", "timeout_cancel", "decline", "series", "unobserved", "no_write",
+])
+def test_calendar_change_workflow_rechecks_and_executes_only_once(database, scenario):
+    from langchain_core.messages import AIMessage
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from app.graph.calendar.adapters import ExistingCalendar
+    from app.graph.wiring import make_workflow
+    from app.services.auth import GoogleAccess, make_cipher
+
+    end = "2042-11-22T11:00:00+09:00"
+    event = {"id": "occurrence-1", "summary": "알파 정기 미팅", "start": "2042-11-22T10:00:00+09:00",
+             "end": end, "all_day": scenario == "all_day"}
+    if event["all_day"]:
+        event.update(start="2042-11-22", end="2042-11-24")
+    calendar = FakeCalendar()
+    calendar.events = [event]
+    calendar.changed_events[event["id"]] = {**event, "etag": "1", "recurring_instance": scenario != "series",
+                                           "recurring_series": scenario == "series"}
+    calendar.change_after_timeout = scenario in {"timeout", "timeout_cancel"}
+    conflict = {**event, "id": "conflict", "summary": "다른 회의", "transparent": False}
+    if scenario == "before_conflict":
+        calendar.conflicts = [conflict]
+    else:
+        calendar.conflicts = [{**event, "transparent": False}, {**conflict, "transparent": True}]
+    access = GoogleAccess(database, calendar, make_cipher(settings_of(str(database.engine.url))), "")
+    with database.session() as session:
+        session.add(CalendarToken(user_id=1, google_sub="fake-sub-1", scopes=list(
+            CALENDAR_READ_SCOPES if scenario == "no_write" else CALENDAR_SCOPES),
+            access_token_enc=access.cipher.encrypt("calendar-access"),
+            refresh_token_enc=access.cipher.encrypt("calendar-refresh"), expires_at=utcnow() + timedelta(hours=1)))
+
+    command = {"event_id": event["id"]}
+    cancelling = scenario in {"cancel", "timeout_cancel"}
+    tool_name = "prepare_cancel_calendar_event" if cancelling else "prepare_move_calendar_event"
+    if not cancelling:
+        command["new_start"] = "2042-11-25" if event["all_day"] else "2042-11-22T15:00:00+09:00"
+    calls = [] if scenario == "unobserved" else [("list_calendar_events", {
+        "start": "2042-11-22T00:00:00+09:00", "end": "2042-11-23T00:00:00+09:00"})]
+    calls += [(tool_name, command)]
+
+    def choose(_messages, _context):
+        if calls:
+            name, args = calls.pop(0)
+            return AIMessage("", tool_calls=[{"id": name, "name": name, "args": args}]).model_dump()
+        return AIMessage("결과를 확인했습니다.").model_dump()
+
+    workflow = make_workflow(database=database, calendar=ExistingCalendar(access),
+                             checkpointer=InMemorySaver(), interactive=True, choose=choose)
+    args = {"actor_id": 1, "thread_id": f"calendar-{scenario}"}
+    state = workflow.start(**args, request="알파 일정 확인")
+    assert not calendar.called("change_event")
+    waiting = workflow.snapshot(**args)["waiting"]
+    blocked = {"before_conflict": "calendar_move_conflict", "unobserved": "calendar_event_lookup_required",
+               "no_write": "calendar_write_required", "series": "calendar_select_occurrence"}
+    if scenario in blocked:
+        assert waiting is None
+        assert list(state["results"].values())[-1]["code"] == blocked[scenario]
+        return
+
+    action = waiting["action"]
+    assert action["payload"]["event"]["recurring_instance"]
+    if scenario == "all_day":
+        assert action["payload"]["new_time"]["end"] == "2042-11-27"
+    elif not cancelling:
+        assert action["payload"]["new_time"]["end"] == "2042-11-22T16:00:00+09:00"
+    response = {"action_id": action["id"], "content_hash": waiting["content_hash"],
+                "decision": "cancel" if scenario == "decline" else "approve"}
+    if scenario == "stale":
+        calendar.changed_events[event["id"]]["etag"] = "another-user-edit"
+    if scenario == "after_conflict":
+        calendar.conflicts = [conflict]
+    finished = workflow.resume(**args, response=response)
+    result = finished["results"][action["task_id"]]
+    if scenario in {"stale", "after_conflict"}:
+        assert result["code"] == ("calendar_event_changed" if scenario == "stale" else "calendar_move_conflict")
+        assert not calendar.called("change_event")
+        return
+    if scenario == "decline":
+        assert result["status"] == "cancelled"
+        assert not calendar.called("change_event")
+        return
+    if scenario in {"timeout", "timeout_cancel"}:
+        assert result["status"] == "unknown"
+        result = workflow.recover(**args)["results"][action["task_id"]]
+    assert result["status"] == "completed"
+    assert result["data"]["calendar_outcome"] == ("cancelled" if cancelling else "moved")
+    workflow.resume(**args, response=response)
+    assert len(calendar.called("change_event")) == 1
+
+
+def test_calendar_http_mutation_uses_etag_and_occurrence_id(monkeypatch):
+    from app.clients.calendar import CalendarChanged
+
+    captured = []
+
+    def patch(url, **kwargs):
+        captured.append((url, kwargs))
+        return httpx.Response(200, json={})
+
+    monkeypatch.setattr("app.clients.calendar.httpx.patch", patch)
+    google = CalendarClient(settings_of("postgresql://fixture"))
+    event_id = "series_20421122T010000Z"
+    google.change_event("fake-token", event_id, '"v1"', {
+        "start": "2042-11-22T15:00:00+09:00", "end": "2042-11-22T16:00:00+09:00",
+        "timezone": "Asia/Seoul", "all_day": False,
+    })
+    url, data = captured[0]
+    assert url.endswith("/calendars/primary/events/" + event_id)
+    assert data["headers"]["If-Match"] == '"v1"'
+    assert data["json"]["start"]["timeZone"] == "Asia/Seoul"
+    monkeypatch.setattr("app.clients.calendar.httpx.delete", lambda *a, **kw: httpx.Response(412))
+    with pytest.raises(CalendarChanged):
+        google.change_event("fake-token", event_id, '"v1"', None)

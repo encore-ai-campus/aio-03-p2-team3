@@ -70,6 +70,24 @@ class CalendarInput(Interval):
         return self
 
 
+class CalendarEventSelection(Contract):
+    event_id: str = Field(min_length=1, max_length=1024, description="이번 요청의 list_calendar_events가 반환한 이벤트 ID. 반복 일정은 확장된 회차 ID.")
+
+
+class CalendarMoveInput(CalendarEventSelection):
+    new_start: str = Field(min_length=10, max_length=40, description="사용자가 지정한 새 시작. 시간 일정은 ISO 8601 오프셋 포함, 종일 일정은 YYYY-MM-DD.")
+    timezone: str = Field(default="Asia/Seoul", description="새 시간의 IANA 시간대. 별도 언급이 없으면 Asia/Seoul.")
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_zone(cls, value):
+        try:
+            ZoneInfo(value)
+        except (KeyError, ValueError) as error:
+            raise ValueError("invalid_timezone") from error
+        return value
+
+
 class BusySnapshot(Contract):
     calendars: dict[str, list[Interval]]
     version: str

@@ -131,9 +131,13 @@ def use_worker_call(callback):
         _worker_call.reset(token)
 
 
+def delegated_to_worker() -> bool:
+    return _worker_call.get() is not None and _override.get() is None
+
+
 def require_completed_ai():
     """실패한 PC 호출이 성찰의 대체 경로를 통해 후보로 저장되지 않게 한다."""
-    if _worker_call.get() is not None and _override.get() is None:
+    if delegated_to_worker():
         _worker_call.get().guard()
 
 
@@ -188,7 +192,7 @@ def call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict,
     `backend`는 백엔드 인스턴스, `backend_factory`는 인자 없는 팩토리. 팩토리는 앞선
     둘이 없을 때만 부른다(가짜 주입 테스트에서 키 없는 팩토리가 먼저 실패하는 일이
     없게 한다)."""
-    if _worker_call.get() is not None and _override.get() is None and backend is None:
+    if delegated_to_worker() and backend is None:
         return _worker_call.get()(prompt, schema, variables)
     started = perf_counter()
     attempts = 0

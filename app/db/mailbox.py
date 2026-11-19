@@ -1,12 +1,20 @@
 """본인 메일·분류·후보 조회. HTTP와 모델 호출은 이 모듈에 두지 않는다."""
-from sqlalchemy import select, update, func, or_
+from sqlalchemy import and_, select, update, func, or_
+from sqlalchemy.orm import aliased
 
-from app.db.models import (ProcessedMessage, ThreadMessage, ReplyCandidate, CompanyProfile,
+from app.db.models import (ProcessedMessage, ThreadMessage, ReplyCandidate, CompanyProfile, Counterparty,
                            GmailWatch, GoogleToken, TradeDocument, Quote)
 
 
 def _time(value):
     return value.isoformat() if value else None
+
+
+def search_preview(body: str, query: str) -> str:
+    match = body.lower().find(query.lower()) if query else -1
+    start = max(0, match - 48)
+    end = start + 160
+    return f'{"…" if start else ""}{body[start:end]}{"…" if end < len(body) else ""}'
 
 
 class MailStore:
@@ -107,6 +115,59 @@ class MailStore:
                     "connection": {"connected": bool(token and token.refresh_token_enc),
                                    "watch": watch.status if watch else "stopped"}}
 
+    def search_threads(self, owner, *, query, field, received_from, received_before, reply_status, cursor, limit):
+        """조건에 맞는 수신 메일 중 스레드별 최신 수집본. 답장은 같은 스레드의 이후 발송 이력으로 판정한다."""
+        outbound = aliased(ThreadMessage)
+        replied = select(outbound.id).where(
+            outbound.user_id == owner, outbound.thread_id == ThreadMessage.thread_id,
+            outbound.direction == "out",
+            or_(outbound.sent_at > ThreadMessage.sent_at,
+                and_(outbound.sent_at == ThreadMessage.sent_at, outbound.id > ThreadMessage.id)),
+        ).correlate(ThreadMessage).exists()
+        message_key = and_(ThreadMessage.user_id == ProcessedMessage.user_id,
+                           ThreadMessage.gmail_message_id == ProcessedMessage.gmail_message_id)
+        filters = [
+            ProcessedMessage.user_id == owner, ThreadMessage.direction == "in",
+            or_(ProcessedMessage.skip_reason.is_(None), ProcessedMessage.skip_reason == "intent_ignore"),
+        ]
+        received_at = func.coalesce(ProcessedMessage.received_at, ThreadMessage.sent_at)
+        if received_from is not None:
+            filters.append(received_at >= received_from)
+        if received_before is not None:
+            filters.append(received_at < received_before)
+        if reply_status != "any":
+            filters.append(replied if reply_status == "replied" else ~replied)
+
+        query = query.strip()
+        with self.database.session() as session:
+            if query:
+                subject = ThreadMessage.subject.icontains(query, autoescape=True)
+                body = ThreadMessage.body_text.icontains(query, autoescape=True)
+                sender = ThreadMessage.from_addr.icontains(query, autoescape=True)
+                if field in {"all", "sender"} and "@" not in query:
+                    accounts = session.execute(select(Counterparty.legal_name, Counterparty.aliases, Counterparty.email)
+                        .where(Counterparty.user_id == owner, Counterparty.email.is_not(None)))
+                    key = query.casefold()
+                    emails = [email.strip().casefold() for name, aliases, email in accounts
+                              if key in {value.strip().casefold() for value in [name, *(aliases or [])]
+                                         if isinstance(value, str)}]
+                    sender = or_(sender, func.lower(ThreadMessage.from_addr).in_(emails))
+                filters.append({"all": or_(subject, sender, body), "body": body,
+                                "sender": sender, "subject": subject}[field])
+            selected = select(func.max(ProcessedMessage.id)).join(ThreadMessage, message_key).where(
+                *filters).group_by(ProcessedMessage.thread_id)
+            statement = select(ProcessedMessage, ThreadMessage, replied).join(ThreadMessage, message_key).where(
+                ProcessedMessage.id.in_(selected))
+            if cursor is not None:
+                statement = statement.where(ProcessedMessage.id < cursor)
+            rows = list(session.execute(statement.order_by(ProcessedMessage.id.desc()).limit(limit + 1)))
+        items = [{"id": received.id, "thread_id": received.thread_id, "subject": message.subject,
+                  "from_addr": message.from_addr, "received_at": _time(received.received_at or message.sent_at),
+                  "reply_status": "replied" if has_reply else "unanswered",
+                  "preview": search_preview(message.body_text, query if field in {"all", "body"} else "")}
+                 for received, message, has_reply in rows[:limit]]
+        return {"items": items, "next_cursor": items[-1]["id"] if len(rows) > limit else None}
+
     def thread(self, owner, thread_id):
         with self.database.session() as s:
             messages = list(s.scalars(select(ThreadMessage).where(ThreadMessage.user_id == owner,
@@ -124,7 +185,7 @@ class MailStore:
                                   "to_addrs": m.to_addrs, "subject": m.subject, "body": m.body_text,
                                   "sent_at": _time(m.sent_at)} for m in messages],
                     "processing": [{"id": p.id, "status": p.status, "triage": p.triage,
-                                    "notice": p.notice, "run_id": p.run_id} for p in processing],
+                                    "notice": p.notice, "run_id": p.run_id, "inbound_context": p.inbound_context} for p in processing],
                     "candidates": [self._candidate(s, owner, c) for c in candidates]}
 
     def candidate(self, owner, candidate_id):

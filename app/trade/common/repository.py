@@ -165,3 +165,21 @@ class SQLDocuments:
                     TradeArtifact.proposal_id == row.id, TradeArtifact.user_id == self.user_id,
                 ).order_by(TradeArtifact.file_format))]
             return {"proposal_id": row.id if row else None, "files": files}
+
+
+def list_unissued(database, owner, *, kind=None, cursor=None, limit=10):
+    """문서 최신 버전에 실제 발급 파일이 없는 본인 초안만 읽는다."""
+    issued = select(TradeArtifact.id).join(TradeProposal, TradeProposal.id == TradeArtifact.proposal_id).where(
+        TradeProposal.document_id == TradeDocument.id, TradeProposal.revision == TradeDocument.revision,
+        TradeProposal.user_id == owner, TradeProposal.status == "approved", TradeArtifact.user_id == owner,
+    ).correlate(TradeDocument).exists()
+    statement = select(TradeDocument).where(TradeDocument.user_id == owner,
+        TradeDocument.doc_kind.in_(("PI", "PO", "CI", "PL")),
+        TradeDocument.status.in_(("needs_input", "ready")), ~issued)
+    if kind:
+        statement = statement.where(TradeDocument.doc_kind == kind)
+    if cursor is not None:
+        statement = statement.where(TradeDocument.id < cursor)
+    with database.session() as session:
+        rows = list(session.scalars(statement.order_by(TradeDocument.id.desc()).limit(limit + 1)))
+        return [SQLDocuments._snapshot(row) for row in rows[:limit]], rows[limit - 1].id if len(rows) > limit else None

@@ -1,5 +1,6 @@
 """draft_followup: 빠진 필수 항목을 묻는 재질문 후보를 만든다(계획 10절)."""
 
+from app.graph.mail.calendar_context import schedule_reply
 from app.graph.master.common import call_tool, failure_update, preferences_of, retry_feedback
 from app.graph.state import AgentState
 from app.quote.required_fields import FIELD_LABELS
@@ -27,5 +28,10 @@ def draft_followup(state: AgentState) -> dict:
         "has_feedback": feedback is not None,
     }, kind_of_reply="followup", asks_fields=missing)
     if result.ok:
-        update.update({"candidates": result.value["candidates"], "needs_review": False, "notice": None})
+        candidates = result.value["candidates"]
+        availability = state.get("calendar_availability")
+        if availability:
+            candidates = [{**candidate, "body": schedule_reply(availability) + "\n\n" + candidate["body"]}
+                          for candidate in candidates]
+        update.update({"candidates": candidates, "needs_review": False, "notice": None})
     return update

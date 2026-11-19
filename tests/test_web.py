@@ -11,11 +11,11 @@ def test_health_home_and_local_assets(monkeypatch, database_url):
     from app.db.engine import get_database
 
     graph_builds = []
-    original = main.get_graph
-    def count_graph_build():
+    original = main.build_graph
+    def count_graph_build(**kwargs):
         graph_builds.append(True)
-        return original()
-    monkeypatch.setattr(main, "get_graph", count_graph_build)
+        return original(**kwargs)
+    monkeypatch.setattr(main, "build_graph", count_graph_build)
     app = create_app(Settings(database_url=database_url))
     with TestClient(app) as client:
         assert client.get("/healthz").json() == {"status": "ok"}

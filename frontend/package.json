@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test src/trade/*.test.js src/documents/*.test.js",
+    "test": "node --test src/trade/*.test.js src/documents/*.test.js src/calendar/*.test.js",
     "check:env": "node scripts/check-env.mjs"
   },
   "dependencies": {
@@ -16,7 +16,8 @@
     "react-dom": "19.3.1",
     "react-markdown": "10.1.0",
     "react-router-dom": "7.18.5",
-    "remark-breaks": "4.0.0"
+    "remark-breaks": "4.0.0",
+    "remark-gfm": "4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

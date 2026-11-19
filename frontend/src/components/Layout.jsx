@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom"
+import FollowupNotice from "./FollowupNotice"
 import { useAuth } from "../useAuth"
 
 // 시안의 사이드바(WORKSPACE·MANAGE)·상단바·모바일 헤더·하단탐색. 활성 표시는 NavLink가 담당한다.
@@ -6,14 +7,15 @@ const WORKSPACE_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
   { to: "/agent", label: "업무 도우미", icon: "◇" },
   { to: "/status", label: "작업현황", icon: "▦" },
+  { to: "/calendar", label: "일정", icon: "▩" },
   { to: "/inbox", label: "받은 메일", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
-  { to: "/activity", label: "실행 기록", icon: "◷" },
 ]
 const MANAGE_NAV = [{ to: "/settings", label: "설정", icon: "⚙" }]
 const BOTTOM_NAV = [
   { to: "/", label: "문서작성", icon: "✦", end: true },
   { to: "/agent", label: "업무 도우미", icon: "◇" },
+  { to: "/calendar", label: "일정", icon: "▩" },
   { to: "/inbox", label: "받은 메일", icon: "✉" },
   { to: "/documents", label: "문서함", icon: "▤" },
   { to: "/settings", label: "설정", icon: "⚙" },
@@ -21,9 +23,9 @@ const BOTTOM_NAV = [
 const PAGE_LABELS = {
   "/": "문서작성",
   "/status": "작업현황",
+  "/calendar": "일정",
   "/inbox": "받은 메일",
   "/documents": "문서함",
-  "/activity": "실행 기록",
   "/settings": "설정",
   "/agent": "업무 도우미",
 }
@@ -73,6 +75,7 @@ export default function Layout() {
         </header>
         <div className="content">
           {state.notice && <p role="alert">{state.notice}</p>}
+          <FollowupNotice token={state.accessToken} />
           <Outlet />
         </div>
       </main>

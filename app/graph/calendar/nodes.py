@@ -6,10 +6,14 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
+from app.graph.calendar.changes import change_window, moved_time, same_slot
 from app.graph.calendar.ports import CalendarPort, UnavailableCalendar
-from app.graph.calendar.schemas import BusySnapshot, CalendarInput, Interval
+from app.graph.calendar.schemas import (
+    BusySnapshot, CalendarEventSelection, CalendarInput, CalendarMoveInput, Interval,
+)
 from app.graph.schemas import Evidence, Question, Task, WorkResult, WorkflowError
 
+CHANGES = frozenset({"move_event", "cancel_event"})
 REQUIRED = ("start", "end", "timezone", "duration_minutes", "calendar_ids")
 
 
@@ -69,13 +73,24 @@ def prepare_event(task, context, query, snapshot, now):
 
 
 class CalendarNodes:
-    operations = frozenset({"find_slots", "create"})
+    operations = frozenset({"list_events", "find_slots", "create"}) | CHANGES
 
     def __init__(self, port: CalendarPort | None = None, *, clock: Callable[[], datetime] | None = None):
         self.port = port if port is not None else UnavailableCalendar()
         self.clock = clock if clock is not None else lambda: datetime.now(timezone.utc)
 
     def prepare(self, task, context):
+        if task.operation == "list_events":
+            start, end = task.inputs.get("start"), task.inputs.get("end")
+            if not isinstance(start, str) or not isinstance(end, str):
+                return WorkResult(status="failed", code="invalid_range")
+            data = self.port.list_events(context.actor_id, start, end)
+            events = data["events"]
+            return WorkResult(status="completed", data={
+                **data, "events": events[:30], "total": len(events),
+            })
+        if task.operation in CHANGES:
+            return self.prepare_change(task, context)
         query = check_constraints(task)
         if isinstance(query, WorkResult):
             return query
@@ -96,7 +111,36 @@ class CalendarNodes:
                                                 message="등록할 제목과 시간을 선택해 주세요."))
         return prepare_event(task, context, query, snapshot, self.clock()).model_copy(update={"evidence": evidence})
 
+    def prepare_change(self, task, context):
+        command = (CalendarMoveInput if task.operation == "move_event" else CalendarEventSelection).model_validate(task.inputs)
+        event_id = command.event_id
+        observed = any(item["id"] == event_id for result in context.results.values()
+                       for item in (result.get("data") or {}).get("events", []))
+        if not observed:
+            return WorkResult(status="failed", code="calendar_event_lookup_required")
+        event = self.port.event_for_change(context.actor_id, event_id)
+        if event["recurring_series"]:
+            return WorkResult(status="failed", code="calendar_select_occurrence")
+        new_time = moved_time(event, command.new_start, command.timezone, self.clock()) if isinstance(command, CalendarMoveInput) else None
+        if new_time is not None:
+            if same_slot(event, new_time):
+                return WorkResult(status="completed", data={"calendar_event": event, "outcome": "already_at_time"})
+            if conflicts := self.port.competing_events(context.actor_id, event_id, *change_window(new_time)):
+                return WorkResult(status="failed", code="calendar_move_conflict", data={"calendar_conflicts": conflicts[:5]})
+        return WorkResult(status="needs_approval", action=context.action(
+            task, {"event": event, "new_time": new_time}, version=event["etag"]))
+
     def recheck(self, action, context):
+        if action.operation in CHANGES:
+            event = self.port.event_for_change(context.actor_id, action.payload["event"]["id"])
+            if event["etag"] != action.version:
+                return WorkResult(status="failed", code="calendar_event_changed")
+            new_time = action.payload["new_time"]
+            if new_time is not None:
+                moved_time(event, new_time["start"], new_time["timezone"], self.clock())
+                if conflicts := self.port.competing_events(context.actor_id, event["id"], *change_window(new_time)):
+                    return WorkResult(status="failed", code="calendar_move_conflict", data={"calendar_conflicts": conflicts[:5]})
+            return WorkResult(status="needs_approval", action=action)
         query = CalendarInput.model_validate(action.payload["query"])
         snapshot = read_busy(self.port, context.actor_id, query)
         task = Task(id=action.task_id, domain="calendar", operation=action.operation, inputs=query.model_dump(mode="json"))
@@ -106,9 +150,13 @@ class CalendarNodes:
         return result.model_copy(update={"evidence": evidence})
 
     def execute(self, action, context):
+        if action.operation in CHANGES:
+            return self.port.change(context.actor_id, action)
         return self.port.create(context.actor_id, action)
 
     def lookup(self, action, context):
+        if action.operation in CHANGES:
+            return self.port.lookup_change(context.actor_id, action)
         return self.port.lookup(context.actor_id, action)
 
     def cancel(self, action, context):
