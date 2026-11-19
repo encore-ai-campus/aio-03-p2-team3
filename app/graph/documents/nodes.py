@@ -23,6 +23,7 @@ class DocumentPort(Protocol):
     def search_issued(self, actor_id: int, command: IssuedDocumentSearch) -> dict: ...
     def search_knowledge(self, actor_id: int, command: KnowledgeDocumentSearch) -> dict: ...
     def draft(self, actor_id: int, command: DocumentInput) -> dict: ...
+    def complete_pi(self, actor_id: int, command: DocumentInput, changes) -> tuple[dict, str | None]: ...
     def propose(self, actor_id: int, command: DocumentInput, *, packing: bool = False) -> dict: ...
     def recheck(self, actor_id: int, action: PreparedAction) -> None: ...
     def issue(self, actor_id: int, action: PreparedAction) -> ExecutionResult: ...
@@ -54,7 +55,11 @@ class DocumentNodes:
             return WorkResult(status="completed", data=self.port.search_knowledge(context.actor_id, command))
         if task.inputs.get("kind") is None:
             return WorkResult(status="needs_input", question=Question(fields=["kind"], message="문서 종류를 선택해 주세요."))
-        command = DocumentInput.model_validate(task.inputs)
+        inputs = dict(task.inputs)
+        pi_resume = task.operation == "draft" and inputs.get("kind") == "PI" and context.memory.get("agent_mode")
+        completing_pi = pi_resume and "pi_changes" in inputs
+        changes = inputs.pop("pi_changes") if completing_pi else None
+        command = DocumentInput.model_validate(inputs)
         if task.operation == "schema":
             return WorkResult(status="completed", data=self.port.schema(command.kind))
         if task.operation in {"get", "approve_packing", "issue"} and command.document_id is None:
@@ -70,7 +75,10 @@ class DocumentNodes:
                 return WorkResult(status="needs_input", question=Question(fields=["values", "text"], message="문서 입력값 또는 원문을 알려 주세요."))
             if command.document_id is not None and command.revision is None:
                 return WorkResult(status="failed", code="revision_required")
-            data = self.port.draft(context.actor_id, command)
+            if completing_pi:
+                data, completion_error = self.port.complete_pi(context.actor_id, command, changes)
+            else:
+                data, completion_error = self.port.draft(context.actor_id, command), None
             resume = {"document_id": data["document_id"], "revision": data["revision"]}
             evidence = document_evidence(command.kind, data["document_id"], data["revision"], data["document"])
             blocking = data["document"].get("blocking_issues", [])
@@ -78,7 +86,20 @@ class DocumentNodes:
                 or message.startswith("Packing source discrepancy: ") for message in blocking)
             if command.kind == "PL" and packing_only:
                 return WorkResult(status="completed", data={**data, "needs_packing_approval": True}, resume_inputs=resume, evidence=evidence)
-            if data["status"] != "ready":
+            if pi_resume and (data["status"] == "needs_input" or completion_error):
+                completion = {
+                    "document_id": data["document_id"], "revision": data["revision"],
+                    "fields": data["missing_fields"] if data["status"] == "needs_input" else [],
+                    "item_names": [row.get("product_name") for row in data["input"]["items"]],
+                    "bank_missing": [issue.removeprefix("PI bank detail required: ") for issue in blocking
+                                     if issue.startswith("PI bank detail required: ")],
+                    "error": completion_error,
+                    "attempted": changes if completion_error == "PI_NUMBER_DUPLICATE" else {},
+                }
+                return WorkResult(status="needs_input", data={**data, "pi_completion": completion},
+                                  resume_inputs=resume, evidence=evidence,
+                                  question=Question(fields=["pi_changes"], message="PI 초안 보완"))
+            if data["status"] != "ready" and not completing_pi:
                 if context.memory.get("agent_mode"):
                     # 부족한 실제 값/기존 input을 모델로 돌려 자연어 질문과 같은 문서 수정을 잇는다.
                     return WorkResult(status="completed", data={**data, "needs_input": True},

@@ -69,12 +69,13 @@ def test_pi_creates_without_database_or_graph_and_preserves_zero_quantity():
     assert result.document["total"] == "0.00"
 
 
-def test_pi_assigns_document_number_when_blank_and_defaults_discount_to_zero():
-    result = create_pi(pi_input(document_number=None, items=[{
+def test_pi_leaves_number_unassigned_and_defaults_discount_to_zero():
+    values = pi_input(document_number=None, items=[{
         "product_name": "Virtual Serum", "capacity": "50ml", "quantity": "10", "unit": "PCS",
         "price_basis": "PCS", "discount_percent": None,
-    }]), repository=MemoryPIRepository())
-    assert result.document["document_number"] == "PI-TEST-1"
+    }]).model_dump(mode="json")
+    result = extract_pi("source", repository=MemoryPIRepository(), extractor=lambda _: values)
+    assert result.document["document_number"] is None
     assert result.document["items"][0]["discount_percent"] == "0"
     assert result.status == "ready"
 
@@ -86,6 +87,27 @@ def test_pi_direct_and_extracted_facts_use_the_same_business_calculation():
                         extractor=lambda _: command.model_dump(mode="json"))
     assert direct.document == via_ai.document
     assert direct.document["total"] == "80.00"
+
+
+def test_pi_keeps_unconfirmed_numbers_empty_when_revising_other_fields():
+    repository = MemoryPIRepository()
+    values = pi_input(document_number=None).model_dump(mode="json")
+    values["items"][0].update(discount_percent=None, quantity=None)
+    first = create_pi(PIInput.model_validate(values), repository=repository)
+    assert {"items.0.discount_percent", "items.0.quantity"} <= set(first.missing_fields)
+    assert first.input["items"][0]["discount_percent"] is None
+    assert first.input["items"][0]["quantity"] is None
+
+    revised = revise_pi(first.document_id, first.revision,
+                        PIInput.model_validate({**first.input, "document_number": "PI-101"}), repository=repository)
+    assert revised.status == "needs_input"
+    assert {"items.0.discount_percent", "items.0.quantity"} <= set(revised.missing_fields)
+    values = revised.input
+    values["items"][0].update(discount_percent="0", quantity="0")
+    ready = revise_pi(first.document_id, revised.revision, PIInput.model_validate(values), repository=repository)
+    assert ready.status == "ready"
+    assert ready.input["items"][0]["discount_percent"] == "0"
+    assert ready.input["items"][0]["quantity"] == "0"
 
 
 def test_pi_revision_uses_snapshot_and_rejects_stale_revision():

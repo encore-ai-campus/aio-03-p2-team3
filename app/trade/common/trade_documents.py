@@ -161,7 +161,7 @@ def _plain_decimal(value):
 
 # 원본: reference/kekorea/Quotation_KEKOREA/agent/trade_documents.py validate_and_calculate
 # (발행사 역할 검사만 계약 15.4절대로 issuer_key 일반화. 머리글 참고)
-def validate_and_calculate(data, *, issuer_key):
+def validate_and_calculate(data, *, issuer_key, require_document_number=True):
     """Validate extracted user data, calculate sums, and identify issue blockers."""
     # Issue date is a system field: the issue date is always the current Seoul date.
     data = {**data, "issue_date": current_issue_date()}
@@ -213,6 +213,10 @@ def validate_and_calculate(data, *, issuer_key):
     if doc_type in DOC_TYPES:
         validate_header(data, str(issuer_key or "").strip(), block)
 
+    if require_document_number and not data.get("document_number"):
+        block("Document number is required or must be marked DRAFT")
+    if require_document_number and _has_chinese(data.get("document_number")):
+        block("Document Number must be translated into English")
     if not data.get("incoterms"):
         block("Incoterms and named place")
 

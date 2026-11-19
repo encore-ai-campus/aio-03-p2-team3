@@ -2,9 +2,12 @@
 from copy import deepcopy
 from typing import Callable
 
+from pydantic import ValidationError
+
 from app.trade.common.models import DocumentContext, DocumentError, DocumentResult, DocumentSummary
 from app.trade.common import operations as common
 from app.trade.common.results import document_result, editable_values
+from app.trade.common.review_fields import _missing
 from app.trade.pi.models import PIInput, PIItem, PIRepository
 from app.trade.pi.samples import update_sample
 
@@ -18,6 +21,11 @@ def prepare_pi(values: dict, context: DocumentContext) -> dict:
                           quantity=item.get("quantity") if item.get("quantity") is not None else item.get("paid_quantity"),
                           unit=item.get("unit"), price=item.get("unit_price"))
     result = common.prepare_priced(draft, context, "PI")
+    for source, calculated in zip(draft.get("items", []), result["items"]):
+        if source.get("discount_percent") is None and "discount_percent" in source:
+            calculated["discount_percent"] = None
+        if source.get("quantity") is None and source.get("paid_quantity") is None:
+            calculated.update(quantity=None, paid_quantity=None)
     for key in ("BENEFICIARY", "BANK_NAME", "BRANCH", "SWIFT", "ACCOUNT_NUMBER", "BANK_ADDRESS"):
         if not (context.bank or {}).get(key):
             result["blocking_issues"].append(f"PI bank detail required: {key}")
@@ -26,9 +34,71 @@ def prepare_pi(values: dict, context: DocumentContext) -> dict:
     return result
 
 
+def _unconfirmed_inputs(document, values):
+    # Calculated zeroes are useful for incomplete totals, but are not transaction inputs.
+    # The existing validation messages also identify drafts saved before this change.
+    issues = set(document.get("blocking_issues", []))
+    for index, item in enumerate(values["items"], 1):
+        if f"Valid number required for discount percent for item {index}" in issues:
+            item["discount_percent"] = None
+        if f"Valid number required for paid quantity for item {index}" in issues:
+            item.update(quantity=None, paid_quantity=None)
+    return values
+
+
 def pi_result(document: dict) -> DocumentResult:
-    values = editable_values(document, PIInput.model_fields, PIItem.model_fields)
-    return document_result(document, PIInput.model_validate(values).model_dump(mode="json"))
+    values = _unconfirmed_inputs(document, editable_values(document, PIInput.model_fields, PIItem.model_fields))
+    inputs = PIInput.model_validate(values).model_dump(mode="json")
+    result = document_result(document, inputs)
+    return result.model_copy(update={"missing_fields": list(dict.fromkeys([
+        *result.missing_fields, *completion_fields(inputs),
+    ]))})
+
+
+def completion_fields(inputs):
+    fields = [key for key in ("currency", "incoterms", "payment_terms", "product_family")
+              if _missing(inputs.get(key), True)]
+    fields.extend(f"{role}.{key}" for role in ("buyer", "seller") for key in ("legal_name", "address")
+                  if _missing(inputs[role].get(key), True))
+    for index, item in enumerate(inputs["items"] or [{}]):
+        for key in ("product_name", "quantity", "unit", "unit_price", "price_basis", "discount_percent"):
+            if key == "quantity" and item.get("paid_quantity") is not None:
+                continue
+            if _missing(item.get(key), True):
+                fields.append(f"items.{index}.{key}")
+    return fields
+
+
+def completion_command(result: DocumentResult, changes: dict) -> PIInput:
+    values = deepcopy(result.input)
+    allowed = set(completion_fields(values))
+    for path, value in changes.items():
+        if path.endswith(".confirm_price_override"):
+            price = path.rsplit(".", 1)[0] + ".unit_price"
+            if price not in allowed or price not in changes or value is not True:
+                raise DocumentError("PI_COMPLETION_INVALID", "입력할 수 없는 단가 확인 항목입니다")
+        elif path not in allowed or not isinstance(value, str) or _missing(value, True):
+            raise DocumentError("PI_COMPLETION_INVALID", "보완할 항목과 입력값을 확인하세요")
+        parts = path.split(".")
+        if parts[0] == "items":
+            if not values["items"]:
+                values["items"].append({})
+            row = values["items"][int(parts[1])]
+            row[parts[2]] = value
+            if parts[2] == "quantity":
+                row["paid_quantity"] = value
+        elif len(parts) == 2:
+            values[parts[0]][parts[1]] = value
+        else:
+            values[path] = value
+    try:
+        command = PIInput.model_validate(values)
+        for row in command.items:
+            if row.discount_percent is not None and row.discount_percent > 100:
+                raise ValueError("discount")
+        return command
+    except (ValidationError, ValueError):
+        raise DocumentError("PI_COMPLETION_INVALID", "입력 형식과 할인율 범위(0~100%)를 확인하세요") from None
 
 
 def create_pi(command: PIInput, *, repository: PIRepository) -> DocumentResult:
@@ -39,7 +109,10 @@ def create_pi(command: PIInput, *, repository: PIRepository) -> DocumentResult:
 
 
 def extract_pi(text: str, *, repository: PIRepository, extractor: Callable[[str], dict]) -> DocumentResult:
-    values = extractor(text)
+    values = deepcopy(extractor(text))
+    for item in values.get("items", []):
+        if item.get("discount_percent") is None:
+            item["discount_percent"] = "0"
     context = repository.context(values.get("currency"))
     document = prepare_pi(values, context)
     return pi_result(repository.create(document))
@@ -82,7 +155,7 @@ def refresh_issuer(document_id: int, revision: int, *, repository: PIRepository)
     if previous["status"] in {"sent", "sending"}:
         raise DocumentError("REVISION_CONFLICT", "발송 중이거나 발송된 PI는 수정할 수 없습니다")
     context = repository.context(previous.get("currency"))
-    values = common.refresh_settings_values(previous, context, "PI", PIInput, PIItem)
+    values = _unconfirmed_inputs(previous, common.refresh_settings_values(previous, context, "PI", PIInput, PIItem))
     refreshed = prepare_pi(values, context)
     refreshed["issue_date"] = previous.get("issue_date")
     return pi_result(repository.replace(document_id, revision, refreshed))

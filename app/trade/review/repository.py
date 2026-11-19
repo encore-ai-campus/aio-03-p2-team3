@@ -47,11 +47,18 @@ class SQLReviews:
 
     def search_issued(self, *, document_number, counterparty, issued_from, issued_to):
         document = TradeDocumentVersion.payload
-        number = document["document_number"].as_string()
+        number = func.coalesce(document["document_number"].as_string(),
+                               TradeProposal.payload["document"]["document_number"].as_string())
         internal_number = func.coalesce(document["doc_no"].as_string(), TradeDocument.doc_no)
         party = case((TradeDocument.doc_kind == "PO", document["seller"]["legal_name"].as_string()),
                      else_=document["buyer"]["legal_name"].as_string())
-        day = cast(func.timezone("Asia/Seoul", TradeProposal.decided_at), Date)
+        legacy = TradeProposal.payload["document"]
+        party = func.coalesce(party, case(
+            (TradeDocument.doc_kind == "PO", legacy["seller"]["legal_name"].as_string()),
+            else_=legacy["buyer"]["legal_name"].as_string(),
+        ))
+        # Korea uses UTC+09:00. An interval also works with embedded PostgreSQL without tzdata.
+        day = cast(func.timezone(timedelta(hours=9), TradeProposal.decided_at), Date)
         has_files = select(TradeArtifact.id).where(
             TradeArtifact.proposal_id == TradeProposal.id, TradeArtifact.user_id == self.user_id,
         ).exists()
@@ -59,12 +66,13 @@ class SQLReviews:
             TradeProposal.id.label("proposal_id"), TradeProposal.document_id, TradeProposal.revision,
             TradeDocument.doc_kind.label("kind"), func.coalesce(number, internal_number).label("document_number"),
             party.label("counterparty"), day.label("issued_on"), TradeProposal.decided_at,
-        ).join(TradeDocument).join(TradeDocumentVersion, and_(
+        ).select_from(TradeProposal).join(TradeDocument, TradeDocument.id == TradeProposal.document_id).outerjoin(
+            TradeDocumentVersion, and_(
             TradeDocumentVersion.document_id == TradeProposal.document_id,
             TradeDocumentVersion.revision == TradeProposal.revision,
+            TradeDocumentVersion.user_id == self.user_id,
         )).where(
             TradeDocument.user_id == self.user_id, TradeProposal.user_id == self.user_id,
-            TradeDocumentVersion.user_id == self.user_id,
             TradeProposal.status == "approved", TradeProposal.decided_at.is_not(None), has_files,
         )
         if self.document_type:

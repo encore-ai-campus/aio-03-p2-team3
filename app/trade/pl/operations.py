@@ -45,7 +45,7 @@ def prepare_pl(values, context):
     draft["document_number"] = None
     draft.update(document_type="PL", doc_kind="PL", currency=None, bank=None, issuer=deepcopy(context.issuer))
     apply_issuer_defaults(draft, "PL", context.issuer, fix_name=True, fix_address=True)
-    apply_company_profiles(draft, context.counterparties)
+    apply_company_profiles(draft, context.counterparties, preserve_entered_name=True)
     for item in draft.get("items", []):
         item["product_match_confirmed"] = item.pop("confirm_product_override", False) is True
     return finalize(draft)

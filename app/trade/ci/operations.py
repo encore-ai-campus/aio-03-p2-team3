@@ -49,11 +49,13 @@ def prepare_standalone(command, context, values=None):
     draft["document_number"] = None
     draft.update(document_type="PI", doc_kind="PI", issuer=deepcopy(context.issuer), bank=None)
     apply_issuer_defaults(draft, "PI", context.issuer, fix_name=True, fix_address=True)
-    apply_company_profiles(draft, context.counterparties)
+    apply_company_profiles(draft, context.counterparties, preserve_entered_name=True)
     for item in draft.get("items", []):
         item["product_match_confirmed"] = item.pop("confirm_product_override", False) is True
         confirmed = item.pop("confirm_price_override", False)
         # 단독 CI는 직접 입력이므로 원문 근거로 단가 확인을 대신할 수 없다.
+        if values is not None and item.get("discount_percent") is None:
+            item["discount_percent"] = "0"
         item["source"] = None
         item["price_override_confirmed"] = confirmed is True
         if item.get("unit_price") is not None:
@@ -85,8 +87,7 @@ def create(command: CIInput | StandaloneCIInput, *, repository: CIRepository):
     if isinstance(command, StandaloneCIInput):
         return result(repository.create(prepare_standalone(command, repository.context(command.currency))))
     source = repository.source_pi(command.source_pi_id, command.source_revision)
-    issuer = repository.context(source.get("currency")).issuer
-    return result(repository.create(prepare_ci(command, source, issuer=issuer)))
+    return result(repository.create(prepare_ci(command, source)))
 
 
 def extract_standalone(text, *, repository: CIRepository, extractor):
@@ -104,8 +105,7 @@ def extract(text, *, repository: CIRepository, extractor, source_pi_id, source_r
     values = extractor(text)
     command = CIInput.model_validate({**{key: value for key, value in values.items() if key in CIInput.model_fields},
                                       "source_pi_id": source_pi_id, "source_revision": source_revision})
-    issuer = repository.context(source.get("currency")).issuer
-    document = prepare_ci(command, source, values.get("conflicts", []), issuer)
+    document = prepare_ci(command, source, values.get("conflicts", []))
     return result(repository.create(document))
 
 
@@ -124,8 +124,7 @@ def revise(document_id, revision, command: CIInput | StandaloneCIInput, *, repos
     if previous.get("source_pi_id") and (previous["source_pi_id"], previous["source_revision"]) != (command.source_pi_id, command.source_revision):
         raise DocumentError("SOURCE_PI_CHANGE_REQUIRES_NEW_CI", "다른 PI 버전은 새 CI로 작성하세요")
     source = repository.source_pi(command.source_pi_id, command.source_revision)
-    issuer = repository.context(source.get("currency")).issuer
-    document = prepare_ci(command, source, issuer=issuer)
+    document = prepare_ci(command, source)
     return result(repository.replace(document_id, revision, document, review_reference))
 
 
@@ -156,7 +155,7 @@ def refresh_settings(document_id, revision, *, repository: CIRepository):
                 seller[key] = new_value
         document["seller"] = seller
         document["issuer"] = deepcopy(context.issuer)
-        apply_company_profiles(document, context.counterparties)
+        apply_company_profiles(document, context.counterparties, preserve_entered_name=True)
         document = calculate(document)
     return result(repository.replace(document_id, revision, document))
 
