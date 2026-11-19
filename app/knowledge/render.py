@@ -58,7 +58,7 @@ class PageRenderer:
             manifest_path = directory / "manifest.json"
             if not manifest_path.exists():
                 raise KnowledgeError("render_failed", "문서를 변환하지 못했습니다. 손상·암호화 여부를 확인해 주세요.")
-            manifest = json.loads(manifest_path.read_text())
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             if returncode or "error" in manifest:
                 raise KnowledgeError(manifest.get("error", "render_failed"), manifest.get("message", "문서 변환에 실패했습니다."),
                                      manifest.get("status", 422))
@@ -167,7 +167,7 @@ def main():
         manifest, status = {"error": error.code, "message": error.message, "status": error.status}, 1
     except Exception:
         manifest, status = {"error": "render_failed", "message": "페이지 변환에 실패했습니다. 파일의 손상·암호화 여부를 확인해 주세요."}, 1
-    (directory / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False))
+    (directory / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
     return status
 
 
