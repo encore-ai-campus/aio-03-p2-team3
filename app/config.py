@@ -140,8 +140,8 @@ def get_settings(env_file: str | None = None) -> Settings:
     values["ai_runtime"] = values["ai_runtime"].strip() or "server"
     # 비우면 같은 출처 배포 기본값 /app, 루트로 서비스하는 분리 배포는 "/"로 지정한다.
     values["frontend_base_path"] = values["frontend_base_path"].strip() or "/app"
-    if values["ai_runtime"] == "local":
-        values["openai_api_key"] = os.getenv("OPENAI_API_KEY", "")
+    # 로컬·서버 공용 키. 채우면 모든 LLM 호출이 이 키로 직접 실행되고, 비운 서버는 사용자별 DB 키를 쓴다.
+    values["openai_api_key"] = os.getenv("OPENAI_API_KEY", "")
     values["reflection_enabled_default"] = (
         values["reflection_enabled_default"].lower() == "true"
     )

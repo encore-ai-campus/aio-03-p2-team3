@@ -83,7 +83,8 @@ def http_error(status):
 def test_login_without_pubsub_starts_at_current_history_and_never_watches(local, sdk):
     client, fake, access = local
     assert missing_login_settings(access.settings) == []
-    assert "GMAIL_PUBSUB_TOPIC" in missing_login_settings(replace(access.settings, ai_runtime="server"))
+    # 서버도 토픽 없이 로그인할 수 있다(폴링 수집으로 동작).
+    assert missing_login_settings(replace(access.settings, ai_runtime="server")) == []
     assert (watch(access).topic, watch(access).history_id, watch(access).status) == (LOCAL_TOPIC, "1000", "active")
     assert fake.called("profile") == [("profile", "fake-access-1")]
     assert not fake.mailbox.called("history") and not rows(access.database, Run) and sdk == []
@@ -342,12 +343,13 @@ def test_new_collector_resumes_persisted_cursor_after_process_restart(local, sdk
     assert len(rows(access.database, Run)) == 2
 
 
-def test_server_mode_keeps_pubsub_login_watch_and_stop_without_collector(tmp_path, database_url):
+def test_server_mode_with_topic_keeps_pubsub_login_and_collector_stays_idle(tmp_path, database_url):
     settings = replace(get_settings(str(env_file(tmp_path, database_url))), ai_runtime="server",
                        gmail_pubsub_topic="projects/fake/topics/unchanged")
     fake = FakeGmailGoogle()
     with TestClient(create_app(settings, google=fake)) as client:
-        assert client.app.state.local_gmail is None
+        # 수집기는 항상 뜨지만 토픽을 지정한 서버에서는 poll_once가 스스로 건너뛴다.
+        assert client.app.state.local_gmail is not None
         assert sign_in(client).status_code == 303
         assert fake.called("watch")[0][2] == "projects/fake/topics/unchanged"
         assert "새 메일 알림 켜짐" in client.get("/inbox").text
@@ -534,7 +536,7 @@ def test_collector_continues_after_one_store_read_fails():
     from app.config import Settings
     from app.services.local_gmail import Mailbox
     class DummyDatabase: pass
-    access = SimpleNamespace(local_mode=True, settings=Settings(ai_runtime='local'), database=DummyDatabase())
+    access = SimpleNamespace(local_mode=True, polling=True, settings=Settings(ai_runtime='local'), database=DummyDatabase())
     mailboxes = [Mailbox(1, 'a@example.invalid', '1000', utcnow()), Mailbox(2, 'b@example.invalid', '1000', utcnow())]
     class Store:
         def list(self): return mailboxes

@@ -410,7 +410,7 @@ def test_native_tool_binding_uses_owner_key_and_refuses_worker_fallback(database
         with database.session() as s:
             s.get(User, 1).ai_execution_mode = 'local_worker'
         result = runtime.start(actor_id=1, thread_id='no-worker-fallback', request='메일 검색')
-        assert result['error'] == 'LOCAL_WORKER_KEY_FORBIDDEN' and len(requests) == 2
+        assert result['error'] is None and len(requests) == 3  # PC 위임 폐지: 같은 키로 직접 실행한다
 
 
 def test_mail_search_filters_body_date_and_sent_reply_before_paging(database):

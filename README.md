@@ -42,7 +42,7 @@ uv run uvicorn app.main:app --reload  # 로컬 서버
 - 위 Uvicorn 명령은 기본 `AI_RUNTIME=server`의 사용자별 DB 키 방식이다. 개인 `.env` 키를 쓰려면 아래 전용 로컬 실행 절차를 따른다.
 - Render 배포: `render.yaml`이 서버 웹 서비스(빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`)와 프론트 정적 사이트를 분리 선언한다(아래 분리 배포 안내).
 - 현재는 계획 2절의 앱 뼈대에 6절의 Google 로그인·Gmail 감시 등록을 더한 상태다. 업무 노드·도구, 알림 처리·발송·후보 저장·화면 기능은 후속 작업에서 구현한다. 가짜 LLM 그래프 검증은 `uv run pytest tests/test_graph.py tests/test_llm.py`로 실행한다.
-- 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 필요하며, 기본 서버 모드에서는 `GMAIL_PUBSUB_TOPIC`도 있어야 로그인 버튼이 켜진다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). 로컬 모드는 아래 개인 OAuth 설정을 사용한다. 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py tests/test_local_gmail.py`로 실행한다.
+- 로그인: 기본 화면의 'Gmail 연결하기' → `/login` → Google 로그인. `GOOGLE_OAUTH_*`·`TOKEN_ENCRYPTION_KEY`·`SESSION_SECRET`이 필요하다(빠진 이름을 로그인 화면이 보여 줌, 키 만드는 명령은 `.env.example`). `GMAIL_PUBSUB_TOPIC`은 선택이다. 토픽을 지정한 서버는 Pub/Sub 푸시로, 지정하지 않으면 로컬과 같은 30초 폴링 수집으로 새 메일을 받는다. 로컬 모드는 아래 개인 OAuth 설정을 사용한다. 가짜 Google 응답 검증은 `uv run pytest tests/test_auth.py tests/test_local_gmail.py`로 실행한다.
 - Supabase 로그인 404: `SUPABASE_URL`은 `https://<project-id>.supabase.co` 형식의 프로젝트 API 주소다. `/dashboard/project/...` 관리 화면 주소를 넣지 않는다. `.env`를 고쳤는데 이전 주소가 계속 전달되면 개발 서버를 멈추고 터미널의 `SUPABASE_URL`·`SUPABASE_PUBLISHABLE_KEY`를 `unset`한 뒤 `npm run dev`로 다시 시작한다. 이미 실행 환경에 있는 값이 `.env`보다 우선한다([Vite 안내](https://vite.dev/guide/env-and-mode#env-loading-priorities)).
 - 앱 DB는 PostgreSQL 전용이다(react-supabase 계획 4절). `DATABASE_URL`이 비었거나 비PostgreSQL 주소면 서버가 시작을 거부한다(과거의 `app/db/local.sqlite3` 자동 생성 경로는 제거). `postgres://`·`postgresql://` 주소는 `psycopg` 드라이버로 연결하며, Supabase는 Session pooler 주소(포트 5432)에 `?sslmode=require`를 붙인다(트랜잭션 pooler 6543은 안 쓴다). 엔진 풀 상한은 프로세스당 pool_size 5·max_overflow 10·timeout 30초·recycle 1800초다. 서버 시작 시 `app/db/migrations/`의 Alembic 리비전으로 기존 데이터와 승인 이력을 보존하며 갱신하되, 대상 스키마를 `public`으로 고정해 Supabase의 `auth`·`storage` 스키마는 건드리지 않는다. 운영 갱신 전 DB 백업을 보관한다. 테스트는 실제 PostgreSQL에서 갱신을 확인하고, 역사적 SQLite 이관 검사만 `tests/test_trade_upgrade.py` 첫 검사로 한시적으로 남긴다.
 - 기존 SQLite → PostgreSQL 데이터 이전(일회성): `uv run python -m app.db.copy_data --source <SQLite 파일 경로|DB URL> [--target <PostgreSQL 주소>] [--dry-run] [--yes]`. 원본 SQLite 파일은 임시 사본을 갱신해 읽어 원본을 고치지 않고, 쓰기는 `--yes`를 줄 때만 한다. 대상에 원본과 다른 데이터가 있으면 합치지 않고 실패하고, 이미 같으면 다시 쓰지 않고 대조만 통과한다. 복사·시퀀스 정렬은 대상 한 트랜잭션으로 커밋해 중간 실패 시 전부 롤백된다. 대조는 표별 행 수·모든 열 값·PK/시퀀스를 비교한다.
@@ -136,7 +136,9 @@ server는 로그인 여부와 독립적으로 감시 갱신을 확인한다. 재
 - 기존 본인 OpenAI 키·모델과 PostgreSQL을 사용한다. `uv sync`로 공식 PostgresSaver 의존성을 설치한다. 대화·승인은 DB에 저장하므로 새로고침/재시작 후 이어가며, 중단된 외부 실행은 상태 확인 후 처리한다. 최초 실행 때 public 체크포인트 표를 준비할 권한이 필요하다. 운영 DB 적용은 별도 확인한다.
 - 단일 앱 프로세스·사용자별 실행 1건·요청당 최대 12회 모델 호출이다. local_worker의 대화형 도구 실행, 지식 문서 검색, Calendar 실행은 아직 연결하지 않았다. 계획/검증 경계는 `docs/plans/master-agent.md`·계약 17.4절이다.
 
-### 개인 PC AI 실행 — HTTPS 서버와 연결
+### 개인 PC AI 실행 — HTTPS 서버와 연결(2026-11-19 폐지)
+
+> **폐지 안내**: 서버가 개인 PC로 AI 호출을 위임하던 `local_worker` 경로를 제거했다. 서버는 언제나 실행 환경의 `OPENAI_API_KEY`(비워 두면 각 사용자의 `/settings` 등록 키)로 직접 실행한다. 아래 절차는 역사 기록으로 남긴다.
 
 Google 로그인 후 `/settings`에서 `stored_key`(기존 본인 DB 키) 또는 `local_worker`(개인 PC 키)를 선택한다. `local_worker`는 서버 저장 키나 공용 환경 키로 자동 전환하지 않는다. 메일 분석·답장·거래 추출·요약·성찰과 PI/PO/CI/PL AI 추출을 PC에서 실행한다. 수동 문서 작성·검토·파일 발급과 메일의 사용자 승인 후 발송은 유지한다.
 
@@ -184,7 +186,7 @@ DB 마이그레이션은 기존 사용자·키·메일·승인을 보존한다. 
 
 | 무엇 | 쓰임 | 키 발급 | 환경변수 |
 |---|---|---|---|
-| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 서버: 사용자별 `/settings` 등록. 전용 로컬: `AI_RUNTIME=local`·`OPENAI_API_KEY`. `LOCAL_OWNER_GOOGLE_SUB`는 HTTPS 서버에 연결하는 개인 PC 실행기 전용. 모델은 `OPENAI_MODEL`(비우면 `gpt-6-luna`) |
+| OpenAI Responses API `gpt-6-luna` | 메일 분석·답장·거래 추출·요약·성찰과 무역 문서 AI 추출(PI·PO·CI·PL) | OpenAI 플랫폼 API 키 화면(https://platform.openai.com/api-keys) | 서버·로컬 공통: `OPENAI_API_KEY` 공용 키를 우선 사용한다. 서버에서 비워 두면 각 사용자가 `/settings`에 등록한 키를 쓴다. 모델은 `OPENAI_MODEL`(비우면 `gpt-6-luna`) |
 | Gmail API | 사용자별 메일 읽기·감시 등록, 승인한 답장·견적서 첨부 발송 | Google Cloud 콘솔: Gmail API 사용 설정 → Google Auth Platform → Clients에서 OAuth 웹 애플리케이션 클라이언트 생성, 로컬·Render 콜백 주소 등록 | `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
 | Cloud Pub/Sub | Gmail 메일함 변경 알림을 서비스로 푸시 전달 | Google Cloud 콘솔: Pub/Sub API 사용 설정 → 토픽·푸시 구독 설정. OIDC 확인 방식 권장, 비밀 토큰은 대체 방식을 쓸 때만 | `GMAIL_PUBSUB_TOPIC` `PUBSUB_PUSH_AUDIENCE` `PUBSUB_PUSH_SERVICE_ACCOUNT` `PUBSUB_PUSH_TOKEN`(대체 방식 전용) |
 | Google Calendar API | 설정에서 읽기 전용 계정 연결·캘린더 목록 접근 확인 | Calendar API 사용 설정과 사용자별 Google OAuth 동의. 아래 연동 안내 참고 | Gmail과 같은 `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `GOOGLE_OAUTH_REDIRECT_URI` |
@@ -222,11 +224,11 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 - OpenAI API는 ChatGPT 구독과 별도로 과금된다. 키를 만든 프로젝트의 결제·사용 한도·선택 모델 이용 권한을 확인한다. 무료 이용이나 무제한 호출을 가정하지 않는다.
 - OAuth 게시·권한과 Pub/Sub 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 설정한다.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md`).
-- 기능별 모델 상향(오류 대응용, 2026-11-19): 기본은 모두 baseline(현재와 같은 요청)이다. 특정 작업에서 오류가 계속될 때만 Render Environment에 `LLM_PROFILE_DEFAULT_STRUCTURED`(메일 분석·답장·메일→견적 조건 추출 등)·`LLM_PROFILE_TRADE_EXTRACTION`(PI/PO/CI/PL 추출·메일의 무역 조건 추출)에 `sol-medium` 또는 `sol-low`(2026-11-19 배포 시연 테스트에서 25품목 이상 추출이 20초 제한으로 실패해 요청자가 이 값을 정함), `LLM_PROFILE_VISION_TRANSCRIPTION`(문서 이미지 전사)에 `terra-low`를 넣는다. 저장하면 재배포 뒤 새 호출부터 적용된다. 되돌릴 때는 변수를 지우거나 `luna-medium`을 넣는다. 잘못된 이름은 서버 시작 오류다. 상향 모델은 품질 실측 전이고 본인 키 프로젝트에 그 모델 권한·요금이 필요하다. 개인 PC 실행 방식은 항상 baseline이며 실행 기록 `llm_profile` 줄에 요청/적용 프로필이 남는다. 호출마다 `llm_call` 줄에 `profile_id`·모델·노력치·토큰 사용량(알 수 없으면 `usage_unknown_attempts`)이 남는다. 계약과 근거는 [모델 프로필 계획](docs/plans/llm-model-profiles.md).
+- 기능별 모델 상향(오류 대응용, 2026-11-19): 기본은 모두 baseline(현재와 같은 요청)이다. 특정 작업에서 오류가 계속될 때만 Render Environment에 `LLM_PROFILE_DEFAULT_STRUCTURED`(메일 분석·답장·메일→견적 조건 추출 등)·`LLM_PROFILE_TRADE_EXTRACTION`(PI/PO/CI/PL 추출·메일의 무역 조건 추출)에 `sol-medium` 또는 `sol-low`(2026-11-19 배포 시연 테스트에서 25품목 이상 추출이 20초 제한으로 실패해 요청자가 이 값을 정함), `LLM_PROFILE_VISION_TRANSCRIPTION`(문서 이미지 전사)에 `terra-low`를 넣는다. 저장하면 재배포 뒤 새 호출부터 적용된다. 되돌릴 때는 변수를 지우거나 `luna-medium`을 넣는다. 잘못된 이름은 서버 시작 오류다. 상향 모델은 품질 실측 전이고 사용하는 키(공용 `OPENAI_API_KEY` 또는 본인 등록 키)의 프로젝트에 그 모델 권한·요금이 필요하다. 개인 PC 실행 방식은 항상 baseline이며 실행 기록 `llm_profile` 줄에 요청/적용 프로필이 남는다. 호출마다 `llm_call` 줄에 `profile_id`·모델·노력치·토큰 사용량(알 수 없으면 `usage_unknown_attempts`)이 남는다. 계약과 근거는 [모델 프로필 계획](docs/plans/llm-model-profiles.md).
 
 전환 적용 순서:
 
-1. 공용 `.env`·Render의 `OPENAI_API_KEY`를 제거한다. 다른 모델을 쓸 때만 `OPENAI_MODEL`을 지정한다. 기존 `TOKEN_ENCRYPTION_KEY`·Google OAuth·Gmail·Pub/Sub 값은 유지한다.
+1. 공용 `.env`·Render의 `OPENAI_API_KEY`는 공용 키로 우선 사용한다(2026-11-19부터 서버도 읽는다). 다른 모델을 쓸 때만 `OPENAI_MODEL`을 지정한다. 기존 `TOKEN_ENCRYPTION_KEY`·Google OAuth·Gmail·Pub/Sub 값은 유지한다.
 2. DB 백업 후 PR 병합·Render 자동 배포(`uv sync --locked`)가 끝나면 각 사용자가 로그인해 `/settings`에 본인 키를 등록한다. 저장은 API를 호출하지 않으며 유효성은 실제 AI 요청 시 확인한다. 가상 메일·무역 문서로 본인 프로젝트의 사용량을 확인한다. 미등록 상태에서 실패한 메일은 자동 재처리하지 않는다. 키 교체·삭제는 다음 AI 호출부터 적용되며 이미 시작된 작업은 취소되지 않는다.
 3. 전환 확인 후 기존 `GEMINI_API_KEY`·`GEMINI_MODEL`·`TRADE_EXTRACT_BACKEND`를 로컬·Render에서 제거한다. 앱은 이 값을 더 이상 읽지 않는다. 이전 Gemini 실행 기록과 응답 시간은 과거 결과이며 OpenAI 성능은 다시 측정한다.
 

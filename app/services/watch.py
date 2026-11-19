@@ -35,7 +35,7 @@ def watch_is_due(watch: GmailWatch | None, now: datetime) -> bool:
 def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = None) -> str:
     """감시를 등록(또는 갱신)하고 결과 상태(`active`/`error`)를 돌려준다. 실패는 표에 남기고 예외를 내지 않는다."""
     now = now or utcnow()
-    if access.local_mode:
+    if access.polling:
         from app.services.local_gmail import connect_local
         from app.db.local_gmail import SqlMailboxStore
 
@@ -79,8 +79,8 @@ def register_watch(access: GoogleAccess, user_id: int, now: datetime | None = No
 
 def renew_watch_if_due(access: GoogleAccess, user_id: int, now: datetime | None = None) -> bool:
     """갱신할 때가 됐으면 다시 등록한다. 다시 등록을 시도했으면 True."""
-    if access.local_mode:
-        return False
+    if access.polling:
+        return False  # 폴링 수집은 수집기가 주기적으로 확인하므로 화면 방문 갱신이 없다
     now = now or utcnow()
     with access.database.session() as session:
         due = watch_is_due(session.get(GmailWatch, user_id), now)
@@ -91,8 +91,8 @@ def renew_watch_if_due(access: GoogleAccess, user_id: int, now: datetime | None 
 
 def renew_connected_watches(access: GoogleAccess) -> None:
     """화면 방문 없이 연결된 서버 계정만 갱신한다. 중지 계정은 켜지 않는다."""
-    if access.local_mode:
-        return
+    if access.polling:
+        return  # 폴링 수집은 수집기가 주기적으로 확인하므로 배경 갱신이 없다
     with access.database.session() as session:
         owners = list(session.scalars(select(GmailWatch.user_id).join(
             GoogleToken, GoogleToken.user_id == GmailWatch.user_id,
@@ -104,7 +104,7 @@ def renew_connected_watches(access: GoogleAccess) -> None:
 
 def stop_watch(access: GoogleAccess, user_id: int) -> None:
     """감시를 멈춘다. Google 호출이 실패해도 표는 `stopped`로 바꾼다(남은 알림은 7이 무시)."""
-    if access.local_mode:
+    if access.polling:
         with access.database.session() as session:
             watch = session.get(GmailWatch, user_id)
             if watch is not None:

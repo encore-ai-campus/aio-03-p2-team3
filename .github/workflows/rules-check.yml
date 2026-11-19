@@ -2,6 +2,7 @@
 # 원본: doomdiver100T/claude-github-setup 커밋 9c45959의 template/managed/common/.github/workflows/rules-check.yml을 복사해 고침 [Past work: setup]
 # check.py는 테스트를 부르지 않으므로 테스트 작업(tests)을 따로 둔다. 두 결과가 PR에 따로 보인다 [Claude proposal]
 # PR 본문 검사는 pr-check.yml로 분리한다. 본문 수정으로 코드 검사가 다시 실행/취소되지 않는다.
+# windows-worker 잡은 개인 PC 위임 폐지(2026-11-19)로 제거했다. tests는 늘 "-m 'not slow'"로 브라우저 등 무거운 검사를 뺀다.
 name: rules-check
 
 on:
@@ -87,31 +88,3 @@ jobs:
         run: uv run --locked pytest -m 'not slow'
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-
-  windows-worker:
-    name: windows-worker
-    needs: check
-    if: needs.check.outputs.run_tests == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 10
-    env:
-      PYTHONUTF8: "1"
-      TEST_DATABASE_URL: postgresql://postgres:root@localhost:5432/postgres
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Windows 시험 PostgreSQL 시작
-        shell: pwsh
-        run: |
-          $pgService = Get-Service -Name 'postgresql-x64-*' | Select-Object -First 1
-          Set-Service -Name $pgService.Name -StartupType Manual
-          Start-Service -Name $pgService.Name
-
-      - name: Windows PostgreSQL pgvector 설치
-        shell: pwsh
-        run: ./scripts/install-pgvector-windows.ps1
-
-      - name: Windows 개인 실행기·DPAPI·DACL 검사
-        run: uv run --locked pytest tests/test_worker_credentials.py tests/test_worker_execution.py -q
