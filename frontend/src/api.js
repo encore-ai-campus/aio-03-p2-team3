@@ -34,11 +34,14 @@ export async function apiFetch(path, { method = "GET", token, body, signal, resp
   if (body !== undefined && !isForm) headers["Content-Type"] = "application/json"
   let response
   try {
+    // 분리 배포에서는 프론트와 서버가 다른 출처다. OAuth 연결의 대기 상태가 담긴
+    // gq_session 쿠키를 주고받아야 해서 자격증명(쿠키)을 항상 함께 보낸다(같은 출처에서는 무해하다).
     response = await fetch(`${API_BASE}/api${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       signal,
+      credentials: "include",
     })
   } catch (error) {
     if (error.name === "AbortError") throw error
