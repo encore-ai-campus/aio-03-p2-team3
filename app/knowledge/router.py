@@ -13,6 +13,7 @@ from app.knowledge.extract import OpenAIDocumentExtractor
 from app.knowledge.render import PageRenderer
 from app.knowledge.schemas import AttemptRequest, KnowledgeError, MAX_FILE_BYTES, ReviewRequest
 from app.llm.client import DEFAULT_MODEL, OpenAIKeyError
+from app.llm.profiles import resolve, resolve_selected
 from app.services.auth import make_cipher
 from app.services.openai_keys import UserKeyAccess
 
@@ -33,7 +34,16 @@ def make_adapters(database, settings, owner, snapshot):
             raise KnowledgeError(error.code, error.message, error.status_code) from None
 
     read_key()  # 접수 전과 worker 실행 전에 같은 설정 경계를 확인한다. API 호출은 하지 않는다.
-    vision = snapshot.get("extraction", {}).get("model") or settings.knowledge_vision_model.strip() or settings.openai_model.strip() or DEFAULT_MODEL
+    # 비전 프로필: 새 처리(스냅샷 없음)는 서버 선택(LLM_PROFILE_VISION_TRANSCRIPTION), 이미 시작한
+    # 처리는 스냅샷에 고정된 프로필을 그대로 쓴다(키 없는 기존 스냅샷 = baseline). 진행 중 시도를 섞지 않는다.
+    try:
+        vision_profile = (resolve("vision_transcription", snapshot["vision_profile"].split(".", 1)[1])
+                          if snapshot.get("vision_profile") else
+                          resolve("vision_transcription", "baseline") if snapshot else
+                          resolve_selected("vision_transcription", settings))
+    except (KeyError, IndexError, ValueError):
+        raise KnowledgeError("provider_not_configured", "저장된 처리 프로필이 설치되지 않았습니다.", 503) from None
+    vision = vision_profile.model or snapshot.get("extraction", {}).get("model") or settings.knowledge_vision_model.strip() or settings.openai_model.strip() or DEFAULT_MODEL
     embedding = snapshot.get("embedding", {})
     model = embedding.get("model") or settings.knowledge_embedding_model.strip() or "text-embedding-3-small"
     try:
@@ -42,7 +52,11 @@ def make_adapters(database, settings, owner, snapshot):
         raise KnowledgeError("invalid_dimensions", "임베딩 차원 설정을 확인해 주세요.", 503) from None
     if snapshot and (snapshot.get("extraction", {}).get("provider") != "openai" or embedding.get("provider") != "openai"):
         raise KnowledgeError("provider_not_configured", "저장된 처리 프로필의 공급자가 설치되지 않았습니다.", 503)
-    return (PageRenderer(settings.knowledge_office_command.strip()), OpenAIDocumentExtractor(read_key, vision),
+    extractor = (OpenAIDocumentExtractor(read_key, vision) if vision_profile.is_baseline else OpenAIDocumentExtractor(
+        read_key, vision, reasoning_effort=vision_profile.reasoning_effort, timeout=vision_profile.timeout_seconds,
+        max_retries=vision_profile.sdk_max_retries, max_output_tokens=vision_profile.max_output_tokens,
+        profile_id=vision_profile.profile_id))
+    return (PageRenderer(settings.knowledge_office_command.strip()), extractor,
             OpenAIEmbedder(read_key, model, dimensions))
 
 

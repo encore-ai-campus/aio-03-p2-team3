@@ -36,6 +36,8 @@ uv run pytest            # 테스트
 uv run uvicorn app.main:app --reload  # 로컬 서버
 ```
 
+모델 교체 전 비용/노력치 비교는 [LLM 측정 단계](docs/plans/llm-quality-and-cost.md)를 따른다. `uv run python -m app.evaluation.model_benchmark --out work/llm-benchmark/dry.json`은 API를 호출하지 않는다. 실제 측정은 개인 PC에서 `--live`로 실행하며 기능별 토큰/비용/지연을 기록한다. 운영 모델·기한·출력 상한은 바꾸지 않고, 보고서가 기존 모델 복귀의 비교 기준이 된다.
+
 - 기본 화면: `http://127.0.0.1:8000/`(`/inbox`로 이동). 상태 확인: `http://127.0.0.1:8000/healthz` → `{"status":"ok"}`. 화면·상태 확인에는 API 키가 필요 없다.
 - 위 Uvicorn 명령은 기본 `AI_RUNTIME=server`의 사용자별 DB 키 방식이다. 개인 `.env` 키를 쓰려면 아래 전용 로컬 실행 절차를 따른다.
 - Render 배포: `render.yaml`이 서버 웹 서비스(빌드 `uv sync --locked`, 시작 `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`)와 프론트 정적 사이트를 분리 선언한다(아래 분리 배포 안내).
@@ -222,6 +224,7 @@ API 키 외 앱 설정도 같은 계약 11절을 따른다. 실제 값은 `.env`
 - OpenAI API는 ChatGPT 구독과 별도로 과금된다. 키를 만든 프로젝트의 결제·사용 한도·선택 모델 이용 권한을 확인한다. 무료 이용이나 무제한 호출을 가정하지 않는다.
 - OAuth 게시·권한과 Pub/Sub 푸시 수신 인증은 별도 Google Cloud·로그인·알림 수신 작업에서 설정한다.
 - LLM·외부 API를 더하거나 바꾸는 일은 요청자가 정한다(`.work/TASK.md`).
+- 기능별 모델 상향(오류 대응용, 2026-11-19): 기본은 모두 baseline(현재와 같은 요청)이다. 특정 작업에서 오류가 계속될 때만 Render Environment에 `LLM_PROFILE_DEFAULT_STRUCTURED`(메일 분석·답장·메일→견적 조건 추출 등)·`LLM_PROFILE_TRADE_EXTRACTION`(PI/PO/CI/PL 추출·메일의 무역 조건 추출)에 `sol-medium` 또는 `sol-low`(2026-11-19 배포 시연 테스트에서 25품목 이상 추출이 20초 제한으로 실패해 요청자가 이 값을 정함), `LLM_PROFILE_VISION_TRANSCRIPTION`(문서 이미지 전사)에 `terra-low`를 넣는다. 저장하면 재배포 뒤 새 호출부터 적용된다. 되돌릴 때는 변수를 지우거나 `luna-medium`을 넣는다. 잘못된 이름은 서버 시작 오류다. 상향 모델은 품질 실측 전이고 사용하는 키(공용 `OPENAI_API_KEY` 또는 본인 등록 키)의 프로젝트에 그 모델 권한·요금이 필요하다. 개인 PC 실행 방식은 항상 baseline이며 실행 기록 `llm_profile` 줄에 요청/적용 프로필이 남는다. 호출마다 `llm_call` 줄에 `profile_id`·모델·노력치·토큰 사용량(알 수 없으면 `usage_unknown_attempts`)이 남는다. 계약과 근거는 [모델 프로필 계획](docs/plans/llm-model-profiles.md).
 
 전환 적용 순서:
 

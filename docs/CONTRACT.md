@@ -460,7 +460,8 @@ class AgentError(TypedDict):
 - 키 오류: 문서 추출은 `OPENAI_KEY_REQUIRED`/`OPENAI_KEY_UNAVAILABLE`와 HTTP 409를 반환한다. 메일 실행은 `end_reason=failed`, `notice=openai_key_required`로 끝나고 `processed_messages`에 오류 상태를 남긴다. 기존 notice 값에 `openai_key_required`를 추가하며 그래프 노드/전이는 유지한다. 키 등록 전 실패한 메일은 자동 재처리하지 않는다. 교체·삭제는 다음 논리 호출부터 적용되며 이미 시작한 호출·재시도는 취소하지 않는다.
 - 모델: OpenAI Responses API `gpt-6-luna`(`app/llm/client.py`의 `DEFAULT_MODEL`, 환경변수 `OPENAI_MODEL`로 덮어씀), 패키지 `langchain-openai`, 키는 사용자별 설정 등록값이며 서버 `OPENAI_API_KEY`로 대체하지 않는다. 2026-11-11 요청에 따라 메일·요약·성찰·독립 무역 문서 추출까지 모두 전환했다. 기본 모델은 앞서 채택한 무역 추출 모델을 유지한다. 실제 개인정보를 넣지 않는다. [Request]
 - 호출은 모두 `call_structured(prompt: Prompt, schema: type[BaseModel], variables: dict) -> LLMResult` 하나로 한다. 실제 백엔드는 `ChatOpenAI(use_responses_api=True, max_retries=0, timeout=20)`이고, `structured_output()`이 `with_structured_output(schema, method="function_calling", strict=False)`를 적용한다. 기존 스키마의 기본값·자유 키 dict를 유지하면서 반환값은 Pydantic으로 검증한다. 대역은 기존 `with_structured_output(schema)` 인터페이스를 유지한다. [Request · Claude proposal]
-- `LLMResult`: `ok`, `value`(schema 객체), `error_kind`(`rate_limit`/`network`/`invalid_output`/`invalid_input`/`internal`), `attempts`, `prompt_version`, `duration_ms`. 노드는 이것을 `ToolResult`로 옮긴다. [Claude proposal]
+- `LLMResult`: `ok`, `value`(schema 객체), `error_kind`(`rate_limit`/`network`/`invalid_output`/`invalid_input`/`internal`), `attempts`, `prompt_version`, `duration_ms`. 노드는 이것을 `ToolResult`로 옮긴다. [Claude proposal] 2026-11-19 추가 필드(선택, 기존 5종 유지): `error_detail`(`timeout`/`incomplete_output`/`access_denied`), `profile_id`. [Request · Claude proposal]
+- 기능별 프로필(2026-11-19, 결정 1a·2a): `app/llm/profiles.py`가 `docs/plans/llm-model-profiles.contract.json`을 읽어 프롬프트 이름으로 기능 키(`default_structured`/`trade_extraction`)를 정하고 서버 설정 `LLM_PROFILE_<기능>`의 프로필을 고른다. 비우면 baseline이며 baseline 요청은 위 백엔드와 같다. 상향(`sol-medium`)은 계약에 고정된 모델·노력치·timeout·출력 상한을 쓰고 자동 재시도 0, 시간 초과 뒤 같은/다른 모델 재요청 없음, 논리 기한 120초다. 매핑 밖 프롬프트·도구 바인딩 호출과 개인 PC 위임은 baseline이다(PC 위임 때 `llm_profile` 줄에 요청/적용 프로필). 잘못된 이름·운영 선택 불가 상태는 `Settings` 생성(서버 시작) 때 오류다. `llm_call` 줄 detail에 `profile_id`·`prompt_feature`·`model`·`reasoning_effort`·`timeout_seconds`·`max_output_tokens`·`error_detail`과 실제 백엔드일 때 `usage`(입력·출력·캐시·추론 토큰 합)·`usage_unknown_attempts`를 남긴다. 키·응답 원문은 남기지 않는다. [Request · Claude proposal]
 - 오류 구분: OpenAI SDK HTTP 429는 `rate_limit`(재시도 안 함) · 제한 시간 초과·연결 오류·HTTP 5xx는 `network`(`LLM_MAX_RETRIES`까지, 최초 포함 최대 3회·1초→2초 대기) · 스키마 검증 실패는 `invalid_output`(`LLM_INVALID_OUTPUT_RETRIES`까지 별도 1회) · 그 밖의 HTTP 4xx는 `invalid_input`(재시도 안 함). SDK 자동 재시도는 끄며 오류 원문·응답·키 대신 HTTP 코드나 예외 종류만 기록한다. [Request · Claude proposal]
 - 재시도한 횟수(`attempts - 1`)는 노드가 `call_retries`에 더한다. [Claude proposal]
 - 프롬프트: `app/prompts/<이름>.py`에 `NAME`, `VERSION`(`v1`, `v2` …), `TEMPLATE`을 둔다. 버전 이름은 `<이름>.<VERSION>`(예: `draft_replies.v1`)이고 호출마다 실행 기록에 남긴다. 고치면 `VERSION`을 올리고 `app/prompts/VERSIONS.md`에 날짜·버전·변경 이유를 한 줄 적는다(12, R-10). [Request · Claude proposal]
@@ -734,7 +735,10 @@ React `/app/inbox`는 목록·검색/상태·원문·초안·최종 수신자 �
 | `AI_RUNTIME` | `server`(기본) 또는 `local`(전용 루프백 명령에서만 허용) | local-openai-execution 1 |
 | `LOCAL_OWNER_GOOGLE_SUB` | HTTPS 서버에 연결하는 app.worker.pc의 --env 파일 전용 Google sub. 앱 공통 Settings·app.local은 읽지 않음 | local-openai-execution 4 |
 | `OPENAI_API_KEY` | local 앱의 PC 환경 키 또는 개인 PC 실행기 키. 서버 앱은 읽거나 대체 키로 사용하지 않음 | local-openai-execution 1·4 |
-| `OPENAI_MODEL` | 쓸 OpenAI 모델 이름(비우면 `gpt-6-luna`) | 모든 LLM 호출 |
+| `OPENAI_MODEL` | 쓸 OpenAI 모델 이름(비우면 `gpt-6-luna`). baseline 프로필에만 적용 | 모든 LLM 호출 |
+| `LLM_PROFILE_DEFAULT_STRUCTURED` | 메일 분석·답장·메일→견적 조건 추출·후속 질문·요약·성찰 프로필(`baseline`/`luna-medium`/`sol-medium`, 비우면 baseline) | llm-model-profiles 2 |
+| `LLM_PROFILE_TRADE_EXTRACTION` | PI/PO/CI/PL·거래 조건 추출 프로필(`baseline`/`luna-medium`/`sol-medium`) | llm-model-profiles 2 |
+| `LLM_PROFILE_VISION_TRANSCRIPTION` | 지식 문서 페이지 전사 프로필(`baseline`/`luna-medium`/`terra-low`). 새 처리부터 적용, 진행 중 처리는 스냅샷의 `vision_profile`(없으면 baseline) 유지 | llm-model-profiles 4 |
 | `GOOGLE_OAUTH_CLIENT_ID` | Gmail·Calendar 공용 OAuth 클라이언트 ID(서비스별 범위·토큰 분리) | 6, #192 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 클라이언트 비밀번호 | 6 |
 | `GOOGLE_OAUTH_REDIRECT_URI` | OAuth 리디렉션 주소(로컬·Render 각각) | 6 |

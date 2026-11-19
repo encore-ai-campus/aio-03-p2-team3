@@ -21,6 +21,10 @@
 - 출처: [OpenAI 파일 입력](https://developers.openai.com/api/docs/guides/file-inputs), [비전의 한계](https://developers.openai.com/api/docs/guides/images-vision#limitations). API의 PDF·일반 문서 처리 차이와 작은 글씨/한국어/정확도 제한을 확인했다. 특정 공급자 채택의 근거로 바꾸지 않는다.
 
 ## LLM
+### 기능별 모델 상향 — 무역 추출 Sol low (2026-11-19, PR #256)
+- 요청: 배포 시연 테스트에서 PI 화면 49품목과 메일 본문 25품목의 무역 추출이 baseline(`gpt-6-luna`, 20초·재시도 2)에서 3번 모두 시간 초과로 실패했다(5품목은 성공). 요청자가 기능별 상향을 무역 추출만 `gpt-6.1-sol` low로 정했고, 켜는 방법은 Render 환경변수 `LLM_PROFILE_TRADE_EXTRACTION=sol-low`다(코드 기본값은 baseline 유지, 지우면 복귀). [Request]
+- 값: 90초·출력 8192·재시도 0·논리 기한 120초(기존 `sol-medium`과 같음). 메일 분석·답장(`default_structured`)과 비전 전사는 바꾸지 않는다. 근거: OpenAI 모델 문서 https://developers.openai.com/api/docs/models/gpt-6.1-sol (reasoning.effort low~max 지원, none/minimal 미지원). 품질·비용 실측은 하지 않았고 사용하는 키(공용 `OPENAI_API_KEY` 또는 본인 등록 키)의 프로젝트에 이 모델 권한·요금이 필요하다. 계약은 `docs/plans/llm-model-profiles.contract.json`.
+
 ### 전용 로컬 .env 키 모드 (2026-11-16 정리, 초기 Issue #153)
 - 요청: 개인 PC에서 본인 `.env` 키를 사용하고 공용 서버의 환경 키 사용 금지를 유지한다. `AI_RUNTIME` 기본은 `server`이며, 전용 `uv run python -m app.local`의 실제 루프백 리스너가 있는 `local` 실행에서만 환경 키를 선택한다. Render·공용 실행은 로컬 모드로 시작할 수 없다.
 - 책임 분리: 앱 인증·자료 권한은 검증된 user_id, 로컬 AI는 전용 루프백 실행과 OPENAI_API_KEY 존재로 판단한다. Google 식별자·Gmail 연결·last_login_at은 필요 없다. LOCAL_OWNER_GOOGLE_SUB는 HTTPS 서버에 연결하는 개인 PC 실행기의 명시적 파일/LocalPolicy 전용이며, 해당 소유자·장치 정책은 유지한다.

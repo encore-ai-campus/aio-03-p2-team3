@@ -34,18 +34,30 @@ def provider_error(error: Exception) -> KnowledgeError:
 
 
 class OpenAIDocumentExtractor:
-    def __init__(self, read_key: Callable[[], str], model: str, *, client_factory=OpenAI):
+    """기본값은 vision_transcription.baseline과 같다(노력치 미전송). 명시 프로필만 값을 바꾼다.
+
+    `ModelProfile`에는 필드를 더하지 않는다(지문이 청크 profile_id다). 프로필 ID는 `profile_id`
+    속성으로 따로 두고 처리 스냅샷의 별도 키(`vision_profile`)로 남긴다.
+    """
+
+    def __init__(self, read_key: Callable[[], str], model: str, *, client_factory=OpenAI,
+                 reasoning_effort: str | None = None, timeout=180, max_retries=3, max_output_tokens=10000,
+                 profile_id: str = "vision_transcription.baseline"):
         self.read_key, self.client_factory = read_key, client_factory
         self.profile = ModelProfile(provider="openai", model=model, revision=EXTRACTION_REVISION)
+        self.reasoning_effort, self.profile_id = reasoning_effort, profile_id
+        self.timeout, self.max_retries, self.max_output_tokens = timeout, max_retries, max_output_tokens
 
     def extract(self, pages: list[PageImage]) -> ExtractionResult:
         output = []
-        with self.client_factory(api_key=self.read_key(), timeout=180, max_retries=3) as client:
+        # 노력치는 명시 프로필에서만 보낸다(baseline 요청은 기존과 같다).
+        options = {"reasoning": {"effort": self.reasoning_effort}} if self.reasoning_effort else {}
+        with self.client_factory(api_key=self.read_key(), timeout=self.timeout, max_retries=self.max_retries) as client:
             for page in pages:
                 try:
                     response = client.responses.parse(
                         model=self.profile.model, instructions=INSTRUCTIONS, store=False,
-                        max_output_tokens=10000, text_format=VisionPage,
+                        max_output_tokens=self.max_output_tokens, text_format=VisionPage, **options,
                         input=[{"role": "user", "content": [
                             {"type": "input_text", "text": f"이 이미지 한 페이지를 원문 그대로 전사해 주세요. 입력 페이지 ID: {page.number}"},
                             {"type": "input_image", "detail": "high",

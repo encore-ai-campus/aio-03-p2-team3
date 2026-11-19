@@ -1,0 +1,242 @@
+{
+  "contract_version": 1,
+  "status": "adopted_baseline_default",
+  "note": "기능별 LLM 프로필 계약. 서버(app/llm/profiles.py)가 이 파일을 읽는다. 기본값은 모두 baseline(현재와 같은 요청)이며, 기능별 환경변수를 명시했을 때만 manual_upgrade 프로필로 상향한다(결정 2a, 2026-11-19). 상향 값은 측정 준비값이며 품질 게이트를 통과한 설정이 아니다. 서술·근거·미확인은 llm-model-profiles.md에 있다.",
+  "analysis_base": {
+    "repo": "encore-ai-campus/aio-03-p2-team3",
+    "main_commit": "428139a",
+    "benchmark_branch": "feat/llm-usage-benchmark",
+    "benchmark_commit": "a24e2d5"
+  },
+  "forbidden": {
+    "efforts": ["none", "minimal", "high", "xhigh", "max"],
+    "secret_field_name_patterns": ["key", "token", "secret", "password", "credential", "authorization"],
+    "automatic_cross_model_fallback_after_timeout": true,
+    "side_effect_replay": ["approval", "issuance", "mail_send"]
+  },
+  "models": {
+    "gpt-6-luna": {"efforts": ["default", "medium"]},
+    "gpt-6.1-sol": {"efforts": ["low", "medium"]},
+    "gpt-6.1-terra": {"efforts": ["low"]}
+  },
+  "allowed_models_by_feature": {
+    "default_structured": ["gpt-6-luna", "gpt-6.1-sol"],
+    "trade_extraction": ["gpt-6-luna", "gpt-6.1-sol"],
+    "catalog_candidates": ["gpt-6-luna", "gpt-6.1-sol"],
+    "vision_transcription": ["gpt-6-luna", "gpt-6.1-terra"],
+    "mail_gate": ["gpt-6-luna"]
+  },
+  "limits": {
+    "timeout_seconds_max": 600,
+    "max_output_tokens_max": 32768
+  },
+  "deadline_layers": {
+    "claim_margin_seconds": 30,
+    "note": "claim 대기 최대 25초 + 임대 여유 5초. 큐 전체 기한은 시도 1회 시간 + 이 여유 이상이어야 한다."
+  },
+  "selection": {
+    "mechanism": "서버 설정 이름(비밀 아님). 비우면 baseline. 사용자별 선택이 아니다. 키는 계속 사용자별 UserKeyAccess/PC .env다.",
+    "config_names": {
+      "default_structured": "LLM_PROFILE_DEFAULT_STRUCTURED",
+      "trade_extraction": "LLM_PROFILE_TRADE_EXTRACTION",
+      "catalog_candidates": "LLM_PROFILE_CATALOG_CANDIDATES",
+      "vision_transcription": "LLM_PROFILE_VISION_TRANSCRIPTION"
+    },
+    "production_selectable_statuses": ["baseline", "explicit_return", "approved", "manual_upgrade"],
+    "manual_upgrade_rule": "결정 2a(2026-11-19): manual_upgrade는 품질 게이트 없이 오류 대응용으로 수동 전환을 허용한다. 해당 기능의 환경변수에 프로필 이름을 명시했을 때만 쓰고, 처리 기록에 profile_id를 남긴다. 변수를 지우거나 luna-medium을 고르면 복귀한다.",
+    "local_worker_policy": "상향·복귀 프로필은 stored_key 경로에만 적용한다. local_worker(개인 PC)는 선택과 관계없이 baseline으로 실행하고, 요청 프로필과 적용 프로필을 처리 기록에 함께 남긴다(PC 모델·출력 상한은 PC가 강제하고 서버가 수치를 보낼 수 없다, 6.4절).",
+    "unmapped_prompt_policy": "prompt_ids에 없는 구조화 호출(workflow_plan·workflow_repair·knowledge_query_plan·knowledge_rerank)과 도구 바인딩 호출은 선택과 관계없이 baseline으로 실행한다.",
+    "invalid_value_policy": "계약에 없는 이름, stored_key가 없는 프로필, 운영 선택 불가 상태(candidate·measurement_prep)는 서버 시작 시 오류다. 조용히 baseline으로 대체하지 않는다.",
+    "never_auto_promote": true,
+    "baseline_model_override": "baseline 프로필만 기존 OPENAI_MODEL/KNOWLEDGE_VISION_MODEL 덮어쓰기를 따른다. 그 밖의 프로필 모델은 고정이며 환경 변수로 바뀌지 않는다."
+  },
+  "features": {
+    "default_structured": {
+      "description": "메일 분석·답장·후속 질문·딜 조건·요약·성찰의 일반 구조화 호출(call_structured)",
+      "prompt_ids": ["analyze_email", "draft_replies", "draft_followup_replies", "extract_deal_terms", "summarize_thread", "reflect_fix"],
+      "execution_modes": ["stored_key", "local_worker"],
+      "profiles": {
+        "baseline": {
+          "status": "baseline",
+          "model": "gpt-6-luna",
+          "model_source": "legacy_env:OPENAI_MODEL",
+          "reasoning_effort": "default",
+          "modes": {
+            "stored_key": {"timeout_seconds": 20, "max_output_tokens": null, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1},
+            "local_worker": {"timeout_seconds": 20, "max_output_tokens": 2048, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1, "queue_deadline_seconds": 120}
+          }
+        },
+        "luna-medium": {
+          "status": "explicit_return",
+          "model": "gpt-6-luna",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 20, "max_output_tokens": null, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1},
+            "local_worker": {"timeout_seconds": 20, "max_output_tokens": 2048, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1, "queue_deadline_seconds": 120}
+          }
+        },
+        "sol-medium": {
+          "status": "manual_upgrade",
+          "values_origin": "결정 1a(2026-11-19): 메일→견적 단계 오류 대응용 상향. 값은 거래 추출 측정 준비값(90초/8192)과 같다. 품질 실측 없음.",
+          "model": "gpt-6.1-sol",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
+          }
+        }
+      }
+    },
+    "trade_extraction": {
+      "description": "PI/PO/CI/PL 무역 문서 추출(wire 스키마와 원문 근거 검사 포함)",
+      "prompt_ids": ["extract_trade_terms", "pi_extract", "po_extract", "ci_extract", "ci_standalone_extract", "pl_extract"],
+      "execution_modes": ["stored_key", "local_worker"],
+      "profiles": {
+        "baseline": {
+          "status": "baseline",
+          "model": "gpt-6-luna",
+          "model_source": "legacy_env:OPENAI_MODEL",
+          "reasoning_effort": "default",
+          "modes": {
+            "stored_key": {"timeout_seconds": 20, "max_output_tokens": null, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1},
+            "local_worker": {"timeout_seconds": 20, "max_output_tokens": 2048, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1, "queue_deadline_seconds": 120}
+          }
+        },
+        "luna-medium": {
+          "status": "explicit_return",
+          "model": "gpt-6-luna",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 20, "max_output_tokens": null, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1},
+            "local_worker": {"timeout_seconds": 20, "max_output_tokens": 2048, "sdk_max_retries": 0, "network_retries": 2, "invalid_output_retries": 1, "queue_deadline_seconds": 120}
+          }
+        },
+        "sol-medium": {
+          "status": "manual_upgrade",
+          "values_origin": "측정 준비값(계획 2절 90초/8192)을 결정 2a(2026-11-19)로 수동 상향값으로 확정. 재시도 0·논리 기한 120초. 품질 게이트 통과 설정이 아니다. PC 경로는 baseline 유지(selection.local_worker_policy).",
+          "model": "gpt-6.1-sol",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
+          }
+        },
+        "sol-low": {
+          "status": "manual_upgrade",
+          "values_origin": "요청자 결정(2026-11-19 배포 시연 테스트): 25·49품목 추출이 baseline 20초 제한에서 ReadTimeout으로 실패해 무역 추출만 Sol low로 상향. 값은 sol-medium과 같은 90초/8192·재시도 0·논리 기한 120초. 노력치 low는 OpenAI 모델 문서(gpt-6.1-sol: low~max 지원)로 확인. 품질 게이트 통과 설정이 아니다. PC 경로는 baseline 유지(selection.local_worker_policy).",
+          "model": "gpt-6.1-sol",
+          "model_source": "fixed",
+          "reasoning_effort": "low",
+          "modes": {
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
+          }
+        }
+      }
+    },
+    "catalog_candidates": {
+      "description": "사전 없는 카탈로그 후보 해석(2번 세션 소유 기능). 이 계약은 키와 호출 한도만 제공하고 후보 API/UI/회원 검색은 포함하지 않는다.",
+      "prompt_ids": [],
+      "prompt_ids_note": "2번 세션이 설치 프롬프트/스키마를 정의한 뒤 채운다. 비어 있는 동안 PC 모드는 지원하지 않는다.",
+      "execution_modes": ["stored_key"],
+      "production_available": false,
+      "profiles": {
+        "luna-medium": {
+          "status": "measurement_prep",
+          "values_origin": "측정 준비값(90초/2048). 검증된 운영 설정이 아니다.",
+          "model": "gpt-6-luna",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 2048, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
+          },
+          "unresolved": ["max_output_tokens", "logical_deadline_seconds"]
+        },
+        "sol-medium": {
+          "status": "measurement_prep",
+          "values_origin": "측정 준비값(90초/2048). 검증된 운영 설정이 아니다.",
+          "model": "gpt-6.1-sol",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 2048, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
+          },
+          "unresolved": ["max_output_tokens", "logical_deadline_seconds"]
+        }
+      }
+    },
+    "vision_transcription": {
+      "description": "지식 문서 페이지 이미지 전사(app/knowledge/extract.py). local_worker는 현재 명시적으로 미지원이다.",
+      "prompt_ids": [],
+      "execution_modes": ["stored_key"],
+      "profiles": {
+        "baseline": {
+          "status": "baseline",
+          "model": "gpt-6-luna",
+          "model_source": "legacy_env:KNOWLEDGE_VISION_MODEL|OPENAI_MODEL",
+          "reasoning_effort": "default",
+          "modes": {
+            "stored_key": {"timeout_seconds": 180, "max_output_tokens": 10000, "sdk_max_retries": 3}
+          }
+        },
+        "luna-medium": {
+          "status": "explicit_return",
+          "model": "gpt-6-luna",
+          "model_source": "fixed",
+          "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 180, "max_output_tokens": 10000, "sdk_max_retries": 3}
+          }
+        },
+        "terra-low": {
+          "status": "manual_upgrade",
+          "values_origin": "측정 준비값(계획 2절 180초/10000)을 결정 2a(2026-11-19)로 수동 상향값으로 확정. SDK 재시도는 baseline과 같은 3(재시도 정책을 암묵적으로 바꾸지 않음). 가림 표시를 오류 없이 다루는 것이 목적이며 품질 실측 없음.",
+          "model": "gpt-6.1-terra",
+          "model_source": "fixed",
+          "reasoning_effort": "low",
+          "modes": {
+            "stored_key": {"timeout_seconds": 180, "max_output_tokens": 10000, "sdk_max_retries": 3}
+          }
+        }
+      }
+    },
+    "mail_gate": {
+      "description": "메일 사전 제외(OpenAI Decisions API, app/llm/mail_gate.py). 모델이 코드 상수라 OPENAI_MODEL로 바뀌지 않는다. 이번 계약에서는 고정 baseline으로만 기록한다.",
+      "prompt_ids": [],
+      "execution_modes": ["stored_key"],
+      "profiles": {
+        "baseline": {
+          "status": "baseline",
+          "model": "gpt-6-luna",
+          "model_source": "code_constant:mail_gate.MODEL",
+          "reasoning_effort": "default",
+          "modes": {
+            "stored_key": {"timeout_seconds": 20, "max_output_tokens": null, "sdk_max_retries": 0}
+          }
+        }
+      }
+    }
+  },
+  "baseline_code_facts": {
+    "default_model": {"file": "app/llm/client.py", "pattern": "DEFAULT_MODEL = \"gpt-6-luna\"", "value": "gpt-6-luna"},
+    "llm_timeout_seconds": {"file": "app/config.py", "pattern": "\"LLM_TIMEOUT_SECONDS\": 20", "value": 20},
+    "llm_max_retries": {"file": "app/config.py", "pattern": "\"LLM_MAX_RETRIES\": 2", "value": 2},
+    "llm_invalid_output_retries": {"file": "app/config.py", "pattern": "\"LLM_INVALID_OUTPUT_RETRIES\": 1", "value": 1},
+    "pc_default_max_output_tokens": {"file": "app/worker/pc.py", "pattern": "max_output_tokens: int = 2048", "value": 2048},
+    "pc_max_output_tokens_ceiling": {"file": "app/worker/pc.py", "pattern": "1 <= self.max_output_tokens <= 32768", "value": 32768},
+    "queue_deadline_seconds_adapter": {"file": "app/worker/adapter.py", "pattern": "deadline = started + 120", "value": 120},
+    "queue_deadline_seconds_service": {"file": "app/worker/service.py", "pattern": "expires = now + timedelta(seconds=120)", "value": 120},
+    "queue_deadline_seconds_protocol_cap": {"file": "app/worker/protocol.py", "pattern": "<= 120", "value": 120},
+    "lease_seconds": {"file": "app/worker/service.py", "pattern": "timedelta(seconds=30)", "value": 30},
+    "heartbeat_min_interval_seconds": {"file": "app/worker/service.py", "pattern": "timedelta(seconds=10)", "value": 10},
+    "device_offline_seconds": {"file": "app/worker/service.py", "pattern": "timedelta(seconds=45)", "value": 45},
+    "result_duration_ms_cap": {"file": "app/worker/protocol.py", "pattern": "le=30000", "value": 30000},
+    "vision_timeout_seconds": {"file": "app/knowledge/extract.py", "pattern": "timeout=180", "value": 180},
+    "vision_sdk_max_retries": {"file": "app/knowledge/extract.py", "pattern": "max_retries=3", "value": 3},
+    "vision_max_output_tokens": {"file": "app/knowledge/extract.py", "pattern": "max_output_tokens=10000", "value": 10000},
+    "knowledge_lease_seconds": {"file": "app/knowledge/repository.py", "pattern": "LEASE_SECONDS = 3600", "value": 3600},
+    "mail_gate_model": {"file": "app/llm/mail_gate.py", "pattern": "MODEL = \"gpt-6-luna\"", "value": "gpt-6-luna"},
+    "mail_gate_timeout_seconds": {"file": "app/llm/mail_gate.py", "pattern": "timeout=20", "value": 20}
+  }
+}
