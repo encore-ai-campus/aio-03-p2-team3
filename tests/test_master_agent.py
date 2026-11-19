@@ -154,22 +154,58 @@ def test_document_tool_missing_facts_revises_same_document_and_issues_real_files
     from sqlalchemy import select, func
     jwks, google, storage = FakeJwks(), FakeGmailGoogle(), FakeStorage()
     token = jwks.token()
+    incomplete = pi_input(document_number=None, payment_terms=None).model_dump(mode='json')
+    incomplete['items'][0]['discount_percent'] = None
     choices = Choices([('document_schema', {'kind': 'PI'}),
-        ('prepare_document', {'kind': 'PI', 'values': pi_input(payment_terms=None).model_dump(mode='json')}),
-        ('ask_user', {'question': '결제 조건을 알려 주세요.'}),
-        ('prepare_document', {'kind': 'PI', 'document_id': 1, 'revision': 1, 'values': pi_input().model_dump(mode='json')}),
-        ('prepare_issue', {'kind': 'PI', 'document_id': 1, 'revision': 2}), '문서를 발급했습니다.'])
+        ('prepare_document', {'kind': 'PI', 'values': incomplete}),
+        ('prepare_issue', {'kind': 'PI', 'document_id': 2, 'revision': 4}), '문서를 발급했습니다.'])
     with TestClient(app_for(database_url, jwks, google, choices, storage=storage)) as client:
         company(client, token)
+        duplicate = client.post('/api/trade/pi', headers=auth(token),
+                                json=pi_input(document_number='PI-TAKEN').model_dump(mode='json'))
+        assert duplicate.status_code < 300, duplicate.text
         response = client.post('/api/agent/conversations', headers=auth(token), json={'message': 'PI를 작성해 줘'})
         key = response.json()['id']
         state = read(client, token, key)
-        assert state['waiting']['message'] == '결제 조건을 알려 주세요.', state
-        state = resume(client, token, key, state, {'task_id': 'agent', 'answers': {'response': 'T/T'}})
+
+        def complete(state, changes):
+            return resume(client, token, key, state, {'task_id': state['waiting']['task_id'],
+                          'answers': {'pi_changes': changes}})
+
+        assert state['waiting']['fields'] == ['pi_changes']
+        card = state['working']['data']['pi_completion']
+        assert card['document_id'] == 2 and card['revision'] == 1
+        assert set(card['fields']) == {'document_number', 'payment_terms', 'items.0.discount_percent'}
+        state = complete(state, {'document_number': 'PI-TAKEN', 'items.0.discount_percent': '0'})
+        card = state['working']['data']['pi_completion']
+        assert card['error'] == 'PI_NUMBER_DUPLICATE' and card['revision'] == 1
+        assert card['attempted']['items.0.discount_percent'] == '0'
+        state = complete(state, {'buyer.legal_name': 'Unexpected Change'})
+        card = state['working']['data']['pi_completion']
+        assert card['error'] == 'PI_COMPLETION_INVALID' and card['revision'] == 1
+        state = complete(state, {'items.0.discount_percent': '101'})
+        assert state['working']['data']['pi_completion']['error'] == 'PI_COMPLETION_INVALID'
+        saved = client.get('/api/trade/pi/2', headers=auth(token)).json()
+        externally_revised = client.put('/api/trade/pi/2', headers=auth(token),
+            json={'revision': 1, 'document': {**saved['input'], 'remarks': 'External edit'}})
+        assert externally_revised.status_code == 200, externally_revised.text
+        state = complete(state, {'document_number': 'PI-STALE'})
+        card = state['working']['data']['pi_completion']
+        assert card['error'] == 'document_changed' and card['revision'] == 2
+        assert state['working']['data']['input']['document_number'] is None
+        state = complete(state, {'payment_terms': 'T/T'})
+        card = state['working']['data']['pi_completion']
+        assert card['revision'] == 3
+        assert set(card['fields']) == {'document_number', 'items.0.discount_percent'}
+        state = complete(state, {'document_number': 'PI-100', 'items.0.discount_percent': '0'})
         assert state['status'] == 'needs_approval', state
-        assert state['waiting']['action']['payload']['revision'] == 2
+        assert state['waiting']['action']['payload']['revision'] == 4
+        saved = client.get('/api/trade/pi/2', headers=auth(token)).json()
+        assert saved['input']['document_number'] == 'PI-100'
+        assert saved['input']['remarks'] == 'External edit'
+        assert saved['input']['items'][0]['discount_percent'] == '0'
         with client.app.state.database.session() as s:
-            assert s.scalar(select(func.count()).select_from(TradeDocument)) == 1
+            assert s.scalar(select(func.count()).select_from(TradeDocument)) == 2
         waiting = state['waiting']
         state = resume(client, token, key, state, {'action_id': waiting['action']['id'],
             'content_hash': waiting['content_hash'], 'decision': 'approve'})

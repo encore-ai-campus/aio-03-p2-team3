@@ -99,14 +99,15 @@ def test_trade_drafts_tool_current_revision_issued_and_owner_filter(database_url
     token, outsider = jwks.token(), jwks.token(sub=uuid4())
     values = pi_input(payment_terms=None).model_dump(mode="json")
     ready = pi_input(document_number="PI-ISSUED-002").model_dump(mode="json")
-    choices = Choices([("prepare_document", {"kind": "PI", "values": values}), "초안을 저장했습니다."])
+    choices = Choices([])
     with TestClient(app_for(database_url, jwks, google, choices, storage=FakeStorage())) as client:
         company(client, token)
         company(client, outsider)
-        _, state = turn(client, token, "PI 작성")
-        target = state["results"][0]["data"]["document_id"]
-        choices.calls.extend([("prepare_document", {"kind": "PI", "document_id": target, "revision": 1, "values": values}), "초안 수정"])
-        turn(client, token, "PI 수정")
+        created = client.post("/api/trade/pi", headers=auth(token), json=values)
+        assert created.status_code == 201, created.text
+        target = created.json()["document_id"]
+        revised = client.put(f"/api/trade/pi/{target}", headers=auth(token), json={"revision": 1, "document": values})
+        assert revised.status_code == 200, revised.text
         choices.calls.extend([("prepare_document", {"kind": "PI", "values": ready}), "초안 준비"])
         _, state = turn(client, token, "발급할 PI 작성")
         assert "document_id" in state["results"][0]["data"], state

@@ -123,6 +123,29 @@ class ExistingDocuments:
         except DocumentError as error:
             raise WorkflowError(error.code) from None
 
+    def complete_pi(self, actor_id, command, changes):
+        repository = pi_repository(self.database, actor_id)
+        try:
+            current = pi.get_pi(command.document_id, repository=repository)
+            if current.revision != command.revision:
+                return current.model_dump(mode="json"), "document_changed" if changes else None
+            if current.status != "needs_input":
+                return current.model_dump(mode="json"), None
+            if not isinstance(changes, dict):
+                raise DocumentError("PI_COMPLETION_INVALID", "입력 형식을 확인하세요")
+            if changes:
+                values = pi.completion_command(current, changes)
+                current = pi.revise_pi(current.document_id, current.revision, values, repository=repository)
+            elif (repository.context(current.document.get("currency")).bank or {}) != (current.document.get("bank") or {}):
+                current = pi.refresh_settings(current.document_id, current.revision, repository=repository)
+            return current.model_dump(mode="json"), None
+        except DocumentError as error:
+            if error.code not in {"PI_NUMBER_DUPLICATE", "PI_COMPLETION_INVALID", "REVISION_CONFLICT"}:
+                raise WorkflowError(error.code) from None
+            current = pi.get_pi(command.document_id, repository=repository)
+            code = "document_changed" if error.code == "REVISION_CONFLICT" or current.revision != command.revision else error.code
+            return current.model_dump(mode="json"), code
+
     def propose(self, actor_id, command, *, packing=False):
         ops, _, _, _, _ = IMPLEMENTATIONS[command.kind]
         repository = SQLReviews(self.database, actor_id, command.kind, self.storage)
