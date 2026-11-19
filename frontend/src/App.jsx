@@ -44,7 +44,7 @@ function LegacyKnowledgeRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename={APP_BASE}>
+      <BrowserRouter basename={APP_BASE || "/"}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth />}>

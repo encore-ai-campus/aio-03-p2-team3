@@ -41,12 +41,13 @@ services:
         sync: false
       - key: PUBSUB_PUSH_TOKEN
         sync: false
-  - type: static
+  - type: web
     name: aio3-gmail-quote-ui
+    runtime: static
     branch: main
     rootDir: frontend
     buildCommand: npm ci && npm run build -- --base=/
-    publishPath: dist
+    staticPublishPath: dist
     routes:
       # SPA 새로고침·상세 주소를 index.html로 복구한다.
       - type: rewrite
