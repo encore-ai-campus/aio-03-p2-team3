@@ -114,6 +114,29 @@ def test_each_domain_cancel_modify_approve_download_and_version_history(pi_clien
     assert client.get(approved.json()["files"][0]["download_url"]).status_code == 404
 
 
+def test_pl_with_source_packing_totals_and_no_packing_rows_can_be_issued(pi_client):
+    values = pl_values()
+    values.update(items=[{"product_name": "Virtual Serum", "quantity": "10", "unit": "PCS"}],
+                  actual_package_count="11", declared_net_weight_kg="2",
+                  declared_gross_weight_kg="1", declared_total_quantity="10",
+                  declared_total_quantity_unit="PCS", declared_volume_cbm=None)
+    draft = post(pi_client, "/api/trade/pl", values)
+    assert any(issue["message"] == "Source net weight cannot exceed source gross weight"
+               for issue in draft["issues"])
+    values["declared_net_weight_kg"] = "1"
+    response = pi_client.put(f"/api/trade/pl/{draft['document_id']}",
+                             json={"revision": draft["revision"], "document": values})
+    assert response.status_code == 200, response.text
+    approved = packing_choice(pi_client, response.json())
+    assert approved["status"] == "ready", approved["issues"]
+    assert approved["document"]["actual_package_count"] == "11"
+    assert approved["document"]["declared_net_weight_kg"] == "1"
+    assert approved["document"]["declared_gross_weight_kg"] == "1"
+    issued = choice(pi_client, "pl", review(pi_client, "pl", approved), "approve")
+    assert issued.status_code == 200, issued.text
+    assert {file["file_format"] for file in issued.json()["files"]} == {"pdf", "xlsx"}
+
+
 def test_po_uses_purchase_price_and_zero_quantity_without_pi_bank(pi_client):
     po = ready_document(pi_client, "po")
     assert po["document"]["total"] == "30.00"  # 판매가 8과 별개로 매입가 3을 적용한다.
