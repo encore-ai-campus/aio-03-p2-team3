@@ -459,3 +459,17 @@ def test_gmail_requires_verified_google_provider_identity(database_url):
         response = client.post("/api/gmail/connect", headers=bearer(jwks.token(sub=sub)))
         assert response.status_code == 409
         assert response.json()["error"]["code"] == "google_identity_required"
+
+
+def test_connect_without_topic_uses_polling_collection(database_url):
+    # 토픽이 없는 서버는 Pub/Sub 등록 대신 로컬과 같은 폴링 수집(local:history)으로 시작한다.
+    jwks, fake = FakeJwks(), FakeGoogle()
+    settings = replace(settings_of(database_url), gmail_pubsub_topic="")
+    with make_client(database_url, jwks, fake, settings) as client:
+        token = jwks.token()
+        result = complete(client, start_connect(client, token))
+        assert result.headers["location"] == "/app/settings?gmail=connected"
+        assert fake.called("watch") == []
+        with client.app.state.database.session() as session:
+            watch = session.get(GmailWatch, me(client, token)["user_id"])
+        assert (watch.status, watch.topic) == ("active", "local:history")

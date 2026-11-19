@@ -37,8 +37,7 @@ def web(database_url, monkeypatch):
         pytest.fail("장치 연결/큐는 OpenAI를 호출하면 안 됩니다")
     monkeypatch.setattr(llm, "_backend_for_settings", forbidden)
     config = Settings(database_url=database_url, session_secret="fake-session",
-                      token_encryption_key=Fernet.generate_key().decode(), app_base_url="https://testserver",
-                      openai_api_key="fake-unused-server-key")
+                      token_encryption_key=Fernet.generate_key().decode(), app_base_url="https://testserver")
     with TestClient(create_app(config, google=FakeGmailGoogle()), base_url="https://testserver") as client:
         with client.app.state.database.session() as session:
             session.add_all([User(id=n, google_sub=f"fake-sub-{n}", email=f"user{n}@example.invalid",
@@ -454,16 +453,13 @@ def test_https_required_even_with_spoofed_header_and_pairing_errors_hide_secrets
     assert response.status_code == 400 and "fake-secret-never-echo" not in response.text
 
 
-def test_selected_worker_mode_cannot_fall_back_to_existing_user_or_server_key(web):
+def test_worker_mode_selection_no_longer_changes_key_path(web):
     client, config, clock = web
     database = client.app.state.database
     save_key(database, 1, "fake-user-key", client.app.state.google_access.cipher, settings=config)
     device, _, csrf = pair(web)
-    with pytest.raises(llm.OpenAIKeyError, match="개인 PC 실행"):
-        UserKeyAccess(database, 1, client.app.state.google_access.cipher, config).read()
-    page = client.get("/settings")
-    assert "PC가 켜져 있을 때 본인 .env 키로 AI를 실행합니다" in page.text
-    assert "fake-user-key" not in page.text
+    # PC 위임 폐지(2026-11-19): 실행 방식 표시와 무관하게 같은 키 경로를 쓴다.
+    assert UserKeyAccess(database, 1, client.app.state.google_access.cipher, config).read() == "fake-user-key"
     assert client.post("/api/ai-execution/mode", json={"ai_execution_mode": "stored_key", "csrf_token": csrf}).status_code == 200
     assert UserKeyAccess(database, 1, client.app.state.google_access.cipher, config).read() == "fake-user-key"
 

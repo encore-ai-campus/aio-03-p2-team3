@@ -56,7 +56,7 @@ def make_cipher(settings: Settings) -> TokenCipher | None:
 def missing_login_settings(settings: Settings) -> list[str]:
     """로그인에 필요한데 비었거나 형식이 틀린 환경변수 이름(값은 내보내지 않는다)."""
     missing = [name for name, field in LOGIN_SETTINGS.items()
-               if not (settings.ai_runtime == "local" and name == "GMAIL_PUBSUB_TOPIC")
+               if name != "GMAIL_PUBSUB_TOPIC"  # 토픽이 없으면 로컬과 같은 폴링 수집으로 동작한다
                and not getattr(settings, field)]
     if settings.token_encryption_key and make_cipher(settings) is None:
         missing.append("TOKEN_ENCRYPTION_KEY(형식 오류)")
@@ -76,6 +76,11 @@ class GoogleAccess:
     @property
     def local_mode(self) -> bool:
         return self.settings is not None and self.settings.ai_runtime == "local"
+
+    @property
+    def polling(self) -> bool:
+        """토픽이 없는 서버도 로컬과 같은 폴링 수집(history 조회)을 쓴다."""
+        return self.local_mode or not self.topic
 
 
 def utcnow() -> datetime:

@@ -140,9 +140,10 @@ def create_app(settings: Settings | None = None, google=None,
                     knowledge_plan=knowledge_plan, knowledge_rerank=knowledge_rerank)
 
         app.state.agent = AgentService(ConversationStore(database), agent_runtime)
-        collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database), graph=app.state.graph) if config.ai_runtime == "local" else None
+        # 로컬과 토픽 없는 서버는 폴링 수집기를 돌린다(토픽을 지정한 서버는 poll_once가 스스로 건너뛴다).
+        collector = LocalGmailCollector(app.state.google_access, SqlMailboxStore(database), graph=app.state.graph)
         app.state.local_gmail = collector
-        task = asyncio.create_task(collector.run()) if collector else None
+        task = asyncio.create_task(collector.run())
         worker_stop = asyncio.Event()
         async def maintain_gmail():
             while not worker_stop.is_set():

@@ -367,16 +367,15 @@ def test_render_page_limit_encrypted_or_broken_pdf_and_timeout():
     assert timeout.value.code == "render_timeout"
 
 
-def test_missing_key_and_pc_mode_cannot_fall_back_to_server_key(database):
-    settings = Settings(openai_api_key="not-a-permitted-server-fallback")
+def test_missing_key_still_blocks_and_env_key_covers_server_and_pc_mode(database):
     with pytest.raises(KnowledgeError) as missing:
-        make_adapters(database, settings, 1, {})
+        make_adapters(database, Settings(), 1, {})
     assert missing.value.code == "OPENAI_KEY_REQUIRED"
+    shared = Settings(openai_api_key="fake-shared-env-key")
+    make_adapters(database, shared, 1, {})  # DB 키 없이 공용 키로 어댑터가 만들어진다
     with database.session() as session:
         session.get(User, 1).ai_execution_mode = "local_worker"
-    with pytest.raises(KnowledgeError) as forbidden:
-        make_adapters(database, settings, 1, {})
-    assert forbidden.value.code == "LOCAL_WORKER_KEY_FORBIDDEN"
+    make_adapters(database, shared, 1, {})  # PC 실행 표시 사용자도 같은 공용 키로 직접 실행한다
 
 
 def test_sql_failure_during_replacement_rolls_back_old_index_without_exposing_text(database):
