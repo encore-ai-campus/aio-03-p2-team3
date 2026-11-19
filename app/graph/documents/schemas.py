@@ -21,6 +21,11 @@ class TradePriceSearch(Contract):
     counterparty: SearchText | None = Field(default=None, description="사용자가 지정한 거래처명 또는 별칭.")
 
 
+class DraftDocumentSearch(Contract):
+    kind: DocumentKind | None = Field(default=None, description="사용자가 말한 PI·PO·CI·PL 종류. 생략하면 모두.")
+    cursor: int | None = Field(default=None, gt=0, strict=True, description="같은 조회의 다음 페이지에 쓰는 next_cursor.")
+
+
 class IssuedDocumentSearch(Contract):
     kind: DocumentKind | None = None
     document_number: SearchText | None = None

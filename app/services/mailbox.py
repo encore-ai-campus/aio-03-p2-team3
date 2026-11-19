@@ -8,10 +8,7 @@ from email.utils import getaddresses
 from app.quote.calc import fill_prices
 from app.quote.pdf import render_quote_pdf
 
-
-class MailError(Exception):
-    def __init__(self, status, code, message):
-        self.status, self.code, self.message = status, code, message
+from app.mail.errors import MailError
 
 
 def read_thread(store, owner, thread_id):

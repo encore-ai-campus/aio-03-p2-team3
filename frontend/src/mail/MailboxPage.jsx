@@ -1,5 +1,6 @@
+import FollowupPanel from "./FollowupPanel"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { apiFetch } from "../api"
 import { useAuth } from "../useAuth"
 import "./mailbox.css"
@@ -89,6 +90,12 @@ function tradeLink(candidate) {
 }
 
 export default function MailboxPage() {
+  const [params] = useSearchParams()
+  const { state } = useAuth()
+  return params.get("followups") === "1" ? <FollowupPanel key={state.accessToken} token={state.accessToken} /> : <Mailbox />
+}
+
+function Mailbox() {
   const { state } = useAuth()
   const token = state.accessToken
   const [params, setParams] = useSearchParams()
@@ -223,6 +230,7 @@ export default function MailboxPage() {
     <div className="page-head enter" style={enter(0)}>
       <h1 className="page-title">받은 메일</h1>
       <p className="page-sub">원문과 AI 답장 초안을 확인하고, 보낼 답장을 골라 승인하세요.</p>
+      <Link className="doc-link" to="/inbox?followups=1">메일 후속 알림</Link>
     </div>
     <div className="mailbar enter" style={enter(1)}>
       <div className="tabs" role="tablist" aria-label="상태별 메일" ref={tabsRef}>

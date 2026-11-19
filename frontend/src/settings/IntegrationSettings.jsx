@@ -19,6 +19,7 @@ const CALENDAR_MESSAGES = {
   cancelled: "Google 캘린더 연결을 취소했습니다. 다시 시도해 주세요.",
   expired: "Google 캘린더 연결 요청이 만료되었습니다. 다시 연결해 주세요.",
   scope_missing: "캘린더 읽기 권한이 누락되었습니다. 필요한 권한에 동의해 주세요.",
+  write_scope_missing: "일정 조회는 가능합니다. 등록·변경·취소를 쓰려면 쓰기 권한에 동의해 주세요.",
   refresh_missing: "갱신 토큰을 받지 못했습니다. Google 계정의 앱 권한을 확인한 뒤 다시 연결해 주세요.",
   token_expired: "캘린더 권한이 만료되었거나 취소되었습니다. 다시 연결해 주세요.",
   api_disabled: "Google Calendar API가 활성화되지 않았습니다. 관리자에게 문의해 주세요.",
@@ -126,17 +127,19 @@ export default function IntegrationSettings({ callback }) {
         {SERVICES.map(([service, label]) => {
           const connection = read[service]
           const serviceError = service === "calendar" && connection?.error
+          const calendarReadOnly = service === "calendar" && connection?.connected && connection.can_write === false
           return <section key={service} className="integration-card" aria-label={`${label} 연동`} aria-busy={busy}>
             <h3>{label}</h3>
             <p className="section-note">{service === "gmail"
               ? "메일 수신과 승인한 답장 발송에 사용합니다. 앱 로그인과 별도로 권한 동의가 필요합니다."
-              : "캘린더 읽기 권한을 연결합니다. 앱 로그인과 별도로 동의가 필요합니다."}</p>
+              : "기본 캘린더 일정을 읽고, 업무 도우미에서 승인한 일정 변경을 반영합니다."}</p>
             <p role="status">{read.phase === "loading" ? "연결 상태 확인 중…" : !connection || serviceError ? "연결 상태 미확인" : connection.connected ? "연결됨" : "연결 안 됨"}</p>
+            {calendarReadOnly && <p className="section-note">일정 조회 가능 · 쓰기 권한 필요</p>}
             {serviceError && <p role="alert">{Object.hasOwn(CALENDAR_MESSAGES, serviceError) ? CALENDAR_MESSAGES[serviceError] : CALENDAR_MESSAGES.google_unavailable}</p>}
             {service === "gmail" && connection?.connected && <p className="section-note">{Object.hasOwn(WATCH_MESSAGES, connection.watch) ? WATCH_MESSAGES[connection.watch] : "메일 감시 상태를 확인해 주세요."}</p>}
             <div className="integration-actions">
               <button className="btn blue" type="button" disabled={busy || !connection || error?.status === 401}
-                onClick={() => act(service, "connect")}>{pending === `${service}:connect` ? "Google 동의 화면으로 이동 중…" : connection?.connected ? `${label} 다시 연결` : `${label} 연결`}</button>
+                onClick={() => act(service, "connect")}>{pending === `${service}:connect` ? "Google 동의 화면으로 이동 중…" : calendarReadOnly ? "Google 캘린더 쓰기 권한 추가" : connection?.connected ? `${label} 다시 연결` : `${label} 연결`}</button>
               {(connection?.connected || serviceError) && <button className="btn" type="button" disabled={busy}
                 onClick={() => setConfirmDisconnect(service)}>{label} 연결 해제</button>}
               <button className="btn" type="button" disabled={busy} onClick={() => setReload((value) => value + 1)}>상태 다시 확인</button>

@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom"
+import FollowupNotice from "./FollowupNotice"
 import { useAuth } from "../useAuth"
 
 // 시안의 사이드바(WORKSPACE·MANAGE)·상단바·모바일 헤더·하단탐색. 활성 표시는 NavLink가 담당한다.
@@ -74,6 +75,7 @@ export default function Layout() {
         </header>
         <div className="content">
           {state.notice && <p role="alert">{state.notice}</p>}
+          <FollowupNotice token={state.accessToken} />
           <Outlet />
         </div>
       </main>

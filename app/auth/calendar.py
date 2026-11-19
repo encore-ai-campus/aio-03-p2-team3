@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth.gmail import GmailConnectionError
 from app.auth.supabase import bearer_user_id
-from app.clients.calendar import CalendarDenied, missing_calendar_scopes
+from app.clients.calendar import CalendarDenied, calendar_can_write, missing_calendar_scopes
 from app.clients.gmail import GoogleError, TokenExpired
 from app.db.models import CalendarOAuthAttempt, CalendarToken, User
 from app.services.auth import make_cipher, utcnow
@@ -72,7 +72,10 @@ def connect(request: Request, user_id: int = Depends(bearer_user_id)):
     subject = request.app.state.supabase_auth.provider_google_subject(verified.sub)
     if not subject:
         raise GmailConnectionError(409, "google_identity_required", "Google로 다시 로그인해 본인 계정을 확인해 주세요.")
-    return {"authorization_url": _start(request, user_id, subject)}
+    access = request.app.state.calendar_access
+    with access.database.session() as session:
+        reconnecting = session.get(CalendarToken, user_id) is not None
+    return {"authorization_url": _start(request, user_id, subject, consent=reconnecting)}
 
 
 @router.post("/disconnect")
@@ -162,7 +165,7 @@ def complete_callback(request, pending, state, code, error):
         return _to_app(request, "config_missing")
     except GoogleError as failure:
         return _to_app(request, failure.code if failure.code != "google_error" else "login_failed")
-    return _to_app(request, "connected")
+    return _to_app(request, "connected" if calendar_can_write(login.scopes) else "write_scope_missing")
 
 
 def calendar_status(request, user_id):
@@ -186,4 +189,4 @@ def calendar_status(request, user_id):
             return {"connected": False}
         except GoogleError as failure:
             return {"connected": False, "error": failure.code}
-    return {"connected": True}
+        return {"connected": True, "can_write": calendar_can_write(stored.scopes)}
