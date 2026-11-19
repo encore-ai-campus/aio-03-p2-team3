@@ -1,6 +1,7 @@
 """Bearer HTTP 경계와 실제 어댑터 조립. 업무는 operations, SQL은 repository에 둔다."""
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
+from pydantic import BaseModel, ConfigDict, PositiveInt
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
@@ -82,6 +83,22 @@ async def upload(request: Request, owner: int = Depends(bearer_user_id)):
 @router.get("")
 def documents(request: Request, offset: int = Query(0, ge=0, le=100000), owner: int = Depends(bearer_user_id)):
     return operations.list_documents(repository(request), owner, offset)
+
+
+@router.get("/counterparties")
+def counterparties(request: Request, owner: int = Depends(bearer_user_id)):
+    return repository(request).counterparties(owner)
+
+
+class CounterpartyAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    counterparty_id: PositiveInt | None
+
+
+@router.put("/{document_id}/counterparty")
+def assign_counterparty(document_id: str, body: CounterpartyAssignment, request: Request,
+                        owner: int = Depends(bearer_user_id)):
+    return repository(request).assign_counterparty(owner, document_id, body.counterparty_id)
 
 
 @router.get("/{document_id}")

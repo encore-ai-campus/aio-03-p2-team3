@@ -50,10 +50,11 @@ class _ApprovedGmail:
 
 
 class ExistingMail:
-    def __init__(self, *, database, access=None, storage=None, key_cipher=None):
+    def __init__(self, *, database, access=None, storage=None, key_cipher=None, inbound_graph=None):
         self.database, self.access = database, access
         self.storage = storage
         self.key_cipher = key_cipher
+        self.inbound_graph = inbound_graph
 
     def search(self, actor_id: int, query: SearchInput) -> dict:
         data = MailStore(self.database).search_threads(actor_id, **query.model_dump(), limit=10)
@@ -143,7 +144,7 @@ class ExistingMail:
         email = next((message for message in reversed(messages) if message["direction"] == "in"), None)
         if email is None:
             raise WorkflowError("inbound_message_required")
-        result = start_run(user_id=actor_id, email=email, database=self.database, key_cipher=self.key_cipher)
+        result = start_run(user_id=actor_id, email=email, database=self.database, key_cipher=self.key_cipher, graph=self.inbound_graph)
         with self.database.session() as session:
             ids = list(session.scalars(select(ReplyCandidate.id).where(
                 ReplyCandidate.user_id == actor_id, ReplyCandidate.run_id == result["run_id"],

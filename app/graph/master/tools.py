@@ -134,7 +134,8 @@ def search_trade_documents(**inputs) -> dict:
 @tool(args_schema=KnowledgeDocumentSearch)
 def search_knowledge_documents(**inputs) -> dict:
     """문서함에 업로드한 본인 파일을 찾거나 조항을 검색한다. 파일 열기에는 filename만, 내용 질문에는 query와
-    알고 있는 filename 또는 검색 결과의 document_id를 넣는다. 파일명만 같을 때는 반환된 후보에서 고른다."""
+    알고 있는 filename 또는 검색 결과의 document_id를 넣는다. 질의는 한국어·영어 검색에 쓰인다.
+    파일명이 같을 때는 반환된 후보에서 고르고, 실제 조항과 sources에 있는 페이지를 인용한다."""
     return task("documents", "search_knowledge", **KnowledgeDocumentSearch.model_validate(inputs).model_dump(mode="json"))
 
 

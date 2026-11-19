@@ -148,15 +148,17 @@ class ExistingCalendar:
             stored = self._token(session, actor_id)
             if stored is None:
                 raise WorkflowError("calendar_not_connected")
-            token = self._access_token(session, stored)
             try:
+                token = self._access_token(session, stored)
                 raw = self.access.google.free_busy(token, query.calendar_ids, query.start, query.end)
-            except GoogleError as error:
-                raise WorkflowError("calendar_unavailable") from error
+            except (ConnectionDropped, CalendarDenied, TokenExpired):
+                raise WorkflowError("calendar_not_connected") from None
+            except (ProviderDown, GoogleError):
+                raise WorkflowError("calendar_unavailable") from None
             intervals, version = {}, {}
             for calendar_id in query.calendar_ids:
-                entry = raw.get(calendar_id) or {}
-                if entry.get("errors"):
+                entry = raw.get(calendar_id)
+                if entry is None or entry.get("errors"):
                     raise WorkflowError("calendar_unavailable")
                 intervals[calendar_id] = [Interval(start=start, end=end) for start, end in entry.get("busy", [])]
                 version[calendar_id] = [[start.isoformat(), end.isoformat()] for start, end in entry.get("busy", [])]

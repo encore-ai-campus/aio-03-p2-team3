@@ -150,6 +150,9 @@ class CalendarClient(GoogleClient):
                 snapshot[calendar_id] = {"busy": busy, "errors": errors}
         except (ValueError, TypeError, KeyError) as error:
             raise GoogleUnavailable("calendar_response") from error
+        # A single primary lookup may be returned under the canonical calendar ID.
+        if calendar_ids == ["primary"] and len(snapshot) == 1:
+            return {"primary": next(iter(snapshot.values()))}
         return snapshot
 
     def list_events(self, access_token, calendar_id, *, time_min, time_max, include_details=False):
