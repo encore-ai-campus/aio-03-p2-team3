@@ -93,6 +93,27 @@ def test_trade_upgrade_applies_fixed_model_effort_cap_timeout_only_to_its_featur
     assert sdk["bodies"][1]["model"] == "gpt-6-luna-legacy-override" and "reasoning" not in sdk["bodies"][1]
 
 
+def test_trade_sol_low_sends_low_effort_with_upgrade_limits_and_covers_mail_trade_extraction(sdk):
+    # 2026-11-19 요청자 결정: 무역 추출만 Sol low로 상향(25·49품목 baseline 20초 시간 초과 대응).
+    settings = Settings(llm_profile_trade_extraction="sol-low")
+    mail_trade = Prompt("extract_trade_terms", "vtest", "Synthetic mail: {text}")
+    for prompt in (MAPPED_TRADE, mail_trade):  # PI 화면 추출과 메일의 무역 조건 추출이 같은 기능 키다
+        result = call(prompt, settings)
+        assert result.ok and result.profile_id == "trade_extraction.sol-low"
+    for body, timeout in zip(sdk["bodies"], sdk["timeouts"]):
+        assert body["model"] == "gpt-6.1-sol" and body["reasoning"] == {"effort": "low"}
+        assert body["max_output_tokens"] == 8192 and timeout == 90
+    # 메일 분석 등 다른 기능은 baseline 그대로다.
+    assert call(MAPPED_STRUCTURED, settings).profile_id == "default_structured.baseline"
+    assert sdk["bodies"][2]["model"] == "gpt-6-luna" and "reasoning" not in sdk["bodies"][2]
+
+
+def test_sol_low_is_only_selectable_for_trade_extraction():
+    assert profiles.validate_name("trade_extraction", "trade_extraction.sol-low") == "sol-low"
+    with pytest.raises(ValueError, match="LLM_PROFILE_DEFAULT_STRUCTURED"):
+        Settings(llm_profile_default_structured="sol-low")
+
+
 def test_default_structured_upgrade_covers_mail_prompts_but_not_unmapped_calls(sdk):
     # 결정 1a: 메일→견적 단계(default_structured)도 Sol medium으로 상향할 수 있다.
     settings = Settings(llm_profile_default_structured="default_structured.sol-medium")

@@ -40,10 +40,11 @@
 | `<기능>.luna-medium` | `gpt-6-luna` · medium(고정 모델) | explicit_return | 명시적 복귀 대상. 환경 변수로 모델이 바뀌지 않음 |
 | `default_structured.sol-medium` | `gpt-6.1-sol` · medium | manual_upgrade | 결정 1a. 90초/8192·재시도 0·논리 기한 120초. 품질 실측 없음 |
 | `trade_extraction.sol-medium` | `gpt-6.1-sol` · medium | manual_upgrade | 90초/8192(측정 준비값을 결정 2a로 확정)·재시도 0·논리 기한 120초. PC 경로 없음 |
+| `trade_extraction.sol-low` | `gpt-6.1-sol` · low | manual_upgrade | 요청자 결정(2026-11-19 배포 시연 테스트): 25·49품목 추출이 baseline 20초에서 시간 초과돼 무역 추출만 상향. 값은 sol-medium과 같음(90초/8192·재시도 0·논리 기한 120초). low 지원은 OpenAI 모델 문서로 확인. 품질 실측 없음 |
 | `vision_transcription.terra-low` | `gpt-6.1-terra` · low | manual_upgrade | 180초/10000·SDK 재시도 3(baseline과 같게). 가림 표시는 품질 부족 근거가 아니며 Terra medium은 제시하지 않음 |
 | `catalog_candidates.luna-medium` / `.sol-medium` | Luna·Sol · medium | measurement_prep | 90초/2048은 측정 준비값. `production_available: false` |
 
-- 허용 조합은 위 표뿐이다. `high/xhigh/max`(와 `none/minimal`)는 계약 검사에서 오류다. 일반 구조화는 Luna와 Sol medium만 허용한다(결정 1a, 2026-11-19: 메일→견적 단계 포함 `default_structured.sol-medium` 추가. 이전 규칙은 Luna만). [Request]
+- 허용 조합은 위 표뿐이다. `high/xhigh/max`(와 `none/minimal`)는 계약 검사에서 오류다. 일반 구조화는 Luna와 Sol medium만 허용한다(결정 1a, 2026-11-19: 메일→견적 단계 포함 `default_structured.sol-medium` 추가. 이전 규칙은 Luna만). Sol low는 무역 추출에만 둔다(2026-11-19 요청자 결정). [Request]
 - 운영에서 고를 수 있는 상태는 `baseline`·`explicit_return`·`approved`·`manual_upgrade`다. `manual_upgrade`(결정 2a)는 품질 게이트 없이 오류 대응용으로 기능별 환경변수에 명시했을 때만 쓰는 상향이며, 서버 저장 키 경로만 가지고 자동 재시도 0이다(검사기가 강제). 후보·측정 준비는 고를 수 없고 자동 승격하지 않는다(`never_auto_promote`). 프로필 선택은 서버 설정(`LLM_PROFILE_<기능>`, 비우면 baseline)이며 사용자별 선택이 아니다. 키·실행 방식은 계속 사용자별이다. [Request · Claude proposal]
 - 처리 기록마다 `profile_id`와 해석된 값(모델·노력치·timeout·출력 상한·실행 방식)을 남긴다. 이미 발급된 파일·이전 처리 결과는 설정을 바꿔도 소급해서 바꾸지 않고, 새 시도에만 새 프로필을 쓴다. [Request]
 

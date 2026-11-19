@@ -16,7 +16,7 @@
   },
   "models": {
     "gpt-6-luna": {"efforts": ["default", "medium"]},
-    "gpt-6.1-sol": {"efforts": ["medium"]},
+    "gpt-6.1-sol": {"efforts": ["low", "medium"]},
     "gpt-6.1-terra": {"efforts": ["low"]}
   },
   "allowed_models_by_feature": {
@@ -119,6 +119,16 @@
           "model": "gpt-6.1-sol",
           "model_source": "fixed",
           "reasoning_effort": "medium",
+          "modes": {
+            "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
+          }
+        },
+        "sol-low": {
+          "status": "manual_upgrade",
+          "values_origin": "요청자 결정(2026-11-19 배포 시연 테스트): 25·49품목 추출이 baseline 20초 제한에서 ReadTimeout으로 실패해 무역 추출만 Sol low로 상향. 값은 sol-medium과 같은 90초/8192·재시도 0·논리 기한 120초. 노력치 low는 OpenAI 모델 문서(gpt-6.1-sol: low~max 지원)로 확인. 품질 게이트 통과 설정이 아니다. PC 경로는 baseline 유지(selection.local_worker_policy).",
+          "model": "gpt-6.1-sol",
+          "model_source": "fixed",
+          "reasoning_effort": "low",
           "modes": {
             "stored_key": {"timeout_seconds": 90, "max_output_tokens": 8192, "sdk_max_retries": 0, "network_retries": 0, "invalid_output_retries": 0, "logical_deadline_seconds": 120}
           }
