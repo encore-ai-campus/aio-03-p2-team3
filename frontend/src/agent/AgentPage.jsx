@@ -354,6 +354,7 @@ export default function AgentPage() {
           {view?.error && <p className="form-error" role="alert">{ERRORS[view.error] || `처리 상태를 확인해 주세요. (${view.error})`}</p>}
           {!timelineAbove && timeline}
           {view?.waiting && <ReviewCard key={`${view.revision}-${view.waiting.task_id || view.waiting.action?.id}`} waiting={view.waiting}
+            piCompletion={view.waiting.fields?.includes("pi_changes") ? view.working?.data?.pi_completion : undefined}
             results={view.working?.data?.candidates ? [{ data: view.working.data }] : (view.results || [])} busy={running} onResume={response => send(`/${view.id}/resume`, { revision: view.revision, response })} />}
           {["interrupted", "review"].includes(view?.status) && <div className="card agent-recover">
             <p>{view.results?.some(item => item.status === "unknown" && item.domain === "calendar") || view.working?.action?.domain === "calendar"

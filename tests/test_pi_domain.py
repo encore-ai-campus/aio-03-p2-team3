@@ -76,6 +76,27 @@ def test_pi_direct_and_extracted_facts_use_the_same_business_calculation():
     assert direct.document["total"] == "80.00"
 
 
+def test_pi_keeps_unconfirmed_numbers_empty_when_revising_other_fields():
+    repository = MemoryPIRepository()
+    values = pi_input(document_number=None).model_dump(mode="json")
+    values["items"][0].update(discount_percent=None, quantity=None)
+    first = create_pi(PIInput.model_validate(values), repository=repository)
+    assert {"items.0.discount_percent", "items.0.quantity"} <= set(first.missing_fields)
+    assert first.input["items"][0]["discount_percent"] is None
+    assert first.input["items"][0]["quantity"] is None
+
+    revised = revise_pi(first.document_id, first.revision,
+                        PIInput.model_validate({**first.input, "document_number": "PI-101"}), repository=repository)
+    assert revised.status == "needs_input"
+    assert {"items.0.discount_percent", "items.0.quantity"} <= set(revised.missing_fields)
+    values = revised.input
+    values["items"][0].update(discount_percent="0", quantity="0")
+    ready = revise_pi(first.document_id, revised.revision, PIInput.model_validate(values), repository=repository)
+    assert ready.status == "ready"
+    assert ready.input["items"][0]["discount_percent"] == "0"
+    assert ready.input["items"][0]["quantity"] == "0"
+
+
 def test_pi_revision_uses_snapshot_and_rejects_stale_revision():
     repository = MemoryPIRepository()
     created = create_pi(pi_input(), repository=repository)
