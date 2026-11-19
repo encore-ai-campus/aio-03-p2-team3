@@ -13,7 +13,7 @@ def validate_header(data, issuer, block):
 
 
 def validate_packing(data, calculated, issues, block):
-    from app.trade.pl.packing import reconcile_packing
+    from app.trade.pl.packing import _number, reconcile_packing
     packing = reconcile_packing({**data, "items": calculated})
     for issue in packing["issues"]:
         block("Packing: " + issue)
@@ -21,8 +21,14 @@ def validate_packing(data, calculated, issues, block):
         block("Packing source discrepancy: " + discrepancy)
     packages = data.get("packages") or []
     has_item_packing = any(item.get("net_weight_kg") or item.get("gross_weight_kg") or item.get("package_count") or item.get("volume_cbm") for item in calculated)
-    if not has_item_packing and (not packages or not data.get("actual_package_count")):
-        block("Actual package count and weights")
+    if not has_item_packing and not packages:
+        # Some source packing lists provide shipment totals without a breakdown.
+        net = _number(data.get("declared_net_weight_kg"))
+        gross = _number(data.get("declared_gross_weight_kg"))
+        if not data.get("actual_package_count") or not net or not gross:
+            block("Actual package count and weights")
+        elif net > gross:
+            block("Source net weight cannot exceed source gross weight")
     actual_count = Decimal("0")
     if not has_item_packing:
         try:

@@ -285,7 +285,14 @@ function issueDetails(raw, draft, kind) {
     const entering = valid.some((path) => !String(readPath(draft, path) ?? "").trim())
     return { message: `${labels} 항목${entering ? "의 값을 입력하세요" : "을 수정하세요"}.`, fields: valid }
   }
-  if (/actual package count and weights/i.test(message)) return { message: "실제 포장 수와 중량 항목을 확인하세요.", fields: ["actual_package_count", "declared_net_weight_kg", "declared_gross_weight_kg"].filter((path) => validPath(draft, path)) }
+  if (kind === "PL" && /^Actual package count and weights$/i.test(message)) {
+    const fields = ["actual_package_count", "declared_net_weight_kg", "declared_gross_weight_kg"]
+    return { message: "포장 행이 없으면 실제 포장 수와 원본 순중량·총중량을 입력하세요.", fields,
+      revalidate: fields.every((path) => String(readPath(draft, path) ?? "").trim()) }
+  }
+  if (kind === "PL" && /^Source net weight cannot exceed source gross weight$/i.test(message)) {
+    return { message: "원본 순중량은 원본 총중량보다 클 수 없습니다.", fields: ["declared_net_weight_kg", "declared_gross_weight_kg"] }
+  }
   if (/^Confirm packing totals before final review$/i.test(message)) return { message: "포장 합계를 먼저 확인하고 승인하세요.", fields: [], packing: true }
   if (/package counts use different package types/i.test(message)) return { message: "포장 종류가 서로 다릅니다. 포장별 합계를 따로 확인하세요.", fields: [], packing: true }
   if (/PI import/i.test(message)) return { message: "원본 PI와 품목별 수량·단가·금액을 대조하세요.", fields: [], source: true }
@@ -401,9 +408,12 @@ export default function MissingFieldsDialog({ open, kind, draft, missing = [], i
           ? "수기 품목 정보를 사용하도록 확인했습니다. 저장하면 단가·필수 항목 등 나머지 기준을 다시 확인합니다."
           : "변경사항을 저장하면 서버가 다시 검증합니다. 입력값이 조건을 충족하면 해당 오류가 사라집니다." : active.catalogMatch
           ? "등록 품목과 다르게 사용하려면 위 확인란을 선택한 뒤 저장하세요."
-          : "현재 값은 이미 저장되어 있습니다. 값을 바꾸면 저장 버튼이 활성화됩니다."}
+          : active.revalidate
+            ? "저장된 포장 수와 중량을 다시 검증할 수 있습니다."
+            : "현재 값은 이미 저장되어 있습니다. 값을 바꾸면 저장 버튼이 활성화됩니다."}
       </p>}
-      <div className="form-actions"><button className="btn blue" type="button" disabled={busy || !dirty || !active.fields.length} onClick={onSave}>{busy ? "저장 중…" : "변경사항 저장"}</button></div>
+      <div className="form-actions"><button className="btn blue" type="button" disabled={busy || (!dirty && !active.revalidate) || !active.fields.length} onClick={onSave}>
+        {busy ? "저장 중…" : !dirty && active.revalidate ? "저장된 값 다시 검증" : "변경사항 저장"}</button></div>
     </div>}
   </section>
 }
